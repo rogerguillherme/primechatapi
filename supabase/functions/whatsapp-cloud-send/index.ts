@@ -80,15 +80,8 @@ Deno.serve(async (req) => {
       };
       if (template_params && Array.isArray(template_params) && template_params.length > 0) {
         const mappedParams = template_params.map((p: any) =>
-          typeof p === "string" ? { type: "text", text: p } : p
+          typeof p === "string" ? { type: "text", text: p || "-" } : { type: "text", text: p.text || "-" }
         );
-        const hasEmpty = mappedParams.some((p: any) => p.type === "text" && (!p.text || p.text.trim() === ""));
-        if (hasEmpty) {
-          return new Response(
-            JSON.stringify({ error: "Template parameters contain empty values. All text parameters must have a value." }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
         templateBody.template.components = [{ type: "body", parameters: mappedParams }];
       }
       body = templateBody;
