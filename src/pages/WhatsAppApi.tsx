@@ -978,6 +978,8 @@ function CloudChatTab() {
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [message, setMessage] = useState("");
+  const [filterAccountId, setFilterAccountId] = useState<string | null>(null);
+  const { accounts } = useWhatsAppAccounts();
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -991,6 +993,23 @@ function CloudChatTab() {
         .select("id, name, phone, photo_url")
         .order("name");
       return data || [];
+    },
+  });
+
+  // Fetch lead IDs per account for filtering
+  const { data: leadAccountMap } = useQuery({
+    queryKey: ["cloud-chat-lead-accounts"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("chat_messages")
+        .select("lead_id, account_id")
+        .not("account_id", "is", null);
+      const map = new Map<string, Set<string>>();
+      for (const m of data || []) {
+        if (!map.has(m.account_id!)) map.set(m.account_id!, new Set());
+        map.get(m.account_id!)!.add(m.lead_id);
+      }
+      return map;
     },
   });
 
@@ -1105,8 +1124,12 @@ function CloudChatTab() {
   const filteredLeads = useMemo(() => {
     if (!leads || !latestMessages) return [];
     const s = search.toLowerCase();
-    return leads.filter((l) => latestMessages.has(l.id) && (l.name.toLowerCase().includes(s) || l.phone.includes(s)));
-  }, [leads, search, latestMessages]);
+    return leads.filter((l) =>
+      latestMessages.has(l.id) &&
+      (l.name.toLowerCase().includes(s) || l.phone.includes(s)) &&
+      (!filterAccountId || leadAccountMap?.get(filterAccountId)?.has(l.id))
+    );
+  }, [leads, search, latestMessages, filterAccountId, leadAccountMap]);
 
   const sortedLeads = useMemo(() => {
     return [...filteredLeads].sort((a, b) => {
@@ -1141,6 +1164,22 @@ function CloudChatTab() {
             <Input placeholder="Buscar lead..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-8 text-sm" />
           </div>
         </div>
+        {accounts.length > 1 && (
+          <div className="px-3 py-1.5 border-b border-border">
+            <select
+              value={filterAccountId || ""}
+              onChange={(e) => setFilterAccountId(e.target.value || null)}
+              className="w-full rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <option value="">Todos os números</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name} {a.is_default ? "(padrão)" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <ScrollArea className="flex-1">
           {sortedLeads.map((lead) => {
             const latest = latestMessages?.get(lead.id);
