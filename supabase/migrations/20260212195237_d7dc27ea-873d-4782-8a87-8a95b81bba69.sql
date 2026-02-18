@@ -1,0 +1,1 @@
+ALTER TABLE public.flow_executions ADD COLUMN metadata jsonb DEFAULT '{}'::jsonb;
