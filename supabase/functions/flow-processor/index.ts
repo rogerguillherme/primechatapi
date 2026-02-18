@@ -70,6 +70,37 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Check if there are still pending executions with a future delay
+    // Schedule a self-invocation to process them when ready
+    const { data: pendingExecutions } = await supabase
+      .from("flow_executions")
+      .select("next_action_at")
+      .eq("status", "waiting_delay")
+      .order("next_action_at")
+      .limit(1);
+
+    if (pendingExecutions && pendingExecutions.length > 0) {
+      const nextAt = new Date(pendingExecutions[0].next_action_at).getTime();
+      const delayMs = Math.max(nextAt - Date.now(), 1000); // min 1s
+      const cappedDelay = Math.min(delayMs, 55000); // max ~55s to stay within function timeout
+
+      // Fire-and-forget: schedule re-invocation after delay
+      setTimeout(async () => {
+        try {
+          await fetch(`${supabaseUrl}/functions/v1/flow-processor`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${supabaseKey}`,
+            },
+            body: JSON.stringify({ auto: true }),
+          });
+        } catch (e) {
+          console.error("Self-invocation failed:", e);
+        }
+      }, cappedDelay);
+    }
+
     return new Response(
       JSON.stringify({ ok: true, processed }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
