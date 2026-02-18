@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
     const limits = await Promise.all(
       accounts.map(async (acc) => {
         try {
-          const url = `https://graph.facebook.com/v21.0/${acc.phone_number_id}?fields=messaging_limit_tier,quality_rating,display_phone_number,verified_name,current_limit`;
+          const url = `https://graph.facebook.com/v21.0/${acc.phone_number_id}?fields=messaging_limit_tier,quality_rating,display_phone_number,verified_name`;
           const res = await fetch(url, {
             headers: { Authorization: `Bearer ${acc.access_token}` },
           });
