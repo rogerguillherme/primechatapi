@@ -11,13 +11,13 @@ export function AppHeader() {
               <MessageCircle size={20} className="text-whatsapp" />
             </div>
             <div>
-              <h1 className="text-base font-display font-bold tracking-tight">Meno Lead</h1>
+              <h1 className="text-base font-display font-bold tracking-tight">Meno API</h1>
               <p className="text-[11px] text-white/50 leading-none">WhatsApp Business Platform</p>
             </div>
           </div>
           <ThemeToggle collapsed={true} />
         </div>
       </div>
-    </header>
-  );
+    </header>);
+
 }
