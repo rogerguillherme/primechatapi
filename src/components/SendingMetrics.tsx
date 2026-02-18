@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { WhatsAppLimits } from "./WhatsAppLimits";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -158,6 +159,8 @@ export function SendingMetrics() {
 
   return (
     <div className="space-y-4">
+      {/* WhatsApp Limits */}
+      <WhatsAppLimits />
       {/* Header with refresh */}
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium text-muted-foreground">Métricas gerais</h3>
