@@ -564,6 +564,9 @@ function BroadcastTab() {
         .in("status", ["running", "waiting_delay", "waiting_reply"]);
 
       await supabase.from("flow_executions").insert(execData);
+
+      // Immediately trigger the flow processor to send the first step
+      await supabase.functions.invoke("flow-processor");
     };
 
     // Helper: generate Brazilian phone variants (with/without 9th digit)
