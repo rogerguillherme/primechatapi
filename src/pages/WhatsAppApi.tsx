@@ -1227,34 +1227,42 @@ export default function WhatsAppApi() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <PageHeader
         title="WhatsApp Cloud API"
-        description="Configure a integração com a API oficial do WhatsApp via Meta/Facebook"
+        description="Gerencie sua integração com a API oficial do WhatsApp via Meta/Facebook"
       />
 
-      <Tabs defaultValue="config" className="space-y-4">
-        <TabsList className="flex-wrap">
-          <TabsTrigger value="config">Configuração</TabsTrigger>
-          <TabsTrigger value="webhook">Webhook</TabsTrigger>
-          <TabsTrigger value="test">Teste</TabsTrigger>
-          <TabsTrigger value="tracking" className="gap-1.5">
-            <Package size={14} />
-            Rastreio
-          </TabsTrigger>
-          <TabsTrigger value="broadcast" className="gap-1.5">
-            <Send size={14} />
-            Disparo
-          </TabsTrigger>
-          <TabsTrigger value="chat" className="gap-1.5">
-            <MessageCircle size={14} />
-            Chat
-          </TabsTrigger>
-          <TabsTrigger value="history" className="gap-1.5">
-            <BarChart3 size={14} />
-            Histórico
-          </TabsTrigger>
-        </TabsList>
+      <Tabs defaultValue="config" className="space-y-6">
+        <div className="bg-card rounded-xl border border-border shadow-card p-1.5">
+          <TabsList className="flex-wrap w-full bg-transparent gap-1 h-auto p-0">
+            <TabsTrigger value="config" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm text-sm px-4 py-2.5 transition-all">
+              Configuração
+            </TabsTrigger>
+            <TabsTrigger value="webhook" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm text-sm px-4 py-2.5 transition-all">
+              Webhook
+            </TabsTrigger>
+            <TabsTrigger value="test" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm text-sm px-4 py-2.5 transition-all">
+              Teste
+            </TabsTrigger>
+            <TabsTrigger value="tracking" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm gap-1.5 text-sm px-4 py-2.5 transition-all">
+              <Package size={14} />
+              Rastreio
+            </TabsTrigger>
+            <TabsTrigger value="broadcast" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm gap-1.5 text-sm px-4 py-2.5 transition-all">
+              <Send size={14} />
+              Disparo
+            </TabsTrigger>
+            <TabsTrigger value="chat" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm gap-1.5 text-sm px-4 py-2.5 transition-all">
+              <MessageCircle size={14} />
+              Chat
+            </TabsTrigger>
+            <TabsTrigger value="history" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm gap-1.5 text-sm px-4 py-2.5 transition-all">
+              <BarChart3 size={14} />
+              Histórico
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* ── Config Tab ── */}
         <TabsContent value="config" className="space-y-4">

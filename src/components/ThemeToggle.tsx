@@ -21,9 +21,10 @@ export function ThemeToggle({ collapsed }: { collapsed?: boolean }) {
     <button
       onClick={() => setDark(!dark)}
       className={cn(
-        "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-        "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+        "flex items-center gap-2 p-2 rounded-lg text-sm font-medium transition-colors",
+        "text-white/60 hover:text-white hover:bg-white/10"
       )}
+      title={dark ? "Modo Claro" : "Modo Escuro"}
     >
       {dark ? <Sun size={18} /> : <Moon size={18} />}
       {!collapsed && <span>{dark ? "Modo Claro" : "Modo Escuro"}</span>}

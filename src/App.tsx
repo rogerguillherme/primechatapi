@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AppHeader } from "@/components/AppHeader";
 import WhatsAppApi from "./pages/WhatsAppApi";
 import NotFound from "./pages/NotFound";
 
@@ -14,12 +15,15 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <main className="min-h-screen">
-          <Routes>
-            <Route path="/" element={<WhatsAppApi />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </main>
+        <div className="min-h-screen flex flex-col">
+          <AppHeader />
+          <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-7xl mx-auto w-full">
+            <Routes>
+              <Route path="/" element={<WhatsAppApi />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </main>
+        </div>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
