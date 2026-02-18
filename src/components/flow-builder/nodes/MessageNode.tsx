@@ -1,0 +1,37 @@
+import { Handle, Position, useReactFlow } from "@xyflow/react";
+import { MessageSquare, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+interface MessageNodeData {
+  label?: string;
+  custom_message?: string;
+  template_id?: string | null;
+  onDelete?: (id: string) => void;
+  [key: string]: unknown;
+}
+
+export function MessageNode({ id, data }: { id: string; data: MessageNodeData }) {
+  return (
+    <div className="bg-background border border-border rounded-xl shadow-md min-w-[260px] max-w-[300px] overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 border-b border-border">
+        <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
+          <MessageSquare size={11} className="text-white" />
+        </div>
+        <span className="text-xs font-semibold text-foreground flex-1">Enviar Mensagem</span>
+        <button
+          onClick={() => data.onDelete?.(id)}
+          className="text-muted-foreground hover:text-destructive transition-colors p-0.5"
+        >
+          <Trash2 size={12} />
+        </button>
+      </div>
+      <div className="p-3">
+        <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap line-clamp-4">
+          {data.custom_message || "Clique para editar a mensagem..."}
+        </p>
+      </div>
+      <Handle type="target" position={Position.Left} className="!w-3 !h-3 !bg-emerald-500 !border-2 !border-background" />
+      <Handle type="source" position={Position.Right} className="!w-3 !h-3 !bg-emerald-500 !border-2 !border-background" />
+    </div>
+  );
+}
