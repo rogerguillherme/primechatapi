@@ -69,6 +69,32 @@ Deno.serve(async (req) => {
     let body: any;
 
     if (template_name) {
+      // If no template_params provided, try to fetch from DB
+      let finalParams = template_params;
+      if (!finalParams || !Array.isArray(finalParams) || finalParams.length === 0) {
+        const { data: tmpl } = await supabase
+          .from("chat_templates")
+          .select("template_params")
+          .eq("template_name", template_name)
+          .maybeSingle();
+        if (tmpl?.template_params && Array.isArray(tmpl.template_params) && tmpl.template_params.length > 0) {
+          // Resolve placeholders with lead info
+          const { data: leadData } = lead_id
+            ? await supabase.from("leads").select("name").eq("id", lead_id).maybeSingle()
+            : { data: null };
+          const leadName = leadData?.name || "";
+          finalParams = (tmpl.template_params as any[]).map((p: any) => {
+            const text = typeof p === "string" ? p : p?.text || "";
+            return {
+              type: "text",
+              text: text
+                .replace(/\{nome\}/g, leadName.split(" ")[0] || "-")
+                .replace(/\{codigo\}/g, "-") || "-",
+            };
+          });
+        }
+      }
+
       const templateBody: any = {
         messaging_product: "whatsapp",
         to: cleanPhone,
@@ -78,8 +104,8 @@ Deno.serve(async (req) => {
           language: { code: template_language || "pt_BR" },
         },
       };
-      if (template_params && Array.isArray(template_params) && template_params.length > 0) {
-        const mappedParams = template_params.map((p: any) =>
+      if (finalParams && Array.isArray(finalParams) && finalParams.length > 0) {
+        const mappedParams = finalParams.map((p: any) =>
           typeof p === "string" ? { type: "text", text: p || "-" } : { type: "text", text: p.text || "-" }
         );
         templateBody.template.components = [{ type: "body", parameters: mappedParams }];
