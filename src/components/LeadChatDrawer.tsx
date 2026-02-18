@@ -252,15 +252,25 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
                   const isOutbound = msg.direction === "outbound";
                   const prevMsg = mi > 0 ? group.messages[mi - 1] : null;
                   const showTail = !prevMsg || prevMsg.direction !== msg.direction;
+                  const accountName = isOutbound && msg.account_id && accounts.length > 1
+                    ? accounts.find((a) => a.id === msg.account_id)?.name
+                    : null;
+                  const prevAccount = prevMsg?.direction === "outbound" ? prevMsg.account_id : null;
+                  const showAccountLabel = accountName && (showTail || msg.account_id !== prevAccount);
                   return (
                     <div
                       key={msg.id}
                       className={cn(
-                        "flex mb-[2px]",
-                        isOutbound ? "justify-end" : "justify-start",
+                        "flex flex-col mb-[2px]",
+                        isOutbound ? "items-end" : "items-start",
                         showTail && "mt-2"
                       )}
                     >
+                      {showAccountLabel && (
+                        <span className="text-[10px] text-muted-foreground/70 px-2 mb-0.5 font-medium">
+                          {accountName}
+                        </span>
+                      )}
                       <div className={cn(
                         "relative max-w-[85%] px-[9px] pt-[6px] pb-2 text-[13.5px] leading-[18px] shadow-sm",
                         isOutbound ? "bg-[#d9fdd3] text-[#111b21] rounded-lg" : "bg-card text-foreground rounded-lg",
