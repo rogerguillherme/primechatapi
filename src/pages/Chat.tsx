@@ -25,6 +25,7 @@ import { ChatMediaBubble } from "@/components/ChatMediaBubble";
 import { AudioRecorder } from "@/components/AudioRecorder";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 
 type ChatTab = "novos_pedidos" | "aguardando_respostas" | "respondidas" | "reembolso";
 
@@ -70,10 +71,19 @@ export default function Chat() {
   const [message, setMessage] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [activeTab, setActiveTab] = useState<ChatTab>("aguardando_respostas");
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { accounts, defaultAccount } = useWhatsAppAccounts();
+
+  // Auto-select default account
+  useEffect(() => {
+    if (!selectedAccountId && defaultAccount) {
+      setSelectedAccountId(defaultAccount.id);
+    }
+  }, [defaultAccount, selectedAccountId]);
 
   // Fetch leads
   const { data: leads } = useQuery({
@@ -228,6 +238,7 @@ export default function Chat() {
           lead_id: selectedLead.id,
           media_url: mediaUrl || undefined,
           media_type: mediaType || undefined,
+          account_id: selectedAccountId || undefined,
         },
       });
       if (error) throw error;
@@ -496,6 +507,19 @@ export default function Chat() {
                 <p className="font-medium text-[15px] text-sidebar-foreground truncate">{selectedLead.name}</p>
                 <p className="text-xs text-sidebar-foreground/50">{selectedLead.phone}</p>
               </div>
+              {accounts.length > 1 && (
+                <select
+                  value={selectedAccountId || ""}
+                  onChange={(e) => setSelectedAccountId(e.target.value || null)}
+                  className="h-7 rounded-md border border-sidebar-foreground/20 bg-transparent px-2 text-xs text-sidebar-foreground focus:outline-none"
+                >
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id} className="text-foreground bg-background">
+                      {a.name} {a.is_default ? "(padrão)" : ""}
+                    </option>
+                  ))}
+                </select>
+              )}
               <div className="flex items-center gap-1">
                 <button className="p-2 rounded-full hover:bg-white/10 text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors">
                   <Search size={18} />

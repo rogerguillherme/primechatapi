@@ -28,6 +28,8 @@ import { cn } from "@/lib/utils";
 import { FlowBuilder } from "@/components/FlowBuilder";
 import { TemplateManager } from "@/components/TemplateManager";
 import { SendingMetrics } from "@/components/SendingMetrics";
+import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
+import { AccountSelector } from "@/components/AccountSelector";
 
 /* ── Helpers ── */
 function getAvatarColor(name: string) {
@@ -53,9 +55,27 @@ function TrackingTab() {
   const [trackingCode, setTrackingCode] = useState("");
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
   const [isSending, setIsSending] = useState(false);
+  const [selectedAccountIds, setSelectedAccountIds] = useState<Set<string>>(new Set());
+  const { accounts, defaultAccount } = useWhatsAppAccounts();
   const [messageTemplate, setMessageTemplate] = useState(
     "Olá {nome}! 📦 Seu pedido foi enviado!\n\nCódigo de rastreio: *{codigo}*\n\nAcompanhe em: https://www.linkcorreto.com.br/{codigo}"
   );
+
+  // Auto-select default account
+  useEffect(() => {
+    if (selectedAccountIds.size === 0 && defaultAccount) {
+      setSelectedAccountIds(new Set([defaultAccount.id]));
+    }
+  }, [defaultAccount, selectedAccountIds.size]);
+
+  const toggleAccount = (id: string) => {
+    setSelectedAccountIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const { data: leads } = useQuery({
     queryKey: ["tracking-leads"],
@@ -106,6 +126,8 @@ function TrackingTab() {
     let successCount = 0;
     let errorCount = 0;
 
+    const accountIds = selectedAccountIds.size > 0 ? Array.from(selectedAccountIds) : (defaultAccount ? [defaultAccount.id] : []);
+
     for (const leadId of selectedLeads) {
       const lead = leads?.find((l) => l.id === leadId);
       if (!lead) continue;
@@ -114,14 +136,16 @@ function TrackingTab() {
         .replace(/\{nome\}/g, lead.name.split(" ")[0])
         .replace(/\{codigo\}/g, trackingCode.trim());
 
-      try {
-        const { error } = await supabase.functions.invoke("whatsapp-cloud-send", {
-          body: { phone: lead.phone, message: finalMessage },
-        });
-        if (error) throw error;
-        successCount++;
-      } catch {
-        errorCount++;
+      for (const accountId of accountIds) {
+        try {
+          const { error } = await supabase.functions.invoke("whatsapp-cloud-send", {
+            body: { phone: lead.phone, message: finalMessage, account_id: accountId },
+          });
+          if (error) throw error;
+          successCount++;
+        } catch {
+          errorCount++;
+        }
       }
     }
 
@@ -233,6 +257,14 @@ function TrackingTab() {
             </div>
           )}
 
+          <AccountSelector
+            accounts={accounts}
+            selectedIds={selectedAccountIds}
+            onToggle={toggleAccount}
+            mode="multi"
+            label="Contas para envio"
+          />
+
           <Button
             onClick={handleSendTracking}
             disabled={isSending || selectedLeads.size === 0 || !trackingCode.trim()}
@@ -285,10 +317,28 @@ function BroadcastTab() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [selectedFlowId, setSelectedFlowId] = useState<string | null>(null);
   const [customMessage, setCustomMessage] = useState("");
+  const [selectedAccountIds, setSelectedAccountIds] = useState<Set<string>>(new Set());
+  const { accounts, defaultAccount } = useWhatsAppAccounts();
   // CSV state
   const [csvRows, setCsvRows] = useState<CsvRow[]>([]);
   const [csvSelectedIdxs, setCsvSelectedIdxs] = useState<Set<number>>(new Set());
   const csvInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-select default account
+  useEffect(() => {
+    if (selectedAccountIds.size === 0 && defaultAccount) {
+      setSelectedAccountIds(new Set([defaultAccount.id]));
+    }
+  }, [defaultAccount, selectedAccountIds.size]);
+
+  const toggleAccount = (id: string) => {
+    setSelectedAccountIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const { data: leads } = useQuery({
     queryKey: ["broadcast-leads"],
@@ -475,6 +525,8 @@ function BroadcastTab() {
       return existing && existing.length > 0 ? existing[0].id : null;
     };
 
+    const accountIds = selectedAccountIds.size > 0 ? Array.from(selectedAccountIds) : (defaultAccount ? [defaultAccount.id] : []);
+
     if (isCsv) {
       for (const idx of csvSelectedIdxs) {
         const row = csvRows[idx];
@@ -484,21 +536,24 @@ function BroadcastTab() {
             const leadId = await findLeadByPhone(row.telefone);
             if (!leadId) { errorCount++; continue; }
             await startFlowForLead(leadId, row.codigo);
+            successCount++;
           } else {
-            const body: any = { phone: row.telefone };
-            if (sendType === "template" && selectedTemplate?.template_name) {
-              body.template_name = selectedTemplate.template_name;
-              body.template_language = selectedTemplate.template_language || "pt_BR";
-              body.template_params = resolveParams((selectedTemplate.template_params || []) as any[], row.nome, row.codigo);
-            } else {
-              body.message = customMessage
-                .replace(/\{nome\}/g, row.nome.split(" ")[0])
-                .replace(/\{codigo\}/g, row.codigo);
+            for (const accountId of accountIds) {
+              const body: any = { phone: row.telefone, account_id: accountId };
+              if (sendType === "template" && selectedTemplate?.template_name) {
+                body.template_name = selectedTemplate.template_name;
+                body.template_language = selectedTemplate.template_language || "pt_BR";
+                body.template_params = resolveParams((selectedTemplate.template_params || []) as any[], row.nome, row.codigo);
+              } else {
+                body.message = customMessage
+                  .replace(/\{nome\}/g, row.nome.split(" ")[0])
+                  .replace(/\{codigo\}/g, row.codigo);
+              }
+              const { error } = await supabase.functions.invoke("whatsapp-cloud-send", { body });
+              if (error) throw error;
+              successCount++;
             }
-            const { error } = await supabase.functions.invoke("whatsapp-cloud-send", { body });
-            if (error) throw error;
           }
-          successCount++;
         } catch {
           errorCount++;
         }
@@ -510,19 +565,22 @@ function BroadcastTab() {
         try {
           if (sendType === "flow") {
             await startFlowForLead(leadId);
+            successCount++;
           } else {
-            const body: any = { phone: lead.phone, lead_id: lead.id };
-            if (sendType === "template" && selectedTemplate?.template_name) {
-              body.template_name = selectedTemplate.template_name;
-              body.template_language = selectedTemplate.template_language || "pt_BR";
-              body.template_params = resolveParams((selectedTemplate.template_params || []) as any[], lead.name, "");
-            } else {
-              body.message = customMessage.replace(/\{nome\}/g, lead.name.split(" ")[0]);
+            for (const accountId of accountIds) {
+              const body: any = { phone: lead.phone, lead_id: lead.id, account_id: accountId };
+              if (sendType === "template" && selectedTemplate?.template_name) {
+                body.template_name = selectedTemplate.template_name;
+                body.template_language = selectedTemplate.template_language || "pt_BR";
+                body.template_params = resolveParams((selectedTemplate.template_params || []) as any[], lead.name, "");
+              } else {
+                body.message = customMessage.replace(/\{nome\}/g, lead.name.split(" ")[0]);
+              }
+              const { error } = await supabase.functions.invoke("whatsapp-cloud-send", { body });
+              if (error) throw error;
+              successCount++;
             }
-            const { error } = await supabase.functions.invoke("whatsapp-cloud-send", { body });
-            if (error) throw error;
           }
-          successCount++;
         } catch {
           errorCount++;
         }
@@ -766,6 +824,16 @@ function BroadcastTab() {
                   rows={5}
                 />
               </div>
+            )}
+
+            {sendType !== "flow" && (
+              <AccountSelector
+                accounts={accounts}
+                selectedIds={selectedAccountIds}
+                onToggle={toggleAccount}
+                mode="multi"
+                label="Contas para envio"
+              />
             )}
 
             <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 p-3">
