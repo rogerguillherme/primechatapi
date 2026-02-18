@@ -1399,6 +1399,27 @@ export default function WhatsAppApi() {
 
   const defaultAccount = accounts?.find((a: any) => a.is_default) || accounts?.[0];
 
+  const { data: limitsData } = useQuery({
+    queryKey: ["whatsapp-limits-inline"],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("whatsapp-limits");
+      if (error) throw error;
+      return (data?.limits || []) as Array<{ account_id: string; messaging_limit_tier: string | null; quality_rating: string | null; error?: string }>;
+    },
+    refetchInterval: 60000,
+    staleTime: 30000,
+  });
+
+  const limitsMap = useMemo(() => {
+    const map = new Map<string, { tier: string | null; quality: string | null }>();
+    if (limitsData) {
+      for (const l of limitsData) {
+        map.set(l.account_id, { tier: l.messaging_limit_tier, quality: l.quality_rating });
+      }
+    }
+    return map;
+  }, [limitsData]);
+
   // Auto-select default account for test tab
   useEffect(() => {
     if (!selectedAccountId && defaultAccount) {
@@ -1604,6 +1625,30 @@ export default function WhatsAppApi() {
                           Phone ID: {account.phone_number_id.slice(0, 8)}...
                           {account.business_account_id && ` • BA: ${account.business_account_id.slice(0, 8)}...`}
                         </p>
+                        {(() => {
+                          const lim = limitsMap.get(account.id);
+                          if (!lim) return null;
+                          const tierLabels: Record<string, string> = {
+                            TIER_NOT_SET: "Não definido", TIER_50: "50/dia", TIER_250: "250/dia",
+                            TIER_1K: "1K/dia", TIER_10K: "10K/dia", TIER_100K: "100K/dia", TIER_UNLIMITED: "Ilimitado",
+                          };
+                          const qualityColors: Record<string, string> = { GREEN: "text-emerald-500", YELLOW: "text-amber-500", RED: "text-destructive" };
+                          const qualityLabels: Record<string, string> = { GREEN: "Alta", YELLOW: "Média", RED: "Baixa" };
+                          return (
+                            <div className="flex items-center gap-3 mt-1">
+                              {lim.tier && (
+                                <span className="text-[11px] font-medium text-muted-foreground">
+                                  📨 {tierLabels[lim.tier] || lim.tier}
+                                </span>
+                              )}
+                              {lim.quality && (
+                                <span className={`text-[11px] font-medium ${qualityColors[lim.quality] || "text-muted-foreground"}`}>
+                                  🛡️ {qualityLabels[lim.quality] || lim.quality}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                       <div className="flex items-center gap-1">
                         {!account.is_default && (
