@@ -72,6 +72,7 @@ export default function Chat() {
   const [showSearch, setShowSearch] = useState(false);
   const [activeTab, setActiveTab] = useState<ChatTab>("aguardando_respostas");
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+  const [filterAccountId, setFilterAccountId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const queryClient = useQueryClient();
@@ -97,15 +98,32 @@ export default function Chat() {
     },
   });
 
+  // Fetch lead IDs per account for filtering
+  const { data: leadAccountMap } = useQuery({
+    queryKey: ["chat-lead-accounts"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("chat_messages")
+        .select("lead_id, account_id")
+        .not("account_id", "is", null);
+      const map = new Map<string, Set<string>>();
+      for (const m of data || []) {
+        if (!map.has(m.account_id!)) map.set(m.account_id!, new Set());
+        map.get(m.account_id!)!.add(m.lead_id);
+      }
+      return map;
+    },
+  });
+
   // Fetch latest message per lead
   const { data: latestMessages } = useQuery({
     queryKey: ["chat-latest-messages"],
     queryFn: async () => {
       const { data } = await supabase
         .from("chat_messages")
-        .select("lead_id, content, created_at, direction")
+        .select("lead_id, content, created_at, direction, account_id")
         .order("created_at", { ascending: false });
-      const map = new Map<string, { content: string; created_at: string; direction: string }>();
+      const map = new Map<string, { content: string; created_at: string; direction: string; account_id: string | null }>();
       for (const m of data || []) {
         if (!map.has(m.lead_id)) map.set(m.lead_id, m);
       }
@@ -304,9 +322,10 @@ export default function Chat() {
     return leads.filter(
       (l) =>
         (l.chat_status === activeTab) &&
-        (l.name.toLowerCase().includes(s) || l.phone.includes(s) || l.email?.toLowerCase().includes(s))
+        (l.name.toLowerCase().includes(s) || l.phone.includes(s) || l.email?.toLowerCase().includes(s)) &&
+        (!filterAccountId || leadAccountMap?.get(filterAccountId)?.has(l.id))
     );
-  }, [leads, search, activeTab]);
+  }, [leads, search, activeTab, filterAccountId, leadAccountMap]);
 
   const tabCounts = useMemo(() => {
     if (!leads) return {} as Record<ChatTab, number>;
@@ -388,6 +407,24 @@ export default function Chat() {
                 autoFocus
               />
             </div>
+          </div>
+        )}
+
+        {/* Account filter */}
+        {accounts.length > 1 && (
+          <div className="px-3 py-1.5 border-b border-border bg-card">
+            <select
+              value={filterAccountId || ""}
+              onChange={(e) => setFilterAccountId(e.target.value || null)}
+              className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <option value="">Todos os números</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name} {a.is_default ? "(padrão)" : ""}
+                </option>
+              ))}
+            </select>
           </div>
         )}
 
