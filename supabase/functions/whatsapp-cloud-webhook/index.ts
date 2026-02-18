@@ -43,7 +43,17 @@ Deno.serve(async (req) => {
     const token = url.searchParams.get("hub.verify_token");
     const challenge = url.searchParams.get("hub.challenge");
 
-    const VERIFY_TOKEN = Deno.env.get("WHATSAPP_VERIFY_TOKEN");
+    // Try to get verify token from database first, then fall back to env var
+    let VERIFY_TOKEN = Deno.env.get("WHATSAPP_VERIFY_TOKEN");
+    try {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const sb = createClient(supabaseUrl, supabaseKey);
+      const { data } = await sb.from("app_settings").select("value").eq("key", "whatsapp_verify_token").maybeSingle();
+      if (data?.value) VERIFY_TOKEN = data.value;
+    } catch (e) {
+      console.error("Failed to read verify token from DB:", e);
+    }
 
     console.log("Webhook verify - mode:", mode, "received token:", JSON.stringify(token), "expected token:", JSON.stringify(VERIFY_TOKEN), "match:", token === VERIFY_TOKEN);
 
