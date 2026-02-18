@@ -323,6 +323,12 @@ function BroadcastTab() {
   const [csvRows, setCsvRows] = useState<CsvRow[]>([]);
   const [csvSelectedIdxs, setCsvSelectedIdxs] = useState<Set<number>>(new Set());
   const csvInputRef = useRef<HTMLInputElement>(null);
+  // Add lead manually
+  const [showAddLead, setShowAddLead] = useState(false);
+  const [newLeadName, setNewLeadName] = useState("");
+  const [newLeadPhone, setNewLeadPhone] = useState("");
+  const [isAddingLead, setIsAddingLead] = useState(false);
+  const queryClient = useQueryClient();
 
   // Auto-select default account
   useEffect(() => {
@@ -407,6 +413,68 @@ function BroadcastTab() {
       else next.add(idx);
       return next;
     });
+  };
+
+  const handleAddLead = async () => {
+    if (!newLeadName.trim() || !newLeadPhone.trim()) {
+      toast.error("Preencha nome e telefone.");
+      return;
+    }
+    setIsAddingLead(true);
+    try {
+      const phone = newLeadPhone.replace(/\D/g, "");
+      const cleanPhone = phone.startsWith("55") ? phone : "55" + phone;
+      const { data, error } = await supabase.from("leads").insert({ name: newLeadName.trim(), phone: cleanPhone, origin: "manual" }).select("id").single();
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ["broadcast-leads"] });
+      setSelectedLeads((prev) => new Set([...prev, data.id]));
+      setNewLeadName("");
+      setNewLeadPhone("");
+      setShowAddLead(false);
+      toast.success("Lead adicionado!");
+    } catch (e: any) {
+      toast.error("Erro: " + e.message);
+    } finally {
+      setIsAddingLead(false);
+    }
+  };
+
+  const handleLoadLastBroadcast = async () => {
+    // Get the most recent outbound messages grouped by lead_id (last broadcast batch)
+    const { data: recentMessages } = await supabase
+      .from("chat_messages")
+      .select("lead_id, created_at")
+      .eq("direction", "outbound")
+      .order("created_at", { ascending: false })
+      .limit(500);
+
+    if (!recentMessages || recentMessages.length === 0) {
+      toast.error("Nenhum disparo anterior encontrado.");
+      return;
+    }
+
+    // Find the timestamp of the most recent message
+    const latestTs = recentMessages[0].created_at;
+    const latestDate = new Date(latestTs);
+    // Consider messages within a 5-minute window as part of the same broadcast
+    const windowMs = 5 * 60 * 1000;
+    const cutoff = new Date(latestDate.getTime() - windowMs).toISOString();
+
+    const batchLeadIds = new Set<string>();
+    for (const msg of recentMessages) {
+      if (msg.created_at >= cutoff) {
+        batchLeadIds.add(msg.lead_id);
+      }
+    }
+
+    if (batchLeadIds.size === 0) {
+      toast.error("Nenhum lead encontrado no último disparo.");
+      return;
+    }
+
+    setSelectedLeads(batchLeadIds);
+    setMode("leads");
+    toast.success(`${batchLeadIds.size} lead(s) do último disparo selecionados!`);
   };
 
   const handleCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -602,14 +670,43 @@ function BroadcastTab() {
   return (
     <div className="space-y-6">
       {/* Mode toggle */}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button variant={mode === "leads" ? "default" : "outline"} size="sm" onClick={() => setMode("leads")}>
           <Users size={14} className="mr-1.5" /> Leads cadastrados
         </Button>
         <Button variant={mode === "csv" ? "default" : "outline"} size="sm" onClick={() => setMode("csv")}>
           <FileText size={14} className="mr-1.5" /> Importar CSV
         </Button>
+        <Button variant="outline" size="sm" onClick={handleLoadLastBroadcast}>
+          <ArrowLeft size={14} className="mr-1.5" /> Último disparo
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => setShowAddLead(!showAddLead)}>
+          <Users size={14} className="mr-1.5" /> {showAddLead ? "Fechar" : "Adicionar lead"}
+        </Button>
       </div>
+
+      {/* Add lead form */}
+      {showAddLead && (
+        <Card>
+          <CardContent className="pt-4 space-y-3">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Nome</Label>
+                <Input placeholder="Nome do lead" value={newLeadName} onChange={(e) => setNewLeadName(e.target.value)} className="h-9 text-sm" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Telefone</Label>
+                <Input placeholder="5511999999999" value={newLeadPhone} onChange={(e) => setNewLeadPhone(e.target.value)} className="h-9 text-sm font-mono" />
+              </div>
+              <div className="flex items-end">
+                <Button onClick={handleAddLead} disabled={isAddingLead} size="sm" className="w-full">
+                  {isAddingLead ? "Salvando..." : "Adicionar"}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Left: Contact selection */}
