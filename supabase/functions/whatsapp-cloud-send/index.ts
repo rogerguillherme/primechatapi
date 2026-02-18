@@ -161,6 +161,7 @@ Deno.serve(async (req) => {
         lead_id, direction: "outbound", content: contentText,
         media_type: media_type || null, media_url: media_url || null,
         zapi_message_id: waMessageId, status: "sent",
+        account_id: account_id || null,
       });
     }
 
