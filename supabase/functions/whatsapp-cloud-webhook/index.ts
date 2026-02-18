@@ -108,7 +108,29 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
-    const ACCESS_TOKEN = Deno.env.get("WHATSAPP_ACCESS_TOKEN");
+
+    // Resolve access token: try matching account by phone_number_id, then default, then env var
+    const incomingPhoneNumberId = value.metadata?.phone_number_id || "";
+    let ACCESS_TOKEN: string | undefined;
+    if (incomingPhoneNumberId) {
+      const { data: matchedAccount } = await supabase
+        .from("whatsapp_accounts")
+        .select("access_token")
+        .eq("phone_number_id", incomingPhoneNumberId)
+        .maybeSingle();
+      if (matchedAccount) ACCESS_TOKEN = matchedAccount.access_token;
+    }
+    if (!ACCESS_TOKEN) {
+      const { data: defaultAccount } = await supabase
+        .from("whatsapp_accounts")
+        .select("access_token")
+        .eq("is_default", true)
+        .maybeSingle();
+      if (defaultAccount) ACCESS_TOKEN = defaultAccount.access_token;
+    }
+    if (!ACCESS_TOKEN) {
+      ACCESS_TOKEN = Deno.env.get("WHATSAPP_ACCESS_TOKEN");
+    }
 
     const messages = value.messages;
     if (!messages || messages.length === 0) {

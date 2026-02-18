@@ -1167,9 +1167,16 @@ function CloudChatTab() {
    MAIN PAGE
    ══════════════════════════════════════════════════ */
 export default function WhatsAppApi() {
+  const queryClient = useQueryClient();
+  const [editingAccount, setEditingAccount] = useState<any | null>(null);
+  const [isAddingAccount, setIsAddingAccount] = useState(false);
+  const [accountName, setAccountName] = useState("");
   const [phoneNumberId, setPhoneNumberId] = useState("");
   const [accessToken, setAccessToken] = useState("");
   const [businessAccountId, setBusinessAccountId] = useState("");
+  const [isDefault, setIsDefault] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
   const [verifyToken, setVerifyToken] = useState(() => {
     const stored = localStorage.getItem("whatsapp_verify_token");
     if (stored) return stored;
@@ -1180,30 +1187,116 @@ export default function WhatsAppApi() {
   const [testPhone, setTestPhone] = useState("");
   const [testMessage, setTestMessage] = useState("Olá! Esta é uma mensagem de teste do Meno Lead.");
   const [isTesting, setIsTesting] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState<"idle" | "connected" | "error">("idle");
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
 
   const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-cloud-webhook`;
+
+  const { data: accounts, isLoading: accountsLoading } = useQuery({
+    queryKey: ["whatsapp-accounts"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("whatsapp_accounts")
+        .select("*")
+        .order("is_default", { ascending: false })
+        .order("name");
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const defaultAccount = accounts?.find((a: any) => a.is_default) || accounts?.[0];
+
+  // Auto-select default account for test tab
+  useEffect(() => {
+    if (!selectedAccountId && defaultAccount) {
+      setSelectedAccountId(defaultAccount.id);
+    }
+  }, [defaultAccount, selectedAccountId]);
 
   const handleCopyWebhook = () => {
     navigator.clipboard.writeText(webhookUrl);
     toast.success("URL do webhook copiada!");
   };
 
-  const handleSave = async () => {
-    if (!phoneNumberId || !accessToken) {
-      toast.error("Preencha o Phone Number ID e o Access Token.");
+  const resetForm = () => {
+    setAccountName("");
+    setPhoneNumberId("");
+    setAccessToken("");
+    setBusinessAccountId("");
+    setIsDefault(false);
+    setEditingAccount(null);
+    setIsAddingAccount(false);
+  };
+
+  const startEditing = (account: any) => {
+    setEditingAccount(account);
+    setAccountName(account.name);
+    setPhoneNumberId(account.phone_number_id);
+    setAccessToken(account.access_token);
+    setBusinessAccountId(account.business_account_id || "");
+    setIsDefault(account.is_default);
+    setIsAddingAccount(true);
+  };
+
+  const handleSaveAccount = async () => {
+    if (!accountName.trim() || !phoneNumberId.trim() || !accessToken.trim()) {
+      toast.error("Preencha o nome, Phone Number ID e Access Token.");
       return;
     }
     setIsSaving(true);
     try {
-      toast.success("Configurações salvas! Configure os secrets no backend para ativar.");
-      setConnectionStatus("connected");
-    } catch {
-      toast.error("Erro ao salvar configurações.");
-      setConnectionStatus("error");
+      const payload = {
+        name: accountName.trim(),
+        phone_number_id: phoneNumberId.trim(),
+        business_account_id: businessAccountId.trim() || null,
+        access_token: accessToken.trim(),
+        is_default: isDefault || (accounts?.length === 0),
+      };
+
+      if (editingAccount) {
+        const { error } = await supabase
+          .from("whatsapp_accounts")
+          .update(payload)
+          .eq("id", editingAccount.id);
+        if (error) throw error;
+        toast.success("Conta atualizada!");
+      } else {
+        const { error } = await supabase
+          .from("whatsapp_accounts")
+          .insert(payload);
+        if (error) throw error;
+        toast.success("Conta adicionada!");
+      }
+      queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
+      resetForm();
+    } catch (err: any) {
+      toast.error(`Erro: ${err.message}`);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDeleteAccount = async (id: string) => {
+    if (!confirm("Tem certeza que deseja excluir esta conta?")) return;
+    const { error } = await supabase.from("whatsapp_accounts").delete().eq("id", id);
+    if (error) {
+      toast.error(`Erro: ${error.message}`);
+    } else {
+      toast.success("Conta excluída!");
+      queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
+    }
+  };
+
+  const handleSetDefault = async (id: string) => {
+    const { error } = await supabase
+      .from("whatsapp_accounts")
+      .update({ is_default: true })
+      .eq("id", id);
+    if (error) {
+      toast.error(`Erro: ${error.message}`);
+    } else {
+      toast.success("Conta definida como padrão!");
+      queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
     }
   };
 
@@ -1212,10 +1305,14 @@ export default function WhatsAppApi() {
       toast.error("Informe o número de telefone para teste.");
       return;
     }
+    if (!selectedAccountId) {
+      toast.error("Selecione uma conta para enviar.");
+      return;
+    }
     setIsTesting(true);
     try {
       const { data, error } = await supabase.functions.invoke("whatsapp-cloud-send", {
-        body: { phone: testPhone, message: testMessage },
+        body: { phone: testPhone, message: testMessage, account_id: selectedAccountId },
       });
       if (error) throw error;
       toast.success("Mensagem de teste enviada com sucesso!");
@@ -1262,47 +1359,120 @@ export default function WhatsAppApi() {
 
         {/* ── Config Tab ── */}
         <TabsContent value="config" className="space-y-4">
+          {/* Existing accounts list */}
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="flex items-center gap-2">
                     <Key size={20} />
-                    Credenciais da API
+                    Contas da Meta
                   </CardTitle>
                   <CardDescription>
-                    Obtenha essas informações no{" "}
+                    Gerencie suas contas do WhatsApp Business. Obtenha credenciais no{" "}
                     <a href="https://developers.facebook.com" target="_blank" rel="noopener noreferrer" className="text-primary underline inline-flex items-center gap-1">
                       Facebook Developers <ExternalLink size={12} />
                     </a>
                   </CardDescription>
                 </div>
-                <Badge variant={connectionStatus === "connected" ? "default" : connectionStatus === "error" ? "destructive" : "secondary"} className="gap-1">
-                  {connectionStatus === "connected" ? <><CheckCircle2 size={12} /> Conectado</> : connectionStatus === "error" ? <><AlertCircle size={12} /> Erro</> : "Não configurado"}
-                </Badge>
+                <Button onClick={() => { resetForm(); setIsAddingAccount(true); }} size="sm" className="gap-1.5">
+                  <span className="text-lg leading-none">+</span> Nova Conta
+                </Button>
               </div>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="phoneNumberId">Phone Number ID</Label>
-                  <Input id="phoneNumberId" placeholder="Ex: 123456789012345" value={phoneNumberId} onChange={(e) => setPhoneNumberId(e.target.value)} />
+            <CardContent>
+              {accountsLoading ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">Carregando...</p>
+              ) : !accounts || accounts.length === 0 ? (
+                <div className="text-center py-8 space-y-3">
+                  <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto">
+                    <Key size={24} className="text-muted-foreground" />
+                  </div>
+                  <p className="text-sm text-muted-foreground">Nenhuma conta configurada</p>
+                  <Button variant="outline" size="sm" onClick={() => { resetForm(); setIsDefault(true); setIsAddingAccount(true); }}>
+                    Adicionar primeira conta
+                  </Button>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="businessAccountId">Business Account ID</Label>
-                  <Input id="businessAccountId" placeholder="Ex: 987654321098765" value={businessAccountId} onChange={(e) => setBusinessAccountId(e.target.value)} />
+              ) : (
+                <div className="space-y-3">
+                  {accounts.map((account: any) => (
+                    <div key={account.id} className="flex items-center gap-4 p-4 rounded-lg border border-border bg-muted/20 hover:bg-muted/40 transition-colors">
+                      <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center flex-shrink-0">
+                        <MessageCircle size={18} className="text-primary-foreground" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-sm truncate">{account.name}</p>
+                          {account.is_default && (
+                            <Badge variant="default" className="text-[10px] px-1.5 py-0">Padrão</Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Phone ID: {account.phone_number_id.slice(0, 8)}...
+                          {account.business_account_id && ` • BA: ${account.business_account_id.slice(0, 8)}...`}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {!account.is_default && (
+                          <Button variant="ghost" size="sm" onClick={() => handleSetDefault(account.id)} className="text-xs h-8">
+                            <CheckCircle2 size={14} className="mr-1" /> Padrão
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEditing(account)}>
+                          <ExternalLink size={14} />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDeleteAccount(account.id)}>
+                          <AlertCircle size={14} />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="accessToken">Access Token (permanente)</Label>
-                <Input id="accessToken" type="password" placeholder="EAAxxxxxxx..." value={accessToken} onChange={(e) => setAccessToken(e.target.value)} />
-                <p className="text-xs text-muted-foreground">Use um token permanente do System User no Business Manager.</p>
-              </div>
-              <Button onClick={handleSave} disabled={isSaving} className="w-full sm:w-auto">
-                {isSaving ? "Salvando..." : "Salvar Configurações"}
-              </Button>
+              )}
             </CardContent>
           </Card>
+
+          {/* Add/Edit form */}
+          {isAddingAccount && (
+            <Card className="border-primary/30">
+              <CardHeader>
+                <CardTitle className="text-base">
+                  {editingAccount ? `Editar: ${editingAccount.name}` : "Nova Conta"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="accountName">Nome da Conta</Label>
+                  <Input id="accountName" placeholder="Ex: Minha Loja Principal" value={accountName} onChange={(e) => setAccountName(e.target.value)} />
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="phoneNumberId">Phone Number ID</Label>
+                    <Input id="phoneNumberId" placeholder="Ex: 123456789012345" value={phoneNumberId} onChange={(e) => setPhoneNumberId(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="businessAccountId">Business Account ID</Label>
+                    <Input id="businessAccountId" placeholder="Ex: 987654321098765" value={businessAccountId} onChange={(e) => setBusinessAccountId(e.target.value)} />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="accessToken">Access Token (permanente)</Label>
+                  <Input id="accessToken" type="password" placeholder="EAAxxxxxxx..." value={accessToken} onChange={(e) => setAccessToken(e.target.value)} />
+                  <p className="text-xs text-muted-foreground">Use um token permanente do System User no Business Manager.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox id="isDefault" checked={isDefault} onCheckedChange={(v) => setIsDefault(!!v)} />
+                  <Label htmlFor="isDefault" className="text-sm cursor-pointer">Definir como conta padrão</Label>
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={handleSaveAccount} disabled={isSaving}>
+                    {isSaving ? "Salvando..." : editingAccount ? "Atualizar" : "Salvar Conta"}
+                  </Button>
+                  <Button variant="outline" onClick={resetForm}>Cancelar</Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* ── Webhook Tab ── */}
@@ -1348,6 +1518,22 @@ export default function WhatsAppApi() {
               <CardDescription>Teste a conexão enviando uma mensagem via WhatsApp Cloud API.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {accounts && accounts.length > 1 && (
+                <div className="space-y-2">
+                  <Label>Conta</Label>
+                  <select
+                    value={selectedAccountId || ""}
+                    onChange={(e) => setSelectedAccountId(e.target.value || null)}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {accounts.map((a: any) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name} {a.is_default ? "(padrão)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="testPhone">Número de Telefone</Label>
@@ -1367,7 +1553,6 @@ export default function WhatsAppApi() {
             </CardContent>
           </Card>
         </TabsContent>
-
 
         {/* ── Broadcast Tab ── */}
         <TabsContent value="broadcast" className="space-y-4">
