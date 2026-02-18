@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { ChatMediaBubble } from "@/components/ChatMediaBubble";
 import { AudioRecorder } from "@/components/AudioRecorder";
+import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 
 interface LeadChatDrawerProps {
   lead: { id: string; name: string; phone: string } | null;
@@ -40,11 +41,20 @@ function formatDateSeparator(date: Date) {
 
 export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps) {
   const [message, setMessage] = useState("");
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { accounts, defaultAccount } = useWhatsAppAccounts();
+
+  // Auto-select default account
+  useEffect(() => {
+    if (!selectedAccountId && defaultAccount) {
+      setSelectedAccountId(defaultAccount.id);
+    }
+  }, [defaultAccount, selectedAccountId]);
 
   const { data: messages } = useQuery({
     queryKey: ["chat-messages", lead?.id],
@@ -130,6 +140,7 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
           template_name: templateName,
           template_language: templateLanguage,
           template_params: templateParams,
+          account_id: selectedAccountId || undefined,
         },
       });
       if (error) throw error;
@@ -196,6 +207,19 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
                 <p className="font-medium text-[15px] text-sidebar-foreground truncate">{lead.name}</p>
                 <p className="text-xs text-sidebar-foreground/50">{lead.phone}</p>
               </div>
+              {accounts.length > 1 && (
+                <select
+                  value={selectedAccountId || ""}
+                  onChange={(e) => setSelectedAccountId(e.target.value || null)}
+                  className="h-7 rounded-md border border-sidebar-foreground/20 bg-transparent px-2 text-xs text-sidebar-foreground focus:outline-none"
+                >
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id} className="text-foreground bg-background">
+                      {a.name} {a.is_default ? "(padrão)" : ""}
+                    </option>
+                  ))}
+                </select>
+              )}
             </>
           )}
         </div>
