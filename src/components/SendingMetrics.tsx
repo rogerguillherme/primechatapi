@@ -5,12 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  Send, CheckCheck, Eye, Inbox, RefreshCw, ChevronDown, ChevronRight,
+  Send, CheckCheck, Eye, Inbox, RefreshCw, ChevronDown, ChevronRight, MessageCircle,
 } from "lucide-react";
 import { useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 
 interface BroadcastGroup {
   key: string;
@@ -22,15 +23,27 @@ interface BroadcastGroup {
   failed: number;
 }
 
+interface AccountStats {
+  id: string;
+  name: string;
+  total: number;
+  sent: number;
+  delivered: number;
+  read: number;
+  failed: number;
+}
+
 export function SendingMetrics() {
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const { accounts } = useWhatsAppAccounts();
 
   const handleRefresh = () => {
     setRefreshing(true);
     queryClient.invalidateQueries({ queryKey: ["sending-metrics-summary"] });
     queryClient.invalidateQueries({ queryKey: ["sending-metrics-dispatches"] });
+    queryClient.invalidateQueries({ queryKey: ["sending-metrics-by-account"] });
     setTimeout(() => setRefreshing(false), 800);
   };
 
@@ -52,6 +65,39 @@ export function SendingMetrics() {
     refetchInterval: 30000,
   });
 
+  const { data: accountStats } = useQuery({
+    queryKey: ["sending-metrics-by-account"],
+    queryFn: async () => {
+      const { data: outbound } = await supabase
+        .from("chat_messages")
+        .select("status, delivered_at, read_at, account_id")
+        .eq("direction", "outbound");
+
+      if (!outbound || outbound.length === 0 || accounts.length === 0) return [] as AccountStats[];
+
+      const map = new Map<string, AccountStats>();
+      for (const acc of accounts) {
+        map.set(acc.id, { id: acc.id, name: acc.name, total: 0, sent: 0, delivered: 0, read: 0, failed: 0 });
+      }
+      // For messages without account_id
+      map.set("unknown", { id: "unknown", name: "Sem conta", total: 0, sent: 0, delivered: 0, read: 0, failed: 0 });
+
+      for (const msg of outbound) {
+        const key = msg.account_id && map.has(msg.account_id) ? msg.account_id : "unknown";
+        const entry = map.get(key)!;
+        entry.total++;
+        if (["sent", "delivered", "read"].includes(msg.status)) entry.sent++;
+        if (msg.status === "delivered" || msg.status === "read" || msg.delivered_at) entry.delivered++;
+        if (msg.status === "read" || msg.read_at) entry.read++;
+        if (msg.status === "failed") entry.failed++;
+      }
+
+      return Array.from(map.values()).filter(a => a.total > 0);
+    },
+    enabled: accounts.length > 0,
+    refetchInterval: 30000,
+  });
+
   const { data: dispatches, isLoading: loadingDispatches } = useQuery({
     queryKey: ["sending-metrics-dispatches"],
     queryFn: async () => {
@@ -63,7 +109,6 @@ export function SendingMetrics() {
 
       if (!outbound || outbound.length === 0) return [] as BroadcastGroup[];
 
-      // Group messages by dispatch batches (messages within 5 min window)
       const groups: BroadcastGroup[] = [];
       let current: typeof outbound = [];
       let currentStart: Date | null = null;
@@ -139,6 +184,47 @@ export function SendingMetrics() {
           </Card>
         ))}
       </div>
+
+      {/* Per-account stats */}
+      {accountStats && accountStats.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <MessageCircle size={16} /> Disparos por conta
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y divide-border">
+              {accountStats.map((acc) => (
+                <div key={acc.id} className="px-4 py-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium">{acc.name}</span>
+                    <Badge variant="outline" className="text-[10px] font-mono">{acc.total} total</Badge>
+                  </div>
+                  <div className="grid grid-cols-4 gap-2">
+                    <div className="text-center py-1.5 rounded-md bg-muted/50">
+                      <p className="text-sm font-bold text-amber-500">{acc.sent}</p>
+                      <p className="text-[10px] text-muted-foreground">Enviado</p>
+                    </div>
+                    <div className="text-center py-1.5 rounded-md bg-muted/50">
+                      <p className="text-sm font-bold text-emerald-500">{acc.delivered}</p>
+                      <p className="text-[10px] text-muted-foreground">Recebido</p>
+                    </div>
+                    <div className="text-center py-1.5 rounded-md bg-muted/50">
+                      <p className="text-sm font-bold text-blue-500">{acc.read}</p>
+                      <p className="text-[10px] text-muted-foreground">Lido</p>
+                    </div>
+                    <div className="text-center py-1.5 rounded-md bg-muted/50">
+                      <p className="text-sm font-bold text-destructive">{acc.failed}</p>
+                      <p className="text-[10px] text-muted-foreground">Falhou</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Dispatches list */}
       <Card>

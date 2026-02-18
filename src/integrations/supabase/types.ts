@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       chat_messages: {
         Row: {
+          account_id: string | null
           content: string
           created_at: string
           delivered_at: string | null
@@ -29,6 +30,7 @@ export type Database = {
           zapi_message_id: string | null
         }
         Insert: {
+          account_id?: string | null
           content: string
           created_at?: string
           delivered_at?: string | null
@@ -42,6 +44,7 @@ export type Database = {
           zapi_message_id?: string | null
         }
         Update: {
+          account_id?: string | null
           content?: string
           created_at?: string
           delivered_at?: string | null
@@ -55,6 +58,13 @@ export type Database = {
           zapi_message_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "chat_messages_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "chat_messages_lead_id_fkey"
             columns: ["lead_id"]
