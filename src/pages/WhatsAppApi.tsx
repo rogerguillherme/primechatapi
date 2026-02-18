@@ -1245,10 +1245,6 @@ export default function WhatsAppApi() {
             <TabsTrigger value="test" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm text-sm px-4 py-2.5 transition-all">
               Teste
             </TabsTrigger>
-            <TabsTrigger value="tracking" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm gap-1.5 text-sm px-4 py-2.5 transition-all">
-              <Package size={14} />
-              Rastreio
-            </TabsTrigger>
             <TabsTrigger value="broadcast" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm gap-1.5 text-sm px-4 py-2.5 transition-all">
               <Send size={14} />
               Disparo
@@ -1372,10 +1368,6 @@ export default function WhatsAppApi() {
           </Card>
         </TabsContent>
 
-        {/* ── Tracking Tab ── */}
-        <TabsContent value="tracking" className="space-y-4">
-          <TrackingTab />
-        </TabsContent>
 
         {/* ── Broadcast Tab ── */}
         <TabsContent value="broadcast" className="space-y-4">
