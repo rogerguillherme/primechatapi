@@ -1245,13 +1245,38 @@ export default function WhatsAppApi() {
   const [isDefault, setIsDefault] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  const [verifyToken, setVerifyToken] = useState(() => {
-    const stored = localStorage.getItem("whatsapp_verify_token");
-    if (stored) return stored;
-    const generated = "meno_" + crypto.randomUUID().replace(/-/g, "").slice(0, 24);
-    localStorage.setItem("whatsapp_verify_token", generated);
-    return generated;
-  });
+  const [verifyToken, setVerifyToken] = useState("");
+  const [isSavingToken, setIsSavingToken] = useState(false);
+
+  // Load verify token from database
+  useEffect(() => {
+    supabase.from("app_settings").select("value").eq("key", "whatsapp_verify_token").maybeSingle().then(({ data }) => {
+      if (data?.value) {
+        setVerifyToken(data.value);
+      } else {
+        // Generate default token if none exists
+        const generated = "meno_" + crypto.randomUUID().replace(/-/g, "").slice(0, 24);
+        setVerifyToken(generated);
+      }
+    });
+  }, []);
+
+  const handleSaveVerifyToken = async () => {
+    if (!verifyToken.trim()) {
+      toast.error("Informe um token de verificação.");
+      return;
+    }
+    setIsSavingToken(true);
+    try {
+      const { error } = await supabase.from("app_settings").upsert({ key: "whatsapp_verify_token", value: verifyToken.trim(), updated_at: new Date().toISOString() });
+      if (error) throw error;
+      toast.success("Token de verificação salvo com sucesso!");
+    } catch (e: any) {
+      toast.error("Erro ao salvar token: " + e.message);
+    } finally {
+      setIsSavingToken(false);
+    }
+  };
   const [testPhone, setTestPhone] = useState("");
   const [testMessage, setTestMessage] = useState("Olá! Esta é uma mensagem de teste do Meno Lead.");
   const [isTesting, setIsTesting] = useState(false);
@@ -1560,8 +1585,13 @@ export default function WhatsAppApi() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="verifyToken">Verify Token</Label>
-                <Input id="verifyToken" placeholder="Defina um token de verificação" value={verifyToken} onChange={(e) => setVerifyToken(e.target.value)} />
-                <p className="text-xs text-muted-foreground">Use este mesmo valor no campo "Verify Token" ao configurar o webhook no Facebook.</p>
+                <div className="flex gap-2">
+                  <Input id="verifyToken" placeholder="Defina um token de verificação" value={verifyToken} onChange={(e) => setVerifyToken(e.target.value)} />
+                  <Button onClick={handleSaveVerifyToken} disabled={isSavingToken} variant="default" size="sm" className="shrink-0">
+                    {isSavingToken ? "Salvando..." : <><CheckCircle2 size={16} /> Salvar</>}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">Use este mesmo valor no campo "Verify Token" ao configurar o webhook no Facebook. Clique em Salvar para aplicar.</p>
               </div>
               <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
                 <p className="text-sm font-medium">Passo a passo:</p>
