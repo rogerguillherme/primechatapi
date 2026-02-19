@@ -20,8 +20,10 @@ import { toast } from "sonner";
 import {
   Phone, Key, Link2, Send, CheckCircle2, AlertCircle, Copy, ExternalLink,
   Package, MessageCircle, Search, FileText, Check, CheckCheck, Paperclip,
-  Truck, Users, ArrowLeft, BarChart3,
+  Truck, Users, ArrowLeft, BarChart3, MoreVertical, Pencil, Trash2, Star,
+  KeyRound,
 } from "lucide-react";
+import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -1689,18 +1691,44 @@ export default function WhatsAppApi() {
                           );
                         })()}
                       </div>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1.5">
                         {!account.is_default && (
-                          <Button variant="ghost" size="sm" onClick={() => handleSetDefault(account.id)} className="text-xs h-8">
-                            <CheckCircle2 size={14} className="mr-1" /> Padrão
+                          <Button variant="ghost" size="sm" onClick={() => handleSetDefault(account.id)} className="text-xs h-8 gap-1 text-muted-foreground hover:text-foreground">
+                            <Star size={14} /> Padrão
                           </Button>
                         )}
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEditing(account)}>
-                          <ExternalLink size={14} />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDeleteAccount(account.id)}>
-                          <AlertCircle size={14} />
-                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreVertical size={16} />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem onClick={() => startEditing(account)} className="gap-2">
+                              <Pencil size={14} /> Editar conta
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => {
+                              setEditingAccount(account);
+                              setAccountName(account.name);
+                              setPhoneNumberId(account.phone_number_id);
+                              setAccessToken("");
+                              setBusinessAccountId(account.business_account_id || "");
+                              setIsDefault(account.is_default);
+                              setIsAddingAccount(true);
+                            }} className="gap-2">
+                              <KeyRound size={14} /> Atualizar token
+                            </DropdownMenuItem>
+                            {!account.is_default && (
+                              <DropdownMenuItem onClick={() => handleSetDefault(account.id)} className="gap-2">
+                                <Star size={14} /> Definir como padrão
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => handleDeleteAccount(account.id)} className="gap-2 text-destructive focus:text-destructive">
+                              <Trash2 size={14} /> Excluir conta
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
                   ))}
