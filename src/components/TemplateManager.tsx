@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { Plus, Pencil, Trash2, FileText, Save, RefreshCw, ChevronDown } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
+import { useUserTemplates } from "@/hooks/use-user-templates";
 
 interface Template {
   id: string;
@@ -53,13 +54,8 @@ export function TemplateManager() {
   const [form, setForm] = useState(emptyForm);
   const [isOpen, setIsOpen] = useState(true);
 
-  const { data: templates, isLoading } = useQuery({
-    queryKey: ["managed-templates"],
-    queryFn: async () => {
-      const { data } = await supabase.from("chat_templates").select("*").order("name");
-      return (data || []) as Template[];
-    },
-  });
+  const { templates: rawTemplates, isLoading } = useUserTemplates();
+  const templates = rawTemplates as Template[];
 
   const { data: accountTemplates } = useQuery({
     queryKey: ["account-templates"],

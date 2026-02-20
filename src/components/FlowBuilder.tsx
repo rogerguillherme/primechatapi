@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNodesState, useEdgesState, type Node, type Edge, MarkerType } from "@xyflow/react";
 import { supabase } from "@/integrations/supabase/client";
+import { useUserTemplates } from "@/hooks/use-user-templates";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -280,13 +281,7 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [isLoaded, setIsLoaded] = useState(!flow);
 
-  const { data: templates } = useQuery({
-    queryKey: ["flow-templates"],
-    queryFn: async () => {
-      const { data } = await supabase.from("chat_templates").select("*").order("name");
-      return data || [];
-    },
-  });
+  const { templates } = useUserTemplates();
 
   // Load existing steps and convert to nodes/edges
   useQuery({
