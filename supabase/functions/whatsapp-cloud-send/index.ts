@@ -71,12 +71,16 @@ Deno.serve(async (req) => {
     if (template_name) {
       // If no template_params provided, try to fetch from DB
       let finalParams = template_params;
+      let resolvedLanguage = template_language;
       if (!finalParams || !Array.isArray(finalParams) || finalParams.length === 0) {
         const { data: tmpl } = await supabase
           .from("chat_templates")
-          .select("template_params")
+          .select("template_params, template_language")
           .eq("template_name", template_name)
           .maybeSingle();
+        if (tmpl?.template_language && !resolvedLanguage) {
+          resolvedLanguage = tmpl.template_language;
+        }
         if (tmpl?.template_params && Array.isArray(tmpl.template_params) && tmpl.template_params.length > 0) {
           // Resolve placeholders with lead info
           const { data: leadData } = lead_id
@@ -101,7 +105,7 @@ Deno.serve(async (req) => {
         type: "template",
         template: {
           name: template_name,
-          language: { code: template_language || "pt_BR" },
+          language: { code: resolvedLanguage || "pt_BR" },
         },
       };
       if (finalParams && Array.isArray(finalParams) && finalParams.length > 0) {
