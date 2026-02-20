@@ -35,12 +35,24 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Extract user from JWT
+    const authHeader = req.headers.get("authorization") || "";
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: userErr } = await supabase.auth.getUser(token);
+    if (userErr || !user) {
+      return new Response(
+        JSON.stringify({ error: "Não autenticado" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { account_id } = await req.json().catch(() => ({}));
 
-    // Get accounts to sync
+    // Get accounts to sync — filtered by authenticated user
     let accountsQuery = supabase
       .from("whatsapp_accounts")
-      .select("id, name, business_account_id, access_token");
+      .select("id, name, business_account_id, access_token")
+      .eq("user_id", user.id);
 
     if (account_id) {
       accountsQuery = accountsQuery.eq("id", account_id);
