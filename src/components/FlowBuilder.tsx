@@ -7,9 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
   Plus, Trash2, GitBranch, ChevronRight, Play, Pause, ArrowLeft, Save,
+  Sparkles, Send, Loader2, Bot, X,
 } from "lucide-react";
 import { FlowCanvas } from "@/components/flow-builder/FlowCanvas";
 
@@ -140,6 +142,135 @@ function FlowListView({ onEdit }: { onEdit: (flow: Flow | null) => void }) {
   );
 }
 
+/* ── AI Flow Chat Panel ── */
+function AiFlowChat({ onGenerate }: { onGenerate: (steps: any[]) => void }) {
+  const [open, setOpen] = useState(false);
+  const [prompt, setPrompt] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [messages, setMessages] = useState<{ role: "user" | "ai"; content: string }[]>([
+    { role: "ai", content: "Descreva o fluxo de automação que deseja criar e eu vou gerar para você! Ex: 'Fluxo de boas-vindas com mensagem, delay de 1 hora e botões de sim/não'" },
+  ]);
+
+  const handleSend = async () => {
+    if (!prompt.trim() || isGenerating) return;
+    const userMsg = prompt.trim();
+    setPrompt("");
+    setMessages((prev) => [...prev, { role: "user", content: userMsg }]);
+    setIsGenerating(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-flow", {
+        body: { description: userMsg },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      const steps = data.steps || [];
+      const summary = steps.map((s: any, i: number) => {
+        const typeNames: Record<string, string> = {
+          message: "📝 Mensagem",
+          delay: "⏰ Delay",
+          condition: "🔀 Condição",
+          interactive_buttons: "🔘 Botões",
+          cta_url: "🔗 Link",
+        };
+        return `${i + 1}. ${typeNames[s.type] || s.type}`;
+      }).join("\n");
+
+      setMessages((prev) => [
+        ...prev,
+        { role: "ai", content: `Fluxo gerado com ${steps.length} passos:\n\n${summary}\n\nOs nós foram adicionados ao canvas!` },
+      ]);
+
+      onGenerate(steps);
+    } catch (e: any) {
+      setMessages((prev) => [
+        ...prev,
+        { role: "ai", content: `Erro: ${e.message}` },
+      ]);
+      toast.error(e.message);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <Button
+        onClick={() => setOpen(true)}
+        className="absolute top-4 right-4 z-10 gap-2 shadow-lg"
+        size="sm"
+      >
+        <Sparkles size={14} /> IA Flow Builder
+      </Button>
+    );
+  }
+
+  return (
+    <div className="absolute top-4 right-4 z-10 w-80 bg-background border border-border rounded-xl shadow-elevated flex flex-col max-h-[calc(100%-2rem)]">
+      {/* Header */}
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+        <div className="flex items-center gap-2">
+          <Bot size={16} className="text-primary" />
+          <span className="text-sm font-medium">IA Flow Builder</span>
+        </div>
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setOpen(false)}>
+          <X size={14} />
+        </Button>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-[200px] max-h-[400px]">
+        {messages.map((msg, i) => (
+          <div
+            key={i}
+            className={`text-xs leading-relaxed px-3 py-2 rounded-lg whitespace-pre-wrap ${
+              msg.role === "ai"
+                ? "bg-muted text-foreground"
+                : "bg-primary text-primary-foreground ml-6"
+            }`}
+          >
+            {msg.content}
+          </div>
+        ))}
+        {isGenerating && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground px-3 py-2 bg-muted rounded-lg">
+            <Loader2 size={12} className="animate-spin" /> Gerando fluxo...
+          </div>
+        )}
+      </div>
+
+      {/* Input */}
+      <div className="p-2 border-t border-border">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSend();
+          }}
+          className="flex gap-2"
+        >
+          <Textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder="Descreva seu fluxo..."
+            className="text-xs min-h-[36px] max-h-[80px] resize-none"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+          />
+          <Button type="submit" size="icon" className="h-9 w-9 shrink-0" disabled={isGenerating || !prompt.trim()}>
+            <Send size={14} />
+          </Button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 /* ── Flow Editor View (Visual Canvas) ── */
 function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => void }) {
   const queryClient = useQueryClient();
@@ -193,7 +324,6 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
       const allNodes = [triggerNode, ...stepNodes];
       const allEdges: Edge[] = [];
 
-      // Connect trigger to first step
       if (stepNodes.length > 0) {
         allEdges.push({
           id: `e-trigger-${stepNodes[0].id}`,
@@ -202,7 +332,6 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
           ...defaultEdgeOptions,
         });
       }
-      // Connect steps sequentially
       for (let i = 0; i < stepNodes.length - 1; i++) {
         allEdges.push({
           id: `e-${stepNodes[i].id}-${stepNodes[i + 1].id}`,
@@ -235,6 +364,47 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
     }
   });
 
+  const handleAiGenerate = useCallback((steps: any[]) => {
+    // Keep trigger, add AI-generated nodes
+    const triggerNode = nodes.find((n) => n.id === "trigger") || {
+      id: "trigger",
+      type: "trigger",
+      position: { x: 0, y: 200 },
+      data: {},
+      draggable: true,
+    };
+
+    const newNodes: Node[] = steps.map((s: any, i: number) => ({
+      id: crypto.randomUUID(),
+      type: s.type,
+      position: { x: 350 + i * 350, y: 200 },
+      data: s.data || {},
+    }));
+
+    const allNodes = [triggerNode, ...newNodes];
+    const allEdges: Edge[] = [];
+
+    if (newNodes.length > 0) {
+      allEdges.push({
+        id: `e-trigger-${newNodes[0].id}`,
+        source: "trigger",
+        target: newNodes[0].id,
+        ...defaultEdgeOptions,
+      });
+    }
+    for (let i = 0; i < newNodes.length - 1; i++) {
+      allEdges.push({
+        id: `e-${newNodes[i].id}-${newNodes[i + 1].id}`,
+        source: newNodes[i].id,
+        target: newNodes[i + 1].id,
+        ...defaultEdgeOptions,
+      });
+    }
+
+    setNodes(allNodes);
+    setEdges(allEdges);
+  }, [nodes, setNodes, setEdges]);
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!name.trim()) throw new Error("Nome do fluxo é obrigatório.");
@@ -251,15 +421,12 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
         flowId = data.id;
       }
 
-      // Convert nodes (excluding trigger) to steps, ordered by edges
       const stepNodes = nodes.filter((n) => n.type !== "trigger");
       if (stepNodes.length > 0) {
-        // Build order from edges
         const ordered: Node[] = [];
         const edgeMap = new Map<string, string>();
         edges.forEach((e) => edgeMap.set(e.source, e.target));
 
-        // Find the first step (connected from trigger)
         let currentId = edgeMap.get("trigger");
         const visited = new Set<string>();
         while (currentId && !visited.has(currentId)) {
@@ -268,7 +435,6 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
           if (node) ordered.push(node);
           currentId = edgeMap.get(currentId);
         }
-        // Add any unconnected nodes at the end
         stepNodes.forEach((n) => {
           if (!visited.has(n.id)) ordered.push(n);
         });
@@ -330,9 +496,9 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
         </CardContent>
       </Card>
 
-      {/* Visual Canvas */}
+      {/* Visual Canvas - Expanded */}
       <Card className="overflow-hidden">
-        <div className="h-[500px]">
+        <div className="h-[calc(100vh-280px)] min-h-[500px] relative">
           <FlowCanvas
             nodes={nodes}
             edges={edges}
@@ -342,6 +508,7 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
             setEdges={setEdges}
             templates={templates || []}
           />
+          <AiFlowChat onGenerate={handleAiGenerate} />
         </div>
       </Card>
     </div>
