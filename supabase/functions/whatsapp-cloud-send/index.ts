@@ -172,13 +172,22 @@ Deno.serve(async (req) => {
     const waMessageId = waData.messages?.[0]?.id || null;
 
     if (lead_id) {
-      const contentText = template_name
-        ? `📋 Template: ${template_name}`
-        : interactive_buttons
-        ? `🔘 ${message || "Mensagem com botões"}`
-        : cta_url
-        ? `🔗 ${message || "Botão com link"}`
-        : message || (media_type === "audio" ? "🎤 Áudio" : media_type === "image" ? "📷 Imagem" : media_type === "video" ? "🎥 Vídeo" : "📎 Arquivo");
+      let contentText = message || "";
+      if (template_name) {
+        // Try to get the real template content from DB
+        const { data: tmplRecord } = await supabase
+          .from("chat_templates")
+          .select("content")
+          .eq("template_name", template_name)
+          .maybeSingle();
+        contentText = tmplRecord?.content || `📋 Template: ${template_name}`;
+      } else if (interactive_buttons) {
+        contentText = `🔘 ${message || "Mensagem com botões"}`;
+      } else if (cta_url) {
+        contentText = `🔗 ${message || "Botão com link"}`;
+      } else if (!message) {
+        contentText = media_type === "audio" ? "🎤 Áudio" : media_type === "image" ? "📷 Imagem" : media_type === "video" ? "🎥 Vídeo" : "📎 Arquivo";
+      }
 
       await supabase.from("chat_messages").insert({
         lead_id, direction: "outbound", content: contentText,
