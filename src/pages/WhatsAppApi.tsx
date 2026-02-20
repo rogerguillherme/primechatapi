@@ -21,7 +21,7 @@ import {
   Phone, Key, Link2, Send, CheckCircle2, AlertCircle, Copy, ExternalLink,
   Package, MessageCircle, Search, FileText, Check, CheckCheck, Paperclip,
   Truck, Users, ArrowLeft, BarChart3, MoreVertical, Pencil, Trash2, Star,
-  KeyRound,
+  KeyRound, ChevronDown,
 } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
@@ -29,6 +29,7 @@ import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { FlowBuilder } from "@/components/FlowBuilder";
 import { TemplateManager } from "@/components/TemplateManager";
+import { BroadcastQueue } from "@/components/BroadcastQueue";
 import { SendingMetrics } from "@/components/SendingMetrics";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 import { AccountSelector } from "@/components/AccountSelector";
@@ -679,6 +680,18 @@ function BroadcastTab() {
 
   return (
     <div className="space-y-6">
+      {/* Broadcast Queue - multi account/template/list */}
+      <BroadcastQueue />
+
+      <div className="border-t border-border pt-4" />
+
+      <details className="group">
+        <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground transition-colors list-none flex items-center gap-2">
+          <ChevronDown size={14} className="group-open:rotate-180 transition-transform" />
+          Disparo simples (conta única)
+        </summary>
+        <div className="mt-4 space-y-6">
+
       {/* Mode toggle */}
       <div className="flex flex-wrap gap-2">
         <Button variant={mode === "leads" ? "default" : "outline"} size="sm" onClick={() => setMode("leads")}>
@@ -968,6 +981,9 @@ function BroadcastTab() {
           </CardContent>
         </Card>
       </div>
+
+        </div>
+      </details>
 
       {/* Template Manager */}
       <TemplateManager />

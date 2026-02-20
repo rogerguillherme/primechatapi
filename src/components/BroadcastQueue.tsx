@@ -1,0 +1,558 @@
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Separator } from "@/components/ui/separator";
+import { toast } from "sonner";
+import {
+  Send, Users, Search, FileText, ArrowLeft, Trash2, Plus, CheckCircle2,
+  AlertCircle, Loader2, ChevronDown, ChevronUp, MessageCircle,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
+
+/* ── helpers ── */
+function getAvatarColor(name: string) {
+  const colors = ["bg-emerald-600", "bg-violet-600", "bg-amber-600", "bg-rose-600", "bg-cyan-600", "bg-indigo-600"];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return colors[Math.abs(hash) % colors.length];
+}
+function getInitials(name: string) {
+  return name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+}
+
+/* ── types ── */
+interface QueueItem {
+  id: string;
+  accountId: string;
+  templateId: string;
+  leadSource: "manual" | "last_broadcast";
+  selectedLeadIds: Set<string>;
+  status: "pending" | "sending" | "done" | "error";
+  successCount: number;
+  errorCount: number;
+  lastError: string;
+}
+
+function generateId() {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+export function BroadcastQueue() {
+  const { accounts, defaultAccount } = useWhatsAppAccounts();
+  const queryClient = useQueryClient();
+
+  const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [isSendingAll, setIsSendingAll] = useState(false);
+  const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+
+  // Data queries
+  const { data: leads } = useQuery({
+    queryKey: ["broadcast-leads"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("leads")
+        .select("id, name, phone, email, photo_url")
+        .order("name");
+      return data || [];
+    },
+  });
+
+  const { data: templates } = useQuery({
+    queryKey: ["broadcast-templates"],
+    queryFn: async () => {
+      const { data } = await supabase.from("chat_templates").select("*").order("name");
+      return data || [];
+    },
+  });
+
+  const addQueueItem = () => {
+    const newItem: QueueItem = {
+      id: generateId(),
+      accountId: defaultAccount?.id || accounts[0]?.id || "",
+      templateId: "",
+      leadSource: "manual",
+      selectedLeadIds: new Set(),
+      status: "pending",
+      successCount: 0,
+      errorCount: 0,
+      lastError: "",
+    };
+    setQueue((prev) => [...prev, newItem]);
+    setExpandedItemId(newItem.id);
+  };
+
+  const removeQueueItem = (id: string) => {
+    setQueue((prev) => prev.filter((item) => item.id !== id));
+    if (expandedItemId === id) setExpandedItemId(null);
+  };
+
+  const updateQueueItem = (id: string, updates: Partial<QueueItem>) => {
+    setQueue((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, ...updates } : item))
+    );
+  };
+
+  const loadLastBroadcastLeads = async (itemId: string) => {
+    const { data: recentMessages } = await supabase
+      .from("chat_messages")
+      .select("lead_id, created_at")
+      .eq("direction", "outbound")
+      .order("created_at", { ascending: false })
+      .limit(500);
+
+    if (!recentMessages || recentMessages.length === 0) {
+      toast.error("Nenhum disparo anterior encontrado.");
+      return;
+    }
+
+    const latestTs = recentMessages[0].created_at;
+    const latestDate = new Date(latestTs);
+    const windowMs = 5 * 60 * 1000;
+    const cutoff = new Date(latestDate.getTime() - windowMs).toISOString();
+
+    const batchLeadIds = new Set<string>();
+    for (const msg of recentMessages) {
+      if (msg.created_at >= cutoff) batchLeadIds.add(msg.lead_id);
+    }
+
+    if (batchLeadIds.size === 0) {
+      toast.error("Nenhum lead encontrado no último disparo.");
+      return;
+    }
+
+    updateQueueItem(itemId, { selectedLeadIds: batchLeadIds, leadSource: "last_broadcast" });
+    toast.success(`${batchLeadIds.size} lead(s) do último disparo carregados!`);
+  };
+
+  const resolveParams = (rawParams: any[], nome: string) => {
+    return (rawParams as any[]).map((p: any) => {
+      const text = typeof p === "string" ? p : p?.text || "";
+      return {
+        type: "text",
+        text: text.replace(/\{nome\}/g, nome.split(" ")[0]).replace(/\{codigo\}/g, "-"),
+      };
+    });
+  };
+
+  const handleSendAll = async () => {
+    const pendingItems = queue.filter((item) => item.status === "pending");
+    if (pendingItems.length === 0) {
+      toast.error("Nenhum item pendente na fila.");
+      return;
+    }
+
+    for (const item of pendingItems) {
+      if (!item.accountId) {
+        toast.error("Selecione uma conta para todos os itens.");
+        return;
+      }
+      if (!item.templateId) {
+        toast.error("Selecione um template para todos os itens.");
+        return;
+      }
+      if (item.selectedLeadIds.size === 0) {
+        toast.error("Selecione pelo menos um lead em cada item.");
+        return;
+      }
+    }
+
+    setIsSendingAll(true);
+
+    for (const item of pendingItems) {
+      updateQueueItem(item.id, { status: "sending" });
+      const template = templates?.find((t: any) => t.id === item.templateId);
+      let successCount = 0;
+      let errorCount = 0;
+      let lastError = "";
+
+      for (const leadId of item.selectedLeadIds) {
+        const lead = leads?.find((l) => l.id === leadId);
+        if (!lead) continue;
+
+        try {
+          const body: any = {
+            phone: lead.phone,
+            lead_id: lead.id,
+            account_id: item.accountId,
+          };
+          if (template?.template_name) {
+            body.template_name = template.template_name;
+            body.template_language = template.template_language || "pt_BR";
+            body.template_params = resolveParams(
+              (template.template_params || []) as any[],
+              lead.name
+            );
+          }
+          const { data: sendData, error } = await supabase.functions.invoke(
+            "whatsapp-cloud-send",
+            { body }
+          );
+          if (error) throw error;
+          if (sendData?.error) throw new Error(sendData.error);
+          successCount++;
+        } catch (e: any) {
+          errorCount++;
+          lastError = e?.message || "Erro desconhecido";
+        }
+      }
+
+      updateQueueItem(item.id, {
+        status: errorCount > 0 && successCount === 0 ? "error" : "done",
+        successCount,
+        errorCount,
+        lastError,
+      });
+    }
+
+    setIsSendingAll(false);
+    toast.success("Fila de disparos processada!");
+  };
+
+  const totalPending = queue.filter((i) => i.status === "pending").length;
+  const totalLeads = queue
+    .filter((i) => i.status === "pending")
+    .reduce((acc, i) => acc + i.selectedLeadIds.size, 0);
+
+  return (
+    <div className="space-y-4">
+      {/* Queue header */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <Send size={16} /> Fila de Disparos
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            Adicione itens com conta, template e lista de leads diferentes. Dispare todos de uma vez.
+          </p>
+        </div>
+        <Button size="sm" onClick={addQueueItem}>
+          <Plus size={14} /> Adicionar Disparo
+        </Button>
+      </div>
+
+      {/* Queue items */}
+      {queue.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="text-sm text-muted-foreground">
+              Nenhum disparo na fila. Clique em "Adicionar Disparo" para começar.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {queue.map((item, index) => (
+            <QueueItemCard
+              key={item.id}
+              item={item}
+              index={index}
+              accounts={accounts}
+              templates={templates || []}
+              leads={leads || []}
+              isExpanded={expandedItemId === item.id}
+              onToggleExpand={() =>
+                setExpandedItemId(expandedItemId === item.id ? null : item.id)
+              }
+              onUpdate={(updates) => updateQueueItem(item.id, updates)}
+              onRemove={() => removeQueueItem(item.id)}
+              onLoadLastBroadcast={() => loadLastBroadcastLeads(item.id)}
+              disabled={isSendingAll}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Send all button */}
+      {queue.length > 0 && (
+        <Button
+          onClick={handleSendAll}
+          disabled={isSendingAll || totalPending === 0}
+          className="w-full"
+          size="lg"
+        >
+          {isSendingAll ? (
+            <>
+              <Loader2 size={16} className="animate-spin" /> Enviando...
+            </>
+          ) : (
+            <>
+              <Send size={16} /> Disparar {totalPending} item(ns) — {totalLeads} lead(s) total
+            </>
+          )}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════
+   QUEUE ITEM CARD
+   ═══════════════════════════════════════════════ */
+interface QueueItemCardProps {
+  item: QueueItem;
+  index: number;
+  accounts: any[];
+  templates: any[];
+  leads: any[];
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+  onUpdate: (updates: Partial<QueueItem>) => void;
+  onRemove: () => void;
+  onLoadLastBroadcast: () => void;
+  disabled: boolean;
+}
+
+function QueueItemCard({
+  item,
+  index,
+  accounts,
+  templates,
+  leads,
+  isExpanded,
+  onToggleExpand,
+  onUpdate,
+  onRemove,
+  onLoadLastBroadcast,
+  disabled,
+}: QueueItemCardProps) {
+  const [search, setSearch] = useState("");
+
+  const account = accounts.find((a) => a.id === item.accountId);
+  const template = templates.find((t: any) => t.id === item.templateId);
+
+  const filteredLeads = useMemo(() => {
+    if (!leads) return [];
+    const s = search.toLowerCase();
+    return leads.filter(
+      (l: any) =>
+        l.name.toLowerCase().includes(s) ||
+        l.phone.includes(s) ||
+        l.email?.toLowerCase().includes(s)
+    );
+  }, [leads, search]);
+
+  const toggleLead = (id: string) => {
+    const next = new Set(item.selectedLeadIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onUpdate({ selectedLeadIds: next, leadSource: "manual" });
+  };
+
+  const toggleAll = () => {
+    if (item.selectedLeadIds.size === filteredLeads.length) {
+      onUpdate({ selectedLeadIds: new Set(), leadSource: "manual" });
+    } else {
+      onUpdate({
+        selectedLeadIds: new Set(filteredLeads.map((l: any) => l.id)),
+        leadSource: "manual",
+      });
+    }
+  };
+
+  const statusIcon =
+    item.status === "done" ? (
+      <CheckCircle2 size={16} className="text-green-500" />
+    ) : item.status === "error" ? (
+      <AlertCircle size={16} className="text-destructive" />
+    ) : item.status === "sending" ? (
+      <Loader2 size={16} className="animate-spin text-primary" />
+    ) : null;
+
+  return (
+    <Card
+      className={cn(
+        "transition-colors",
+        item.status === "done" && "border-green-300 dark:border-green-800",
+        item.status === "error" && "border-destructive/50"
+      )}
+    >
+      {/* Collapsed header */}
+      <button
+        onClick={onToggleExpand}
+        className="w-full flex items-center gap-3 p-4 text-left"
+        disabled={disabled}
+      >
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          {statusIcon}
+          <span className="text-sm font-semibold">#{index + 1}</span>
+          <Separator orientation="vertical" className="h-4" />
+          <span className="text-sm truncate">
+            {account?.name || "Sem conta"}
+          </span>
+          <Separator orientation="vertical" className="h-4" />
+          <span className="text-sm truncate text-muted-foreground">
+            {template?.name || "Sem template"}
+          </span>
+          <Badge variant="secondary" className="text-xs ml-auto shrink-0">
+            {item.selectedLeadIds.size} lead(s)
+          </Badge>
+        </div>
+        {item.status === "done" && (
+          <span className="text-xs text-green-600">
+            ✓ {item.successCount} ok{item.errorCount > 0 ? `, ${item.errorCount} erro(s)` : ""}
+          </span>
+        )}
+        {item.status === "error" && (
+          <span className="text-xs text-destructive truncate max-w-[200px]">
+            {item.lastError}
+          </span>
+        )}
+        <div className="flex items-center gap-1 shrink-0">
+          {item.status === "pending" && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-destructive hover:text-destructive"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemove();
+              }}
+            >
+              <Trash2 size={14} />
+            </Button>
+          )}
+          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </div>
+      </button>
+
+      {/* Expanded content */}
+      {isExpanded && item.status === "pending" && (
+        <CardContent className="pt-0 space-y-4">
+          <Separator />
+
+          {/* Account selector */}
+          <div className="space-y-2">
+            <Label className="text-xs">Conta WhatsApp</Label>
+            <select
+              value={item.accountId}
+              onChange={(e) => onUpdate({ accountId: e.target.value })}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="">Selecione...</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name} {a.is_default ? "(padrão)" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Template selector */}
+          <div className="space-y-2">
+            <Label className="text-xs">Template</Label>
+            <select
+              value={item.templateId}
+              onChange={(e) => onUpdate({ templateId: e.target.value })}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="">Selecione um template...</option>
+              {templates.map((t: any) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} {t.template_name ? `(API: ${t.template_name})` : ""}
+                </option>
+              ))}
+            </select>
+            {template && (
+              <div className="rounded-lg border bg-muted/30 p-2">
+                <p className="text-xs whitespace-pre-wrap">{template.content}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Lead selection */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">
+                Leads ({item.selectedLeadIds.size} selecionados)
+              </Label>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={onLoadLastBroadcast}
+                >
+                  <ArrowLeft size={12} className="mr-1" /> Último disparo
+                </Button>
+              </div>
+            </div>
+
+            <div className="relative">
+              <Search
+                size={14}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+              />
+              <Input
+                placeholder="Buscar lead..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9 h-8 text-sm"
+              />
+            </div>
+
+            <div className="border rounded-md">
+              <div className="px-3 py-1.5 border-b">
+                <button
+                  onClick={toggleAll}
+                  className="text-xs text-primary hover:underline"
+                >
+                  {item.selectedLeadIds.size === filteredLeads.length
+                    ? "Desmarcar todos"
+                    : "Selecionar todos"}
+                </button>
+              </div>
+              <ScrollArea className="h-[200px]">
+                {filteredLeads.map((lead: any) => (
+                  <button
+                    key={lead.id}
+                    onClick={() => toggleLead(lead.id)}
+                    className={cn(
+                      "w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-accent/40",
+                      item.selectedLeadIds.has(lead.id) && "bg-primary/5"
+                    )}
+                  >
+                    <Checkbox
+                      checked={item.selectedLeadIds.has(lead.id)}
+                      className="pointer-events-none"
+                    />
+                    <Avatar className="w-6 h-6">
+                      {lead.photo_url && <AvatarImage src={lead.photo_url} />}
+                      <AvatarFallback
+                        className={cn(
+                          getAvatarColor(lead.name),
+                          "text-white text-[10px]"
+                        )}
+                      >
+                        {getInitials(lead.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium truncate">{lead.name}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {lead.phone}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+                {filteredLeads.length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-6">
+                    Nenhum lead encontrado
+                  </p>
+                )}
+              </ScrollArea>
+            </div>
+          </div>
+        </CardContent>
+      )}
+    </Card>
+  );
+}
