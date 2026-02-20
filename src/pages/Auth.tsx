@@ -60,7 +60,7 @@ export default function Auth() {
             <MessageCircle className="h-6 w-6 text-primary-foreground" />
           </div>
           <CardTitle className="text-2xl font-display">Prime Chat</CardTitle>
-          <CardDescription>Plataforma de Comunicação</CardDescription>
+          <CardDescription>Business Platform API</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <Button
