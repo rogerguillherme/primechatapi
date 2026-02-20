@@ -109,10 +109,13 @@ Deno.serve(async (req) => {
         },
       };
       if (finalParams && Array.isArray(finalParams) && finalParams.length > 0) {
-        const mappedParams = finalParams.map((p: any) =>
-          typeof p === "string" ? { type: "text", text: p || "-" } : { type: "text", text: p.text || "-" }
-        );
-        templateBody.template.components = [{ type: "body", parameters: mappedParams }];
+        // Filter out empty/placeholder params
+        const mappedParams = finalParams
+          .map((p: any) => typeof p === "string" ? { type: "text", text: p || "-" } : { type: "text", text: p.text || "-" })
+          .filter((p: any) => p.text && p.text.trim() !== "");
+        if (mappedParams.length > 0) {
+          templateBody.template.components = [{ type: "body", parameters: mappedParams }];
+        }
       }
       body = templateBody;
     } else if (media_url && media_type) {
