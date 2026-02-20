@@ -598,6 +598,7 @@ function BroadcastTab() {
       return existing && existing.length > 0 ? existing[0].id : null;
     };
 
+    let lastError = "";
     const accountIds = selectedAccountIds.size > 0 ? Array.from(selectedAccountIds) : (defaultAccount ? [defaultAccount.id] : []);
 
     if (isCsv) {
@@ -622,13 +623,15 @@ function BroadcastTab() {
                   .replace(/\{nome\}/g, row.nome.split(" ")[0])
                   .replace(/\{codigo\}/g, row.codigo);
               }
-              const { error } = await supabase.functions.invoke("whatsapp-cloud-send", { body });
+              const { data: sendData, error } = await supabase.functions.invoke("whatsapp-cloud-send", { body });
               if (error) throw error;
+              if (sendData?.error) throw new Error(sendData.error);
               successCount++;
             }
           }
-        } catch {
+        } catch (e: any) {
           errorCount++;
+          lastError = e?.message || "Erro desconhecido";
         }
       }
     } else {
@@ -649,13 +652,15 @@ function BroadcastTab() {
               } else {
                 body.message = customMessage.replace(/\{nome\}/g, lead.name.split(" ")[0]);
               }
-              const { error } = await supabase.functions.invoke("whatsapp-cloud-send", { body });
+              const { data: sendData2, error } = await supabase.functions.invoke("whatsapp-cloud-send", { body });
               if (error) throw error;
+              if (sendData2?.error) throw new Error(sendData2.error);
               successCount++;
             }
           }
-        } catch {
+        } catch (e: any) {
           errorCount++;
+          lastError = e?.message || "Erro desconhecido";
         }
       }
     }
@@ -663,7 +668,7 @@ function BroadcastTab() {
     setIsSending(false);
     const action = sendType === "flow" ? "fluxo(s) iniciado(s)" : "mensagem(ns) enviada(s)";
     if (successCount > 0) toast.success(`${successCount} ${action} com sucesso!`);
-    if (errorCount > 0) toast.error(`${errorCount} falharam.`);
+    if (errorCount > 0) toast.error(`${errorCount} falharam. ${lastError}`);
     if (successCount > 0) {
       setSelectedLeads(new Set());
       setCsvSelectedIdxs(new Set());
@@ -1086,6 +1091,7 @@ function CloudChatTab() {
         body: { phone: selectedLead.phone, message: text || "", lead_id: selectedLead.id, media_url: mediaUrl, media_type: mediaType, template_name: templateName, template_language: templateLanguage, template_params: templateParams },
       });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       return data;
     },
     onSuccess: () => {
@@ -1570,6 +1576,7 @@ export default function WhatsAppApi() {
         body: { phone: testPhone, message: testMessage, account_id: selectedAccountId },
       });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       toast.success("Mensagem de teste enviada com sucesso!");
     } catch (err: any) {
       toast.error(`Erro ao enviar mensagem: ${err.message}`);
