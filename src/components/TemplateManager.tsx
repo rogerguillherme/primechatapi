@@ -11,7 +11,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, FileText, Save, RefreshCw } from "lucide-react";
+import { Plus, Pencil, Trash2, FileText, Save, RefreshCw, ChevronDown } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 
 interface Template {
@@ -50,6 +51,7 @@ export function TemplateManager() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [isOpen, setIsOpen] = useState(true);
 
   const { data: templates, isLoading } = useQuery({
     queryKey: ["managed-templates"],
@@ -189,79 +191,90 @@ export function TemplateManager() {
 
   return (
     <>
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-3">
-          <div>
-            <CardTitle className="text-base flex items-center gap-2">
-              <FileText size={18} />
-              Templates de Mensagem
-            </CardTitle>
-            <CardDescription>Gerencie os templates aprovados pela Meta para uso nos disparos e chat.</CardDescription>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => syncMutation.mutate()}
-              disabled={syncMutation.isPending}
-            >
-              <RefreshCw size={14} className={syncMutation.isPending ? "animate-spin" : ""} />
-              {syncMutation.isPending ? "Sincronizando..." : "Sincronizar Meta"}
-            </Button>
-            <Button size="sm" onClick={openNew}>
-              <Plus size={14} /> Novo Template
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <p className="text-sm text-muted-foreground text-center py-8">Carregando...</p>
-          ) : !templates?.length ? (
-            <p className="text-sm text-muted-foreground text-center py-8">Nenhum template cadastrado. Clique em "Sincronizar Meta" para importar.</p>
-          ) : (
-            <div className="divide-y divide-border">
-              {templates.map((t) => (
-                <div key={t.id} className="flex items-start gap-3 px-4 py-3 hover:bg-accent/30 transition-colors">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-medium">{t.name}</p>
-                      {t.template_name && (
-                        <Badge variant="secondary" className="text-[10px]">API: {t.template_name}</Badge>
-                      )}
-                      {getStatusBadge(t.meta_status)}
-                      {t.category && (
-                        <Badge variant="outline" className="text-[10px]">{t.category}</Badge>
-                      )}
-                      {(accountTemplates || [])
-                        .filter((at) => at.template_id === t.id)
-                        .map((at) => {
-                          const acc = accounts.find((a) => a.id === at.account_id);
-                          return acc ? (
-                            <Badge key={at.id} variant="default" className="text-[10px]">{acc.name}</Badge>
-                          ) : null;
-                        })}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{t.content}</p>
-                  </div>
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(t)}>
-                      <Pencil size={13} />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-destructive hover:text-destructive"
-                      onClick={() => { if (confirm(`Remover template "${t.name}"?`)) deleteMutation.mutate(t.id); }}
-                    >
-                      <Trash2 size={13} />
-                    </Button>
-                  </div>
-                </div>
-              ))}
+      <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <div className="flex items-center gap-2">
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <ChevronDown size={16} className={`transition-transform ${isOpen ? "" : "-rotate-90"}`} />
+                </Button>
+              </CollapsibleTrigger>
+              <div>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <FileText size={18} />
+                  Templates de Mensagem
+                </CardTitle>
+                <CardDescription>Gerencie os templates aprovados pela Meta para uso nos disparos e chat.</CardDescription>
+              </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => syncMutation.mutate()}
+                disabled={syncMutation.isPending}
+              >
+                <RefreshCw size={14} className={syncMutation.isPending ? "animate-spin" : ""} />
+                {syncMutation.isPending ? "Sincronizando..." : "Sincronizar Meta"}
+              </Button>
+              <Button size="sm" onClick={openNew}>
+                <Plus size={14} /> Novo Template
+              </Button>
+            </div>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent className="p-0">
+              {isLoading ? (
+                <p className="text-sm text-muted-foreground text-center py-8">Carregando...</p>
+              ) : !templates?.length ? (
+                <p className="text-sm text-muted-foreground text-center py-8">Nenhum template cadastrado. Clique em "Sincronizar Meta" para importar.</p>
+              ) : (
+                <div className="divide-y divide-border">
+                  {templates.map((t) => (
+                    <div key={t.id} className="flex items-start gap-3 px-4 py-3 hover:bg-accent/30 transition-colors">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-medium">{t.name}</p>
+                          {t.template_name && (
+                            <Badge variant="secondary" className="text-[10px]">API: {t.template_name}</Badge>
+                          )}
+                          {getStatusBadge(t.meta_status)}
+                          {t.category && (
+                            <Badge variant="outline" className="text-[10px]">{t.category}</Badge>
+                          )}
+                          {(accountTemplates || [])
+                            .filter((at) => at.template_id === t.id)
+                            .map((at) => {
+                              const acc = accounts.find((a) => a.id === at.account_id);
+                              return acc ? (
+                                <Badge key={at.id} variant="default" className="text-[10px]">{acc.name}</Badge>
+                              ) : null;
+                            })}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{t.content}</p>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(t)}>
+                          <Pencil size={13} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          onClick={() => { if (confirm(`Remover template "${t.name}"?`)) deleteMutation.mutate(t.id); }}
+                        >
+                          <Trash2 size={13} />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-[500px]">
