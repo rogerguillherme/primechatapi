@@ -390,17 +390,17 @@ function QueueItemCard({
       }
     }
 
-    // Auto-create leads for phones not yet in the system
+    // Auto-create leads for phones not yet in the system (upsert to avoid duplicate key errors)
     let createdCount = 0;
     if (unmatchedPhones.length > 0) {
-      const toInsert = unmatchedPhones.map((p) => ({
+      const toUpsert = unmatchedPhones.map((p) => ({
         phone: p.length >= 12 ? p : `55${p}`,
         name: names[p] || `Contato ${p.slice(-4)}`,
         origin: "xls_import",
       }));
       const { data: newLeads, error } = await supabase
         .from("leads")
-        .insert(toInsert)
+        .upsert(toUpsert, { onConflict: "phone", ignoreDuplicates: false })
         .select("id");
       if (error) {
         toast.error(`Erro ao criar leads: ${error.message}`);
