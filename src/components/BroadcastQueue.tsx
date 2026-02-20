@@ -37,6 +37,7 @@ interface QueueItem {
   templateId: string;
   leadSource: "manual" | "last_broadcast";
   selectedLeadIds: Set<string>;
+  customParams: Record<number, string>; // index -> value override
   status: "pending" | "sending" | "done" | "error";
   successCount: number;
   errorCount: number;
@@ -90,6 +91,7 @@ export function BroadcastQueue() {
       templateId: "",
       leadSource: "manual",
       selectedLeadIds: new Set(),
+      customParams: {},
       status: "pending",
       successCount: 0,
       errorCount: 0,
@@ -142,8 +144,16 @@ export function BroadcastQueue() {
     toast.success(`${batchLeadIds.size} lead(s) do último disparo carregados!`);
   };
 
-  const resolveParams = (rawParams: any[], nome: string) => {
-    return (rawParams as any[]).map((p: any) => {
+  const resolveParams = (rawParams: any[], nome: string, customParams: Record<number, string>) => {
+    return (rawParams as any[]).map((p: any, i: number) => {
+      // Use custom param if set, otherwise use default
+      const customValue = customParams[i];
+      if (customValue !== undefined && customValue !== "") {
+        const resolved = customValue
+          .replace(/\{nome\}/g, nome.split(" ")[0])
+          .replace(/\{codigo\}/g, "-");
+        return { type: "text", text: resolved };
+      }
       const text = typeof p === "string" ? p : p?.text || "";
       return {
         type: "text",
@@ -198,7 +208,8 @@ export function BroadcastQueue() {
             body.template_language = template.template_language || "pt_BR";
             body.template_params = resolveParams(
               (template.template_params || []) as any[],
-              lead.name
+              lead.name,
+              item.customParams
             );
           }
           const { data: sendData, error } = await supabase.functions.invoke(
@@ -550,6 +561,35 @@ function QueueItemCard({
             {template && (
               <div className="rounded-lg border bg-muted/30 p-2">
                 <p className="text-xs whitespace-pre-wrap">{template.content}</p>
+              </div>
+            )}
+
+            {/* Template parameters */}
+            {template && template.template_params && Array.isArray(template.template_params) && (template.template_params as any[]).length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-xs font-medium">Parâmetros do Template</Label>
+                <div className="space-y-1.5">
+                  {(template.template_params as any[]).map((_: any, i: number) => {
+                    const defaultText = typeof _ === "string" ? _ : _?.text || "";
+                    return (
+                      <div key={i} className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground whitespace-nowrap w-12 shrink-0">{`{{${i + 1}}}`}</span>
+                        <Input
+                          placeholder={defaultText || `Valor para {{${i + 1}}}. Use {nome} para nome do lead`}
+                          value={item.customParams?.[i] ?? defaultText}
+                          onChange={(e) => {
+                            const next = { ...item.customParams, [i]: e.target.value };
+                            onUpdate({ customParams: next } as any);
+                          }}
+                          className="h-7 text-xs"
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Use <code className="bg-muted px-1 rounded">{"{nome}"}</code> para inserir o primeiro nome do lead automaticamente.
+                </p>
               </div>
             )}
           </div>
