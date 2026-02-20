@@ -59,8 +59,8 @@ export default function Auth() {
           <div className="mx-auto w-12 h-12 rounded-xl gradient-primary flex items-center justify-center">
             <MessageCircle className="h-6 w-6 text-primary-foreground" />
           </div>
-          <CardTitle className="text-2xl font-display">Meno API</CardTitle>
-          <CardDescription>WhatsApp Business Platform</CardDescription>
+          <CardTitle className="text-2xl font-display">Prime Chat</CardTitle>
+          <CardDescription>Plataforma de Comunicação</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <Button

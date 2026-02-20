@@ -753,7 +753,7 @@ export default function Chat() {
               <div className="w-[200px] h-[200px] mx-auto mb-6 rounded-full bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center">
                 <MessageSquare size={80} className="text-primary/30" />
               </div>
-              <h2 className="text-2xl font-display text-foreground/80 mb-2">Meno Lead Chat</h2>
+              <h2 className="text-2xl font-display text-foreground/80 mb-2">Prime Chat</h2>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 Envie e receba mensagens dos seus leads via WhatsApp.<br />
                 Selecione um contato para começar.

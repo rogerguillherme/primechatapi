@@ -31,8 +31,8 @@ export function AppSidebar() {
       <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
         {!collapsed && (
           <div className="animate-fade-in">
-            <h1 className="text-lg font-display font-bold text-sidebar-primary">ML</h1>
-            <p className="text-xs text-sidebar-foreground/60">Meno Lead</p>
+            <h1 className="text-lg font-display font-bold text-sidebar-primary">PC</h1>
+            <p className="text-xs text-sidebar-foreground/60">Prime Chat</p>
           </div>
         )}
         <button
@@ -67,7 +67,7 @@ export function AppSidebar() {
       <div className="p-2 border-t border-sidebar-border space-y-1">
         <ThemeToggle collapsed={collapsed} />
         {!collapsed && (
-          <p className="text-[10px] text-sidebar-foreground/40 px-3 py-1">Meno Lead v1.0</p>
+          <p className="text-[10px] text-sidebar-foreground/40 px-3 py-1">Prime Chat v1.0</p>
         )}
       </div>
     </aside>
