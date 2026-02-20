@@ -166,7 +166,18 @@ Deno.serve(async (req) => {
     try { waData = JSON.parse(waText); } catch { waData = { raw: waText }; }
 
     if (!waRes.ok) {
-      throw new Error(`WhatsApp API error [${waRes.status}]: ${waText}`);
+      // Return error as 4xx instead of 500 so client gets a clear message
+      const errorCode = waData?.error?.code;
+      const isTemplateError = errorCode === 132001 || errorCode === 132000;
+      return new Response(
+        JSON.stringify({ 
+          error: isTemplateError 
+            ? `Template "${template_name || ''}" não encontrado na Meta com idioma "${body?.template?.language?.code || ''}". Verifique o nome e idioma no Facebook Business Manager.`
+            : `WhatsApp API error [${waRes.status}]: ${waText}`,
+          wa_error: waData?.error 
+        }),
+        { status: isTemplateError ? 422 : 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const waMessageId = waData.messages?.[0]?.id || null;
