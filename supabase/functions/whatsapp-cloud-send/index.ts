@@ -109,9 +109,14 @@ Deno.serve(async (req) => {
         },
       };
       if (finalParams && Array.isArray(finalParams) && finalParams.length > 0) {
-        // Filter out empty/placeholder params
+        // Filter out empty/placeholder params and resolve unresolved placeholders
         const mappedParams = finalParams
           .map((p: any) => typeof p === "string" ? { type: "text", text: p || "-" } : { type: "text", text: p.text || "-" })
+          .map((p: any) => ({
+            ...p,
+            // Replace unresolved {{N}} placeholders with a dash to avoid Meta rejection
+            text: p.text.replace(/\{\{\d+\}\}/g, "-").trim() || "-",
+          }))
           .filter((p: any) => p.text && p.text.trim() !== "");
         if (mappedParams.length > 0) {
           templateBody.template.components = [{ type: "body", parameters: mappedParams }];
