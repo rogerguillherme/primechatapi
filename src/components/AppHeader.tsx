@@ -34,8 +34,8 @@ export function AppHeader() {
               <MessageCircle size={20} className="text-whatsapp" />
             </div>
             <div>
-              <h1 className="text-base font-display font-bold tracking-tight">Meno API</h1>
-              <p className="text-[11px] text-white/50 leading-none">WhatsApp Business Platform</p>
+              <h1 className="text-base font-display font-bold tracking-tight">Prime Chat</h1>
+              <p className="text-[11px] text-white/50 leading-none">Plataforma de Comunicação</p>
             </div>
           </div>
           <div className="flex items-center gap-2">

@@ -193,7 +193,7 @@ export default function Dashboard() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-display font-bold text-foreground">Dashboard</h1>
-          <p className="text-sm text-muted-foreground mt-1">Visão geral do Meno Lead</p>
+          <p className="text-sm text-muted-foreground mt-1">Visão geral do Prime Chat</p>
         </div>
         <DateRangeFilter value={dateRange} onChange={setDateRange} />
       </div>

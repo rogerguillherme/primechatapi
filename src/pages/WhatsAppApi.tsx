@@ -1419,7 +1419,7 @@ export default function WhatsAppApi() {
     }
   };
   const [testPhone, setTestPhone] = useState("");
-  const [testMessage, setTestMessage] = useState("Olá! Esta é uma mensagem de teste do Meno Lead.");
+  const [testMessage, setTestMessage] = useState("Olá! Esta é uma mensagem de teste do Prime Chat.");
   const [isTesting, setIsTesting] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
 
