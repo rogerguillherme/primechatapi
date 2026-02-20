@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_templates: {
+        Row: {
+          account_id: string
+          created_at: string
+          id: string
+          template_id: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          id?: string
+          template_id: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          id?: string
+          template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_templates_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "account_templates_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "chat_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_settings: {
         Row: {
           key: string
