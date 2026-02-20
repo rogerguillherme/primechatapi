@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
+import * as XLSX from "xlsx";
 
 /* ── helpers ── */
 function getAvatarColor(name: string) {
@@ -343,34 +344,66 @@ function QueueItemCard({
 
   const normalizePhone = (raw: string) => raw.replace(/\D/g, "");
 
+  const extractPhonesFromText = (text: string) => {
+    const lines = text.split(/[\r\n,;]+/).map((l) => l.trim()).filter(Boolean);
+    return lines.map(normalizePhone).filter((p) => p.length >= 10);
+  };
+
+  const extractPhonesFromXLS = (buffer: ArrayBuffer) => {
+    const workbook = XLSX.read(buffer, { type: "array" });
+    const phones: string[] = [];
+    for (const sheetName of workbook.SheetNames) {
+      const sheet = workbook.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { header: 1 });
+      for (const row of rows) {
+        for (const cell of Object.values(row)) {
+          const val = String(cell ?? "").trim();
+          const normalized = normalizePhone(val);
+          if (normalized.length >= 10) phones.push(normalized);
+        }
+      }
+    }
+    return phones;
+  };
+
+  const matchPhonesToLeads = (phones: string[]) => {
+    if (phones.length === 0) {
+      toast.error("Nenhum número válido encontrado no arquivo.");
+      return;
+    }
+    const matchedIds = new Set<string>();
+    for (const lead of leads) {
+      const leadPhone = normalizePhone(lead.phone);
+      if (phones.some((p) => leadPhone.endsWith(p) || p.endsWith(leadPhone))) {
+        matchedIds.add(lead.id);
+      }
+    }
+    if (matchedIds.size === 0) {
+      toast.error(`Nenhum lead encontrado para os ${phones.length} números importados.`);
+    } else {
+      onUpdate({ selectedLeadIds: matchedIds, leadSource: "manual" });
+      toast.success(`${matchedIds.size} lead(s) encontrado(s) de ${phones.length} número(s) importados.`);
+    }
+  };
+
   const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const isExcel = /\.(xlsx?|xls)$/i.test(file.name);
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      if (!text) return;
-      const lines = text.split(/[\r\n,;]+/).map((l) => l.trim()).filter(Boolean);
-      const phones = lines.map(normalizePhone).filter((p) => p.length >= 10);
-      if (phones.length === 0) {
-        toast.error("Nenhum número válido encontrado no arquivo.");
-        return;
-      }
-      const matchedIds = new Set<string>();
-      for (const lead of leads) {
-        const leadPhone = normalizePhone(lead.phone);
-        if (phones.some((p) => leadPhone.endsWith(p) || p.endsWith(leadPhone))) {
-          matchedIds.add(lead.id);
-        }
-      }
-      if (matchedIds.size === 0) {
-        toast.error(`Nenhum lead encontrado para os ${phones.length} números importados.`);
+      if (isExcel) {
+        const buffer = ev.target?.result as ArrayBuffer;
+        if (!buffer) return;
+        matchPhonesToLeads(extractPhonesFromXLS(buffer));
       } else {
-        onUpdate({ selectedLeadIds: matchedIds, leadSource: "manual" });
-        toast.success(`${matchedIds.size} lead(s) encontrado(s) de ${phones.length} número(s) importados.`);
+        const text = ev.target?.result as string;
+        if (!text) return;
+        matchPhonesToLeads(extractPhonesFromText(text));
       }
     };
-    reader.readAsText(file);
+    if (isExcel) reader.readAsArrayBuffer(file);
+    else reader.readAsText(file);
     e.target.value = "";
   };
 
@@ -530,7 +563,7 @@ function QueueItemCard({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".csv,.txt"
+                  accept=".csv,.txt,.xls,.xlsx"
                   className="hidden"
                   onChange={handleFileImport}
                 />
@@ -540,7 +573,7 @@ function QueueItemCard({
                   className="h-7 text-xs"
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  <Upload size={12} className="mr-1" /> Importar CSV
+                  <Upload size={12} className="mr-1" /> Importar CSV/XLS
                 </Button>
                 <Button
                   variant="outline"
