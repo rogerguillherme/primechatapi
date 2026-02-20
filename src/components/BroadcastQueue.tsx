@@ -11,6 +11,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
   Send, Users, Search, FileText, ArrowLeft, Trash2, Plus, CheckCircle2,
@@ -345,6 +347,12 @@ function QueueItemCard({
   const [search, setSearch] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Column mapping modal state
+  const [columnMapOpen, setColumnMapOpen] = useState(false);
+  const [sheetColumns, setSheetColumns] = useState<string[]>([]);
+  const [sheetRows, setSheetRows] = useState<Record<string, any>[]>([]);
+  const [phoneColumn, setPhoneColumn] = useState<string>("");
+
   const account = accounts.find((a) => a.id === item.accountId);
   const template = templates.find((t: any) => t.id === item.templateId);
 
@@ -353,23 +361,6 @@ function QueueItemCard({
   const extractPhonesFromText = (text: string) => {
     const lines = text.split(/[\r\n,;]+/).map((l) => l.trim()).filter(Boolean);
     return lines.map(normalizePhone).filter((p) => p.length >= 10);
-  };
-
-  const extractPhonesFromXLS = (buffer: ArrayBuffer) => {
-    const workbook = XLSX.read(buffer, { type: "array" });
-    const phones: string[] = [];
-    for (const sheetName of workbook.SheetNames) {
-      const sheet = workbook.Sheets[sheetName];
-      const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { header: 1 });
-      for (const row of rows) {
-        for (const cell of Object.values(row)) {
-          const val = String(cell ?? "").trim();
-          const normalized = normalizePhone(val);
-          if (normalized.length >= 10) phones.push(normalized);
-        }
-      }
-    }
-    return phones;
   };
 
   const matchPhonesToLeads = (phones: string[]) => {
@@ -392,6 +383,18 @@ function QueueItemCard({
     }
   };
 
+  const handleConfirmColumnMap = () => {
+    if (!phoneColumn) {
+      toast.error("Selecione a coluna de telefone.");
+      return;
+    }
+    const phones = sheetRows
+      .map((row) => normalizePhone(String(row[phoneColumn] ?? "").trim()))
+      .filter((p) => p.length >= 10);
+    setColumnMapOpen(false);
+    matchPhonesToLeads(phones);
+  };
+
   const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -401,7 +404,22 @@ function QueueItemCard({
       if (isExcel) {
         const buffer = ev.target?.result as ArrayBuffer;
         if (!buffer) return;
-        matchPhonesToLeads(extractPhonesFromXLS(buffer));
+        const workbook = XLSX.read(buffer, { type: "array" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet);
+        if (rows.length === 0) {
+          toast.error("Planilha vazia ou sem dados.");
+          return;
+        }
+        const cols = Object.keys(rows[0]);
+        setSheetColumns(cols);
+        setSheetRows(rows);
+        // Auto-detect phone column
+        const autoPhone = cols.find((c) =>
+          /tel|phone|fone|celular|whatsapp|numero|número/i.test(c)
+        ) || "";
+        setPhoneColumn(autoPhone);
+        setColumnMapOpen(true);
       } else {
         const text = ev.target?.result as string;
         if (!text) return;
@@ -452,6 +470,63 @@ function QueueItemCard({
     ) : null;
 
   return (
+    <>
+    {/* Column mapping modal */}
+    <Dialog open={columnMapOpen} onOpenChange={setColumnMapOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Selecionar colunas do arquivo</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label className="text-sm">Coluna de Telefone <span className="text-destructive">*</span></Label>
+            <Select value={phoneColumn} onValueChange={setPhoneColumn}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione a coluna..." />
+              </SelectTrigger>
+              <SelectContent>
+                {sheetColumns.map((col) => (
+                  <SelectItem key={col} value={col}>{col}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Preview first 3 rows */}
+          {sheetRows.length > 0 && phoneColumn && (
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Prévia dos dados ({sheetRows.length} linha(s))</Label>
+              <div className="rounded-md border overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Telefone</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sheetRows.slice(0, 5).map((row, i) => (
+                      <tr key={i} className="border-t">
+                        <td className="px-3 py-1.5">{String(row[phoneColumn] ?? "—")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {sheetRows.length > 5 && (
+                <p className="text-[10px] text-muted-foreground">... e mais {sheetRows.length - 5} linha(s)</p>
+              )}
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setColumnMapOpen(false)}>Cancelar</Button>
+          <Button onClick={handleConfirmColumnMap} disabled={!phoneColumn}>
+            Importar Leads
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
     <Card
       className={cn(
         "transition-colors",
@@ -690,5 +765,6 @@ function QueueItemCard({
         </CardContent>
       )}
     </Card>
+    </>
   );
 }
