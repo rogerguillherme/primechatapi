@@ -338,29 +338,36 @@ function QueueItemCard({
       }
     }
 
-    // Cria/atualiza os leads não encontrados em lotes de 50
+    // Cria/atualiza os leads não encontrados
     if (unmatchedPhones.length > 0) {
+      // Normaliza DDI e deduplica dentro do próprio batch para evitar conflito de unique
+      const phoneMap = new Map<string, string>(); // phone55 -> name
+      for (const p of unmatchedPhones) {
+        const phone55 = p.length <= 11 ? `55${p}` : p;
+        if (!phoneMap.has(phone55)) {
+          phoneMap.set(phone55, names[p] || names[phone55] || `Contato ${p.slice(-4)}`);
+        }
+      }
+
+      const uniqueEntries = Array.from(phoneMap.entries()).map(([phone, name]) => ({
+        phone,
+        name,
+        origin: "xls_import",
+      }));
+
       const BATCH = 50;
-      for (let i = 0; i < unmatchedPhones.length; i += BATCH) {
-        const batch = unmatchedPhones.slice(i, i + BATCH);
-        const toUpsert = batch.map((p) => {
-          // Garante DDI 55 se número tiver apenas DDD + número (10-11 dígitos)
-          const phone = p.length <= 11 ? `55${p}` : p;
-          return {
-            phone,
-            name: names[p] || names[phone] || `Contato ${p.slice(-4)}`,
-            origin: "xls_import",
-          };
-        });
+      for (let i = 0; i < uniqueEntries.length; i += BATCH) {
+        const batch = uniqueEntries.slice(i, i + BATCH);
 
         const { data: upserted, error } = await supabase
           .from("leads")
-          .upsert(toUpsert, { onConflict: "phone", ignoreDuplicates: false })
+          .upsert(batch, { onConflict: "phone", ignoreDuplicates: false })
           .select("id");
 
         if (error) {
-          // Se upsert falhou (ex: conflito não resolvido), busca pelos telefones formatados
-          const phones55 = batch.map((p) => (p.length <= 11 ? `55${p}` : p));
+          console.error("[Import] Upsert error:", error);
+          // Fallback: busca pelos telefones já formatados
+          const phones55 = batch.map((b) => b.phone);
           const { data: existing } = await supabase
             .from("leads").select("id").in("phone", phones55);
           for (const ex of existing || []) matchedIds.add(ex.id);
