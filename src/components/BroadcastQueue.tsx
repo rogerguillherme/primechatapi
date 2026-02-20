@@ -351,10 +351,14 @@ function QueueItemCard({
   const [columnMapOpen, setColumnMapOpen] = useState(false);
   const [sheetColumns, setSheetColumns] = useState<string[]>([]);
   const [sheetRows, setSheetRows] = useState<Record<string, any>[]>([]);
-  const [phoneColumn, setPhoneColumn] = useState<string>("");
+  // mapping: col name -> field ("phone" | "name" | "param_0" | "param_1" | ... | "ignore")
+  const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
 
   const account = accounts.find((a) => a.id === item.accountId);
   const template = templates.find((t: any) => t.id === item.templateId);
+  const templateParamCount = Array.isArray(template?.template_params)
+    ? (template.template_params as any[]).length
+    : 0;
 
   const normalizePhone = (raw: string) => raw.replace(/\D/g, "");
 
@@ -383,16 +387,69 @@ function QueueItemCard({
     }
   };
 
+  const getFieldLabel = (field: string) => {
+    if (field === "phone") return "📞 Telefone";
+    if (field === "name") return "👤 Nome";
+    if (field === "ignore") return "— Ignorar";
+    if (field.startsWith("param_")) {
+      const idx = parseInt(field.replace("param_", ""), 10);
+      return `🔧 Parâmetro {{${idx + 1}}}`;
+    }
+    return field;
+  };
+
+  const getAvailableFields = () => {
+    const fields = [
+      { value: "ignore", label: "— Ignorar" },
+      { value: "phone", label: "📞 Telefone" },
+      { value: "name", label: "👤 Nome" },
+    ];
+    for (let i = 0; i < templateParamCount; i++) {
+      fields.push({ value: `param_${i}`, label: `🔧 Parâmetro {{${i + 1}}}` });
+    }
+    return fields;
+  };
+
   const handleConfirmColumnMap = () => {
-    if (!phoneColumn) {
-      toast.error("Selecione a coluna de telefone.");
+    const phoneCol = Object.entries(columnMapping).find(([, v]) => v === "phone")?.[0];
+    if (!phoneCol) {
+      toast.error("Selecione qual coluna é o Telefone.");
       return;
     }
+
     const phones = sheetRows
-      .map((row) => normalizePhone(String(row[phoneColumn] ?? "").trim()))
+      .map((row) => normalizePhone(String(row[phoneCol] ?? "").trim()))
       .filter((p) => p.length >= 10);
+
+    // Build custom params overrides from mapped columns
+    const paramOverrides: Record<number, string[]> = {};
+    for (const [col, field] of Object.entries(columnMapping)) {
+      if (field.startsWith("param_")) {
+        const idx = parseInt(field.replace("param_", ""), 10);
+        paramOverrides[idx] = sheetRows.map((row) => String(row[col] ?? ""));
+      }
+    }
+
     setColumnMapOpen(false);
     matchPhonesToLeads(phones);
+  };
+
+  const autoDetectMapping = (cols: string[]): Record<string, string> => {
+    const mapping: Record<string, string> = {};
+    let paramIdx = 0;
+    for (const col of cols) {
+      const lower = col.toLowerCase();
+      if (/tel|phone|fone|celular|whatsapp|numero|número/.test(lower)) {
+        mapping[col] = "phone";
+      } else if (/nome|name|cliente/.test(lower)) {
+        mapping[col] = "name";
+      } else if (/param|codigo|código|cod\.?$/.test(lower) && paramIdx < templateParamCount) {
+        mapping[col] = `param_${paramIdx++}`;
+      } else {
+        mapping[col] = "ignore";
+      }
+    }
+    return mapping;
   };
 
   const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -414,11 +471,7 @@ function QueueItemCard({
         const cols = Object.keys(rows[0]);
         setSheetColumns(cols);
         setSheetRows(rows);
-        // Auto-detect phone column
-        const autoPhone = cols.find((c) =>
-          /tel|phone|fone|celular|whatsapp|numero|número/i.test(c)
-        ) || "";
-        setPhoneColumn(autoPhone);
+        setColumnMapping(autoDetectMapping(cols));
         setColumnMapOpen(true);
       } else {
         const text = ev.target?.result as string;
@@ -473,54 +526,81 @@ function QueueItemCard({
     <>
     {/* Column mapping modal */}
     <Dialog open={columnMapOpen} onOpenChange={setColumnMapOpen}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Selecionar colunas do arquivo</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div className="space-y-1.5">
-            <Label className="text-sm">Coluna de Telefone <span className="text-destructive">*</span></Label>
-            <Select value={phoneColumn} onValueChange={setPhoneColumn}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione a coluna..." />
-              </SelectTrigger>
-              <SelectContent>
-                {sheetColumns.map((col) => (
-                  <SelectItem key={col} value={col}>{col}</SelectItem>
+
+        <div className="space-y-3 py-1">
+          <p className="text-xs text-muted-foreground">
+            Defina o significado de cada coluna da planilha. A coluna <strong>Telefone</strong> é obrigatória.
+          </p>
+
+          {/* Column mapping table */}
+          <div className="rounded-md border overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50">
+                <tr>
+                  <th className="px-3 py-2 text-left font-medium text-muted-foreground w-1/2">Coluna na planilha</th>
+                  <th className="px-3 py-2 text-left font-medium text-muted-foreground w-1/2">Representa</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sheetColumns.map((col, idx) => (
+                  <tr key={col} className={cn("border-t", idx % 2 === 0 ? "bg-background" : "bg-muted/20")}>
+                    <td className="px-3 py-2">
+                      <div>
+                        <p className="font-medium text-sm truncate max-w-[180px]">{col}</p>
+                        {sheetRows[0] && (
+                          <p className="text-[10px] text-muted-foreground truncate max-w-[180px]">
+                            ex: {String(sheetRows[0][col] ?? "—")}
+                          </p>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <Select
+                        value={columnMapping[col] ?? "ignore"}
+                        onValueChange={(val) =>
+                          setColumnMapping((prev) => ({ ...prev, [col]: val }))
+                        }
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {getAvailableFields().map((f) => (
+                            <SelectItem key={f.value} value={f.value} className="text-xs">
+                              {f.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </td>
+                  </tr>
                 ))}
-              </SelectContent>
-            </Select>
+              </tbody>
+            </table>
           </div>
 
-          {/* Preview first 3 rows */}
-          {sheetRows.length > 0 && phoneColumn && (
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Prévia dos dados ({sheetRows.length} linha(s))</Label>
-              <div className="rounded-md border overflow-hidden">
-                <table className="w-full text-xs">
-                  <thead className="bg-muted/50">
-                    <tr>
-                      <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Telefone</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sheetRows.slice(0, 5).map((row, i) => (
-                      <tr key={i} className="border-t">
-                        <td className="px-3 py-1.5">{String(row[phoneColumn] ?? "—")}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {sheetRows.length > 5 && (
-                <p className="text-[10px] text-muted-foreground">... e mais {sheetRows.length - 5} linha(s)</p>
-              )}
-            </div>
+          {/* Validation hint */}
+          {!Object.values(columnMapping).includes("phone") && (
+            <p className="text-xs text-destructive">
+              ⚠️ Selecione ao menos uma coluna como <strong>Telefone</strong>.
+            </p>
           )}
+
+          <p className="text-[10px] text-muted-foreground">
+            {sheetRows.length} linha(s) encontrada(s) na planilha.
+          </p>
         </div>
+
         <DialogFooter>
           <Button variant="outline" onClick={() => setColumnMapOpen(false)}>Cancelar</Button>
-          <Button onClick={handleConfirmColumnMap} disabled={!phoneColumn}>
+          <Button
+            onClick={handleConfirmColumnMap}
+            disabled={!Object.values(columnMapping).includes("phone")}
+          >
             Importar Leads
           </Button>
         </DialogFooter>
