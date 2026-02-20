@@ -170,17 +170,21 @@ Deno.serve(async (req) => {
       const errorCode = waData?.error?.code;
       const isTemplateNotFound = errorCode === 132001;
       const isParamsMismatch = errorCode === 132000;
+      const isGenericUserError = errorCode === 135000;
       let errorMsg: string;
       if (isTemplateNotFound) {
         errorMsg = `Template "${template_name || ''}" não encontrado na Meta com idioma "${body?.template?.language?.code || ''}". Verifique o nome e idioma no Facebook Business Manager.`;
       } else if (isParamsMismatch) {
         errorMsg = `Template "${template_name || ''}" requer parâmetros que não foram enviados. Configure os parâmetros do template no sistema (ex: {{1}}).`;
+      } else if (isGenericUserError) {
+        errorMsg = `Erro genérico da Meta ao enviar template "${template_name || ''}". Possíveis causas: template não aprovado, idioma "${body?.template?.language?.code || ''}" incorreto, quantidade de parâmetros não bate com o template, ou janela de 24h expirada. Verifique no WhatsApp Manager.`;
       } else {
         errorMsg = `WhatsApp API error [${waRes.status}]: ${waText}`;
       }
+      const isKnownError = isTemplateNotFound || isParamsMismatch || isGenericUserError;
       return new Response(
         JSON.stringify({ error: errorMsg, wa_error: waData?.error }),
-        { status: (isTemplateNotFound || isParamsMismatch) ? 422 : 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: isKnownError ? 422 : 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
