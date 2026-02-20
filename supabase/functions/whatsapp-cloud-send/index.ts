@@ -168,15 +168,19 @@ Deno.serve(async (req) => {
     if (!waRes.ok) {
       // Return error as 4xx instead of 500 so client gets a clear message
       const errorCode = waData?.error?.code;
-      const isTemplateError = errorCode === 132001 || errorCode === 132000;
+      const isTemplateNotFound = errorCode === 132001;
+      const isParamsMismatch = errorCode === 132000;
+      let errorMsg: string;
+      if (isTemplateNotFound) {
+        errorMsg = `Template "${template_name || ''}" não encontrado na Meta com idioma "${body?.template?.language?.code || ''}". Verifique o nome e idioma no Facebook Business Manager.`;
+      } else if (isParamsMismatch) {
+        errorMsg = `Template "${template_name || ''}" requer parâmetros que não foram enviados. Configure os parâmetros do template no sistema (ex: {{1}}).`;
+      } else {
+        errorMsg = `WhatsApp API error [${waRes.status}]: ${waText}`;
+      }
       return new Response(
-        JSON.stringify({ 
-          error: isTemplateError 
-            ? `Template "${template_name || ''}" não encontrado na Meta com idioma "${body?.template?.language?.code || ''}". Verifique o nome e idioma no Facebook Business Manager.`
-            : `WhatsApp API error [${waRes.status}]: ${waText}`,
-          wa_error: waData?.error 
-        }),
-        { status: isTemplateError ? 422 : 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: errorMsg, wa_error: waData?.error }),
+        { status: (isTemplateNotFound || isParamsMismatch) ? 422 : 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
