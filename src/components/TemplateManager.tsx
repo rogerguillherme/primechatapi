@@ -11,7 +11,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, FileText, Save } from "lucide-react";
+import { Plus, Pencil, Trash2, FileText, Save, RefreshCw } from "lucide-react";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 
 interface Template {
@@ -22,6 +22,7 @@ interface Template {
   template_language: string | null;
   template_params: any;
   category: string | null;
+  meta_status?: string | null;
 }
 
 const emptyForm = {
@@ -32,6 +33,15 @@ const emptyForm = {
   category: "geral",
   template_params: [] as { type: string; text: string }[],
   accountIds: [] as string[],
+};
+
+const metaStatusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
+  APPROVED: { label: "Aprovado", variant: "default" },
+  PENDING: { label: "Pendente", variant: "secondary" },
+  REJECTED: { label: "Rejeitado", variant: "destructive" },
+  PAUSED: { label: "Pausado", variant: "outline" },
+  DISABLED: { label: "Desativado", variant: "outline" },
+  unknown: { label: "Não sincronizado", variant: "outline" },
 };
 
 export function TemplateManager() {
@@ -57,6 +67,31 @@ export function TemplateManager() {
     },
   });
 
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("whatsapp-sync-templates", {
+        body: {},
+      });
+      if (error) throw new Error(error.message || "Erro ao sincronizar");
+      return data;
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["managed-templates"] });
+      queryClient.invalidateQueries({ queryKey: ["account-templates"] });
+      queryClient.invalidateQueries({ queryKey: ["chat-templates"] });
+      queryClient.invalidateQueries({ queryKey: ["broadcast-templates"] });
+      const results = data?.results || [];
+      const totalSynced = results.reduce((sum: number, r: any) => sum + (r.synced || 0), 0);
+      const errors = results.filter((r: any) => r.error);
+      if (errors.length > 0) {
+        toast.warning(`Sincronizado ${totalSynced} templates. ${errors.length} conta(s) com erro.`);
+      } else {
+        toast.success(`${totalSynced} templates sincronizados com sucesso!`);
+      }
+    },
+    onError: (err: any) => toast.error(`Erro ao sincronizar: ${err.message}`),
+  });
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!form.name.trim() || !form.content.trim()) throw new Error("Nome e conteúdo são obrigatórios.");
@@ -77,7 +112,6 @@ export function TemplateManager() {
         if (error) throw error;
         templateId = data.id;
       }
-      // Sync account_templates
       if (templateId) {
         await supabase.from("account_templates").delete().eq("template_id", templateId);
         if (form.accountIds.length > 0) {
@@ -147,6 +181,12 @@ export function TemplateManager() {
     setForm(emptyForm);
   };
 
+  const getStatusBadge = (status: string | null | undefined) => {
+    const s = status || "unknown";
+    const config = metaStatusConfig[s] || metaStatusConfig.unknown;
+    return <Badge variant={config.variant} className="text-[10px]">{config.label}</Badge>;
+  };
+
   return (
     <>
       <Card>
@@ -158,15 +198,26 @@ export function TemplateManager() {
             </CardTitle>
             <CardDescription>Gerencie os templates aprovados pela Meta para uso nos disparos e chat.</CardDescription>
           </div>
-          <Button size="sm" onClick={openNew}>
-            <Plus size={14} /> Novo Template
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => syncMutation.mutate()}
+              disabled={syncMutation.isPending}
+            >
+              <RefreshCw size={14} className={syncMutation.isPending ? "animate-spin" : ""} />
+              {syncMutation.isPending ? "Sincronizando..." : "Sincronizar Meta"}
+            </Button>
+            <Button size="sm" onClick={openNew}>
+              <Plus size={14} /> Novo Template
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
             <p className="text-sm text-muted-foreground text-center py-8">Carregando...</p>
           ) : !templates?.length ? (
-            <p className="text-sm text-muted-foreground text-center py-8">Nenhum template cadastrado.</p>
+            <p className="text-sm text-muted-foreground text-center py-8">Nenhum template cadastrado. Clique em "Sincronizar Meta" para importar.</p>
           ) : (
             <div className="divide-y divide-border">
               {templates.map((t) => (
@@ -177,6 +228,7 @@ export function TemplateManager() {
                       {t.template_name && (
                         <Badge variant="secondary" className="text-[10px]">API: {t.template_name}</Badge>
                       )}
+                      {getStatusBadge(t.meta_status)}
                       {t.category && (
                         <Badge variant="outline" className="text-[10px]">{t.category}</Badge>
                       )}

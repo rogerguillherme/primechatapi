@@ -535,9 +535,10 @@ function QueueItemCard({
               <option value="">Selecione um template...</option>
               {templates
                 .filter((t: any) => {
+                  // Hide templates that are not approved on Meta (if status is known)
+                  if (t.meta_status && t.meta_status !== "unknown" && t.meta_status !== "APPROVED") return false;
                   if (!item.accountId) return true;
                   const linked = accountTemplates.filter((at) => at.template_id === t.id);
-                  // Show template if it has no account links (available to all) or is linked to selected account
                   return linked.length === 0 || linked.some((at) => at.account_id === item.accountId);
                 })
                 .map((t: any) => (

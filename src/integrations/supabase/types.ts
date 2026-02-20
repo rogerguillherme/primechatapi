@@ -134,6 +134,7 @@ export type Database = {
           content: string
           created_at: string
           id: string
+          meta_status: string | null
           name: string
           template_language: string | null
           template_name: string | null
@@ -145,6 +146,7 @@ export type Database = {
           content: string
           created_at?: string
           id?: string
+          meta_status?: string | null
           name: string
           template_language?: string | null
           template_name?: string | null
@@ -156,6 +158,7 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
+          meta_status?: string | null
           name?: string
           template_language?: string | null
           template_name?: string | null
