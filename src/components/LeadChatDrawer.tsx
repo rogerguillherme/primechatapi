@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useUserTemplates } from "@/hooks/use-user-templates";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -70,14 +71,7 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
     enabled: !!lead && open,
   });
 
-  const { data: templates } = useQuery({
-    queryKey: ["chat-templates"],
-    queryFn: async () => {
-      const { data } = await supabase.from("chat_templates").select("*").order("name");
-      return data || [];
-    },
-    enabled: open,
-  });
+  const { templates } = useUserTemplates(open);
 
   useEffect(() => {
     if (!open || !lead) return;

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useUserTemplates } from "@/hooks/use-user-templates";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -68,13 +69,7 @@ export function BroadcastQueue() {
     },
   });
 
-  const { data: templates } = useQuery({
-    queryKey: ["broadcast-templates"],
-    queryFn: async () => {
-      const { data } = await supabase.from("chat_templates").select("*").order("name");
-      return data || [];
-    },
-  });
+  const { templates } = useUserTemplates();
 
   const { data: accountTemplates } = useQuery({
     queryKey: ["account-templates"],

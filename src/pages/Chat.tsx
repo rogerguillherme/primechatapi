@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useUserTemplates } from "@/hooks/use-user-templates";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -146,14 +147,8 @@ export default function Chat() {
     enabled: !!selectedLeadId,
   });
 
-  // Fetch templates
-  const { data: templates } = useQuery({
-    queryKey: ["chat-templates"],
-    queryFn: async () => {
-      const { data } = await supabase.from("chat_templates").select("*").order("name");
-      return data || [];
-    },
-  });
+  // Fetch templates scoped to user's accounts
+  const { templates } = useUserTemplates();
 
   // Fetch expiration days per lead
   const { data: leadExpirationMap } = useQuery({

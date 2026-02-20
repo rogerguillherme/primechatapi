@@ -33,6 +33,7 @@ import { TemplateManager } from "@/components/TemplateManager";
 import { BroadcastQueue } from "@/components/BroadcastQueue";
 import { SendingMetrics } from "@/components/SendingMetrics";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
+import { useUserTemplates } from "@/hooks/use-user-templates";
 import { AccountSelector } from "@/components/AccountSelector";
 
 /* ── Helpers ── */
@@ -361,13 +362,7 @@ function BroadcastTab() {
     },
   });
 
-  const { data: templates } = useQuery({
-    queryKey: ["broadcast-templates"],
-    queryFn: async () => {
-      const { data } = await supabase.from("chat_templates").select("*").order("name");
-      return data || [];
-    },
-  });
+  const { templates } = useUserTemplates();
 
   const { data: flows } = useQuery({
     queryKey: ["broadcast-flows"],
@@ -1070,13 +1065,7 @@ function CloudChatTab() {
     enabled: !!selectedLeadId,
   });
 
-  const { data: templates } = useQuery({
-    queryKey: ["chat-templates"],
-    queryFn: async () => {
-      const { data } = await supabase.from("chat_templates").select("*").order("name");
-      return data || [];
-    },
-  });
+  const { templates } = useUserTemplates();
 
   const selectedLead = leads?.find((l) => l.id === selectedLeadId);
 
