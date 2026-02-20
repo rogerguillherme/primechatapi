@@ -23,7 +23,7 @@ import { CtaUrlNode } from "./nodes/CtaUrlNode";
 import { NodeEditPanel } from "./NodeEditPanel";
 import { Button } from "@/components/ui/button";
 import {
-  MessageSquare, Clock, GitBranch, MousePointerClick, ExternalLink, Plus,
+  MessageSquare, Clock, GitBranch, MousePointerClick, ExternalLink, Plus, Braces,
 } from "lucide-react";
 
 const nodeTypes: NodeTypes = {
@@ -183,6 +183,9 @@ export function FlowCanvas({
         </Button>
         <Button variant="outline" size="sm" onClick={() => addNode("cta_url")} className="gap-1.5 text-xs h-8">
           <ExternalLink size={12} /> Link
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => {/* TODO: open variables panel */}} className="gap-1.5 text-xs h-8">
+          <Braces size={12} /> Variáveis
         </Button>
       </div>
 
