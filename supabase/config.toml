@@ -1,1 +1,10 @@
 project_id = "nnjwemmerumzkiiykpas"
+
+[functions.whatsapp-cloud-webhook]
+verify_jwt = false
+
+[functions.hubla-webhook]
+verify_jwt = false
+
+[functions.zapi-webhook]
+verify_jwt = false
