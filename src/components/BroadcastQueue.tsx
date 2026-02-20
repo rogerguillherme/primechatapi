@@ -438,6 +438,7 @@ function QueueItemCard({
     const names: Record<string, string> = {};
     for (const row of sheetRows) {
       const raw = String(row[phoneCol] ?? "").trim();
+      console.log("[XLS] raw phone value:", JSON.stringify(raw), "-> normalized:", normalizePhone(raw));
       const phone = normalizePhone(raw);
       if (phone.length >= 10) {
         phones.push(phone);
@@ -446,6 +447,7 @@ function QueueItemCard({
         }
       }
     }
+    console.log("[XLS] Total phones extracted:", phones.length, "| First 5:", phones.slice(0, 5));
     setColumnMapOpen(false);
     await matchOrCreateLeads(phones, names);
   };
@@ -489,15 +491,34 @@ function QueueItemCard({
       if (isExcel) {
         const buffer = ev.target?.result as ArrayBuffer;
         if (!buffer) return;
-        const workbook = XLSX.read(buffer, { type: "array" });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { raw: false, defval: "" });
-        if (rows.length === 0) { toast.error("Planilha vazia ou sem dados."); return; }
-        const cols = Object.keys(rows[0]);
-        setSheetColumns(cols);
-        setSheetRows(rows);
-        setColumnMapping(autoDetectMapping(cols));
-        setColumnMapOpen(true);
+        try {
+          const workbook = XLSX.read(buffer, { type: "array" });
+          console.log("[XLS] Sheets:", workbook.SheetNames);
+          const sheetName = workbook.SheetNames[0];
+          const sheet = workbook.Sheets[sheetName];
+          // Try raw: false first (formatted values)
+          const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { raw: false, defval: "" });
+          console.log("[XLS] Total rows:", rows.length);
+          if (rows.length === 0) {
+            // Try with header row detection
+            const rowsRaw = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1, defval: "" });
+            console.log("[XLS] Raw rows (header:1):", rowsRaw.slice(0, 3));
+            toast.error(`Planilha vazia ou sem dados. Linhas brutas: ${rowsRaw.length}`);
+            return;
+          }
+          const cols = Object.keys(rows[0]);
+          console.log("[XLS] Columns:", cols);
+          console.log("[XLS] Row 0 sample:", rows[0]);
+          console.log("[XLS] Row 1 sample:", rows[1]);
+          setSheetColumns(cols);
+          setSheetRows(rows);
+          setColumnMapping(autoDetectMapping(cols));
+          setColumnMapOpen(true);
+        } catch (err: any) {
+          console.error("[XLS] Parse error:", err);
+          toast.error(`Erro ao ler arquivo: ${err?.message || err}`);
+          return;
+        }
       } else {
         const text = ev.target?.result as string;
         if (!text) return;
