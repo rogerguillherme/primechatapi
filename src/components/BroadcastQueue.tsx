@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import {
   Send, Users, Search, FileText, ArrowLeft, Trash2, Plus, CheckCircle2,
-  AlertCircle, Loader2, ChevronDown, ChevronUp, MessageCircle,
+  AlertCircle, Loader2, ChevronDown, ChevronUp, MessageCircle, Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
@@ -325,9 +325,43 @@ function QueueItemCard({
   disabled,
 }: QueueItemCardProps) {
   const [search, setSearch] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const account = accounts.find((a) => a.id === item.accountId);
   const template = templates.find((t: any) => t.id === item.templateId);
+
+  const normalizePhone = (raw: string) => raw.replace(/\D/g, "");
+
+  const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      if (!text) return;
+      const lines = text.split(/[\r\n,;]+/).map((l) => l.trim()).filter(Boolean);
+      const phones = lines.map(normalizePhone).filter((p) => p.length >= 10);
+      if (phones.length === 0) {
+        toast.error("Nenhum número válido encontrado no arquivo.");
+        return;
+      }
+      const matchedIds = new Set<string>();
+      for (const lead of leads) {
+        const leadPhone = normalizePhone(lead.phone);
+        if (phones.some((p) => leadPhone.endsWith(p) || p.endsWith(leadPhone))) {
+          matchedIds.add(lead.id);
+        }
+      }
+      if (matchedIds.size === 0) {
+        toast.error(`Nenhum lead encontrado para os ${phones.length} números importados.`);
+      } else {
+        onUpdate({ selectedLeadIds: matchedIds, leadSource: "manual" });
+        toast.success(`${matchedIds.size} lead(s) encontrado(s) de ${phones.length} número(s) importados.`);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
 
   const filteredLeads = useMemo(() => {
     if (!leads) return [];
@@ -475,6 +509,21 @@ function QueueItemCard({
                 Leads ({item.selectedLeadIds.size} selecionados)
               </Label>
               <div className="flex gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,.txt"
+                  className="hidden"
+                  onChange={handleFileImport}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload size={12} className="mr-1" /> Importar CSV
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"
