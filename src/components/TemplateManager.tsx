@@ -28,6 +28,7 @@ const emptyForm = {
   template_name: "",
   template_language: "pt_BR",
   category: "geral",
+  template_params: [] as { type: string; text: string }[],
 };
 
 export function TemplateManager() {
@@ -53,6 +54,7 @@ export function TemplateManager() {
         template_name: form.template_name.trim() || null,
         template_language: form.template_language.trim() || "pt_BR",
         category: form.category.trim() || "geral",
+        template_params: form.template_params.length > 0 ? form.template_params : [],
       };
       if (editingId) {
         const { error } = await supabase.from("chat_templates").update(payload).eq("id", editingId);
@@ -94,12 +96,18 @@ export function TemplateManager() {
 
   const openEdit = (t: Template) => {
     setEditingId(t.id);
+    const params = Array.isArray(t.template_params)
+      ? (t.template_params as any[]).map((p: any) =>
+          typeof p === "string" ? { type: "text", text: p } : { type: p?.type || "text", text: p?.text || "" }
+        )
+      : [];
     setForm({
       name: t.name,
       content: t.content,
       template_name: t.template_name || "",
       template_language: t.template_language || "pt_BR",
       category: t.category || "geral",
+      template_params: params,
     });
     setDialogOpen(true);
   };
@@ -225,6 +233,47 @@ export function TemplateManager() {
                 <option value="utility">Utilidade</option>
                 <option value="authentication">Autenticação</option>
               </select>
+            </div>
+            <div className="space-y-2">
+              <Label>Parâmetros do Template</Label>
+              <p className="text-[11px] text-muted-foreground">
+                Adicione os parâmetros que o template espera (ex: {"{{1}}"}, {"{{2}}"}). Use {"{nome}"} para substituir pelo nome do lead.
+              </p>
+              {form.template_params.map((param, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground w-8">{`{{${i + 1}}}`}</span>
+                  <Input
+                    value={param.text}
+                    onChange={(e) => {
+                      const newParams = [...form.template_params];
+                      newParams[i] = { type: "text", text: e.target.value };
+                      setForm({ ...form, template_params: newParams });
+                    }}
+                    placeholder={`Valor para {{${i + 1}}} (ex: {nome})`}
+                    className="text-sm"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive hover:text-destructive flex-shrink-0"
+                    onClick={() => {
+                      const newParams = form.template_params.filter((_, idx) => idx !== i);
+                      setForm({ ...form, template_params: newParams });
+                    }}
+                  >
+                    <Trash2 size={13} />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setForm({ ...form, template_params: [...form.template_params, { type: "text", text: "" }] })}
+              >
+                <Plus size={14} /> Adicionar Parâmetro
+              </Button>
             </div>
           </div>
           <DialogFooter>
