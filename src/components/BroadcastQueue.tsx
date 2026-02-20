@@ -573,7 +573,7 @@ function QueueItemCard({
                   className="h-7 text-xs"
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  <Upload size={12} className="mr-1" /> Importar CSV/XLS
+                  <Upload size={12} className="mr-1" /> Importar CSV / XLS
                 </Button>
                 <Button
                   variant="outline"
