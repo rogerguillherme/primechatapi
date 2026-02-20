@@ -6,11 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, FileText, Save } from "lucide-react";
+import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 
 interface Template {
   id: string;
@@ -29,10 +31,12 @@ const emptyForm = {
   template_language: "pt_BR",
   category: "geral",
   template_params: [] as { type: string; text: string }[],
+  accountIds: [] as string[],
 };
 
 export function TemplateManager() {
   const queryClient = useQueryClient();
+  const { accounts } = useWhatsAppAccounts();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -42,6 +46,14 @@ export function TemplateManager() {
     queryFn: async () => {
       const { data } = await supabase.from("chat_templates").select("*").order("name");
       return (data || []) as Template[];
+    },
+  });
+
+  const { data: accountTemplates } = useQuery({
+    queryKey: ["account-templates"],
+    queryFn: async () => {
+      const { data } = await supabase.from("account_templates").select("*");
+      return (data || []) as { id: string; account_id: string; template_id: string }[];
     },
   });
 
@@ -56,16 +68,28 @@ export function TemplateManager() {
         category: form.category.trim() || "geral",
         template_params: form.template_params.length > 0 ? form.template_params : [],
       };
+      let templateId = editingId;
       if (editingId) {
         const { error } = await supabase.from("chat_templates").update(payload).eq("id", editingId);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("chat_templates").insert(payload);
+        const { data, error } = await supabase.from("chat_templates").insert(payload).select("id").single();
         if (error) throw error;
+        templateId = data.id;
+      }
+      // Sync account_templates
+      if (templateId) {
+        await supabase.from("account_templates").delete().eq("template_id", templateId);
+        if (form.accountIds.length > 0) {
+          const rows = form.accountIds.map((aid) => ({ account_id: aid, template_id: templateId! }));
+          const { error: linkErr } = await supabase.from("account_templates").insert(rows);
+          if (linkErr) throw linkErr;
+        }
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["managed-templates"] });
+      queryClient.invalidateQueries({ queryKey: ["account-templates"] });
       queryClient.invalidateQueries({ queryKey: ["chat-templates"] });
       queryClient.invalidateQueries({ queryKey: ["broadcast-templates"] });
       queryClient.invalidateQueries({ queryKey: ["flow-templates"] });
@@ -82,6 +106,7 @@ export function TemplateManager() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["managed-templates"] });
+      queryClient.invalidateQueries({ queryKey: ["account-templates"] });
       queryClient.invalidateQueries({ queryKey: ["chat-templates"] });
       toast.success("Template removido.");
     },
@@ -101,6 +126,9 @@ export function TemplateManager() {
           typeof p === "string" ? { type: "text", text: p } : { type: p?.type || "text", text: p?.text || "" }
         )
       : [];
+    const linkedAccountIds = (accountTemplates || [])
+      .filter((at) => at.template_id === t.id)
+      .map((at) => at.account_id);
     setForm({
       name: t.name,
       content: t.content,
@@ -108,6 +136,7 @@ export function TemplateManager() {
       template_language: t.template_language || "pt_BR",
       category: t.category || "geral",
       template_params: params,
+      accountIds: linkedAccountIds,
     });
     setDialogOpen(true);
   };
@@ -151,6 +180,14 @@ export function TemplateManager() {
                       {t.category && (
                         <Badge variant="outline" className="text-[10px]">{t.category}</Badge>
                       )}
+                      {(accountTemplates || [])
+                        .filter((at) => at.template_id === t.id)
+                        .map((at) => {
+                          const acc = accounts.find((a) => a.id === at.account_id);
+                          return acc ? (
+                            <Badge key={at.id} variant="default" className="text-[10px]">{acc.name}</Badge>
+                          ) : null;
+                        })}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{t.content}</p>
                   </div>
@@ -275,6 +312,32 @@ export function TemplateManager() {
                 <Plus size={14} /> Adicionar Parâmetro
               </Button>
             </div>
+            {accounts.length > 0 && (
+              <div className="space-y-2">
+                <Label>Contas WhatsApp associadas</Label>
+                <p className="text-[11px] text-muted-foreground">
+                  Selecione quais contas podem usar este template nos disparos.
+                </p>
+                <div className="space-y-1.5">
+                  {accounts.map((acc) => (
+                    <label key={acc.id} className="flex items-center gap-2 cursor-pointer">
+                      <Checkbox
+                        checked={form.accountIds.includes(acc.id)}
+                        onCheckedChange={(checked) => {
+                          setForm({
+                            ...form,
+                            accountIds: checked
+                              ? [...form.accountIds, acc.id]
+                              : form.accountIds.filter((id) => id !== acc.id),
+                          });
+                        }}
+                      />
+                      <span className="text-sm">{acc.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={closeDialog}>Cancelar</Button>

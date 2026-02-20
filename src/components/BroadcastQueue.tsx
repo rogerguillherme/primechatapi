@@ -74,6 +74,14 @@ export function BroadcastQueue() {
     },
   });
 
+  const { data: accountTemplates } = useQuery({
+    queryKey: ["account-templates"],
+    queryFn: async () => {
+      const { data } = await supabase.from("account_templates").select("*");
+      return (data || []) as { id: string; account_id: string; template_id: string }[];
+    },
+  });
+
   const addQueueItem = () => {
     const newItem: QueueItem = {
       id: generateId(),
@@ -257,6 +265,7 @@ export function BroadcastQueue() {
               index={index}
               accounts={accounts}
               templates={templates || []}
+              accountTemplates={accountTemplates || []}
               leads={leads || []}
               isExpanded={expandedItemId === item.id}
               onToggleExpand={() =>
@@ -302,6 +311,7 @@ interface QueueItemCardProps {
   index: number;
   accounts: any[];
   templates: any[];
+  accountTemplates: { id: string; account_id: string; template_id: string }[];
   leads: any[];
   isExpanded: boolean;
   onToggleExpand: () => void;
@@ -316,6 +326,7 @@ function QueueItemCard({
   index,
   accounts,
   templates,
+  accountTemplates,
   leads,
   isExpanded,
   onToggleExpand,
@@ -489,11 +500,18 @@ function QueueItemCard({
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <option value="">Selecione um template...</option>
-              {templates.map((t: any) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} {t.template_name ? `(API: ${t.template_name})` : ""}
-                </option>
-              ))}
+              {templates
+                .filter((t: any) => {
+                  if (!item.accountId) return true;
+                  const linked = accountTemplates.filter((at) => at.template_id === t.id);
+                  // Show template if it has no account links (available to all) or is linked to selected account
+                  return linked.length === 0 || linked.some((at) => at.account_id === item.accountId);
+                })
+                .map((t: any) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} {t.template_name ? `(API: ${t.template_name})` : ""}
+                  </option>
+                ))}
             </select>
             {template && (
               <div className="rounded-lg border bg-muted/30 p-2">
