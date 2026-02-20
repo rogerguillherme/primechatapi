@@ -66,10 +66,12 @@ export function BroadcastQueue() {
       const { data } = await supabase
         .from("leads")
         .select("id, name, phone, email, photo_url")
-        .order("name");
+        .order("name")
+        .limit(10000);
       return data || [];
     },
   });
+
 
   const { templates } = useUserTemplates();
 
@@ -369,7 +371,7 @@ function QueueItemCard({
 
   const matchPhonesToLeads = (phones: string[]) => {
     if (phones.length === 0) {
-      toast.error("Nenhum número válido encontrado no arquivo.");
+      toast.error("Nenhum número válido encontrado no arquivo. Verifique se selecionou a coluna correta.");
       return;
     }
     const matchedIds = new Set<string>();
@@ -380,7 +382,11 @@ function QueueItemCard({
       }
     }
     if (matchedIds.size === 0) {
-      toast.error(`Nenhum lead encontrado para os ${phones.length} números importados.`);
+      const sample = phones.slice(0, 3).join(", ");
+      toast.error(
+        `Nenhum lead encontrado para os ${phones.length} números importados. Exemplos extraídos: ${sample}. Verifique se a coluna "Telefone" está correta.`,
+        { duration: 8000 }
+      );
     } else {
       onUpdate({ selectedLeadIds: matchedIds, leadSource: "manual" });
       toast.success(`${matchedIds.size} lead(s) encontrado(s) de ${phones.length} número(s) importados.`);
@@ -463,7 +469,8 @@ function QueueItemCard({
         if (!buffer) return;
         const workbook = XLSX.read(buffer, { type: "array" });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet);
+        // raw: false → retorna valores formatados (evita notação científica em telefones)
+        const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { raw: false, defval: "" });
         if (rows.length === 0) {
           toast.error("Planilha vazia ou sem dados.");
           return;
