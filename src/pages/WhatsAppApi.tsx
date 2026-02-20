@@ -680,17 +680,21 @@ function BroadcastTab() {
 
   return (
     <div className="space-y-6">
-      {/* Broadcast Queue - multi account/template/list */}
-      <BroadcastQueue />
+      <Tabs defaultValue="queue" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="queue" className="gap-1.5">
+            <Send size={14} /> Fila de Disparos
+          </TabsTrigger>
+          <TabsTrigger value="simple" className="gap-1.5">
+            <MessageCircle size={14} /> Disparo Simples
+          </TabsTrigger>
+        </TabsList>
 
-      <div className="border-t border-border pt-4" />
+        <TabsContent value="queue" className="mt-4">
+          <BroadcastQueue />
+        </TabsContent>
 
-      <details className="group">
-        <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground transition-colors list-none flex items-center gap-2">
-          <ChevronDown size={14} className="group-open:rotate-180 transition-transform" />
-          Disparo simples (conta única)
-        </summary>
-        <div className="mt-4 space-y-6">
+        <TabsContent value="simple" className="mt-4 space-y-6">
 
       {/* Mode toggle */}
       <div className="flex flex-wrap gap-2">
@@ -982,8 +986,8 @@ function BroadcastTab() {
         </Card>
       </div>
 
-        </div>
-      </details>
+        </TabsContent>
+      </Tabs>
 
       {/* Template Manager */}
       <TemplateManager />
