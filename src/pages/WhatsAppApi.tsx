@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
@@ -1402,6 +1403,7 @@ function CloudChatTab() {
    MAIN PAGE
    ══════════════════════════════════════════════════ */
 export default function WhatsAppApi() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [editingAccount, setEditingAccount] = useState<any | null>(null);
   const [isAddingAccount, setIsAddingAccount] = useState(false);
@@ -1526,13 +1528,17 @@ export default function WhatsAppApi() {
     }
     setIsSaving(true);
     try {
-      const payload = {
+      const payload: any = {
         name: accountName.trim(),
         phone_number_id: phoneNumberId.trim(),
         business_account_id: businessAccountId.trim() || null,
         access_token: accessToken.trim(),
         is_default: isDefault || (accounts?.length === 0),
       };
+
+      if (!editingAccount) {
+        payload.user_id = user?.id;
+      }
 
       if (editingAccount) {
         const { error } = await supabase

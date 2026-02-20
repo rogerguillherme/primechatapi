@@ -617,6 +617,7 @@ export type Database = {
           name: string
           phone_number_id: string
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           access_token: string
@@ -627,6 +628,7 @@ export type Database = {
           name: string
           phone_number_id: string
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           access_token?: string
@@ -637,6 +639,7 @@ export type Database = {
           name?: string
           phone_number_id?: string
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: []
       }
