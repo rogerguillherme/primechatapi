@@ -7,22 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MessageCircle, Mail, Lock, User, Loader2 } from "lucide-react";
+import { MessageCircle, Mail, Lock, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Auth() {
   const { session, loading } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
-
-  // Login state
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
-
-  // Signup state
-  const [signupName, setSignupName] = useState("");
-  const [signupEmail, setSignupEmail] = useState("");
-  const [signupPassword, setSignupPassword] = useState("");
 
   if (loading) {
     return (
@@ -45,25 +37,6 @@ export default function Auth() {
     });
     if (error) {
       toast.error(error.message);
-    }
-    setIsLoading(false);
-  };
-
-  const handleSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email: signupEmail,
-      password: signupPassword,
-      options: {
-        data: { full_name: signupName },
-        emailRedirectTo: window.location.origin,
-      },
-    });
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success("Conta criada com sucesso!");
     }
     setIsLoading(false);
   };
@@ -114,63 +87,25 @@ export default function Auth() {
             </div>
           </div>
 
-          <Tabs defaultValue="login" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login">Entrar</TabsTrigger>
-              <TabsTrigger value="signup">Criar conta</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="login">
-              <form onSubmit={handleLogin} className="space-y-3 pt-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="login-email">Email</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input id="login-email" type="email" placeholder="seu@email.com" className="pl-9" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} required />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="login-password">Senha</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input id="login-password" type="password" placeholder="••••••••" className="pl-9" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} required />
-                  </div>
-                </div>
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Entrar"}
-                </Button>
-              </form>
-            </TabsContent>
-
-            <TabsContent value="signup">
-              <form onSubmit={handleSignup} className="space-y-3 pt-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="signup-name">Nome</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input id="signup-name" placeholder="Seu nome" className="pl-9" value={signupName} onChange={(e) => setSignupName(e.target.value)} required />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="signup-email">Email</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input id="signup-email" type="email" placeholder="seu@email.com" className="pl-9" value={signupEmail} onChange={(e) => setSignupEmail(e.target.value)} required />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="signup-password">Senha</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input id="signup-password" type="password" placeholder="Mínimo 6 caracteres" className="pl-9" value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} required minLength={6} />
-                  </div>
-                </div>
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar conta"}
-                </Button>
-              </form>
-            </TabsContent>
-          </Tabs>
+          <form onSubmit={handleLogin} className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="login-email">Email</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input id="login-email" type="email" placeholder="seu@email.com" className="pl-9" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} required />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="login-password">Senha</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input id="login-password" type="password" placeholder="••••••••" className="pl-9" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} required />
+              </div>
+            </div>
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Entrar"}
+            </Button>
+          </form>
         </CardContent>
       </Card>
     </div>

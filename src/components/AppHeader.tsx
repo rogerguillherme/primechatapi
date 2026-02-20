@@ -1,10 +1,29 @@
-import { MessageCircle, LogOut } from "lucide-react";
+import { MessageCircle, LogOut, Users } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 export function AppHeader() {
   const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const { data: isAdmin } = useQuery({
+    queryKey: ["user-role", user?.id],
+    queryFn: async () => {
+      if (!user) return false;
+      const { data } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .eq("role", "admin")
+        .maybeSingle();
+      return !!data;
+    },
+    enabled: !!user,
+  });
 
   return (
     <header className="gradient-header text-white">
@@ -23,6 +42,11 @@ export function AppHeader() {
             {user && (
               <span className="text-xs text-white/60 hidden sm:inline">{user.email}</span>
             )}
+            {isAdmin && (
+              <Button variant="ghost" size="icon" onClick={() => navigate("/admin/users")} className="text-white/60 hover:text-white hover:bg-white/10">
+                <Users size={16} />
+              </Button>
+            )}
             <ThemeToggle collapsed={true} />
             {user && (
               <Button variant="ghost" size="icon" onClick={signOut} className="text-white/60 hover:text-white hover:bg-white/10">
@@ -32,6 +56,6 @@ export function AppHeader() {
           </div>
         </div>
       </div>
-    </header>);
-
+    </header>
+  );
 }
