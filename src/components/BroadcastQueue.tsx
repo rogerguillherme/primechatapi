@@ -369,39 +369,85 @@ function QueueItemCard({
     return lines.map(normalizePhone).filter((p) => p.length >= 10);
   };
 
-  const matchPhonesToLeads = (phones: string[]) => {
+  const matchOrCreateLeads = async (phones: string[], names: Record<string, string>) => {
     if (phones.length === 0) {
-      toast.error("Nenhum número válido encontrado no arquivo. Verifique se selecionou a coluna correta.");
+      toast.error("Nenhum número válido encontrado. Verifique a coluna de Telefone.");
       return;
     }
+
     const matchedIds = new Set<string>();
-    for (const lead of leads) {
-      const leadPhone = normalizePhone(lead.phone);
-      if (phones.some((p) => leadPhone.endsWith(p) || p.endsWith(leadPhone))) {
-        matchedIds.add(lead.id);
+    const unmatchedPhones: string[] = [];
+
+    for (const phone of phones) {
+      const found = leads.find((lead) => {
+        const lp = normalizePhone(lead.phone);
+        return lp.endsWith(phone) || phone.endsWith(lp);
+      });
+      if (found) {
+        matchedIds.add(found.id);
+      } else {
+        unmatchedPhones.push(phone);
       }
     }
+
+    // Auto-create leads for phones not yet in the system
+    let createdCount = 0;
+    if (unmatchedPhones.length > 0) {
+      const toInsert = unmatchedPhones.map((p) => ({
+        phone: p.length >= 12 ? p : `55${p}`,
+        name: names[p] || `Contato ${p.slice(-4)}`,
+        origin: "xls_import",
+      }));
+      const { data: newLeads, error } = await supabase
+        .from("leads")
+        .insert(toInsert)
+        .select("id");
+      if (error) {
+        toast.error(`Erro ao criar leads: ${error.message}`);
+        return;
+      }
+      for (const nl of newLeads || []) matchedIds.add(nl.id);
+      createdCount = newLeads?.length || 0;
+    }
+
     if (matchedIds.size === 0) {
-      const sample = phones.slice(0, 3).join(", ");
-      toast.error(
-        `Nenhum lead encontrado para os ${phones.length} números importados. Exemplos extraídos: ${sample}. Verifique se a coluna "Telefone" está correta.`,
-        { duration: 8000 }
+      toast.error("Nenhum lead pôde ser adicionado.");
+      return;
+    }
+
+    onUpdate({ selectedLeadIds: matchedIds, leadSource: "manual" });
+    const existingCount = matchedIds.size - createdCount;
+    if (createdCount > 0) {
+      toast.success(
+        `${existingCount > 0 ? `${existingCount} existente(s) + ` : ""}${createdCount} novo(s) lead(s) criado(s) a partir do XLS.`,
+        { duration: 6000 }
       );
     } else {
-      onUpdate({ selectedLeadIds: matchedIds, leadSource: "manual" });
-      toast.success(`${matchedIds.size} lead(s) encontrado(s) de ${phones.length} número(s) importados.`);
+      toast.success(`${matchedIds.size} lead(s) selecionado(s) a partir do XLS.`);
     }
   };
 
-  const getFieldLabel = (field: string) => {
-    if (field === "phone") return "📞 Telefone";
-    if (field === "name") return "👤 Nome";
-    if (field === "ignore") return "— Ignorar";
-    if (field.startsWith("param_")) {
-      const idx = parseInt(field.replace("param_", ""), 10);
-      return `🔧 Parâmetro {{${idx + 1}}}`;
+  const handleConfirmColumnMap = async () => {
+    const phoneCol = Object.entries(columnMapping).find(([, v]) => v === "phone")?.[0];
+    const nameCol = Object.entries(columnMapping).find(([, v]) => v === "name")?.[0];
+    if (!phoneCol) {
+      toast.error("Selecione qual coluna é o Telefone.");
+      return;
     }
-    return field;
+    const phones: string[] = [];
+    const names: Record<string, string> = {};
+    for (const row of sheetRows) {
+      const raw = String(row[phoneCol] ?? "").trim();
+      const phone = normalizePhone(raw);
+      if (phone.length >= 10) {
+        phones.push(phone);
+        if (nameCol) {
+          names[phone] = String(row[nameCol] ?? "").trim() || `Contato ${phone.slice(-4)}`;
+        }
+      }
+    }
+    setColumnMapOpen(false);
+    await matchOrCreateLeads(phones, names);
   };
 
   const getAvailableFields = () => {
@@ -414,30 +460,6 @@ function QueueItemCard({
       fields.push({ value: `param_${i}`, label: `🔧 Parâmetro {{${i + 1}}}` });
     }
     return fields;
-  };
-
-  const handleConfirmColumnMap = () => {
-    const phoneCol = Object.entries(columnMapping).find(([, v]) => v === "phone")?.[0];
-    if (!phoneCol) {
-      toast.error("Selecione qual coluna é o Telefone.");
-      return;
-    }
-
-    const phones = sheetRows
-      .map((row) => normalizePhone(String(row[phoneCol] ?? "").trim()))
-      .filter((p) => p.length >= 10);
-
-    // Build custom params overrides from mapped columns
-    const paramOverrides: Record<number, string[]> = {};
-    for (const [col, field] of Object.entries(columnMapping)) {
-      if (field.startsWith("param_")) {
-        const idx = parseInt(field.replace("param_", ""), 10);
-        paramOverrides[idx] = sheetRows.map((row) => String(row[col] ?? ""));
-      }
-    }
-
-    setColumnMapOpen(false);
-    matchPhonesToLeads(phones);
   };
 
   const autoDetectMapping = (cols: string[]): Record<string, string> => {
@@ -463,18 +485,14 @@ function QueueItemCard({
     if (!file) return;
     const isExcel = /\.(xlsx?|xls)$/i.test(file.name);
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       if (isExcel) {
         const buffer = ev.target?.result as ArrayBuffer;
         if (!buffer) return;
         const workbook = XLSX.read(buffer, { type: "array" });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        // raw: false → retorna valores formatados (evita notação científica em telefones)
         const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { raw: false, defval: "" });
-        if (rows.length === 0) {
-          toast.error("Planilha vazia ou sem dados.");
-          return;
-        }
+        if (rows.length === 0) { toast.error("Planilha vazia ou sem dados."); return; }
         const cols = Object.keys(rows[0]);
         setSheetColumns(cols);
         setSheetRows(rows);
@@ -483,7 +501,9 @@ function QueueItemCard({
       } else {
         const text = ev.target?.result as string;
         if (!text) return;
-        matchPhonesToLeads(extractPhonesFromText(text));
+        const lines = text.split(/[\r\n,;]+/).map((l) => l.trim()).filter(Boolean);
+        const phones = lines.map(normalizePhone).filter((p) => p.length >= 10);
+        await matchOrCreateLeads(phones, {});
       }
     };
     if (isExcel) reader.readAsArrayBuffer(file);
