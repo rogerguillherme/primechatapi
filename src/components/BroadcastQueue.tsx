@@ -427,6 +427,21 @@ function QueueItemCard({
     }
   };
 
+  const rawToPhone = (value: any): string => {
+    if (value === null || value === undefined || value === "") return "";
+    // Se for número (Excel armazena como float), converte direto para inteiro sem notação científica
+    if (typeof value === "number") {
+      return Math.round(value).toString();
+    }
+    // Se for string em notação científica (ex: "5.59299E+12")
+    const str = String(value).trim();
+    if (/e\+/i.test(str)) {
+      // Converte notação científica para inteiro
+      return Math.round(parseFloat(str)).toString();
+    }
+    return str;
+  };
+
   const handleConfirmColumnMap = async () => {
     const phoneCol = Object.entries(columnMapping).find(([, v]) => v === "phone")?.[0];
     const nameCol = Object.entries(columnMapping).find(([, v]) => v === "name")?.[0];
@@ -437,9 +452,9 @@ function QueueItemCard({
     const phones: string[] = [];
     const names: Record<string, string> = {};
     for (const row of sheetRows) {
-      const raw = String(row[phoneCol] ?? "").trim();
-      console.log("[XLS] raw phone value:", JSON.stringify(raw), "-> normalized:", normalizePhone(raw));
-      const phone = normalizePhone(raw);
+      const rawVal = row[phoneCol];
+      const converted = rawToPhone(rawVal);
+      const phone = normalizePhone(converted);
       if (phone.length >= 10) {
         phones.push(phone);
         if (nameCol) {
@@ -447,7 +462,6 @@ function QueueItemCard({
         }
       }
     }
-    console.log("[XLS] Total phones extracted:", phones.length, "| First 5:", phones.slice(0, 5));
     setColumnMapOpen(false);
     await matchOrCreateLeads(phones, names);
   };
@@ -493,29 +507,20 @@ function QueueItemCard({
         if (!buffer) return;
         try {
           const workbook = XLSX.read(buffer, { type: "array" });
-          console.log("[XLS] Sheets:", workbook.SheetNames);
           const sheetName = workbook.SheetNames[0];
           const sheet = workbook.Sheets[sheetName];
-          // Try raw: false first (formatted values)
-          const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { raw: false, defval: "" });
-          console.log("[XLS] Total rows:", rows.length);
+          // raw: true para preservar números inteiros (evita notação científica)
+          const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { raw: true, defval: "" });
           if (rows.length === 0) {
-            // Try with header row detection
-            const rowsRaw = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1, defval: "" });
-            console.log("[XLS] Raw rows (header:1):", rowsRaw.slice(0, 3));
-            toast.error(`Planilha vazia ou sem dados. Linhas brutas: ${rowsRaw.length}`);
+            toast.error("Planilha vazia ou sem dados.");
             return;
           }
           const cols = Object.keys(rows[0]);
-          console.log("[XLS] Columns:", cols);
-          console.log("[XLS] Row 0 sample:", rows[0]);
-          console.log("[XLS] Row 1 sample:", rows[1]);
           setSheetColumns(cols);
           setSheetRows(rows);
           setColumnMapping(autoDetectMapping(cols));
           setColumnMapOpen(true);
         } catch (err: any) {
-          console.error("[XLS] Parse error:", err);
           toast.error(`Erro ao ler arquivo: ${err?.message || err}`);
           return;
         }
