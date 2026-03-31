@@ -174,11 +174,14 @@ Deno.serve(async (req) => {
     try { waData = JSON.parse(waText); } catch { waData = { raw: waText }; }
 
     if (!waRes.ok) {
-      // Return error as 4xx instead of 500 so client gets a clear message
       const errorCode = waData?.error?.code;
+      const errorSubcode = waData?.error?.error_subcode;
+
       const isTemplateNotFound = errorCode === 132001;
       const isParamsMismatch = errorCode === 132000;
       const isGenericUserError = errorCode === 135000;
+      const isAuthError = errorCode === 190;
+
       let errorMsg: string;
       if (isTemplateNotFound) {
         errorMsg = `Template "${template_name || ''}" não encontrado na Meta com idioma "${body?.template?.language?.code || ''}". Verifique o nome e idioma no Facebook Business Manager.`;
@@ -186,13 +189,19 @@ Deno.serve(async (req) => {
         errorMsg = `Template "${template_name || ''}" requer parâmetros que não foram enviados. Configure os parâmetros do template no sistema (ex: {{1}}).`;
       } else if (isGenericUserError) {
         errorMsg = `Erro genérico da Meta ao enviar template "${template_name || ''}". Possíveis causas: template não aprovado, idioma "${body?.template?.language?.code || ''}" incorreto, quantidade de parâmetros não bate com o template, ou janela de 24h expirada. Verifique no WhatsApp Manager.`;
+      } else if (isAuthError) {
+        const loggedOutHint = errorSubcode === 467 ? " Sessão inválida (usuário desconectado)." : "";
+        errorMsg = `Token de acesso da conta WhatsApp inválido ou expirado.${loggedOutHint} Gere um novo token permanente no Meta Business Manager e atualize a conta.`;
       } else {
         errorMsg = `WhatsApp API error [${waRes.status}]: ${waText}`;
       }
-      const isKnownError = isTemplateNotFound || isParamsMismatch || isGenericUserError;
+
+      const isKnownError = isTemplateNotFound || isParamsMismatch || isGenericUserError || isAuthError;
+      const statusCode = isKnownError || waRes.status < 500 ? 422 : 502;
+
       return new Response(
         JSON.stringify({ error: errorMsg, wa_error: waData?.error }),
-        { status: isKnownError ? 422 : 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: statusCode, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
