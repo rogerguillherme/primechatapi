@@ -23,6 +23,7 @@ export function NodeEditPanel({ node, templates, onUpdate, onClose }: NodeEditPa
     condition: "Condição",
     interactive_buttons: "Mensagem com Botões",
     cta_url: "Botão com Link",
+    no_response: "Sem Resposta",
   };
 
   return (
