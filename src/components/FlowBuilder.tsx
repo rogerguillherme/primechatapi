@@ -313,6 +313,7 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
           delay_minutes: s.delay_minutes || 0,
           trigger_value: s.trigger_value,
           buttons: Array.isArray(s.buttons) ? s.buttons : [],
+          timeout_minutes: s.timeout_minutes || null,
         },
       }));
 
