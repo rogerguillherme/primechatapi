@@ -15,13 +15,34 @@ import { toast } from "sonner";
 const REDIRECT_URI = `${window.location.origin}/connect`;
 
 export default function MetaConnect() {
-  const { session } = useAuth();
+  const { session, user } = useAuth();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [isExchanging, setIsExchanging] = useState(false);
   const [testPhone, setTestPhone] = useState("");
   const [testMessage, setTestMessage] = useState("Olá! Esta é uma mensagem de teste do Prime Chat. 🚀");
   const [isSending, setIsSending] = useState(false);
+
+  // Check if user is admin
+  const { data: isAdmin, isLoading: isAdminLoading } = useQuery({
+    queryKey: ["user-role", user?.id],
+    queryFn: async () => {
+      if (!user) return false;
+      const { data } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .eq("role", "admin")
+        .maybeSingle();
+      return !!data;
+    },
+    enabled: !!user,
+  });
+
+  // Redirect non-admins
+  if (!isAdminLoading && !isAdmin) {
+    return <Navigate to="/" replace />;
+  }
 
   // Fetch user connections
   const { data: connections, isLoading } = useQuery({
