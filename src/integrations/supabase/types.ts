@@ -237,6 +237,7 @@ export type Database = {
           step_order: number
           step_type: string
           template_id: string | null
+          timeout_minutes: number | null
           trigger_value: string | null
         }
         Insert: {
@@ -250,6 +251,7 @@ export type Database = {
           step_order?: number
           step_type?: string
           template_id?: string | null
+          timeout_minutes?: number | null
           trigger_value?: string | null
         }
         Update: {
@@ -263,6 +265,7 @@ export type Database = {
           step_order?: number
           step_type?: string
           template_id?: string | null
+          timeout_minutes?: number | null
           trigger_value?: string | null
         }
         Relationships: [
