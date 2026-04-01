@@ -39,11 +39,6 @@ export default function MetaConnect() {
     enabled: !!user,
   });
 
-  // Redirect non-admins
-  if (!isAdminLoading && !isAdmin) {
-    return <Navigate to="/" replace />;
-  }
-
   // Fetch user connections
   const { data: connections, isLoading } = useQuery({
     queryKey: ["meta-connections"],
@@ -55,8 +50,13 @@ export default function MetaConnect() {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!session,
+    enabled: !!session && isAdmin === true,
   });
+
+  // Redirect non-admins (after all hooks)
+  if (!isAdminLoading && !isAdmin) {
+    return <Navigate to="/" replace />;
+  }
 
   const activeConnection = connections?.find((c: any) => c.status === "connected");
 
