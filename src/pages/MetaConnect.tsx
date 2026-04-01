@@ -67,19 +67,19 @@ export default function MetaConnect() {
     }
   }, [searchParams]);
 
-  const handleConnect = () => {
-    if (!META_APP_ID) {
-      toast.error("META_APP_ID não configurado. Adicione VITE_META_APP_ID no ambiente.");
-      return;
+  const handleConnect = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke("meta-oauth-url", {
+        body: { redirect_uri: REDIRECT_URI },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      if (data?.oauth_url) {
+        window.location.href = data.oauth_url;
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao gerar URL de conexão");
     }
-
-    const oauthUrl = new URL("https://www.facebook.com/v19.0/dialog/oauth");
-    oauthUrl.searchParams.set("client_id", META_APP_ID);
-    oauthUrl.searchParams.set("redirect_uri", REDIRECT_URI);
-    oauthUrl.searchParams.set("scope", "whatsapp_business_management,whatsapp_business_messaging,business_management");
-    oauthUrl.searchParams.set("response_type", "code");
-
-    window.location.href = oauthUrl.toString();
   };
 
   const handleDisconnect = async (connectionId: string) => {
