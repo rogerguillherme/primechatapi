@@ -41,6 +41,7 @@ const defaultEdgeOptions = {
   animated: true,
   style: { stroke: "hsl(var(--primary))", strokeWidth: 2 },
   markerEnd: { type: MarkerType.ArrowClosed, color: "hsl(var(--primary))" },
+  deletable: true,
 };
 
 interface FlowCanvasProps {
@@ -153,6 +154,11 @@ export function FlowCanvas({
         defaultEdgeOptions={defaultEdgeOptions}
         onNodeClick={(_, node) => setSelectedNodeId(node.id)}
         onPaneClick={() => setSelectedNodeId(null)}
+        onEdgeClick={(_, edge) => {
+          setEdges((eds) => eds.filter((e) => e.id !== edge.id));
+        }}
+        deleteKeyCode={["Backspace", "Delete"]}
+        nodesDraggable
         fitView
         fitViewOptions={{ padding: 0.3 }}
         proOptions={{ hideAttribution: true }}
