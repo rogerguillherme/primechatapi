@@ -16,14 +16,16 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Find the default WhatsApp account to use for sending
+    // Find the default WhatsApp account to use for sending (most recently updated)
     const { data: defaultAccount } = await supabase
       .from("whatsapp_accounts")
       .select("id")
       .eq("is_default", true)
+      .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
     const accountId = defaultAccount?.id || null;
+    console.log("Using account_id:", accountId);
 
     // Find executions where delay/timeout has expired
     const now = new Date().toISOString();
