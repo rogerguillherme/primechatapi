@@ -4,13 +4,12 @@ import {
   Background,
   Controls,
   MiniMap,
-  useNodesState,
-  useEdgesState,
   addEdge,
   type Node,
   type Edge,
   type Connection,
   type NodeTypes,
+  type EdgeTypes,
   MarkerType,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -22,9 +21,10 @@ import { InteractiveButtonsNode } from "./nodes/InteractiveButtonsNode";
 import { CtaUrlNode } from "./nodes/CtaUrlNode";
 import { NoResponseNode } from "./nodes/NoResponseNode";
 import { NodeEditPanel } from "./NodeEditPanel";
+import { InsertStepEdge, type InsertableStepType } from "./InsertStepEdge";
 import { Button } from "@/components/ui/button";
 import {
-  MessageSquare, Clock, GitBranch, MousePointerClick, ExternalLink, Plus, Braces, TimerOff,
+  MessageSquare, Clock, GitBranch, MousePointerClick, ExternalLink, Braces, TimerOff,
 } from "lucide-react";
 
 const nodeTypes: NodeTypes = {
@@ -37,11 +37,39 @@ const nodeTypes: NodeTypes = {
   no_response: NoResponseNode,
 };
 
+const edgeTypes: EdgeTypes = {
+  insertable: InsertStepEdge,
+};
+
 const defaultEdgeOptions = {
+  type: "insertable",
   animated: true,
   style: { stroke: "hsl(var(--primary))", strokeWidth: 2 },
   markerEnd: { type: MarkerType.ArrowClosed, color: "hsl(var(--primary))" },
   deletable: true,
+};
+
+const createDefaultNodeData = (type: InsertableStepType): Record<string, unknown> => {
+  if (type === "message") {
+    return { custom_message: "", template_id: null };
+  }
+  if (type === "delay") {
+    return { delay_minutes: 60 };
+  }
+  if (type === "condition") {
+    return { trigger_value: "" };
+  }
+  if (type === "interactive_buttons") {
+    return { custom_message: "", buttons: [{ id: crypto.randomUUID(), title: "" }] };
+  }
+  if (type === "cta_url") {
+    return {
+      custom_message: "",
+      buttons: [{ id: crypto.randomUUID(), title: "Acessar site", url: "" }],
+    };
+  }
+
+  return { timeout_minutes: 10 };
 };
 
 interface FlowCanvasProps {
@@ -107,35 +135,17 @@ export function FlowCanvas({
   );
 
   const addNode = useCallback(
-    (type: string) => {
+    (type: InsertableStepType) => {
       const id = crypto.randomUUID();
       const lastNode = nodes.length > 0 ? nodes[nodes.length - 1] : null;
       const x = lastNode ? (lastNode.position?.x || 0) + 350 : 350;
       const y = lastNode ? lastNode.position?.y || 200 : 200;
 
-      const defaultData: Record<string, unknown> = {};
-      if (type === "message") {
-        defaultData.custom_message = "";
-        defaultData.template_id = null;
-      } else if (type === "delay") {
-        defaultData.delay_minutes = 60;
-      } else if (type === "condition") {
-        defaultData.trigger_value = "";
-      } else if (type === "interactive_buttons") {
-        defaultData.custom_message = "";
-        defaultData.buttons = [{ id: crypto.randomUUID(), title: "" }];
-      } else if (type === "cta_url") {
-        defaultData.custom_message = "";
-        defaultData.buttons = [{ id: crypto.randomUUID(), title: "Acessar site", url: "" }];
-      } else if (type === "no_response") {
-        defaultData.timeout_minutes = 10;
-      }
-
       const newNode: Node = {
         id,
         type,
         position: { x, y },
-        data: defaultData,
+        data: createDefaultNodeData(type),
       };
 
       setNodes((nds) => [...nds, newNode]);
@@ -154,17 +164,95 @@ export function FlowCanvas({
     [nodes, setNodes, setEdges]
   );
 
+  const insertNodeOnEdge = useCallback(
+    (edgeId: string, type: InsertableStepType) => {
+      const edgeToSplit = edges.find((edge) => edge.id === edgeId);
+      if (!edgeToSplit) return;
+
+      const sourceNode = nodes.find((node) => node.id === edgeToSplit.source);
+      const targetNode = nodes.find((node) => node.id === edgeToSplit.target);
+
+      const sourceX = sourceNode?.position?.x ?? 0;
+      const sourceY = sourceNode?.position?.y ?? 200;
+      const targetX = targetNode?.position?.x ?? sourceX + 350;
+      const targetY = targetNode?.position?.y ?? sourceY;
+
+      const newNodeId = crypto.randomUUID();
+      const newNode: Node = {
+        id: newNodeId,
+        type,
+        position: {
+          x: (sourceX + targetX) / 2,
+          y: (sourceY + targetY) / 2,
+        },
+        data: createDefaultNodeData(type),
+      };
+
+      const baseEdgeStyle = edgeToSplit.style || defaultEdgeOptions.style;
+      const baseMarkerEnd = edgeToSplit.markerEnd || defaultEdgeOptions.markerEnd;
+
+      const firstEdge: Edge = {
+        id: `e-${edgeToSplit.source}-${newNodeId}`,
+        source: edgeToSplit.source,
+        target: newNodeId,
+        sourceHandle: edgeToSplit.sourceHandle,
+        animated: edgeToSplit.animated ?? true,
+        style: baseEdgeStyle,
+        markerEnd: baseMarkerEnd,
+        type: "insertable",
+        deletable: true,
+        ...(edgeToSplit.label ? { label: edgeToSplit.label } : {}),
+      };
+
+      const secondEdge: Edge = {
+        id: `e-${newNodeId}-${edgeToSplit.target}`,
+        source: newNodeId,
+        target: edgeToSplit.target,
+        targetHandle: edgeToSplit.targetHandle,
+        animated: edgeToSplit.animated ?? true,
+        style: baseEdgeStyle,
+        markerEnd: baseMarkerEnd,
+        type: "insertable",
+        deletable: true,
+      };
+
+      setNodes((currentNodes) => [...currentNodes, newNode]);
+      setEdges((currentEdges) => [
+        ...currentEdges.filter((edge) => edge.id !== edgeId),
+        firstEdge,
+        secondEdge,
+      ]);
+      setSelectedNodeId(newNodeId);
+    },
+    [edges, nodes, setEdges, setNodes]
+  );
+
+  const edgesWithCallbacks = useMemo(
+    () =>
+      edges.map((edge) => ({
+        ...edge,
+        type: edge.type || "insertable",
+        data: {
+          ...(typeof edge.data === "object" && edge.data ? edge.data : {}),
+          onInsert: (targetEdgeId: string, nodeType: InsertableStepType) =>
+            insertNodeOnEdge(targetEdgeId, nodeType),
+        },
+      })),
+    [edges, insertNodeOnEdge]
+  );
+
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
 
   return (
     <div className="relative w-full h-full">
       <ReactFlow
         nodes={nodesWithCallbacks}
-        edges={edges}
+        edges={edgesWithCallbacks}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
         onNodeClick={(_, node) => setSelectedNodeId(node.id)}
         onPaneClick={() => setSelectedNodeId(null)}
