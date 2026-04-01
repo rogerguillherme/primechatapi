@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
 
         // Process the CURRENT step first (send message)
         if (currentStep.step_type === "message" || currentStep.step_type === "interactive_buttons" || currentStep.step_type === "cta_url") {
-          const sent = await sendStepMessage(currentStep, lead, supabase, supabaseUrl, supabaseKey, exec.metadata);
+          const sent = await sendStepMessage(currentStep, lead, supabase, supabaseUrl, supabaseKey, exec.metadata, accountId);
           if (!sent) {
             console.error("Failed to send message for execution:", exec.id);
             continue;
