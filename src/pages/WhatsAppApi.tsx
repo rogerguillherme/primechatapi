@@ -657,38 +657,16 @@ function BroadcastTab() {
           if (sendType === "flow") {
             const leadId = await findLeadByPhone(row.telefone);
             if (!leadId) { errorCount++; continue; }
-            await startFlowForLead(leadId, row.codigo);
+            if (!flowIdForDispatch) throw new Error("Selecione um fluxo antes de iniciar.");
+            await startFlowForLead(leadId, flowIdForDispatch, row.codigo);
             successCount++;
           } else {
             for (const accountId of accountIds) {
-              const body: any = { phone: row.telefone, account_id: accountId };
-              if (sendType === "template" && selectedTemplate?.template_name) {
-                body.template_name = selectedTemplate.template_name;
-                body.template_language = selectedTemplate.template_language || "pt_BR";
-                body.template_params = resolveParams((selectedTemplate.template_params || []) as any[], row.nome, row.codigo);
-              } else {
-                body.message = customMessage
-                  .replace(/\{nome\}/g, row.nome.split(" ")[0])
-                  .replace(/\{codigo\}/g, row.codigo);
-              }
-              const { data: sendData, error } = await supabase.functions.invoke("whatsapp-cloud-send", { body });
-              if (error) throw error;
-              if (sendData?.error) throw new Error(sendData.error);
-              successCount++;
-            }
-          }
-        } catch (e: any) {
-          errorCount++;
-          lastError = e?.message || "Erro desconhecido";
-        }
-      }
-    } else {
-      for (const leadId of selectedLeads) {
-        const lead = leads?.find((l) => l.id === leadId);
-        if (!lead) continue;
+...
         try {
           if (sendType === "flow") {
-            await startFlowForLead(leadId);
+            if (!flowIdForDispatch) throw new Error("Selecione um fluxo antes de iniciar.");
+            await startFlowForLead(leadId, flowIdForDispatch);
             successCount++;
           } else {
             for (const accountId of accountIds) {
