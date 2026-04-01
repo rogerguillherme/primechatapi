@@ -332,9 +332,8 @@ Deno.serve(async (req) => {
                 if (followingSteps && followingSteps.length > 0) {
                   matchedStep = followingSteps[0];
                 }
-              }
-            }
-          }
+      }
+      }
 
           if (matchedStep) {
             await processFlowStep(matchedStep, exec, lead, supabase);
