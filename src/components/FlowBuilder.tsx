@@ -303,38 +303,85 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
         draggable: true,
       };
 
-      const stepNodes: Node[] = steps.map((s: any, i: number) => ({
-        id: s.id,
-        type: s.step_type,
-        position: { x: 350 + i * 350, y: 200 },
-        data: {
-          template_id: s.template_id,
-          custom_message: s.custom_message,
-          delay_minutes: s.delay_minutes || 0,
-          trigger_value: s.trigger_value,
-          buttons: Array.isArray(s.buttons) ? s.buttons : [],
-          timeout_minutes: s.timeout_minutes || null,
-        },
-      }));
+      // Build nodes
+      const stepNodes: Node[] = steps.map((s: any, i: number) => {
+        // Calculate position: branch children go below their parent
+        const parentIdx = s.parent_step_id ? steps.findIndex((p: any) => p.id === s.parent_step_id) : -1;
+        const siblings = s.parent_step_id ? steps.filter((p: any) => p.parent_step_id === s.parent_step_id) : [];
+        const siblingIdx = siblings.findIndex((p: any) => p.id === s.id);
+        const yOffset = siblings.length > 1 ? (siblingIdx - (siblings.length - 1) / 2) * 180 : 0;
+        const xBase = parentIdx >= 0 ? 350 + (parentIdx + 1) * 350 : 350 + i * 350;
+        const yBase = parentIdx >= 0 ? 200 + yOffset : 200;
+
+        return {
+          id: s.id,
+          type: s.step_type,
+          position: { x: xBase, y: yBase },
+          data: {
+            template_id: s.template_id,
+            custom_message: s.custom_message,
+            delay_minutes: s.delay_minutes || 0,
+            trigger_value: s.trigger_value,
+            buttons: Array.isArray(s.buttons) ? s.buttons : [],
+            timeout_minutes: s.timeout_minutes || null,
+          },
+        };
+      });
 
       const allNodes = [triggerNode, ...stepNodes];
       const allEdges: Edge[] = [];
 
-      if (stepNodes.length > 0) {
+      // Build edges from parent_step_id relationships
+      const rootSteps = steps.filter((s: any) => !s.parent_step_id);
+      if (rootSteps.length > 0) {
+        // Connect trigger to the first root step
         allEdges.push({
-          id: `e-trigger-${stepNodes[0].id}`,
+          id: `e-trigger-${rootSteps[0].id}`,
           source: "trigger",
-          target: stepNodes[0].id,
+          target: rootSteps[0].id,
           ...defaultEdgeOptions,
         });
       }
-      for (let i = 0; i < stepNodes.length - 1; i++) {
-        allEdges.push({
-          id: `e-${stepNodes[i].id}-${stepNodes[i + 1].id}`,
-          source: stepNodes[i].id,
-          target: stepNodes[i + 1].id,
-          ...defaultEdgeOptions,
-        });
+
+      // Connect steps based on parent_step_id
+      for (const step of steps) {
+        if (step.parent_step_id) {
+          const parentStep = steps.find((s: any) => s.id === step.parent_step_id);
+          // Determine sourceHandle for interactive_buttons parents
+          let sourceHandle: string | undefined;
+          let edgeLabel: string | undefined;
+          if (parentStep?.step_type === "interactive_buttons" && step.trigger_value) {
+            const parentButtons = Array.isArray(parentStep.buttons) ? parentStep.buttons : [];
+            const btnIdx = parentButtons.findIndex((b: any) => b.title === step.trigger_value);
+            if (btnIdx >= 0) {
+              sourceHandle = `btn-${btnIdx}`;
+            }
+            edgeLabel = step.trigger_value;
+          }
+          allEdges.push({
+            id: `e-${step.parent_step_id}-${step.id}`,
+            source: step.parent_step_id,
+            target: step.id,
+            sourceHandle,
+            label: edgeLabel,
+            ...defaultEdgeOptions,
+          });
+        }
+      }
+
+      // For root steps without parent, connect linearly (backwards compat)
+      for (let i = 0; i < rootSteps.length - 1; i++) {
+        const existing = allEdges.find(
+          (e) => e.source === rootSteps[i].id && e.target === rootSteps[i + 1].id
+        );
+        if (!existing) {
+          allEdges.push({
+            id: `e-${rootSteps[i].id}-${rootSteps[i + 1].id}`,
+            source: rootSteps[i].id,
+            target: rootSteps[i + 1].id,
+            ...defaultEdgeOptions,
+          });
+        }
       }
 
       setNodes(allNodes);
