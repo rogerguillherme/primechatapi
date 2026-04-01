@@ -7,6 +7,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { HelpChatBubble } from "@/components/HelpChatBubble";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import WhatsAppApi from "./pages/WhatsAppApi";
+import MetaConnect from "./pages/MetaConnect";
 import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
 import AdminUsers from "./pages/AdminUsers";
