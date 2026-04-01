@@ -27,7 +27,7 @@ const qualityLabels: Record<string, string> = {
 };
 
 export function WhatsAppLimits() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["whatsapp-limits"],
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke("whatsapp-limits");
@@ -36,6 +36,7 @@ export function WhatsAppLimits() {
     },
     refetchInterval: 60000,
     staleTime: 30000,
+    retry: 1,
   });
 
   if (isLoading) {
