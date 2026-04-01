@@ -23,19 +23,70 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setSession(session);
-        setLoading(false);
-      }
-    );
+    let isMounted = true;
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
+    const applySession = (nextSession: Session | null) => {
+      if (!isMounted) return;
+      setSession(nextSession);
       setLoading(false);
+    };
+
+    const clearLocalSession = async () => {
+      await supabase.auth.signOut({ scope: "local" });
+    };
+
+    const initializeAuth = async () => {
+      try {
+        const {
+          data: { session: storedSession },
+          error: sessionError,
+        } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          console.error("Failed to restore auth session", sessionError);
+          await clearLocalSession();
+          applySession(null);
+          return;
+        }
+
+        if (!storedSession) {
+          applySession(null);
+          return;
+        }
+
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+
+        if (userError || !user) {
+          console.warn("Clearing invalid local auth session", userError);
+          await clearLocalSession();
+          applySession(null);
+          return;
+        }
+
+        applySession(storedSession);
+      } catch (error) {
+        console.error("Unexpected auth bootstrap error", error);
+        await clearLocalSession();
+        applySession(null);
+      }
+    };
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === "INITIAL_SESSION") return;
+      applySession(nextSession);
     });
 
-    return () => subscription.unsubscribe();
+    void initializeAuth();
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signOut = async () => {

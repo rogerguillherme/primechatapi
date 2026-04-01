@@ -36,6 +36,9 @@ import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 import { useUserTemplates } from "@/hooks/use-user-templates";
 import { AccountSelector } from "@/components/AccountSelector";
 
+const isUnauthorizedFunctionError = (error: unknown) =>
+  error instanceof Error && error.message.includes("401");
+
 /* ── Helpers ── */
 function getAvatarColor(name: string) {
   const colors = ["bg-emerald-600", "bg-violet-600", "bg-amber-600", "bg-rose-600", "bg-cyan-600", "bg-indigo-600"];
@@ -1452,7 +1455,7 @@ function CloudChatTab() {
    MAIN PAGE
    ══════════════════════════════════════════════════ */
 export default function WhatsAppApi() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryClient = useQueryClient();
   const [editingAccount, setEditingAccount] = useState<any | null>(null);
   const [isAddingAccount, setIsAddingAccount] = useState(false);
@@ -1499,11 +1502,13 @@ export default function WhatsAppApi() {
   const [testMessage, setTestMessage] = useState("Olá! Esta é uma mensagem de teste do Prime Chat.");
   const [isTesting, setIsTesting] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+  const isAuthenticated = Boolean(session?.access_token);
 
   const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-cloud-webhook`;
 
   const { data: accounts, isLoading: accountsLoading } = useQuery({
-    queryKey: ["whatsapp-accounts"],
+    queryKey: ["whatsapp-accounts", user?.id],
+    enabled: !!user,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("whatsapp_accounts")
@@ -1518,14 +1523,21 @@ export default function WhatsAppApi() {
   const defaultAccount = accounts?.find((a: any) => a.is_default) || accounts?.[0];
 
   const { data: limitsData } = useQuery({
-    queryKey: ["whatsapp-limits-inline"],
+    queryKey: ["whatsapp-limits-inline", user?.id],
+    enabled: isAuthenticated,
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke("whatsapp-limits");
-      if (error) throw error;
+      if (error) {
+        if (isUnauthorizedFunctionError(error)) {
+          return [] as Array<{ account_id: string; messaging_limit_tier: string | null; quality_rating: string | null; error?: string }>;
+        }
+        throw error;
+      }
       return (data?.limits || []) as Array<{ account_id: string; messaging_limit_tier: string | null; quality_rating: string | null; error?: string }>;
     },
-    refetchInterval: 60000,
+    refetchInterval: isAuthenticated ? 60000 : false,
     staleTime: 30000,
+    retry: false,
   });
 
   const limitsMap = useMemo(() => {
