@@ -34,6 +34,7 @@ const nodeTypes: NodeTypes = {
   condition: ConditionNode,
   interactive_buttons: InteractiveButtonsNode,
   cta_url: CtaUrlNode,
+  no_response: NoResponseNode,
 };
 
 const defaultEdgeOptions = {
