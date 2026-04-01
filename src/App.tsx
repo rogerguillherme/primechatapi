@@ -7,6 +7,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { HelpChatBubble } from "@/components/HelpChatBubble";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import WhatsAppApi from "./pages/WhatsAppApi";
+import MetaConnect from "./pages/MetaConnect";
 import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
 import AdminUsers from "./pages/AdminUsers";
@@ -46,6 +47,19 @@ function AppRoutes() {
                 <WhatsAppApi />
               </main>
               <HelpChatBubble />
+            </div>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/connect"
+        element={
+          <ProtectedRoute>
+            <div className="min-h-screen flex flex-col">
+              <AppHeader />
+              <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-7xl mx-auto w-full">
+                <MetaConnect />
+              </main>
             </div>
           </ProtectedRoute>
         }
