@@ -445,6 +445,7 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
           trigger_value: (n.data.trigger_value as string) || null,
           parent_step_id: null,
           buttons: (n.type === "interactive_buttons" || n.type === "cta_url") ? (n.data.buttons as any) || [] : [],
+          timeout_minutes: (n.data.timeout_minutes as number) || null,
         }));
 
         const { error } = await supabase.from("flow_steps").insert(stepsToInsert);
