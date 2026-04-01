@@ -52,6 +52,19 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/connect"
+        element={
+          <ProtectedRoute>
+            <div className="min-h-screen flex flex-col">
+              <AppHeader />
+              <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-7xl mx-auto w-full">
+                <MetaConnect />
+              </main>
+            </div>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/admin/users"
         element={
           <ProtectedRoute>
