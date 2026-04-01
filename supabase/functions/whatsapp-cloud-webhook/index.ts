@@ -376,17 +376,43 @@ async function downloadCloudMedia(
 }
 
 async function processFlowStep(step: any, execution: any, lead: any, supabase: any) {
-  const PHONE_NUMBER_ID = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID");
-  const ACCESS_TOKEN = Deno.env.get("WHATSAPP_ACCESS_TOKEN");
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-  if (step.step_type === "message" || step.step_type === "cta_url") {
-    // Send message via whatsapp-cloud-send
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  // Resolve account_id from the default WhatsApp account
+  const { data: defaultAccount } = await supabase
+    .from("whatsapp_accounts")
+    .select("id")
+    .eq("is_default", true)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const accountId = defaultAccount?.id || null;
 
+  if (step.step_type === "message" || step.step_type === "cta_url" || step.step_type === "interactive_buttons") {
     const body: any = { phone: lead.phone || lead.name, lead_id: lead.id };
+    if (accountId) body.account_id = accountId;
 
-    if (step.template_id) {
+    if (step.step_type === "cta_url") {
+      const buttons = Array.isArray(step.buttons) ? step.buttons : [];
+      const ctaBtn = buttons[0];
+      const codigo = execution.metadata?.codigo || "";
+      const msgText = (step.custom_message || "Acesse o link abaixo:")
+        .replace(/\{nome\}/g, (lead.name || "").split(" ")[0])
+        .replace(/\{codigo\}/g, codigo);
+      body.message = msgText;
+      if (ctaBtn?.url) {
+        body.cta_url = { display_text: ctaBtn.title || "Acessar", url: ctaBtn.url };
+      }
+    } else if (step.step_type === "interactive_buttons") {
+      const buttons = Array.isArray(step.buttons) ? step.buttons : [];
+      const codigo = execution.metadata?.codigo || "";
+      const msgText = (step.custom_message || "Escolha uma opção:")
+        .replace(/\{nome\}/g, (lead.name || "").split(" ")[0])
+        .replace(/\{codigo\}/g, codigo);
+      body.message = msgText;
+      body.interactive_buttons = buttons;
+    } else if (step.template_id) {
       const { data: template } = await supabase
         .from("chat_templates")
         .select("*")
@@ -415,18 +441,15 @@ async function processFlowStep(step: any, execution: any, lead: any, supabase: a
         .replace(/\{codigo\}/g, codigo);
     }
 
-    // Add CTA URL if step type is cta_url
-    if (step.step_type === "cta_url") {
-      const buttons = Array.isArray(step.buttons) ? step.buttons : [];
-      const ctaBtn = buttons[0];
-      if (ctaBtn?.url) {
-        body.cta_url = { display_text: ctaBtn.title || "Acessar", url: ctaBtn.url };
-      }
+    // Only send if there's something to send
+    if (!body.message && !body.template_name && !body.interactive_buttons && !body.cta_url) {
+      console.error("processFlowStep: nothing to send for step:", step.id);
+      return;
     }
 
-    // Call whatsapp-cloud-send
-    const sendUrl = `${supabaseUrl}/functions/v1/whatsapp-cloud-send`;
-    const sendRes = await fetch(sendUrl, {
+    console.log("processFlowStep sending:", step.id, JSON.stringify(body));
+
+    const sendRes = await fetch(`${supabaseUrl}/functions/v1/whatsapp-cloud-send`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -438,48 +461,64 @@ async function processFlowStep(step: any, execution: any, lead: any, supabase: a
     if (!sendRes.ok) {
       const errText = await sendRes.text();
       console.error("processFlowStep send failed:", sendRes.status, errText);
-      return; // Don't advance if send failed
+      return;
     }
     await sendRes.text();
 
-    // Find next step
-    const { data: nextSteps } = await supabase
-      .from("flow_steps")
-      .select("*")
-      .eq("flow_id", execution.flow_id)
-      .gt("step_order", step.step_order)
-      .order("step_order")
-      .limit(1);
-
-    if (nextSteps && nextSteps.length > 0) {
-      const next = nextSteps[0];
-      if (next.step_type === "delay") {
-        await supabase.from("flow_executions").update({
-          current_step_id: next.id,
-          status: "waiting_delay",
-          next_action_at: new Date(Date.now() + next.delay_minutes * 60 * 1000).toISOString(),
-        }).eq("id", execution.id);
-      } else if (next.step_type === "condition") {
-        await supabase.from("flow_executions").update({
-          current_step_id: next.id,
-          status: "waiting_reply",
-        }).eq("id", execution.id);
-      } else {
-        await processFlowStep(next, execution, lead, supabase);
-      }
-    } else {
-      await supabase.from("flow_executions").update({ status: "completed" }).eq("id", execution.id);
-    }
+    // Advance to next step
+    await advanceExecution(execution, step, lead, supabase);
   } else if (step.step_type === "delay") {
     await supabase.from("flow_executions").update({
       current_step_id: step.id,
       status: "waiting_delay",
       next_action_at: new Date(Date.now() + step.delay_minutes * 60 * 1000).toISOString(),
     }).eq("id", execution.id);
+    // Trigger flow-processor to handle the delay
+    await triggerFlowProcessor(supabaseUrl, supabaseKey);
+  } else if (step.step_type === "no_response") {
+    const timeoutMin = step.timeout_minutes || 10;
+    await supabase.from("flow_executions").update({
+      current_step_id: step.id,
+      status: "waiting_no_response",
+      next_action_at: new Date(Date.now() + timeoutMin * 60 * 1000).toISOString(),
+    }).eq("id", execution.id);
+    await triggerFlowProcessor(supabaseUrl, supabaseKey);
   } else if (step.step_type === "condition") {
     await supabase.from("flow_executions").update({
       current_step_id: step.id,
       status: "waiting_reply",
     }).eq("id", execution.id);
+  }
+}
+
+async function advanceExecution(execution: any, currentStep: any, lead: any, supabase: any) {
+  const { data: nextSteps } = await supabase
+    .from("flow_steps")
+    .select("*")
+    .eq("flow_id", execution.flow_id)
+    .gt("step_order", currentStep.step_order)
+    .order("step_order")
+    .limit(1);
+
+  if (!nextSteps || nextSteps.length === 0) {
+    await supabase.from("flow_executions").update({ status: "completed" }).eq("id", execution.id);
+    return;
+  }
+
+  await processFlowStep(nextSteps[0], execution, lead, supabase);
+}
+
+async function triggerFlowProcessor(supabaseUrl: string, supabaseKey: string) {
+  try {
+    await fetch(`${supabaseUrl}/functions/v1/flow-processor`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${supabaseKey}`,
+      },
+      body: JSON.stringify({ auto: true }),
+    });
+  } catch (e) {
+    console.error("Failed to trigger flow-processor:", e);
   }
 }
