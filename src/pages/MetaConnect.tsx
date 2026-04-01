@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -15,13 +15,29 @@ import { toast } from "sonner";
 const REDIRECT_URI = `${window.location.origin}/connect`;
 
 export default function MetaConnect() {
-  const { session } = useAuth();
+  const { session, user } = useAuth();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [isExchanging, setIsExchanging] = useState(false);
   const [testPhone, setTestPhone] = useState("");
   const [testMessage, setTestMessage] = useState("Olá! Esta é uma mensagem de teste do Prime Chat. 🚀");
   const [isSending, setIsSending] = useState(false);
+
+  // Check if user is admin
+  const { data: isAdmin, isLoading: isAdminLoading } = useQuery({
+    queryKey: ["user-role", user?.id],
+    queryFn: async () => {
+      if (!user) return false;
+      const { data } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .eq("role", "admin")
+        .maybeSingle();
+      return !!data;
+    },
+    enabled: !!user,
+  });
 
   // Fetch user connections
   const { data: connections, isLoading } = useQuery({
@@ -34,15 +50,14 @@ export default function MetaConnect() {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!session,
+    enabled: !!session && isAdmin === true,
   });
-
   const activeConnection = connections?.find((c: any) => c.status === "connected");
 
   // Handle OAuth callback
   useEffect(() => {
     const code = searchParams.get("code");
-    if (code && !isExchanging) {
+    if (code && !isExchanging && isAdmin) {
       setIsExchanging(true);
       searchParams.delete("code");
       setSearchParams(searchParams, { replace: true });
@@ -65,8 +80,12 @@ export default function MetaConnect() {
         }
       })();
     }
-  }, [searchParams]);
+  }, [searchParams, isAdmin]);
 
+  // Redirect non-admins (after all hooks)
+  if (!isAdminLoading && !isAdmin) {
+    return <Navigate to="/" replace />;
+  }
   const handleConnect = async () => {
     try {
       const { data, error } = await supabase.functions.invoke("meta-oauth-url", {
