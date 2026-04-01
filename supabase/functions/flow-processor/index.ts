@@ -16,7 +16,7 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Find the default WhatsApp account to use for sending (most recently updated)
+    // Find the default WhatsApp account to use for sending
     const { data: defaultAccount } = await supabase
       .from("whatsapp_accounts")
       .select("id")
@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
 
     for (const exec of readyExecutions) {
       try {
-        // Retry limit: track attempts in metadata
+        // Retry limit
         const attempts = (exec.metadata?.send_attempts || 0) + 1;
         if (attempts > 5) {
           console.error("Max retry attempts reached for execution:", exec.id);
@@ -75,15 +75,14 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Handle no_response timeout: the lead didn't click, so just advance
+        // Handle no_response timeout: advance past this step
         if (currentStep.step_type === "no_response" || exec.status === "waiting_no_response") {
-          // Timeout expired, advance past this step
-          await advanceToNextStep(exec, currentStep, lead, supabase, supabaseUrl, supabaseKey);
+          await advanceToNextStep(exec, currentStep, lead, supabase, supabaseUrl, supabaseKey, accountId);
           processed++;
           continue;
         }
 
-        // Process the CURRENT step first (send message)
+        // Process the CURRENT step (send message)
         if (currentStep.step_type === "message" || currentStep.step_type === "interactive_buttons" || currentStep.step_type === "cta_url") {
           const sent = await sendStepMessage(currentStep, lead, supabase, supabaseUrl, supabaseKey, exec.metadata, accountId);
           if (!sent) {
@@ -93,15 +92,14 @@ Deno.serve(async (req) => {
         }
 
         // Now advance to next step
-        await advanceToNextStep(exec, currentStep, lead, supabase, supabaseUrl, supabaseKey);
+        await advanceToNextStep(exec, currentStep, lead, supabase, supabaseUrl, supabaseKey, accountId);
         processed++;
       } catch (stepErr) {
         console.error("Error processing execution:", exec.id, stepErr);
       }
     }
 
-    // Check if there are still pending executions with a future delay
-    // Schedule a self-invocation to process them when ready
+    // Schedule re-invocation if pending
     const { data: pendingExecutions } = await supabase
       .from("flow_executions")
       .select("next_action_at")
@@ -111,10 +109,9 @@ Deno.serve(async (req) => {
 
     if (pendingExecutions && pendingExecutions.length > 0) {
       const nextAt = new Date(pendingExecutions[0].next_action_at).getTime();
-      const delayMs = Math.max(nextAt - Date.now(), 1000); // min 1s
-      const cappedDelay = Math.min(delayMs, 55000); // max ~55s to stay within function timeout
+      const delayMs = Math.max(nextAt - Date.now(), 1000);
+      const cappedDelay = Math.min(delayMs, 55000);
 
-      // Fire-and-forget: schedule re-invocation after delay
       setTimeout(async () => {
         try {
           await fetch(`${supabaseUrl}/functions/v1/flow-processor`, {
@@ -149,25 +146,26 @@ async function sendStepMessage(
 ): Promise<boolean> {
   const body: any = { phone: lead.phone, lead_id: lead.id };
   if (accountId) body.account_id = accountId;
+  const firstName = (lead.name || "").split(" ")[0];
+  const codigo = metadata?.codigo || "";
 
   if (step.step_type === "cta_url") {
     const buttons = Array.isArray(step.buttons) ? step.buttons : [];
     const ctaBtn = buttons[0];
-    const codigo = metadata?.codigo || "";
     const msgText = (step.custom_message || "Acesse o link abaixo:")
-      .replace(/\{nome\}/g, lead.name.split(" ")[0])
-      .replace(/\{codigo\}/g, codigo);
+      .replace(/\{nome\}/g, firstName)
+      .replace(/\{codigo\}/g, codigo)
+      .replace(/\{\{\d+\}\}/g, firstName);
     body.message = msgText;
     if (ctaBtn?.url) {
       body.cta_url = { display_text: ctaBtn.title || "Acessar", url: ctaBtn.url };
     }
   } else if (step.step_type === "interactive_buttons") {
-    // Interactive button message
     const buttons = Array.isArray(step.buttons) ? step.buttons : [];
-    const codigo = metadata?.codigo || "";
     const msgText = (step.custom_message || "Escolha uma opção:")
-      .replace(/\{nome\}/g, lead.name.split(" ")[0])
-      .replace(/\{codigo\}/g, codigo);
+      .replace(/\{nome\}/g, firstName)
+      .replace(/\{codigo\}/g, codigo)
+      .replace(/\{\{\d+\}\}/g, firstName);
     body.message = msgText;
     body.interactive_buttons = buttons;
   } else if (step.template_id) {
@@ -180,9 +178,7 @@ async function sendStepMessage(
     if (template?.template_name) {
       body.template_name = template.template_name;
       body.template_language = template.template_language || "pt_BR";
-      const codigo = metadata?.codigo || "";
       const rawParams = (template.template_params || []) as any[];
-      const firstName = lead.name.split(" ")[0];
       body.template_params = rawParams.map((p: any) => {
         const text = typeof p === "string" ? p : p?.text || "";
         const resolved = text
@@ -195,15 +191,14 @@ async function sendStepMessage(
       body.message = template.content;
     }
   } else if (step.custom_message) {
-    const codigo = metadata?.codigo || "";
     body.message = step.custom_message
-      .replace(/\{nome\}/g, lead.name.split(" ")[0])
-      .replace(/\{codigo\}/g, codigo);
+      .replace(/\{nome\}/g, firstName)
+      .replace(/\{codigo\}/g, codigo)
+      .replace(/\{\{\d+\}\}/g, firstName);
   }
 
-  // Only send if there's something to send
   if (!body.message && !body.template_name && !body.interactive_buttons && !body.cta_url) {
-    console.error("No message, template, buttons or cta_url to send for step:", step.id);
+    console.error("No message to send for step:", step.id);
     return false;
   }
 
@@ -224,28 +219,62 @@ async function sendStepMessage(
     return false;
   }
 
-  await sendRes.text(); // consume body
+  await sendRes.text();
   return true;
 }
 
 async function advanceToNextStep(
   exec: any, currentStep: any, lead: any,
-  supabase: any, supabaseUrl: string, supabaseKey: string
+  supabase: any, supabaseUrl: string, supabaseKey: string, accountId?: string | null
 ) {
-  const { data: nextSteps } = await supabase
+  // BRANCHING: find children by parent_step_id first
+  let nextStep: any = null;
+
+  const { data: childSteps } = await supabase
     .from("flow_steps")
     .select("*")
     .eq("flow_id", exec.flow_id)
-    .gt("step_order", currentStep.step_order)
-    .order("step_order")
-    .limit(1);
+    .eq("parent_step_id", currentStep.id)
+    .order("step_order");
 
-  if (!nextSteps || nextSteps.length === 0) {
+  if (childSteps && childSteps.length > 0) {
+    if (childSteps.length === 1) {
+      // Single child, just advance
+      nextStep = childSteps[0];
+    } else {
+      // Multiple children = branching point (e.g., interactive_buttons)
+      // If current step is interactive_buttons, we need to wait for button click
+      if (currentStep.step_type === "interactive_buttons") {
+        // Set status to waiting_reply so webhook handles the button click
+        await supabase.from("flow_executions").update({
+          current_step_id: currentStep.id,
+          status: "waiting_reply",
+        }).eq("id", exec.id);
+        return;
+      }
+      // For other types with multiple children, take the first
+      nextStep = childSteps[0];
+    }
+  } else {
+    // Fallback: linear ordering (backwards compat)
+    const { data: nextSteps } = await supabase
+      .from("flow_steps")
+      .select("*")
+      .eq("flow_id", exec.flow_id)
+      .gt("step_order", currentStep.step_order)
+      .is("parent_step_id", null)
+      .order("step_order")
+      .limit(1);
+
+    if (nextSteps && nextSteps.length > 0) {
+      nextStep = nextSteps[0];
+    }
+  }
+
+  if (!nextStep) {
     await supabase.from("flow_executions").update({ status: "completed" }).eq("id", exec.id);
     return;
   }
-
-  const nextStep = nextSteps[0];
 
   if (nextStep.step_type === "delay") {
     await supabase.from("flow_executions").update({
@@ -254,7 +283,6 @@ async function advanceToNextStep(
       next_action_at: new Date(Date.now() + nextStep.delay_minutes * 60 * 1000).toISOString(),
     }).eq("id", exec.id);
   } else if (nextStep.step_type === "no_response") {
-    // Set timeout: if lead doesn't respond within timeout_minutes, advance
     const timeoutMin = nextStep.timeout_minutes || 10;
     await supabase.from("flow_executions").update({
       current_step_id: nextStep.id,
@@ -267,7 +295,7 @@ async function advanceToNextStep(
       status: "waiting_reply",
     }).eq("id", exec.id);
   } else if (nextStep.step_type === "message" || nextStep.step_type === "interactive_buttons" || nextStep.step_type === "cta_url") {
-    // Set as waiting_delay with immediate execution so next cron picks it up
+    // Immediate execution
     await supabase.from("flow_executions").update({
       current_step_id: nextStep.id,
       status: "waiting_delay",
