@@ -49,7 +49,7 @@ export function WhatsAppLimits() {
     );
   }
 
-  if (!data || data.length === 0) return null;
+  if (!data || data.length === 0 || isError) return null;
 
   return (
     <Card>
