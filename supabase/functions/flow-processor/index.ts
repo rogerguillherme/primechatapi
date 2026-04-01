@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
     const { data: pendingExecutions } = await supabase
       .from("flow_executions")
       .select("next_action_at")
-      .eq("status", "waiting_delay")
+      .in("status", ["waiting_delay", "waiting_no_response"])
       .order("next_action_at")
       .limit(1);
 
