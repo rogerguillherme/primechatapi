@@ -52,18 +52,12 @@ export default function MetaConnect() {
     },
     enabled: !!session && isAdmin === true,
   });
-
-  // Redirect non-admins (after all hooks)
-  if (!isAdminLoading && !isAdmin) {
-    return <Navigate to="/" replace />;
-  }
-
   const activeConnection = connections?.find((c: any) => c.status === "connected");
 
   // Handle OAuth callback
   useEffect(() => {
     const code = searchParams.get("code");
-    if (code && !isExchanging) {
+    if (code && !isExchanging && isAdmin) {
       setIsExchanging(true);
       searchParams.delete("code");
       setSearchParams(searchParams, { replace: true });
@@ -86,8 +80,12 @@ export default function MetaConnect() {
         }
       })();
     }
-  }, [searchParams]);
+  }, [searchParams, isAdmin]);
 
+  // Redirect non-admins (after all hooks)
+  if (!isAdminLoading && !isAdmin) {
+    return <Navigate to="/" replace />;
+  }
   const handleConnect = async () => {
     try {
       const { data, error } = await supabase.functions.invoke("meta-oauth-url", {
