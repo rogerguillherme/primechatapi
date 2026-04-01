@@ -382,6 +382,42 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_connections: {
+        Row: {
+          created_at: string
+          id: string
+          meta_access_token: string
+          phone_number: string
+          phone_number_id: string
+          status: string
+          updated_at: string
+          user_id: string
+          waba_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          meta_access_token: string
+          phone_number: string
+          phone_number_id: string
+          status?: string
+          updated_at?: string
+          user_id: string
+          waba_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          meta_access_token?: string
+          phone_number?: string
+          phone_number_id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+          waba_id?: string
+        }
+        Relationships: []
+      }
       order_items: {
         Row: {
           id: string
