@@ -423,13 +423,15 @@ async function processFlowStep(step: any, execution: any, lead: any, supabase: a
         body.template_name = template.template_name;
         body.template_language = template.template_language || "pt_BR";
         const codigo = execution.metadata?.codigo || "";
+        const firstName = (lead.name || "").split(" ")[0];
         const rawParams = (template.template_params || []) as any[];
         body.template_params = rawParams.map((p: any) => {
           const text = typeof p === "string" ? p : p?.text || "";
           const resolved = text
-            .replace(/\{nome\}/g, (lead.name || "").split(" ")[0])
-            .replace(/\{codigo\}/g, codigo);
-          return { type: "text", text: resolved || (lead.name || "").split(" ")[0] };
+            .replace(/\{nome\}/g, firstName)
+            .replace(/\{codigo\}/g, codigo)
+            .replace(/\{\{\d+\}\}/g, firstName);
+          return { type: "text", text: resolved || firstName };
         });
       } else if (template) {
         body.message = template.content;
