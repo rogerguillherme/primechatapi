@@ -452,6 +452,80 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
     mutationFn: async () => {
       if (!name.trim()) throw new Error("Nome do fluxo é obrigatório.");
 
+      const stepNodes = nodes.filter((n) => n.type !== "trigger");
+      if (stepNodes.length === 0) {
+        throw new Error("Adicione pelo menos 1 passo antes de salvar o fluxo.");
+      }
+
+      const isUuid = (value: string) =>
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
+      const persistedIdByNodeId = new Map<string, string>();
+      stepNodes.forEach((n) => {
+        const nodeId = String(n.id);
+        persistedIdByNodeId.set(nodeId, isUuid(nodeId) ? nodeId : crypto.randomUUID());
+      });
+
+      // Build adjacency list from edges (source → [{target, sourceHandle}])
+      const adjList = new Map<string, { target: string; sourceHandle?: string | null }[]>();
+      edges.forEach((e) => {
+        const list = adjList.get(e.source) || [];
+        list.push({ target: e.target, sourceHandle: e.sourceHandle });
+        adjList.set(e.source, list);
+      });
+
+      // BFS from trigger to assign order and parent relationships
+      type StepEntry = {
+        node: Node;
+        parentNodeId: string | null;
+        triggerValue: string | null;
+        order: number;
+      };
+      const entries: StepEntry[] = [];
+      const visited = new Set<string>();
+      const queue: { nodeId: string; parentNodeId: string | null; sourceHandle?: string | null }[] = [];
+
+      // Start from trigger's children
+      const triggerChildren = adjList.get("trigger") || [];
+      triggerChildren.forEach((c) => queue.push({ nodeId: c.target, parentNodeId: null, sourceHandle: null }));
+
+      let order = 0;
+      while (queue.length > 0) {
+        const { nodeId, parentNodeId, sourceHandle } = queue.shift()!;
+        if (visited.has(nodeId)) continue;
+        visited.add(nodeId);
+
+        const node = stepNodes.find((n) => n.id === nodeId);
+        if (!node) continue;
+
+        // Determine trigger_value: from sourceHandle (button index) or from node data
+        let triggerValue = (node.data.trigger_value as string) || null;
+        if (sourceHandle && parentNodeId) {
+          // Find parent node to get button title
+          const parentNode = stepNodes.find((n) => n.id === parentNodeId);
+          if (parentNode?.type === "interactive_buttons" && sourceHandle.startsWith("btn-")) {
+            const btnIdx = parseInt(sourceHandle.replace("btn-", ""));
+            const buttons = (parentNode.data.buttons as any[]) || [];
+            if (buttons[btnIdx]) {
+              triggerValue = buttons[btnIdx].title || null;
+            }
+          }
+        }
+
+        entries.push({ node, parentNodeId, triggerValue, order: order++ });
+
+        // Queue children
+        const children = adjList.get(nodeId) || [];
+        children.forEach((c) => queue.push({ nodeId: c.target, parentNodeId: nodeId, sourceHandle: c.sourceHandle }));
+      }
+
+      // Add unconnected nodes
+      stepNodes.forEach((n) => {
+        if (!visited.has(n.id)) {
+          entries.push({ node: n, parentNodeId: null, triggerValue: (n.data.trigger_value as string) || null, order: order++ });
+        }
+      });
+
       let flowId = flow?.id;
 
       if (flowId) {
@@ -464,84 +538,22 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
         flowId = data.id;
       }
 
-      const stepNodes = nodes.filter((n) => n.type !== "trigger");
-      if (stepNodes.length > 0) {
-        // Build adjacency list from edges (source → [{target, sourceHandle}])
-        const adjList = new Map<string, { target: string; sourceHandle?: string | null }[]>();
-        edges.forEach((e) => {
-          const list = adjList.get(e.source) || [];
-          list.push({ target: e.target, sourceHandle: e.sourceHandle });
-          adjList.set(e.source, list);
-        });
+      const stepsToInsert = entries.map((e) => ({
+        id: persistedIdByNodeId.get(String(e.node.id))!,
+        flow_id: flowId!,
+        step_order: e.order,
+        step_type: e.node.type || "message",
+        template_id: (e.node.data.template_id as string) || null,
+        custom_message: (e.node.data.custom_message as string) || null,
+        delay_minutes: (e.node.data.delay_minutes as number) || 0,
+        trigger_value: e.triggerValue,
+        parent_step_id: e.parentNodeId ? persistedIdByNodeId.get(e.parentNodeId) || null : null,
+        buttons: (e.node.type === "interactive_buttons" || e.node.type === "cta_url") ? (e.node.data.buttons as any) || [] : [],
+        timeout_minutes: (e.node.data.timeout_minutes as number) || null,
+      }));
 
-        // BFS from trigger to assign order and parent_step_id
-        type StepEntry = {
-          node: Node;
-          parentStepId: string | null;
-          triggerValue: string | null;
-          order: number;
-        };
-        const entries: StepEntry[] = [];
-        const visited = new Set<string>();
-        const queue: { nodeId: string; parentStepId: string | null; sourceHandle?: string | null }[] = [];
-
-        // Start from trigger's children
-        const triggerChildren = adjList.get("trigger") || [];
-        triggerChildren.forEach((c) => queue.push({ nodeId: c.target, parentStepId: null, sourceHandle: null }));
-
-        let order = 0;
-        while (queue.length > 0) {
-          const { nodeId, parentStepId, sourceHandle } = queue.shift()!;
-          if (visited.has(nodeId)) continue;
-          visited.add(nodeId);
-
-          const node = stepNodes.find((n) => n.id === nodeId);
-          if (!node) continue;
-
-          // Determine trigger_value: from sourceHandle (button index) or from node data
-          let triggerValue = (node.data.trigger_value as string) || null;
-          if (sourceHandle && parentStepId) {
-            // Find parent node to get button title
-            const parentNode = stepNodes.find((n) => n.id === parentStepId);
-            if (parentNode?.type === "interactive_buttons" && sourceHandle.startsWith("btn-")) {
-              const btnIdx = parseInt(sourceHandle.replace("btn-", ""));
-              const buttons = (parentNode.data.buttons as any[]) || [];
-              if (buttons[btnIdx]) {
-                triggerValue = buttons[btnIdx].title || null;
-              }
-            }
-          }
-
-          entries.push({ node, parentStepId, triggerValue, order: order++ });
-
-          // Queue children
-          const children = adjList.get(nodeId) || [];
-          children.forEach((c) => queue.push({ nodeId: c.target, parentStepId: nodeId, sourceHandle: c.sourceHandle }));
-        }
-
-        // Add unconnected nodes
-        stepNodes.forEach((n) => {
-          if (!visited.has(n.id)) {
-            entries.push({ node: n, parentStepId: null, triggerValue: (n.data.trigger_value as string) || null, order: order++ });
-          }
-        });
-
-        const stepsToInsert = entries.map((e) => ({
-          flow_id: flowId!,
-          step_order: e.order,
-          step_type: e.node.type || "message",
-          template_id: (e.node.data.template_id as string) || null,
-          custom_message: (e.node.data.custom_message as string) || null,
-          delay_minutes: (e.node.data.delay_minutes as number) || 0,
-          trigger_value: e.triggerValue,
-          parent_step_id: e.parentStepId,
-          buttons: (e.node.type === "interactive_buttons" || e.node.type === "cta_url") ? (e.node.data.buttons as any) || [] : [],
-          timeout_minutes: (e.node.data.timeout_minutes as number) || null,
-        }));
-
-        const { error } = await supabase.from("flow_steps").insert(stepsToInsert);
-        if (error) throw error;
-      }
+      const { error: stepsError } = await supabase.from("flow_steps").insert(stepsToInsert);
+      if (stepsError) throw stepsError;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["flows"] });
