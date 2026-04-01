@@ -16,6 +16,15 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Find the default WhatsApp account to use for sending
+    const { data: defaultAccount } = await supabase
+      .from("whatsapp_accounts")
+      .select("id")
+      .eq("is_default", true)
+      .limit(1)
+      .maybeSingle();
+    const accountId = defaultAccount?.id || null;
+
     // Find executions where delay/timeout has expired
     const now = new Date().toISOString();
     const { data: readyExecutions } = await supabase
@@ -35,6 +44,17 @@ Deno.serve(async (req) => {
 
     for (const exec of readyExecutions) {
       try {
+        // Retry limit: track attempts in metadata
+        const attempts = (exec.metadata?.send_attempts || 0) + 1;
+        if (attempts > 5) {
+          console.error("Max retry attempts reached for execution:", exec.id);
+          await supabase.from("flow_executions").update({ status: "failed" }).eq("id", exec.id);
+          continue;
+        }
+        await supabase.from("flow_executions").update({
+          metadata: { ...exec.metadata, send_attempts: attempts },
+        }).eq("id", exec.id);
+
         // Get the lead
         const { data: lead } = await supabase
           .from("leads")
