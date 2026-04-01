@@ -466,33 +466,77 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
 
       const stepNodes = nodes.filter((n) => n.type !== "trigger");
       if (stepNodes.length > 0) {
-        const ordered: Node[] = [];
-        const edgeMap = new Map<string, string>();
-        edges.forEach((e) => edgeMap.set(e.source, e.target));
-
-        let currentId = edgeMap.get("trigger");
-        const visited = new Set<string>();
-        while (currentId && !visited.has(currentId)) {
-          visited.add(currentId);
-          const node = stepNodes.find((n) => n.id === currentId);
-          if (node) ordered.push(node);
-          currentId = edgeMap.get(currentId);
-        }
-        stepNodes.forEach((n) => {
-          if (!visited.has(n.id)) ordered.push(n);
+        // Build adjacency list from edges (source → [{target, sourceHandle}])
+        const adjList = new Map<string, { target: string; sourceHandle?: string | null }[]>();
+        edges.forEach((e) => {
+          const list = adjList.get(e.source) || [];
+          list.push({ target: e.target, sourceHandle: e.sourceHandle });
+          adjList.set(e.source, list);
         });
 
-        const stepsToInsert = ordered.map((n, i) => ({
+        // BFS from trigger to assign order and parent_step_id
+        type StepEntry = {
+          node: Node;
+          parentStepId: string | null;
+          triggerValue: string | null;
+          order: number;
+        };
+        const entries: StepEntry[] = [];
+        const visited = new Set<string>();
+        const queue: { nodeId: string; parentStepId: string | null; sourceHandle?: string | null }[] = [];
+
+        // Start from trigger's children
+        const triggerChildren = adjList.get("trigger") || [];
+        triggerChildren.forEach((c) => queue.push({ nodeId: c.target, parentStepId: null, sourceHandle: null }));
+
+        let order = 0;
+        while (queue.length > 0) {
+          const { nodeId, parentStepId, sourceHandle } = queue.shift()!;
+          if (visited.has(nodeId)) continue;
+          visited.add(nodeId);
+
+          const node = stepNodes.find((n) => n.id === nodeId);
+          if (!node) continue;
+
+          // Determine trigger_value: from sourceHandle (button index) or from node data
+          let triggerValue = (node.data.trigger_value as string) || null;
+          if (sourceHandle && parentStepId) {
+            // Find parent node to get button title
+            const parentNode = stepNodes.find((n) => n.id === parentStepId);
+            if (parentNode?.type === "interactive_buttons" && sourceHandle.startsWith("btn-")) {
+              const btnIdx = parseInt(sourceHandle.replace("btn-", ""));
+              const buttons = (parentNode.data.buttons as any[]) || [];
+              if (buttons[btnIdx]) {
+                triggerValue = buttons[btnIdx].title || null;
+              }
+            }
+          }
+
+          entries.push({ node, parentStepId, triggerValue, order: order++ });
+
+          // Queue children
+          const children = adjList.get(nodeId) || [];
+          children.forEach((c) => queue.push({ nodeId: c.target, parentStepId: nodeId, sourceHandle: c.sourceHandle }));
+        }
+
+        // Add unconnected nodes
+        stepNodes.forEach((n) => {
+          if (!visited.has(n.id)) {
+            entries.push({ node: n, parentStepId: null, triggerValue: (n.data.trigger_value as string) || null, order: order++ });
+          }
+        });
+
+        const stepsToInsert = entries.map((e) => ({
           flow_id: flowId!,
-          step_order: i,
-          step_type: n.type || "message",
-          template_id: (n.data.template_id as string) || null,
-          custom_message: (n.data.custom_message as string) || null,
-          delay_minutes: (n.data.delay_minutes as number) || 0,
-          trigger_value: (n.data.trigger_value as string) || null,
-          parent_step_id: null,
-          buttons: (n.type === "interactive_buttons" || n.type === "cta_url") ? (n.data.buttons as any) || [] : [],
-          timeout_minutes: (n.data.timeout_minutes as number) || null,
+          step_order: e.order,
+          step_type: e.node.type || "message",
+          template_id: (e.node.data.template_id as string) || null,
+          custom_message: (e.node.data.custom_message as string) || null,
+          delay_minutes: (e.node.data.delay_minutes as number) || 0,
+          trigger_value: e.triggerValue,
+          parent_step_id: e.parentStepId,
+          buttons: (e.node.type === "interactive_buttons" || e.node.type === "cta_url") ? (e.node.data.buttons as any) || [] : [],
+          timeout_minutes: (e.node.data.timeout_minutes as number) || null,
         }));
 
         const { error } = await supabase.from("flow_steps").insert(stepsToInsert);
