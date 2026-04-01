@@ -16,12 +16,12 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Find executions where delay has expired
+    // Find executions where delay/timeout has expired
     const now = new Date().toISOString();
     const { data: readyExecutions } = await supabase
       .from("flow_executions")
       .select("*, current_step:flow_steps!current_step_id(*)")
-      .eq("status", "waiting_delay")
+      .in("status", ["waiting_delay", "waiting_no_response"])
       .lte("next_action_at", now);
 
     if (!readyExecutions || readyExecutions.length === 0) {
