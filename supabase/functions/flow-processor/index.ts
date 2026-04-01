@@ -143,9 +143,10 @@ Deno.serve(async (req) => {
 });
 
 async function sendStepMessage(
-  step: any, lead: any, supabase: any, supabaseUrl: string, supabaseKey: string, metadata?: any
+  step: any, lead: any, supabase: any, supabaseUrl: string, supabaseKey: string, metadata?: any, accountId?: string | null
 ): Promise<boolean> {
   const body: any = { phone: lead.phone, lead_id: lead.id };
+  if (accountId) body.account_id = accountId;
 
   if (step.step_type === "cta_url") {
     const buttons = Array.isArray(step.buttons) ? step.buttons : [];
