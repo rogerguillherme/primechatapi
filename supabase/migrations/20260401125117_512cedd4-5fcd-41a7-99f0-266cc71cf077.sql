@@ -1,0 +1,1 @@
+UPDATE public.flow_executions SET status = 'cancelled' WHERE status NOT IN ('completed', 'cancelled', 'failed');

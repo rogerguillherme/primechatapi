@@ -16,6 +16,17 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Find the default WhatsApp account to use for sending (most recently updated)
+    const { data: defaultAccount } = await supabase
+      .from("whatsapp_accounts")
+      .select("id")
+      .eq("is_default", true)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const accountId = defaultAccount?.id || null;
+    console.log("Using account_id:", accountId);
+
     // Find executions where delay/timeout has expired
     const now = new Date().toISOString();
     const { data: readyExecutions } = await supabase
@@ -35,6 +46,17 @@ Deno.serve(async (req) => {
 
     for (const exec of readyExecutions) {
       try {
+        // Retry limit: track attempts in metadata
+        const attempts = (exec.metadata?.send_attempts || 0) + 1;
+        if (attempts > 5) {
+          console.error("Max retry attempts reached for execution:", exec.id);
+          await supabase.from("flow_executions").update({ status: "failed" }).eq("id", exec.id);
+          continue;
+        }
+        await supabase.from("flow_executions").update({
+          metadata: { ...exec.metadata, send_attempts: attempts },
+        }).eq("id", exec.id);
+
         // Get the lead
         const { data: lead } = await supabase
           .from("leads")
@@ -63,7 +85,7 @@ Deno.serve(async (req) => {
 
         // Process the CURRENT step first (send message)
         if (currentStep.step_type === "message" || currentStep.step_type === "interactive_buttons" || currentStep.step_type === "cta_url") {
-          const sent = await sendStepMessage(currentStep, lead, supabase, supabaseUrl, supabaseKey, exec.metadata);
+          const sent = await sendStepMessage(currentStep, lead, supabase, supabaseUrl, supabaseKey, exec.metadata, accountId);
           if (!sent) {
             console.error("Failed to send message for execution:", exec.id);
             continue;
@@ -123,9 +145,10 @@ Deno.serve(async (req) => {
 });
 
 async function sendStepMessage(
-  step: any, lead: any, supabase: any, supabaseUrl: string, supabaseKey: string, metadata?: any
+  step: any, lead: any, supabase: any, supabaseUrl: string, supabaseKey: string, metadata?: any, accountId?: string | null
 ): Promise<boolean> {
   const body: any = { phone: lead.phone, lead_id: lead.id };
+  if (accountId) body.account_id = accountId;
 
   if (step.step_type === "cta_url") {
     const buttons = Array.isArray(step.buttons) ? step.buttons : [];
