@@ -60,8 +60,22 @@ export function FlowCanvas({
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
   const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge({ ...params, ...defaultEdgeOptions }, eds)),
-    [setEdges]
+    (params: Connection) => {
+      // Add label when connecting from a button handle
+      let label: string | undefined;
+      if (params.sourceHandle?.startsWith("btn-")) {
+        const sourceNode = nodes.find((n) => n.id === params.source);
+        if (sourceNode?.type === "interactive_buttons") {
+          const btnIdx = parseInt(params.sourceHandle.replace("btn-", ""));
+          const buttons = (sourceNode.data.buttons as any[]) || [];
+          if (buttons[btnIdx]) {
+            label = buttons[btnIdx].title || `Botão ${btnIdx + 1}`;
+          }
+        }
+      }
+      setEdges((eds) => addEdge({ ...params, ...defaultEdgeOptions, ...(label ? { label } : {}) }, eds));
+    },
+    [setEdges, nodes]
   );
 
   const deleteNode = useCallback(

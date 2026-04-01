@@ -29,7 +29,7 @@ export function ConditionNode({ id, data }: { id: string; data: ConditionNodeDat
         </p>
       </div>
       <Handle type="target" position={Position.Left} className="!w-3 !h-3 !bg-violet-500 !border-2 !border-background" />
-      <Handle type="source" position={Position.Right} className="!w-3 !h-3 !bg-violet-500 !border-2 !border-background" />
+      <Handle type="source" position={Position.Right} id="default" className="!w-3 !h-3 !bg-violet-500 !border-2 !border-background" />
     </div>
   );
 }

@@ -279,33 +279,71 @@ Deno.serve(async (req) => {
           .eq("status", "waiting_reply");
 
         for (const exec of executions || []) {
-          // Find next step matching this button payload
-          const { data: nextSteps } = await supabase
-            .from("flow_steps")
-            .select("*")
-            .eq("flow_id", exec.flow_id)
-            .eq("step_type", "condition")
-            .eq("trigger_value", buttonPayload);
+          const currentStepId = exec.current_step_id;
 
-          if (nextSteps && nextSteps.length > 0) {
-            const conditionStep = nextSteps[0];
-            // Find the step after the condition
-            const { data: followingSteps } = await supabase
+          // BRANCHING: look for child steps matching trigger_value via parent_step_id
+          let matchedStep: any = null;
+
+          if (currentStepId) {
+            // Find child step whose trigger_value matches the button clicked
+            const { data: childSteps } = await supabase
               .from("flow_steps")
               .select("*")
               .eq("flow_id", exec.flow_id)
-              .gt("step_order", conditionStep.step_order)
-              .order("step_order")
-              .limit(1);
+              .eq("parent_step_id", currentStepId)
+              .eq("trigger_value", buttonPayload);
 
-            if (followingSteps && followingSteps.length > 0) {
-              const nextStep = followingSteps[0];
-              await processFlowStep(nextStep, exec, lead, supabase);
-            } else {
-              await supabase.from("flow_executions").update({ status: "completed" }).eq("id", exec.id);
+            if (childSteps && childSteps.length > 0) {
+              matchedStep = childSteps[0];
             }
           }
+
+          // Fallback: old linear approach (condition node by trigger_value)
+          if (!matchedStep) {
+            const { data: conditionSteps } = await supabase
+              .from("flow_steps")
+              .select("*")
+              .eq("flow_id", exec.flow_id)
+              .eq("step_type", "condition")
+              .eq("trigger_value", buttonPayload);
+
+            if (conditionSteps && conditionSteps.length > 0) {
+              const conditionStep = conditionSteps[0];
+              // Find child of this condition step
+              const { data: condChildren } = await supabase
+                .from("flow_steps")
+                .select("*")
+                .eq("flow_id", exec.flow_id)
+                .eq("parent_step_id", conditionStep.id)
+                .order("step_order")
+                .limit(1);
+
+              if (condChildren && condChildren.length > 0) {
+                matchedStep = condChildren[0];
+              } else {
+                // Fallback: next by step_order
+                const { data: followingSteps } = await supabase
+                  .from("flow_steps")
+                  .select("*")
+                  .eq("flow_id", exec.flow_id)
+                  .gt("step_order", conditionStep.step_order)
+                  .order("step_order")
+                  .limit(1);
+                if (followingSteps && followingSteps.length > 0) {
+                  matchedStep = followingSteps[0];
+                }
+              }
+            }
+          }
+
+          if (matchedStep) {
+            await processFlowStep(matchedStep, exec, lead, supabase);
+          } else {
+            console.log("No matching branch for button payload:", buttonPayload, "exec:", exec.id);
+            await supabase.from("flow_executions").update({ status: "completed" }).eq("id", exec.id);
+          }
         }
+      }
       }
     }
 
@@ -494,11 +532,39 @@ async function processFlowStep(step: any, execution: any, lead: any, supabase: a
 }
 
 async function advanceExecution(execution: any, currentStep: any, lead: any, supabase: any) {
+  // BRANCHING: find children by parent_step_id first
+  const { data: childSteps } = await supabase
+    .from("flow_steps")
+    .select("*")
+    .eq("flow_id", execution.flow_id)
+    .eq("parent_step_id", currentStep.id)
+    .order("step_order");
+
+  if (childSteps && childSteps.length > 0) {
+    if (childSteps.length === 1) {
+      await processFlowStep(childSteps[0], execution, lead, supabase);
+      return;
+    }
+    // Multiple children = branching (interactive_buttons sends all then waits)
+    if (currentStep.step_type === "interactive_buttons") {
+      await supabase.from("flow_executions").update({
+        current_step_id: currentStep.id,
+        status: "waiting_reply",
+      }).eq("id", execution.id);
+      return;
+    }
+    // Default: take first child
+    await processFlowStep(childSteps[0], execution, lead, supabase);
+    return;
+  }
+
+  // Fallback: linear ordering
   const { data: nextSteps } = await supabase
     .from("flow_steps")
     .select("*")
     .eq("flow_id", execution.flow_id)
     .gt("step_order", currentStep.step_order)
+    .is("parent_step_id", null)
     .order("step_order")
     .limit(1);
 
