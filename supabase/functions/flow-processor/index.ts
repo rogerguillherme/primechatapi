@@ -53,12 +53,20 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Process the CURRENT step first
+        // Handle no_response timeout: the lead didn't click, so just advance
+        if (currentStep.step_type === "no_response" || exec.status === "waiting_no_response") {
+          // Timeout expired, advance past this step
+          await advanceToNextStep(exec, currentStep, lead, supabase, supabaseUrl, supabaseKey);
+          processed++;
+          continue;
+        }
+
+        // Process the CURRENT step first (send message)
         if (currentStep.step_type === "message" || currentStep.step_type === "interactive_buttons" || currentStep.step_type === "cta_url") {
           const sent = await sendStepMessage(currentStep, lead, supabase, supabaseUrl, supabaseKey, exec.metadata);
           if (!sent) {
             console.error("Failed to send message for execution:", exec.id);
-            continue; // Don't advance if send failed
+            continue;
           }
         }
 
