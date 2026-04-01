@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Gauge, Phone, ShieldCheck, AlertTriangle, Loader2 } from "lucide-react";
@@ -26,18 +27,30 @@ const qualityLabels: Record<string, string> = {
   RED: "Baixa",
 };
 
+const isUnauthorizedFunctionError = (error: unknown) =>
+  error instanceof Error && error.message.includes("401");
+
 export function WhatsAppLimits() {
+  const { session } = useAuth();
+  const isAuthenticated = Boolean(session?.access_token);
+
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["whatsapp-limits"],
+    queryKey: ["whatsapp-limits", session?.user.id],
+    enabled: isAuthenticated,
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke("whatsapp-limits");
-      if (error) throw error;
+      if (error) {
+        if (isUnauthorizedFunctionError(error)) return [];
+        throw error;
+      }
       return data?.limits || [];
     },
-    refetchInterval: 60000,
+    refetchInterval: isAuthenticated ? 60000 : false,
     staleTime: 30000,
-    retry: 1,
+    retry: false,
   });
+
+  if (!isAuthenticated) return null;
 
   if (isLoading) {
     return (
