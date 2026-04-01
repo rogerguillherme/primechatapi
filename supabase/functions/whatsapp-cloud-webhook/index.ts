@@ -332,9 +332,8 @@ Deno.serve(async (req) => {
                 if (followingSteps && followingSteps.length > 0) {
                   matchedStep = followingSteps[0];
                 }
-              }
-            }
-          }
+      }
+      }
 
           if (matchedStep) {
             await processFlowStep(matchedStep, exec, lead, supabase);
@@ -346,7 +345,6 @@ Deno.serve(async (req) => {
       }
       }
     }
-
     return new Response(
       JSON.stringify({ ok: true }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
