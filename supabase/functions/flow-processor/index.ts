@@ -228,6 +228,14 @@ async function advanceToNextStep(
       status: "waiting_delay",
       next_action_at: new Date(Date.now() + nextStep.delay_minutes * 60 * 1000).toISOString(),
     }).eq("id", exec.id);
+  } else if (nextStep.step_type === "no_response") {
+    // Set timeout: if lead doesn't respond within timeout_minutes, advance
+    const timeoutMin = nextStep.timeout_minutes || 10;
+    await supabase.from("flow_executions").update({
+      current_step_id: nextStep.id,
+      status: "waiting_no_response",
+      next_action_at: new Date(Date.now() + timeoutMin * 60 * 1000).toISOString(),
+    }).eq("id", exec.id);
   } else if (nextStep.step_type === "condition") {
     await supabase.from("flow_executions").update({
       current_step_id: nextStep.id,
