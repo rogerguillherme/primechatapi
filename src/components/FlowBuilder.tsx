@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNodesState, useEdgesState, type Node, type Edge, MarkerType } from "@xyflow/react";
 import { supabase } from "@/integrations/supabase/client";
@@ -28,6 +28,70 @@ const defaultEdgeOptions = {
   animated: true,
   style: { stroke: "hsl(var(--primary))", strokeWidth: 2 },
   markerEnd: { type: MarkerType.ArrowClosed, color: "hsl(var(--primary))" },
+};
+
+const FLOW_DRAFT_STORAGE_PREFIX = "flow-editor-draft:";
+
+type FlowDraftPayload = {
+  version: 1;
+  name: string;
+  description: string;
+  nodes: Node[];
+  edges: Edge[];
+  savedAt: string;
+};
+
+const createTriggerNode = (): Node => ({
+  id: "trigger",
+  type: "trigger",
+  position: { x: 0, y: 200 },
+  data: {},
+  draggable: true,
+});
+
+const isFlowDraftPayload = (value: unknown): value is FlowDraftPayload => {
+  if (!value || typeof value !== "object") return false;
+  const payload = value as Partial<FlowDraftPayload>;
+  return (
+    payload.version === 1 &&
+    typeof payload.name === "string" &&
+    typeof payload.description === "string" &&
+    Array.isArray(payload.nodes) &&
+    Array.isArray(payload.edges)
+  );
+};
+
+const readFlowDraft = (storageKey: string): FlowDraftPayload | null => {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return isFlowDraftPayload(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const writeFlowDraft = (storageKey: string, payload: FlowDraftPayload) => {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify(payload));
+  } catch {
+    // ignore write errors (quota, private mode)
+  }
+};
+
+const clearFlowDraft = (storageKey: string) => {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.removeItem(storageKey);
+  } catch {
+    // ignore clear errors
+  }
 };
 
 /* ── Flow List View ── */
@@ -275,11 +339,15 @@ function AiFlowChat({ onGenerate }: { onGenerate: (steps: any[]) => void }) {
 /* ── Flow Editor View (Visual Canvas) ── */
 function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => void }) {
   const queryClient = useQueryClient();
-  const [name, setName] = useState(flow?.name || "");
-  const [description, setDescription] = useState(flow?.description || "");
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const [isLoaded, setIsLoaded] = useState(!flow);
+  const draftKey = useMemo(() => `${FLOW_DRAFT_STORAGE_PREFIX}${flow?.id ?? "new"}`, [flow?.id]);
+  const initialDraft = useMemo(() => readFlowDraft(draftKey), [draftKey]);
+
+  const [name, setName] = useState(initialDraft?.name ?? flow?.name ?? "");
+  const [description, setDescription] = useState(initialDraft?.description ?? flow?.description ?? "");
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>(initialDraft?.nodes ?? []);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initialDraft?.edges ?? []);
+  const [isLoaded, setIsLoaded] = useState(Boolean(initialDraft) || !flow);
+  const [hydratedFromDraft, setHydratedFromDraft] = useState(Boolean(initialDraft));
 
   const { templates } = useUserTemplates();
 
@@ -295,13 +363,7 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
         .order("step_order");
 
       const steps = data || [];
-      const triggerNode: Node = {
-        id: "trigger",
-        type: "trigger",
-        position: { x: 0, y: 200 },
-        data: {},
-        draggable: true,
-      };
+      const triggerNode = createTriggerNode();
 
       // Build nodes
       const stepNodes: Node[] = steps.map((s: any, i: number) => {
@@ -389,33 +451,39 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
       setIsLoaded(true);
       return steps;
     },
-    enabled: !!flow,
+    enabled: !!flow && !hydratedFromDraft,
   });
 
-  // Initialize with trigger node for new flows
-  useState(() => {
-    if (!flow) {
-      setNodes([
-        {
-          id: "trigger",
-          type: "trigger",
-          position: { x: 0, y: 200 },
-          data: {},
-          draggable: true,
-        },
-      ]);
+  useEffect(() => {
+    if (initialDraft) {
+      setName(initialDraft.name);
+      setDescription(initialDraft.description);
+      setNodes(initialDraft.nodes);
+      setEdges(initialDraft.edges);
+      setHydratedFromDraft(true);
+      setIsLoaded(true);
+      return;
     }
-  });
+
+    setHydratedFromDraft(false);
+
+    if (!flow) {
+      setName("");
+      setDescription("");
+      setNodes([createTriggerNode()]);
+      setEdges([]);
+      setIsLoaded(true);
+      return;
+    }
+
+    setName(flow.name);
+    setDescription(flow.description || "");
+    setIsLoaded(false);
+  }, [initialDraft, flow, setNodes, setEdges]);
 
   const handleAiGenerate = useCallback((steps: any[]) => {
     // Keep trigger, add AI-generated nodes
-    const triggerNode = nodes.find((n) => n.id === "trigger") || {
-      id: "trigger",
-      type: "trigger",
-      position: { x: 0, y: 200 },
-      data: {},
-      draggable: true,
-    };
+    const triggerNode = nodes.find((n) => n.id === "trigger") || createTriggerNode();
 
     const newNodes: Node[] = steps.map((s: any, i: number) => ({
       id: crypto.randomUUID(),
@@ -447,6 +515,19 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
     setNodes(allNodes);
     setEdges(allEdges);
   }, [nodes, setNodes, setEdges]);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    writeFlowDraft(draftKey, {
+      version: 1,
+      name,
+      description,
+      nodes,
+      edges,
+      savedAt: new Date().toISOString(),
+    });
+  }, [draftKey, name, description, nodes, edges, isLoaded]);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -565,6 +646,7 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
       if (cleanupError) throw cleanupError;
     },
     onSuccess: () => {
+      clearFlowDraft(draftKey);
       queryClient.invalidateQueries({ queryKey: ["flows"] });
       queryClient.invalidateQueries({ queryKey: ["flow-step-counts"] });
       toast.success("Fluxo salvo com sucesso!");
