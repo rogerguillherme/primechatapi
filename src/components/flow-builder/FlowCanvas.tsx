@@ -20,10 +20,11 @@ import { DelayNode } from "./nodes/DelayNode";
 import { ConditionNode } from "./nodes/ConditionNode";
 import { InteractiveButtonsNode } from "./nodes/InteractiveButtonsNode";
 import { CtaUrlNode } from "./nodes/CtaUrlNode";
+import { NoResponseNode } from "./nodes/NoResponseNode";
 import { NodeEditPanel } from "./NodeEditPanel";
 import { Button } from "@/components/ui/button";
 import {
-  MessageSquare, Clock, GitBranch, MousePointerClick, ExternalLink, Plus, Braces,
+  MessageSquare, Clock, GitBranch, MousePointerClick, ExternalLink, Plus, Braces, TimerOff,
 } from "lucide-react";
 
 const nodeTypes: NodeTypes = {
