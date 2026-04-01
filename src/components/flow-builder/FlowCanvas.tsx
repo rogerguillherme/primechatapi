@@ -41,6 +41,7 @@ const defaultEdgeOptions = {
   animated: true,
   style: { stroke: "hsl(var(--primary))", strokeWidth: 2 },
   markerEnd: { type: MarkerType.ArrowClosed, color: "hsl(var(--primary))" },
+  deletable: true,
 };
 
 interface FlowCanvasProps {
