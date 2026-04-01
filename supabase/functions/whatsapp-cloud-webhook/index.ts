@@ -532,11 +532,39 @@ async function processFlowStep(step: any, execution: any, lead: any, supabase: a
 }
 
 async function advanceExecution(execution: any, currentStep: any, lead: any, supabase: any) {
+  // BRANCHING: find children by parent_step_id first
+  const { data: childSteps } = await supabase
+    .from("flow_steps")
+    .select("*")
+    .eq("flow_id", execution.flow_id)
+    .eq("parent_step_id", currentStep.id)
+    .order("step_order");
+
+  if (childSteps && childSteps.length > 0) {
+    if (childSteps.length === 1) {
+      await processFlowStep(childSteps[0], execution, lead, supabase);
+      return;
+    }
+    // Multiple children = branching (interactive_buttons sends all then waits)
+    if (currentStep.step_type === "interactive_buttons") {
+      await supabase.from("flow_executions").update({
+        current_step_id: currentStep.id,
+        status: "waiting_reply",
+      }).eq("id", execution.id);
+      return;
+    }
+    // Default: take first child
+    await processFlowStep(childSteps[0], execution, lead, supabase);
+    return;
+  }
+
+  // Fallback: linear ordering
   const { data: nextSteps } = await supabase
     .from("flow_steps")
     .select("*")
     .eq("flow_id", execution.flow_id)
     .gt("step_order", currentStep.step_order)
+    .is("parent_step_id", null)
     .order("step_order")
     .limit(1);
 
