@@ -533,39 +533,90 @@ function BroadcastTab() {
     let successCount = 0;
     let errorCount = 0;
 
+    const flowIdForDispatch = sendType === "flow" ? selectedFlowId : null;
+
     // Helper to start a flow for a lead
-    const startFlowForLead = async (leadId: string, codigo?: string) => {
-      // Get first step
-      const { data: steps } = await supabase
+    const startFlowForLead = async (leadId: string, flowId: string, codigo?: string) => {
+      // Prefer root step (parent_step_id null) for branched flows
+      const { data: rootSteps, error: rootStepError } = await supabase
         .from("flow_steps")
         .select("*")
-        .eq("flow_id", selectedFlowId!)
+        .eq("flow_id", flowId)
+        .is("parent_step_id", null)
         .order("step_order")
         .limit(1);
-      const firstStep = steps?.[0];
-      if (!firstStep) throw new Error("Fluxo sem etapas");
+
+      if (rootStepError) {
+        throw new Error(`Erro ao carregar etapas do fluxo: ${rootStepError.message}`);
+      }
+
+      let firstStep = rootSteps?.[0];
+
+      // Fallback for legacy flows without parent_step_id roots
+      if (!firstStep) {
+        const { data: anySteps, error: anyStepError } = await supabase
+          .from("flow_steps")
+          .select("*")
+          .eq("flow_id", flowId)
+          .order("step_order")
+          .limit(1);
+
+        if (anyStepError) {
+          throw new Error(`Erro ao carregar etapas do fluxo: ${anyStepError.message}`);
+        }
+
+        firstStep = anySteps?.[0];
+      }
+
+      if (!firstStep) throw new Error("Fluxo sem etapas. Abra o Flow Builder e salve o fluxo novamente.");
+
+      const firstStepStatus =
+        firstStep.step_type === "delay"
+          ? "waiting_delay"
+          : firstStep.step_type === "no_response"
+            ? "waiting_no_response"
+            : firstStep.step_type === "condition"
+              ? "waiting_reply"
+              : "waiting_delay";
+
+      const firstStepNextActionAt =
+        firstStep.step_type === "delay"
+          ? new Date(Date.now() + (firstStep.delay_minutes || 0) * 60 * 1000).toISOString()
+          : firstStep.step_type === "no_response"
+            ? new Date(Date.now() + (firstStep.timeout_minutes || 10) * 60 * 1000).toISOString()
+            : new Date().toISOString();
 
       const execData: any = {
-        flow_id: selectedFlowId!,
+        flow_id: flowId,
         lead_id: leadId,
         current_step_id: firstStep.id,
-        status: firstStep.step_type === "delay" ? "waiting_delay" : firstStep.step_type === "condition" ? "waiting_reply" : "waiting_delay",
-        next_action_at: firstStep.step_type === "delay"
-          ? new Date(Date.now() + (firstStep.delay_minutes || 0) * 60 * 1000).toISOString()
-          : new Date().toISOString(),
+        status: firstStepStatus,
+        next_action_at: firstStepNextActionAt,
         metadata: { codigo: codigo || "" },
       };
+
       // Cancel any existing active executions for this lead before creating a new one
       await supabase
         .from("flow_executions")
         .update({ status: "cancelled" })
         .eq("lead_id", leadId)
-        .in("status", ["running", "waiting_delay", "waiting_reply"]);
+        .in("status", ["running", "waiting_delay", "waiting_reply", "waiting_no_response"]);
 
-      await supabase.from("flow_executions").insert(execData);
+      const { error: insertExecutionError } = await supabase.from("flow_executions").insert(execData);
+      if (insertExecutionError) {
+        throw new Error(`Erro ao iniciar execução do fluxo: ${insertExecutionError.message}`);
+      }
 
       // Immediately trigger the flow processor to send the first step
-      await supabase.functions.invoke("flow-processor");
+      const { data: processorData, error: processorError } = await supabase.functions.invoke("flow-processor", {
+        body: { auto: true },
+      });
+      if (processorError) {
+        throw new Error(`Erro ao iniciar o processador de fluxo: ${processorError.message}`);
+      }
+      if ((processorData as any)?.error) {
+        throw new Error((processorData as any).error);
+      }
     };
 
     // Helper: generate Brazilian phone variants (with/without 9th digit)
@@ -602,11 +653,16 @@ function BroadcastTab() {
       for (const idx of csvSelectedIdxs) {
         const row = csvRows[idx];
         if (!row) continue;
+
         try {
           if (sendType === "flow") {
             const leadId = await findLeadByPhone(row.telefone);
-            if (!leadId) { errorCount++; continue; }
-            await startFlowForLead(leadId, row.codigo);
+            if (!leadId) {
+              errorCount++;
+              continue;
+            }
+            if (!flowIdForDispatch) throw new Error("Selecione um fluxo antes de iniciar.");
+            await startFlowForLead(leadId, flowIdForDispatch, row.codigo);
             successCount++;
           } else {
             for (const accountId of accountIds) {
@@ -620,6 +676,7 @@ function BroadcastTab() {
                   .replace(/\{nome\}/g, row.nome.split(" ")[0])
                   .replace(/\{codigo\}/g, row.codigo);
               }
+
               const { data: sendData, error } = await supabase.functions.invoke("whatsapp-cloud-send", { body });
               if (error) throw error;
               if (sendData?.error) throw new Error(sendData.error);
@@ -635,9 +692,11 @@ function BroadcastTab() {
       for (const leadId of selectedLeads) {
         const lead = leads?.find((l) => l.id === leadId);
         if (!lead) continue;
+
         try {
           if (sendType === "flow") {
-            await startFlowForLead(leadId);
+            if (!flowIdForDispatch) throw new Error("Selecione um fluxo antes de iniciar.");
+            await startFlowForLead(leadId, flowIdForDispatch);
             successCount++;
           } else {
             for (const accountId of accountIds) {
@@ -649,6 +708,7 @@ function BroadcastTab() {
               } else {
                 body.message = customMessage.replace(/\{nome\}/g, lead.name.split(" ")[0]);
               }
+
               const { data: sendData2, error } = await supabase.functions.invoke("whatsapp-cloud-send", { body });
               if (error) throw error;
               if (sendData2?.error) throw new Error(sendData2.error);
