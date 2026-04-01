@@ -531,7 +531,6 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
       if (flowId) {
         const { error } = await supabase.from("flows").update({ name, description: description || null }).eq("id", flowId);
         if (error) throw error;
-        await supabase.from("flow_steps").delete().eq("flow_id", flowId);
       } else {
         const { data, error } = await supabase.from("flows").insert({ name, description: description || null }).select("id").single();
         if (error) throw error;
@@ -552,8 +551,18 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
         timeout_minutes: (e.node.data.timeout_minutes as number) || null,
       }));
 
-      const { error: stepsError } = await supabase.from("flow_steps").insert(stepsToInsert);
+      const { error: stepsError } = await supabase
+        .from("flow_steps")
+        .upsert(stepsToInsert, { onConflict: "id" });
       if (stepsError) throw stepsError;
+
+      const persistedStepIds = stepsToInsert.map((s) => s.id);
+      const { error: cleanupError } = await supabase
+        .from("flow_steps")
+        .delete()
+        .eq("flow_id", flowId!)
+        .not("id", "in", `(${persistedStepIds.join(",")})`);
+      if (cleanupError) throw cleanupError;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["flows"] });
