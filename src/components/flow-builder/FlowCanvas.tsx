@@ -112,6 +112,8 @@ export function FlowCanvas({
       } else if (type === "cta_url") {
         defaultData.custom_message = "";
         defaultData.buttons = [{ id: crypto.randomUUID(), title: "Acessar site", url: "" }];
+      } else if (type === "no_response") {
+        defaultData.timeout_minutes = 10;
       }
 
       const newNode: Node = {
