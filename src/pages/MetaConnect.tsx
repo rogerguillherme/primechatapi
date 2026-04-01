@@ -12,7 +12,6 @@ import { Separator } from "@/components/ui/separator";
 import { MessageCircle, Phone, Send, Plug, Unplug, Loader2, CheckCircle2, XCircle, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 
-const META_APP_ID = import.meta.env.VITE_META_APP_ID || "";
 const REDIRECT_URI = `${window.location.origin}/connect`;
 
 export default function MetaConnect() {
