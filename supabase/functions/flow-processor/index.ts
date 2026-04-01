@@ -16,12 +16,12 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Find executions where delay has expired
+    // Find executions where delay/timeout has expired
     const now = new Date().toISOString();
     const { data: readyExecutions } = await supabase
       .from("flow_executions")
       .select("*, current_step:flow_steps!current_step_id(*)")
-      .eq("status", "waiting_delay")
+      .in("status", ["waiting_delay", "waiting_no_response"])
       .lte("next_action_at", now);
 
     if (!readyExecutions || readyExecutions.length === 0) {
@@ -53,12 +53,20 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Process the CURRENT step first
+        // Handle no_response timeout: the lead didn't click, so just advance
+        if (currentStep.step_type === "no_response" || exec.status === "waiting_no_response") {
+          // Timeout expired, advance past this step
+          await advanceToNextStep(exec, currentStep, lead, supabase, supabaseUrl, supabaseKey);
+          processed++;
+          continue;
+        }
+
+        // Process the CURRENT step first (send message)
         if (currentStep.step_type === "message" || currentStep.step_type === "interactive_buttons" || currentStep.step_type === "cta_url") {
           const sent = await sendStepMessage(currentStep, lead, supabase, supabaseUrl, supabaseKey, exec.metadata);
           if (!sent) {
             console.error("Failed to send message for execution:", exec.id);
-            continue; // Don't advance if send failed
+            continue;
           }
         }
 
@@ -75,7 +83,7 @@ Deno.serve(async (req) => {
     const { data: pendingExecutions } = await supabase
       .from("flow_executions")
       .select("next_action_at")
-      .eq("status", "waiting_delay")
+      .in("status", ["waiting_delay", "waiting_no_response"])
       .order("next_action_at")
       .limit(1);
 
@@ -219,6 +227,14 @@ async function advanceToNextStep(
       current_step_id: nextStep.id,
       status: "waiting_delay",
       next_action_at: new Date(Date.now() + nextStep.delay_minutes * 60 * 1000).toISOString(),
+    }).eq("id", exec.id);
+  } else if (nextStep.step_type === "no_response") {
+    // Set timeout: if lead doesn't respond within timeout_minutes, advance
+    const timeoutMin = nextStep.timeout_minutes || 10;
+    await supabase.from("flow_executions").update({
+      current_step_id: nextStep.id,
+      status: "waiting_no_response",
+      next_action_at: new Date(Date.now() + timeoutMin * 60 * 1000).toISOString(),
     }).eq("id", exec.id);
   } else if (nextStep.step_type === "condition") {
     await supabase.from("flow_executions").update({

@@ -313,6 +313,7 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
           delay_minutes: s.delay_minutes || 0,
           trigger_value: s.trigger_value,
           buttons: Array.isArray(s.buttons) ? s.buttons : [],
+          timeout_minutes: s.timeout_minutes || null,
         },
       }));
 
@@ -444,6 +445,7 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
           trigger_value: (n.data.trigger_value as string) || null,
           parent_step_id: null,
           buttons: (n.type === "interactive_buttons" || n.type === "cta_url") ? (n.data.buttons as any) || [] : [],
+          timeout_minutes: (n.data.timeout_minutes as number) || null,
         }));
 
         const { error } = await supabase.from("flow_steps").insert(stepsToInsert);

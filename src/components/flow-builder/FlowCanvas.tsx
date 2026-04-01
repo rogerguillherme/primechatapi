@@ -20,10 +20,11 @@ import { DelayNode } from "./nodes/DelayNode";
 import { ConditionNode } from "./nodes/ConditionNode";
 import { InteractiveButtonsNode } from "./nodes/InteractiveButtonsNode";
 import { CtaUrlNode } from "./nodes/CtaUrlNode";
+import { NoResponseNode } from "./nodes/NoResponseNode";
 import { NodeEditPanel } from "./NodeEditPanel";
 import { Button } from "@/components/ui/button";
 import {
-  MessageSquare, Clock, GitBranch, MousePointerClick, ExternalLink, Plus, Braces,
+  MessageSquare, Clock, GitBranch, MousePointerClick, ExternalLink, Plus, Braces, TimerOff,
 } from "lucide-react";
 
 const nodeTypes: NodeTypes = {
@@ -33,6 +34,7 @@ const nodeTypes: NodeTypes = {
   condition: ConditionNode,
   interactive_buttons: InteractiveButtonsNode,
   cta_url: CtaUrlNode,
+  no_response: NoResponseNode,
 };
 
 const defaultEdgeOptions = {
@@ -110,6 +112,8 @@ export function FlowCanvas({
       } else if (type === "cta_url") {
         defaultData.custom_message = "";
         defaultData.buttons = [{ id: crypto.randomUUID(), title: "Acessar site", url: "" }];
+      } else if (type === "no_response") {
+        defaultData.timeout_minutes = 10;
       }
 
       const newNode: Node = {
@@ -183,6 +187,9 @@ export function FlowCanvas({
         </Button>
         <Button variant="outline" size="sm" onClick={() => addNode("cta_url")} className="gap-1.5 text-xs h-8">
           <ExternalLink size={12} /> Link
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => addNode("no_response")} className="gap-1.5 text-xs h-8">
+          <TimerOff size={12} /> Sem Resposta
         </Button>
         <Button variant="outline" size="sm" onClick={() => {/* TODO: open variables panel */}} className="gap-1.5 text-xs h-8">
           <Braces size={12} /> Variáveis
