@@ -1,4 +1,4 @@
-import { MessageCircle, LogOut, Users } from "lucide-react";
+import { MessageCircle, LogOut, Users, Plug } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
