@@ -619,6 +619,77 @@ export type Database = {
         }
         Relationships: []
       }
+      webhook_endpoints: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          is_active: boolean
+          updated_at: string
+          user_id: string
+          webhook_token: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          is_active?: boolean
+          updated_at?: string
+          user_id: string
+          webhook_token?: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          is_active?: boolean
+          updated_at?: string
+          user_id?: string
+          webhook_token?: string
+        }
+        Relationships: []
+      }
+      webhook_events: {
+        Row: {
+          created_at: string
+          endpoint_id: string
+          event_type: string
+          id: string
+          is_test: boolean
+          payload: Json | null
+          processed: boolean
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          endpoint_id: string
+          event_type: string
+          id?: string
+          is_test?: boolean
+          payload?: Json | null
+          processed?: boolean
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          endpoint_id?: string
+          event_type?: string
+          id?: string
+          is_test?: boolean
+          payload?: Json | null
+          processed?: boolean
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webhook_events_endpoint_id_fkey"
+            columns: ["endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "webhook_endpoints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       webhook_logs: {
         Row: {
           created_at: string
