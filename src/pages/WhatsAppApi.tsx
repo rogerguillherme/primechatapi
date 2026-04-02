@@ -1986,7 +1986,7 @@ export default function WhatsAppApi() {
         </div>
 
         {/* Main content */}
-        <div className="flex-1 overflow-auto flex flex-col">
+        <div className="flex-1 overflow-hidden flex flex-col min-h-0">
           {/* Non-chat tabs get padding */}
           <TabsContent value="config" className="space-y-4 p-6 max-w-6xl flex-1">
 
