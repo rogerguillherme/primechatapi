@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 Deno.serve(async (req) => {
@@ -13,24 +13,23 @@ Deno.serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const metaAppId = Deno.env.get("META_APP_ID")!;
 
     // Authenticate user
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
+    const authHeader = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
+    if (!authHeader.toLowerCase().startsWith("bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
+    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+    const { data: { user }, error: userError } = await adminClient.auth.getUser(token);
+
+    if (userError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -48,7 +47,7 @@ Deno.serve(async (req) => {
     const oauthUrl = new URL("https://www.facebook.com/v19.0/dialog/oauth");
     oauthUrl.searchParams.set("client_id", metaAppId);
     oauthUrl.searchParams.set("redirect_uri", redirect_uri);
-    oauthUrl.searchParams.set("scope", "whatsapp_business_management,whatsapp_business_messaging,business_management");
+    oauthUrl.searchParams.set("scope", "whatsapp_business_management,whatsapp_business_messaging");
     oauthUrl.searchParams.set("response_type", "code");
 
     return new Response(
