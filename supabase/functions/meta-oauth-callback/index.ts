@@ -143,7 +143,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (existing) {
-      await adminClient
+      const { error: updateError } = await adminClient
         .from("meta_connections")
         .update({
           meta_access_token: accessToken,
@@ -152,8 +152,13 @@ Deno.serve(async (req) => {
           status: "connected",
         })
         .eq("id", existing.id);
+
+      if (updateError) {
+        console.error("Failed to update meta connection:", updateError);
+        throw updateError;
+      }
     } else {
-      await adminClient.from("meta_connections").insert({
+      const { error: insertError } = await adminClient.from("meta_connections").insert({
         user_id: userId,
         meta_access_token: accessToken,
         waba_id: wabaId,
@@ -161,6 +166,11 @@ Deno.serve(async (req) => {
         phone_number: phoneNumber,
         status: "connected",
       });
+
+      if (insertError) {
+        console.error("Failed to insert meta connection:", insertError);
+        throw insertError;
+      }
     }
 
     return new Response(
