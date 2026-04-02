@@ -1730,8 +1730,26 @@ export default function WhatsAppApi() {
               Histórico
             </TabsTrigger>
           </TabsList>
-          <div className="mt-auto p-3 border-t border-border">
-            <ThemeToggle collapsed={false} />
+          <div className="mt-auto border-t border-border p-2 space-y-0.5">
+            {isAdmin && (
+              <>
+                <button onClick={() => navigate("/auth/meta/callback")} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                  <Plug size={16} /> Conexão Meta
+                </button>
+                <button onClick={() => navigate("/admin/users")} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                  <Users size={16} /> Usuários
+                </button>
+              </>
+            )}
+            <div className="flex items-center justify-between px-3 py-2">
+              <span className="text-xs text-muted-foreground truncate">{user?.email}</span>
+            </div>
+            <div className="flex items-center gap-1 px-1">
+              <ThemeToggle collapsed={false} />
+              <Button variant="ghost" size="icon" onClick={signOut} className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                <LogOut size={16} />
+              </Button>
+            </div>
           </div>
         </div>
 
