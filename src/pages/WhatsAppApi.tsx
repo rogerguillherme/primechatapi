@@ -1873,14 +1873,11 @@ export default function WhatsAppApi() {
                 </div>
               </CardContent>
             </Card>
-          )}
-        </TabsContent>
 
-        {/* ── Webhook Tab ── */}
-        <TabsContent value="webhook" className="space-y-4">
+          {/* Webhook do WhatsApp Cloud API */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Link2 size={20} /> Configuração do Webhook</CardTitle>
+              <CardTitle className="flex items-center gap-2"><Link2 size={20} /> Webhook do WhatsApp</CardTitle>
               <CardDescription>Configure este webhook no seu App do Facebook Developers para receber mensagens.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1899,7 +1896,7 @@ export default function WhatsAppApi() {
                     {isSavingToken ? "Salvando..." : <><CheckCircle2 size={16} /> Salvar</>}
                   </Button>
                 </div>
-                <p className="text-xs text-muted-foreground">Use este mesmo valor no campo "Verify Token" ao configurar o webhook no Facebook. Clique em Salvar para aplicar.</p>
+                <p className="text-xs text-muted-foreground">Use este mesmo valor no campo "Verify Token" ao configurar o webhook no Facebook.</p>
               </div>
               <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
                 <p className="text-sm font-medium">Passo a passo:</p>
@@ -1914,6 +1911,11 @@ export default function WhatsAppApi() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ── Webhook Tab (Event Webhooks) ── */}
+        <TabsContent value="webhook" className="space-y-4">
+          <WebhookEndpoints />
         </TabsContent>
 
         {/* ── Test Tab ── */}
