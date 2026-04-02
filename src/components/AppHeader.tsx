@@ -43,7 +43,7 @@ export function AppHeader() {
               <span className="text-xs text-white/60 hidden sm:inline">{user.email}</span>
             )}
             {isAdmin && (
-              <Button variant="ghost" size="icon" onClick={() => navigate("/connect")} className="text-white/60 hover:text-white hover:bg-white/10" title="Conexão WhatsApp">
+              <Button variant="ghost" size="icon" onClick={() => navigate("/auth/meta/callback")} className="text-white/60 hover:text-white hover:bg-white/10" title="Conexão WhatsApp">
                 <Plug size={16} />
               </Button>
             )}
