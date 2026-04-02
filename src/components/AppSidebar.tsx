@@ -4,13 +4,13 @@ import {
   ChevronLeft, ChevronRight, CalendarClock, MessageSquare,
   RotateCcw, MessageCircle, LogOut, Plug, Shield,
 } from "lucide-react";
-import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
+import { useSidebarState } from "@/App";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
