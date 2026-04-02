@@ -32,25 +32,19 @@ Deno.serve(async (req) => {
 
     const token = authHeader.replace(/^Bearer\s+/i, "").trim();
 
-    const userClient = createClient(supabaseUrl, anonKey, {
-      global: {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      },
-    });
-
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-    const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
-    const userId = claimsData?.claims?.sub;
+    const { data: { user }, error: userError } = await adminClient.auth.getUser(token);
 
-    if (claimsError || !userId) {
+    if (userError || !user) {
+      console.error("Auth error:", userError?.message);
       return new Response(JSON.stringify({ error: "Não autenticado" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    const userId = user.id;
 
     const { data: accounts, error } = await adminClient
       .from("whatsapp_accounts")
