@@ -26,7 +26,7 @@ const navItems = [
 ];
 
 export function AppSidebar() {
-  const [collapsed, setCollapsed] = useState(false);
+  const { collapsed, setCollapsed } = useSidebarState();
   const location = useLocation();
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
