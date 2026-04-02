@@ -68,6 +68,30 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_labels: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       chat_messages: {
         Row: {
           account_id: string | null
@@ -346,14 +370,53 @@ export type Database = {
         }
         Relationships: []
       }
+      lead_labels: {
+        Row: {
+          created_at: string
+          id: string
+          label_id: string
+          lead_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label_id: string
+          lead_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label_id?: string
+          lead_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_labels_label_id_fkey"
+            columns: ["label_id"]
+            isOneToOne: false
+            referencedRelation: "chat_labels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_labels_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
+          assigned_to: string | null
           chat_status: string
           cpf: string | null
           created_at: string
           email: string | null
           hubla_id: string | null
           id: string
+          last_inbound_at: string | null
+          last_outbound_at: string | null
           name: string
           origin: string | null
           phone: string
@@ -361,12 +424,15 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          assigned_to?: string | null
           chat_status?: string
           cpf?: string | null
           created_at?: string
           email?: string | null
           hubla_id?: string | null
           id?: string
+          last_inbound_at?: string | null
+          last_outbound_at?: string | null
           name: string
           origin?: string | null
           phone: string
@@ -374,12 +440,15 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          assigned_to?: string | null
           chat_status?: string
           cpf?: string | null
           created_at?: string
           email?: string | null
           hubla_id?: string | null
           id?: string
+          last_inbound_at?: string | null
+          last_outbound_at?: string | null
           name?: string
           origin?: string | null
           phone?: string

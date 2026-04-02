@@ -24,7 +24,7 @@ import {
   Phone, Key, Link2, Send, CheckCircle2, AlertCircle, Copy, ExternalLink,
   Package, MessageCircle, Search, FileText, Check, CheckCheck, Paperclip,
   Truck, Users, ArrowLeft, BarChart3, MoreVertical, Pencil, Trash2, Star,
-  KeyRound, ChevronDown, Webhook, LogOut, Plug,
+  KeyRound, ChevronDown, Webhook, LogOut, Plug, Tag,
 } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
@@ -38,6 +38,7 @@ import { WebhookEndpoints } from "@/components/WebhookEndpoints";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 import { useUserTemplates } from "@/hooks/use-user-templates";
 import { AccountSelector } from "@/components/AccountSelector";
+import { ChatLabelsManager, useLabels, LeadLabelSelector } from "@/components/ChatLabelsManager";
 
 const isUnauthorizedFunctionError = (error: unknown) =>
   error instanceof Error && error.message.includes("401");
@@ -1064,28 +1065,41 @@ function BroadcastTab() {
    CHAT TAB COMPONENT
    ══════════════════════════════════════════════════ */
 function CloudChatTab() {
+  const { user } = useAuth();
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [message, setMessage] = useState("");
   const [filterAccountId, setFilterAccountId] = useState<string | null>(null);
+  const [filterLabelId, setFilterLabelId] = useState<string | null>(null);
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [labelsDialogOpen, setLabelsDialogOpen] = useState(false);
   const { accounts } = useWhatsAppAccounts();
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
+  const { labels, leadLabelsMap } = useLabels();
+
+  // Fetch profiles for assignment
+  const { data: profiles = [] } = useQuery({
+    queryKey: ["chat-profiles"],
+    queryFn: async () => {
+      const { data } = await supabase.from("profiles").select("user_id, display_name");
+      return data || [];
+    },
+  });
 
   const { data: leads } = useQuery({
     queryKey: ["cloud-chat-leads"],
     queryFn: async () => {
       const { data } = await supabase
         .from("leads")
-        .select("id, name, phone, photo_url")
+        .select("id, name, phone, photo_url, assigned_to, last_outbound_at, last_inbound_at, chat_status")
         .order("name");
       return data || [];
     },
   });
 
-  // Fetch lead IDs per account for filtering
   const { data: leadAccountMap } = useQuery({
     queryKey: ["cloud-chat-lead-accounts"],
     queryFn: async () => {
@@ -1135,6 +1149,32 @@ function CloudChatTab() {
 
   const selectedLead = leads?.find((l) => l.id === selectedLeadId);
 
+  // 24h window helper
+  const get24hWindow = (lead: any) => {
+    // The window is active after the lead responds (inbound) and lasts 24h
+    // Or after we send (outbound) a template, a new 24h window opens on inbound reply
+    const lastInbound = lead.last_inbound_at ? new Date(lead.last_inbound_at) : null;
+    if (!lastInbound) return { active: false, remaining: 0, label: "Fechada" };
+    const now = new Date();
+    const diff = 24 * 60 * 60 * 1000 - (now.getTime() - lastInbound.getTime());
+    if (diff <= 0) return { active: false, remaining: 0, label: "Fechada" };
+    const hours = Math.floor(diff / (60 * 60 * 1000));
+    const mins = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
+    return { active: true, remaining: diff, label: `${hours}h${mins.toString().padStart(2, "0")}m` };
+  };
+
+  // Assign lead to user
+  const assignMutation = useMutation({
+    mutationFn: async ({ leadId, userId }: { leadId: string; userId: string | null }) => {
+      const { error } = await supabase.from("leads").update({ assigned_to: userId }).eq("id", leadId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cloud-chat-leads"] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   // Realtime
   useEffect(() => {
     const channel = supabase
@@ -1142,6 +1182,7 @@ function CloudChatTab() {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, () => {
         queryClient.invalidateQueries({ queryKey: ["cloud-chat-messages", selectedLeadId] });
         queryClient.invalidateQueries({ queryKey: ["cloud-chat-latest"] });
+        queryClient.invalidateQueries({ queryKey: ["cloud-chat-leads"] });
       })
       .subscribe();
     const interval = setInterval(() => {
@@ -1174,6 +1215,7 @@ function CloudChatTab() {
       setMessage("");
       queryClient.invalidateQueries({ queryKey: ["cloud-chat-messages", selectedLeadId] });
       queryClient.invalidateQueries({ queryKey: ["cloud-chat-latest"] });
+      queryClient.invalidateQueries({ queryKey: ["cloud-chat-leads"] });
     },
     onError: (err: any) => toast.error(`Erro: ${err.message}`),
   });
@@ -1208,12 +1250,24 @@ function CloudChatTab() {
   const filteredLeads = useMemo(() => {
     if (!leads || !latestMessages) return [];
     const s = search.toLowerCase();
-    return leads.filter((l) =>
-      latestMessages.has(l.id) &&
-      (l.name.toLowerCase().includes(s) || l.phone.includes(s)) &&
-      (!filterAccountId || leadAccountMap?.get(filterAccountId)?.has(l.id))
-    );
-  }, [leads, search, latestMessages, filterAccountId, leadAccountMap]);
+    return leads.filter((l) => {
+      if (!latestMessages.has(l.id)) return false;
+      if (!(l.name.toLowerCase().includes(s) || l.phone.includes(s))) return false;
+      if (filterAccountId && !leadAccountMap?.get(filterAccountId)?.has(l.id)) return false;
+      if (filterLabelId && !leadLabelsMap.get(l.id)?.has(filterLabelId)) return false;
+      if (filterStatus === "open") {
+        const w = get24hWindow(l);
+        if (!w.active) return false;
+      }
+      if (filterStatus === "closed") {
+        const w = get24hWindow(l);
+        if (w.active) return false;
+      }
+      if (filterStatus === "mine" && l.assigned_to !== user?.id) return false;
+      if (filterStatus === "unassigned" && l.assigned_to) return false;
+      return true;
+    });
+  }, [leads, search, latestMessages, filterAccountId, leadAccountMap, filterLabelId, leadLabelsMap, filterStatus, user]);
 
   const sortedLeads = useMemo(() => {
     return [...filteredLeads].sort((a, b) => {
@@ -1239,218 +1293,355 @@ function CloudChatTab() {
   }, [messages]);
 
   return (
-    <div className="flex h-[520px] rounded-lg border border-border overflow-hidden bg-card">
-      {/* Contact list */}
-      <div className={cn("w-[280px] flex flex-col border-r border-border", selectedLeadId ? "hidden md:flex" : "flex flex-1 md:flex-none md:w-[280px]")}>
-        <div className="p-3 border-b border-border">
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Buscar lead..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-8 text-sm" />
-          </div>
-        </div>
-        {accounts.length > 1 && (
-          <div className="px-3 py-1.5 border-b border-border">
-            <select
-              value={filterAccountId || ""}
-              onChange={(e) => setFilterAccountId(e.target.value || null)}
-              className="w-full rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              <option value="">Todos os números</option>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name} {a.is_default ? "(padrão)" : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-        <ScrollArea className="flex-1">
-          {sortedLeads.map((lead) => {
-            const latest = latestMessages?.get(lead.id);
-            return (
-              <button
-                key={lead.id}
-                onClick={() => setSelectedLeadId(lead.id)}
-                className={cn("w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-accent/40 transition-colors", lead.id === selectedLeadId && "bg-accent/80")}
+    <>
+      <ChatLabelsManager open={labelsDialogOpen} onOpenChange={setLabelsDialogOpen} />
+      <div className="flex h-[600px] rounded-lg border border-border overflow-hidden bg-card">
+        {/* Contact list */}
+        <div className={cn("w-[300px] flex flex-col border-r border-border", selectedLeadId ? "hidden md:flex" : "flex flex-1 md:flex-none md:w-[300px]")}>
+          <div className="p-2.5 border-b border-border space-y-2">
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input placeholder="Buscar lead..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-8 text-sm" />
+            </div>
+            {/* Filters row */}
+            <div className="flex gap-1 flex-wrap">
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="rounded-md border border-input bg-background px-2 py-1 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
-                <Avatar className="w-9 h-9">
-                  {lead.photo_url && <AvatarImage src={lead.photo_url} />}
-                  <AvatarFallback className={cn(getAvatarColor(lead.name), "text-white text-xs")}>{getInitials(lead.name)}</AvatarFallback>
-                </Avatar>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium truncate">{lead.name}</p>
-                  {latest && <p className="text-xs text-muted-foreground truncate">{latest.content}</p>}
-                </div>
-                {latest && <span className="text-[10px] text-muted-foreground flex-shrink-0">{isToday(new Date(latest.created_at)) ? format(new Date(latest.created_at), "HH:mm") : format(new Date(latest.created_at), "dd/MM")}</span>}
+                <option value="all">Todos</option>
+                <option value="open">🟢 Janela aberta</option>
+                <option value="closed">🔴 Janela fechada</option>
+                <option value="mine">👤 Meus</option>
+                <option value="unassigned">⚪ Sem atendente</option>
+              </select>
+              {labels.length > 0 && (
+                <select
+                  value={filterLabelId || ""}
+                  onChange={(e) => setFilterLabelId(e.target.value || null)}
+                  className="rounded-md border border-input bg-background px-2 py-1 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="">Etiqueta</option>
+                  {labels.map((l: any) => (
+                    <option key={l.id} value={l.id}>{l.name}</option>
+                  ))}
+                </select>
+              )}
+              {accounts.length > 1 && (
+                <select
+                  value={filterAccountId || ""}
+                  onChange={(e) => setFilterAccountId(e.target.value || null)}
+                  className="rounded-md border border-input bg-background px-2 py-1 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="">Conta</option>
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+              )}
+              <button
+                onClick={() => setLabelsDialogOpen(true)}
+                className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                title="Gerenciar etiquetas"
+              >
+                <Tag size={14} />
               </button>
-            );
-          })}
-        </ScrollArea>
-      </div>
-
-      {/* Chat area */}
-      {selectedLeadId && selectedLead ? (
-        <div className="flex-1 flex flex-col">
-          {/* Header */}
-          <div className="h-12 px-3 flex items-center gap-2 border-b border-border bg-muted/30">
-            <button onClick={() => setSelectedLeadId(null)} className="md:hidden p-1 rounded hover:bg-accent">
-              <ArrowLeft size={18} />
-            </button>
-            <Avatar className="w-8 h-8">
-              {selectedLead.photo_url && <AvatarImage src={selectedLead.photo_url} />}
-              <AvatarFallback className={cn(getAvatarColor(selectedLead.name), "text-white text-xs")}>{getInitials(selectedLead.name)}</AvatarFallback>
-            </Avatar>
-            <div className="min-w-0">
-              <p className="text-sm font-medium truncate">{selectedLead.name}</p>
-              <p className="text-[11px] text-muted-foreground">{selectedLead.phone}</p>
             </div>
           </div>
-
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-3 py-2" style={{ backgroundColor: "hsl(30 20% 93%)", backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='0.02'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }}>
-            {messages?.length === 0 && (
-              <div className="flex justify-center py-8">
-                <div className="bg-card/90 backdrop-blur rounded-lg px-5 py-2 shadow-sm">
-                  <p className="text-sm text-muted-foreground">Nenhuma mensagem ainda 💬</p>
-                </div>
-              </div>
-            )}
-            {groupedMessages.map((group, gi) => (
-              <div key={gi}>
-                <div className="flex justify-center my-2">
-                  <span className="bg-card/90 backdrop-blur text-muted-foreground text-[11px] font-medium px-3 py-1 rounded-md shadow-sm uppercase tracking-wide">
-                    {formatDateSeparator(group.date)}
-                  </span>
-                </div>
-                {group.messages.map((msg, mi) => {
-                  const isOutbound = msg.direction === "outbound";
-                  const prevMsg = mi > 0 ? group.messages[mi - 1] : null;
-                  const showTail = !prevMsg || prevMsg.direction !== msg.direction;
-                  return (
-                    <div key={msg.id} className={cn("flex mb-[2px]", isOutbound ? "justify-end" : "justify-start", showTail && "mt-2")}>
-                      <div className={cn(
-                        "relative max-w-[85%] px-[9px] pt-[6px] pb-2 text-[13px] leading-[18px] shadow-sm",
-                        isOutbound ? "bg-[#d9fdd3] text-[#111b21] rounded-lg" : "bg-card text-foreground rounded-lg",
-                        showTail && isOutbound && "rounded-tr-none",
-                        showTail && !isOutbound && "rounded-tl-none"
-                      )}>
-                        {showTail && (
-                          <div className={cn("absolute top-0 w-2 h-3", isOutbound ? "-right-2" : "-left-2")}>
-                            <svg viewBox="0 0 8 13" width="8" height="13">
-                              {isOutbound ? (
-                                <path fill="#d9fdd3" d="M1.533 3.568 8 12.193V1H2.812C1.042 1 .474 2.156 1.533 3.568z" />
-                              ) : (
-                                <path fill="hsl(var(--card))" d="M6.467 3.568 0 12.193V1h5.188c1.77 0 2.338 1.156 1.28 2.568z" />
-                              )}
-                            </svg>
-                          </div>
-                        )}
-                        {msg.media_url && msg.media_type ? (
-                          <div className="mb-1">
-                            <ChatMediaBubble mediaType={msg.media_type} mediaUrl={msg.media_url} caption={msg.media_type !== "audio" ? msg.content : undefined} isOutbound={isOutbound} />
-                            <span className="inline-block w-[55px]" />
-                          </div>
-                        ) : (
-                          <p className="whitespace-pre-wrap break-words">
-                            {msg.content}
-                            <span className="inline-block w-[55px]" />
-                          </p>
-                        )}
-                        <span className={cn("absolute bottom-[4px] right-[6px] flex items-center gap-[2px]", isOutbound ? "text-[#667781]" : "text-muted-foreground")}>
-                          <span className="text-[11px] leading-none">{format(new Date(msg.created_at), "HH:mm")}</span>
-                          {isOutbound && <CheckCheck size={13} className={msg.status === "read" ? "text-sky-400" : "opacity-60"} />}
-                        </span>
-                      </div>
+          <ScrollArea className="flex-1">
+            {sortedLeads.map((lead) => {
+              const latest = latestMessages?.get(lead.id);
+              const window24h = get24hWindow(lead);
+              const leadLabelIds = leadLabelsMap.get(lead.id);
+              const assignedProfile = profiles.find((p) => p.user_id === lead.assigned_to);
+              return (
+                <button
+                  key={lead.id}
+                  onClick={() => setSelectedLeadId(lead.id)}
+                  className={cn("w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-accent/40 transition-colors", lead.id === selectedLeadId && "bg-accent/80")}
+                >
+                  <Avatar className="w-9 h-9">
+                    {lead.photo_url && <AvatarImage src={lead.photo_url} />}
+                    <AvatarFallback className={cn(getAvatarColor(lead.name), "text-white text-xs")}>{getInitials(lead.name)}</AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-medium truncate">{lead.name}</p>
+                      <span className={cn("w-2 h-2 rounded-full flex-shrink-0", window24h.active ? "bg-emerald-500" : "bg-destructive/50")} title={window24h.active ? `Janela: ${window24h.label}` : "Janela fechada"} />
                     </div>
-                  );
-                })}
-              </div>
-            ))}
-            <div ref={bottomRef} />
-          </div>
+                    {latest && <p className="text-xs text-muted-foreground truncate">{latest.content}</p>}
+                    <div className="flex items-center gap-1 mt-0.5">
+                      {leadLabelIds && labels.filter((l: any) => leadLabelIds.has(l.id)).slice(0, 2).map((l: any) => (
+                        <span key={l.id} className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: l.color }} title={l.name} />
+                      ))}
+                      {assignedProfile && (
+                        <span className="text-[9px] text-muted-foreground ml-auto">👤 {assignedProfile.display_name?.split(" ")[0]}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                    {latest && <span className="text-[10px] text-muted-foreground">{isToday(new Date(latest.created_at)) ? format(new Date(latest.created_at), "HH:mm") : format(new Date(latest.created_at), "dd/MM")}</span>}
+                    {window24h.active && <span className="text-[9px] text-emerald-600 font-medium">{window24h.label}</span>}
+                  </div>
+                </button>
+              );
+            })}
+          </ScrollArea>
+        </div>
 
-          {/* Input area */}
-          <div className="px-3 py-2 bg-muted/50 border-t border-border">
-            <input ref={fileInputRef} type="file" accept="image/*,video/*,audio/*" className="hidden" onChange={handleFileSelect} />
-            <div className="flex items-end gap-1.5">
-              {templates && templates.length > 0 && (
+        {/* Chat area */}
+        {selectedLeadId && selectedLead ? (
+          <div className="flex-1 flex flex-col">
+            {/* Header */}
+            <div className="px-3 py-2 flex items-center gap-2 border-b border-border bg-muted/30">
+              <button onClick={() => setSelectedLeadId(null)} className="md:hidden p-1 rounded hover:bg-accent">
+                <ArrowLeft size={18} />
+              </button>
+              <Avatar className="w-8 h-8">
+                {selectedLead.photo_url && <AvatarImage src={selectedLead.photo_url} />}
+                <AvatarFallback className={cn(getAvatarColor(selectedLead.name), "text-white text-xs")}>{getInitials(selectedLead.name)}</AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium truncate">{selectedLead.name}</p>
+                  {(() => {
+                    const w = get24hWindow(selectedLead);
+                    return (
+                      <Badge variant={w.active ? "default" : "secondary"} className={cn("text-[10px] px-1.5 py-0", w.active ? "bg-emerald-600" : "")}>
+                        {w.active ? `⏱ ${w.label}` : "Janela fechada"}
+                      </Badge>
+                    );
+                  })()}
+                </div>
+                <p className="text-[11px] text-muted-foreground">{selectedLead.phone}</p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {/* Assign to user */}
+                <select
+                  value={selectedLead.assigned_to || ""}
+                  onChange={(e) => assignMutation.mutate({ leadId: selectedLead.id, userId: e.target.value || null })}
+                  className="rounded-md border border-input bg-background px-2 py-1 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring max-w-[120px]"
+                >
+                  <option value="">Sem atendente</option>
+                  {profiles.map((p) => (
+                    <option key={p.user_id} value={p.user_id}>{p.display_name || "Usuário"}</option>
+                  ))}
+                </select>
+                {/* Labels dropdown */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 mb-[2px]">
-                      <FileText size={18} />
+                    <button className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground">
+                      <Tag size={14} />
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-72 max-h-64 overflow-y-auto">
-                    <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">Templates</div>
-                    {templates.map((t: any) => (
-                      <DropdownMenuItem 
-                        key={t.id} 
-                        onClick={() => {
-                          if (t.template_name) {
-                            const resolvedParams = ((t.template_params || []) as any[]).map((p: any) => {
-                              const text = typeof p === "string" ? p : p?.text || "";
-                              return {
-                                type: "text",
-                                text: text.replace(/\{nome\}/g, selectedLead?.name?.split(" ")[0] || ""),
-                              };
-                            });
-                            // Check if any param still has unresolved placeholders or is empty
-                            const hasUnresolved = resolvedParams.some((p: any) => !p.text || /\{.*\}/.test(p.text));
-                            if (hasUnresolved) {
-                              toast.error("Este template requer parâmetros que não podem ser preenchidos automaticamente no chat. Use a aba Rastreio ou Disparo.");
-                              return;
-                            }
-                            sendMutation.mutate({ templateName: t.template_name, templateLanguage: t.template_language || "pt_BR", templateParams: resolvedParams });
-                          } else {
-                            setMessage(t.content);
-                          }
-                        }} 
-                        className="flex flex-col items-start gap-0.5"
-                      >
-                        <span className="font-medium text-sm flex items-center gap-1.5">
-                          {t.name}
-                          {t.template_name && <Badge variant="secondary" className="text-[10px] px-1 py-0">API</Badge>}
-                        </span>
-                        <span className="text-xs text-muted-foreground line-clamp-2">{t.content}</span>
-                      </DropdownMenuItem>
-                    ))}
+                  <DropdownMenuContent align="end" className="w-48">
+                    <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Etiquetas</div>
+                    <LeadLabelSelector leadId={selectedLead.id} labels={labels} leadLabelsMap={leadLabelsMap} />
+                    {labels.length === 0 && (
+                      <p className="text-xs text-muted-foreground px-2 py-2">Crie etiquetas primeiro</p>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
-              )}
-              <button onClick={() => fileInputRef.current?.click()} className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 mb-[2px]">
-                <Paperclip size={18} />
-              </button>
-              <div className="flex-1 bg-card rounded-lg border border-border shadow-sm overflow-hidden">
-                <textarea
-                  ref={textareaRef}
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Digite uma mensagem"
-                  className="w-full px-3 py-[8px] text-[13px] bg-transparent outline-none resize-none placeholder:text-muted-foreground max-h-[100px]"
-                  rows={1}
-                  style={{ minHeight: "34px" }}
-                />
               </div>
-              {message.trim() ? (
-                <button onClick={handleSend} disabled={sendMutation.isPending} className="p-2 rounded-full flex-shrink-0 mb-[2px] bg-primary text-primary-foreground hover:opacity-90 transition-colors">
-                  <Send size={16} />
-                </button>
-              ) : (
-                <AudioRecorder onRecorded={handleAudioRecorded} disabled={sendMutation.isPending} />
+            </div>
+
+            {/* Lead labels bar */}
+            {(() => {
+              const ids = leadLabelsMap.get(selectedLead.id);
+              const activeLabels = ids ? labels.filter((l: any) => ids.has(l.id)) : [];
+              if (activeLabels.length === 0) return null;
+              return (
+                <div className="px-3 py-1.5 border-b border-border flex gap-1 flex-wrap bg-muted/20">
+                  {activeLabels.map((l: any) => (
+                    <Badge key={l.id} style={{ backgroundColor: l.color, color: "#fff" }} className="text-[10px]">
+                      {l.name}
+                    </Badge>
+                  ))}
+                </div>
+              );
+            })()}
+
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto px-3 py-2" style={{ backgroundColor: "hsl(30 20% 93%)", backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='0.02'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }}>
+              {messages?.length === 0 && (
+                <div className="flex justify-center py-8">
+                  <div className="bg-card/90 backdrop-blur rounded-lg px-5 py-2 shadow-sm">
+                    <p className="text-sm text-muted-foreground">Nenhuma mensagem ainda 💬</p>
+                  </div>
+                </div>
               )}
+              {groupedMessages.map((group, gi) => (
+                <div key={gi}>
+                  <div className="flex justify-center my-2">
+                    <span className="bg-card/90 backdrop-blur text-muted-foreground text-[11px] font-medium px-3 py-1 rounded-md shadow-sm uppercase tracking-wide">
+                      {formatDateSeparator(group.date)}
+                    </span>
+                  </div>
+                  {group.messages.map((msg, mi) => {
+                    const isOutbound = msg.direction === "outbound";
+                    const prevMsg = mi > 0 ? group.messages[mi - 1] : null;
+                    const showTail = !prevMsg || prevMsg.direction !== msg.direction;
+                    return (
+                      <div key={msg.id} className={cn("flex mb-[2px]", isOutbound ? "justify-end" : "justify-start", showTail && "mt-2")}>
+                        <div className={cn(
+                          "relative max-w-[85%] px-[9px] pt-[6px] pb-2 text-[13px] leading-[18px] shadow-sm",
+                          isOutbound ? "bg-[#d9fdd3] text-[#111b21] rounded-lg" : "bg-card text-foreground rounded-lg",
+                          showTail && isOutbound && "rounded-tr-none",
+                          showTail && !isOutbound && "rounded-tl-none"
+                        )}>
+                          {showTail && (
+                            <div className={cn("absolute top-0 w-2 h-3", isOutbound ? "-right-2" : "-left-2")}>
+                              <svg viewBox="0 0 8 13" width="8" height="13">
+                                {isOutbound ? (
+                                  <path fill="#d9fdd3" d="M1.533 3.568 8 12.193V1H2.812C1.042 1 .474 2.156 1.533 3.568z" />
+                                ) : (
+                                  <path fill="hsl(var(--card))" d="M6.467 3.568 0 12.193V1h5.188c1.77 0 2.338 1.156 1.28 2.568z" />
+                                )}
+                              </svg>
+                            </div>
+                          )}
+                          {msg.media_url && msg.media_type ? (
+                            <div className="mb-1">
+                              <ChatMediaBubble mediaType={msg.media_type} mediaUrl={msg.media_url} caption={msg.media_type !== "audio" ? msg.content : undefined} isOutbound={isOutbound} />
+                              <span className="inline-block w-[55px]" />
+                            </div>
+                          ) : (
+                            <p className="whitespace-pre-wrap break-words">
+                              {msg.content}
+                              <span className="inline-block w-[55px]" />
+                            </p>
+                          )}
+                          <span className={cn("absolute bottom-[4px] right-[6px] flex items-center gap-[2px]", isOutbound ? "text-[#667781]" : "text-muted-foreground")}>
+                            <span className="text-[11px] leading-none">{format(new Date(msg.created_at), "HH:mm")}</span>
+                            {isOutbound && <CheckCheck size={13} className={msg.status === "read" ? "text-sky-400" : "opacity-60"} />}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+              <div ref={bottomRef} />
+            </div>
+
+            {/* Input area */}
+            <div className="px-3 py-2 bg-muted/50 border-t border-border">
+              {(() => {
+                const w = get24hWindow(selectedLead);
+                if (!w.active) {
+                  return (
+                    <div className="flex items-center justify-center gap-2 py-2">
+                      <Badge variant="secondary" className="text-xs">🔒 Janela de 24h fechada</Badge>
+                      <p className="text-xs text-muted-foreground">Use um template para reabrir a conversa</p>
+                      {templates && templates.length > 0 && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="sm" variant="outline" className="gap-1 text-xs h-7">
+                              <FileText size={12} /> Enviar Template
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-72 max-h-64 overflow-y-auto">
+                            {templates.filter((t: any) => t.template_name).map((t: any) => (
+                              <DropdownMenuItem
+                                key={t.id}
+                                onClick={() => {
+                                  const resolvedParams = ((t.template_params || []) as any[]).map((p: any) => {
+                                    const text = typeof p === "string" ? p : p?.text || "";
+                                    return { type: "text", text: text.replace(/\{nome\}/g, selectedLead?.name?.split(" ")[0] || "") };
+                                  });
+                                  const hasUnresolved = resolvedParams.some((p: any) => !p.text || /\{.*\}/.test(p.text));
+                                  if (hasUnresolved) { toast.error("Template requer parâmetros manuais. Use a aba Disparo."); return; }
+                                  sendMutation.mutate({ templateName: t.template_name, templateLanguage: t.template_language || "pt_BR", templateParams: resolvedParams });
+                                }}
+                                className="flex flex-col items-start gap-0.5"
+                              >
+                                <span className="font-medium text-sm">{t.name}</span>
+                                <span className="text-xs text-muted-foreground line-clamp-2">{t.content}</span>
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+              <input ref={fileInputRef} type="file" accept="image/*,video/*,audio/*" className="hidden" onChange={handleFileSelect} />
+              <div className="flex items-end gap-1.5">
+                {templates && templates.length > 0 && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 mb-[2px]">
+                        <FileText size={18} />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-72 max-h-64 overflow-y-auto">
+                      <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">Templates</div>
+                      {templates.map((t: any) => (
+                        <DropdownMenuItem 
+                          key={t.id} 
+                          onClick={() => {
+                            if (t.template_name) {
+                              const resolvedParams = ((t.template_params || []) as any[]).map((p: any) => {
+                                const text = typeof p === "string" ? p : p?.text || "";
+                                return { type: "text", text: text.replace(/\{nome\}/g, selectedLead?.name?.split(" ")[0] || "") };
+                              });
+                              const hasUnresolved = resolvedParams.some((p: any) => !p.text || /\{.*\}/.test(p.text));
+                              if (hasUnresolved) { toast.error("Este template requer parâmetros que não podem ser preenchidos automaticamente no chat. Use a aba Rastreio ou Disparo."); return; }
+                              sendMutation.mutate({ templateName: t.template_name, templateLanguage: t.template_language || "pt_BR", templateParams: resolvedParams });
+                            } else {
+                              setMessage(t.content);
+                            }
+                          }} 
+                          className="flex flex-col items-start gap-0.5"
+                        >
+                          <span className="font-medium text-sm flex items-center gap-1.5">
+                            {t.name}
+                            {t.template_name && <Badge variant="secondary" className="text-[10px] px-1 py-0">API</Badge>}
+                          </span>
+                          <span className="text-xs text-muted-foreground line-clamp-2">{t.content}</span>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+                <button onClick={() => fileInputRef.current?.click()} className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 mb-[2px]">
+                  <Paperclip size={18} />
+                </button>
+                <div className="flex-1 bg-card rounded-lg border border-border shadow-sm overflow-hidden">
+                  <textarea
+                    ref={textareaRef}
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Digite uma mensagem"
+                    className="w-full px-3 py-[8px] text-[13px] bg-transparent outline-none resize-none placeholder:text-muted-foreground max-h-[100px]"
+                    rows={1}
+                    style={{ minHeight: "34px" }}
+                  />
+                </div>
+                {message.trim() ? (
+                  <button onClick={handleSend} disabled={sendMutation.isPending} className="p-2 rounded-full flex-shrink-0 mb-[2px] bg-primary text-primary-foreground hover:opacity-90 transition-colors">
+                    <Send size={16} />
+                  </button>
+                ) : (
+                  <AudioRecorder onRecorded={handleAudioRecorded} disabled={sendMutation.isPending} />
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      ) : (
-        <div className="flex-1 flex items-center justify-center bg-muted/20">
-          <div className="text-center space-y-2">
-            <MessageCircle size={48} className="mx-auto text-muted-foreground/30" />
-            <p className="text-muted-foreground text-sm">Selecione um lead para conversar</p>
+        ) : (
+          <div className="flex-1 flex items-center justify-center bg-muted/20">
+            <div className="text-center space-y-2">
+              <MessageCircle size={48} className="mx-auto text-muted-foreground/30" />
+              <p className="text-muted-foreground text-sm">Selecione um lead para conversar</p>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </>
   );
 }
 
