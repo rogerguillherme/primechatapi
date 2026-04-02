@@ -2202,7 +2202,7 @@ export default function WhatsAppApi() {
         </TabsContent>
 
         {/* ── Webhook Tab (Event Webhooks) ── */}
-        <TabsContent value="webhook" className="space-y-4">
+        <TabsContent value="webhook" className="space-y-4 p-6 max-w-6xl">
           <WebhookEndpoints />
         </TabsContent>
 
