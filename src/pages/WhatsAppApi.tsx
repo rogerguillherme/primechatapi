@@ -1675,6 +1675,7 @@ export default function WhatsAppApi() {
   const [businessAccountId, setBusinessAccountId] = useState("");
   const [isDefault, setIsDefault] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const [verifyToken, setVerifyToken] = useState("");
   const [isSavingToken, setIsSavingToken] = useState(false);
