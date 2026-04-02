@@ -2251,7 +2251,7 @@ export default function WhatsAppApi() {
         </TabsContent>
 
         {/* ── Broadcast Tab ── */}
-        <TabsContent value="broadcast" className="space-y-4 p-6 max-w-6xl">
+        <TabsContent value="broadcast" className="space-y-4 p-6 max-w-6xl overflow-auto">
           <BroadcastTab />
         </TabsContent>
 
