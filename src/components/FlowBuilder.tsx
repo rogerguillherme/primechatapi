@@ -364,7 +364,7 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
         .order("step_order");
 
       const steps = data || [];
-      const triggerNode = createTriggerNode();
+      const triggerNode = { ...createTriggerNode(), data: { trigger_type: flow.trigger_type || "" } };
 
       // Build nodes
       const stepNodes: Node[] = steps.map((s: any, i: number) => {
