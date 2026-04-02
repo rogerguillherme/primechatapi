@@ -1457,8 +1457,24 @@ function CloudChatTab() {
    MAIN PAGE
    ══════════════════════════════════════════════════ */
 export default function WhatsAppApi() {
-  const { user, session } = useAuth();
+  const { user, session, signOut } = useAuth();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+
+  const { data: isAdmin } = useQuery({
+    queryKey: ["user-role", user?.id],
+    queryFn: async () => {
+      if (!user) return false;
+      const { data } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .eq("role", "admin")
+        .maybeSingle();
+      return !!data;
+    },
+    enabled: !!user,
+  });
   const [editingAccount, setEditingAccount] = useState<any | null>(null);
   const [isAddingAccount, setIsAddingAccount] = useState(false);
   const [accountName, setAccountName] = useState("");
