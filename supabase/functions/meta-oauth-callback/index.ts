@@ -13,7 +13,6 @@ Deno.serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const metaAppId = Deno.env.get("META_APP_ID")!;
     const metaAppSecret = Deno.env.get("META_APP_SECRET")!;
