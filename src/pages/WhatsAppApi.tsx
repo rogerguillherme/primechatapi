@@ -2251,20 +2251,19 @@ export default function WhatsAppApi() {
         </TabsContent>
 
         {/* ── Broadcast Tab ── */}
-        <TabsContent value="broadcast" className="space-y-4">
+        <TabsContent value="broadcast" className="space-y-4 p-6 max-w-6xl">
           <BroadcastTab />
         </TabsContent>
 
-        {/* ── Chat Tab ── */}
-        <TabsContent value="chat" className="space-y-4">
+        {/* ── Chat Tab — full height, no padding */}
+        <TabsContent value="chat" className="flex-1 flex flex-col m-0 p-0">
           <CloudChatTab />
         </TabsContent>
 
         {/* ── History Tab ── */}
-        <TabsContent value="history" className="space-y-4">
+        <TabsContent value="history" className="space-y-4 p-6 max-w-6xl">
           <SendingMetrics />
         </TabsContent>
-          </div>
         </div>
       </Tabs>
     </div>
