@@ -299,6 +299,7 @@ export type Database = {
           description: string | null
           id: string
           name: string
+          trigger_type: string | null
           updated_at: string
           user_id: string
         }
@@ -308,6 +309,7 @@ export type Database = {
           description?: string | null
           id?: string
           name: string
+          trigger_type?: string | null
           updated_at?: string
           user_id: string
         }
@@ -317,6 +319,7 @@ export type Database = {
           description?: string | null
           id?: string
           name?: string
+          trigger_type?: string | null
           updated_at?: string
           user_id?: string
         }
