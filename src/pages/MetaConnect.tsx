@@ -12,7 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { MessageCircle, Phone, Send, Plug, Unplug, Loader2, CheckCircle2, XCircle, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 
-const REDIRECT_URI = `${window.location.origin}/connect`;
+const REDIRECT_URI = `${window.location.origin}/auth/meta/callback`;
 
 export default function MetaConnect() {
   const { session, user } = useAuth();

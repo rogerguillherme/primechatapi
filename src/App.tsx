@@ -52,7 +52,7 @@ function AppRoutes() {
         }
       />
       <Route
-        path="/connect"
+        path="/auth/meta/callback"
         element={
           <ProtectedRoute>
             <div className="min-h-screen flex flex-col">
