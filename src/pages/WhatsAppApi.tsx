@@ -23,7 +23,7 @@ import {
   Phone, Key, Link2, Send, CheckCircle2, AlertCircle, Copy, ExternalLink,
   Package, MessageCircle, Search, FileText, Check, CheckCheck, Paperclip,
   Truck, Users, ArrowLeft, BarChart3, MoreVertical, Pencil, Trash2, Star,
-  KeyRound, ChevronDown, Webhook,
+  KeyRound, ChevronDown, Webhook, LogOut, Plug,
 } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
