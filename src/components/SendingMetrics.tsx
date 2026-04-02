@@ -187,6 +187,35 @@ export function SendingMetrics() {
     <div className="space-y-4">
       {/* WhatsApp Limits */}
       <WhatsAppLimits />
+
+      {/* Template Sync */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <FileText size={16} /> Templates da Meta
+            </CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSyncTemplates}
+              disabled={syncingTemplates}
+              className="gap-1.5"
+            >
+              {syncingTemplates ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <RefreshCw size={14} />
+              )}
+              Sincronizar
+            </Button>
+          </div>
+          <CardDescription className="text-xs">
+            Sincronize os templates aprovados da Meta para usar nos disparos e fluxos.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+
       {/* Header with refresh */}
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium text-muted-foreground">Métricas gerais</h3>
