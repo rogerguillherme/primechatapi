@@ -2256,7 +2256,7 @@ export default function WhatsAppApi() {
         </TabsContent>
 
         {/* ── Chat Tab — full height, no padding */}
-        <TabsContent value="chat" className="flex-1 flex flex-col m-0 p-0">
+        <TabsContent value="chat" className="flex-1 flex flex-col m-0 p-0 min-h-0">
           <CloudChatTab />
         </TabsContent>
 
