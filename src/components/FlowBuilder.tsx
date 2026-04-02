@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNodesState, useEdgesState, type Node, type Edge, MarkerType } from "@xyflow/react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { useUserTemplates } from "@/hooks/use-user-templates";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -613,7 +614,9 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
         const { error } = await supabase.from("flows").update({ name, description: description || null }).eq("id", flowId);
         if (error) throw error;
       } else {
-        const { data, error } = await supabase.from("flows").insert({ name, description: description || null }).select("id").single();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("Usuário não autenticado");
+        const { data, error } = await supabase.from("flows").insert({ name, description: description || null, user_id: user.id }).select("id").single();
         if (error) throw error;
         flowId = data.id;
       }

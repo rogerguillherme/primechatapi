@@ -194,6 +194,40 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Step 5: Also create/update whatsapp_accounts so number is available in broadcasts
+    const { data: existingAccount } = await adminClient
+      .from("whatsapp_accounts")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("phone_number_id", phoneNumberId)
+      .maybeSingle();
+
+    if (existingAccount) {
+      await adminClient
+        .from("whatsapp_accounts")
+        .update({
+          access_token: accessToken,
+          business_account_id: wabaId,
+          name: phoneNumber || "WhatsApp",
+        })
+        .eq("id", existingAccount.id);
+    } else {
+      // Check if user already has accounts to decide is_default
+      const { data: existingAccounts } = await adminClient
+        .from("whatsapp_accounts")
+        .select("id")
+        .eq("user_id", userId);
+
+      await adminClient.from("whatsapp_accounts").insert({
+        user_id: userId,
+        name: phoneNumber || "WhatsApp",
+        phone_number_id: phoneNumberId,
+        business_account_id: wabaId,
+        access_token: accessToken,
+        is_default: !existingAccounts || existingAccounts.length === 0,
+      });
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
