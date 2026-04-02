@@ -67,7 +67,16 @@ export default function MetaConnect() {
           const { data, error } = await supabase.functions.invoke("meta-oauth-callback", {
             body: { code, redirect_uri: REDIRECT_URI },
           });
-          if (error) throw error;
+
+          if (error) {
+            const errorPayload =
+              typeof (error as any)?.context?.json === "function"
+                ? await (error as any).context.json().catch(() => null)
+                : null;
+
+            throw new Error(errorPayload?.error || error.message || "Erro ao conectar WhatsApp");
+          }
+
           if (data?.error) throw new Error(data.error);
 
           toast.success(`WhatsApp conectado! Número: ${data.phone_number}`);
