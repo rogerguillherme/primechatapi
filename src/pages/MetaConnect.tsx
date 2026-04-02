@@ -81,6 +81,17 @@ export default function MetaConnect() {
 
           toast.success(`WhatsApp conectado! Número: ${data.phone_number}`);
           queryClient.invalidateQueries({ queryKey: ["meta-connections"] });
+          queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
+
+          // Auto-sync templates after OAuth connection
+          try {
+            await supabase.functions.invoke("whatsapp-sync-templates", { body: {} });
+            toast.success("Templates sincronizados automaticamente!");
+            queryClient.invalidateQueries({ queryKey: ["user-templates"] });
+          } catch {
+            // Non-blocking - templates can be synced later
+            console.warn("Auto template sync failed, user can sync manually");
+          }
         } catch (err: any) {
           console.error("OAuth callback error:", err);
           toast.error(err.message || "Erro ao conectar WhatsApp");

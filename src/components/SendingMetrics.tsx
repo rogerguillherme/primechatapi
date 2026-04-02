@@ -1,18 +1,20 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { WhatsAppLimits } from "./WhatsAppLimits";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Send, CheckCheck, Eye, Inbox, RefreshCw, ChevronDown, ChevronRight, MessageCircle,
+  FileText, Loader2, CheckCircle2, AlertCircle,
 } from "lucide-react";
 import { useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
+import { toast } from "sonner";
 
 interface BroadcastGroup {
   key: string;
@@ -38,6 +40,7 @@ export function SendingMetrics() {
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [syncingTemplates, setSyncingTemplates] = useState(false);
   const { accounts } = useWhatsAppAccounts();
 
   const handleRefresh = () => {
@@ -45,7 +48,30 @@ export function SendingMetrics() {
     queryClient.invalidateQueries({ queryKey: ["sending-metrics-summary"] });
     queryClient.invalidateQueries({ queryKey: ["sending-metrics-dispatches"] });
     queryClient.invalidateQueries({ queryKey: ["sending-metrics-by-account"] });
+    queryClient.invalidateQueries({ queryKey: ["template-sync-stats"] });
     setTimeout(() => setRefreshing(false), 800);
+  };
+
+  const handleSyncTemplates = async () => {
+    setSyncingTemplates(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("whatsapp-sync-templates", { body: {} });
+      if (error) throw error;
+      const results = data?.results || [];
+      const totalSynced = results.reduce((acc: number, r: any) => acc + (r.synced || 0), 0);
+      const errors = results.filter((r: any) => r.error);
+      if (errors.length > 0) {
+        toast.error(`Erro em ${errors.length} conta(s): ${errors[0].error}`);
+      } else {
+        toast.success(`${totalSynced} template(s) sincronizado(s)!`);
+      }
+      queryClient.invalidateQueries({ queryKey: ["user-templates"] });
+      queryClient.invalidateQueries({ queryKey: ["template-sync-stats"] });
+    } catch (err: any) {
+      toast.error(`Erro ao sincronizar: ${err.message}`);
+    } finally {
+      setSyncingTemplates(false);
+    }
   };
 
   const { data: stats, isLoading } = useQuery({
@@ -161,6 +187,35 @@ export function SendingMetrics() {
     <div className="space-y-4">
       {/* WhatsApp Limits */}
       <WhatsAppLimits />
+
+      {/* Template Sync */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <FileText size={16} /> Templates da Meta
+            </CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSyncTemplates}
+              disabled={syncingTemplates}
+              className="gap-1.5"
+            >
+              {syncingTemplates ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <RefreshCw size={14} />
+              )}
+              Sincronizar
+            </Button>
+          </div>
+          <CardDescription className="text-xs">
+            Sincronize os templates aprovados da Meta para usar nos disparos e fluxos.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+
       {/* Header with refresh */}
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium text-muted-foreground">Métricas gerais</h3>
