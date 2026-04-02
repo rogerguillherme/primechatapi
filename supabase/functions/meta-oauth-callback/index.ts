@@ -122,15 +122,36 @@ Deno.serve(async (req) => {
     );
     const phonesData = await phonesRes.json();
 
-    if (phonesData?.data?.length > 0) {
-      phoneNumberId = phonesData.data[0].id;
-      phoneNumber = phonesData.data[0].display_phone_number;
-    } else {
-      return new Response(
-        JSON.stringify({ error: "Nenhum número de telefone encontrado na conta WhatsApp Business." }),
-        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    let phoneRecord: any = Array.isArray(phonesData?.data) ? phonesData.data[0] : null;
+
+    if (!phoneRecord) {
+      const wabaDetailsRes = await fetch(
+        `https://graph.facebook.com/v19.0/${wabaId}?fields=phone_numbers{id,display_phone_number,verified_name}&access_token=${accessToken}`
       );
+      const wabaDetailsData = await wabaDetailsRes.json();
+
+      phoneRecord = Array.isArray(wabaDetailsData?.phone_numbers?.data)
+        ? wabaDetailsData.phone_numbers.data[0]
+        : Array.isArray(wabaDetailsData?.phone_numbers)
+          ? wabaDetailsData.phone_numbers[0]
+          : null;
+
+      if (!phoneRecord) {
+        console.error("Phone number lookup failed:", JSON.stringify({ wabaId, phonesData, wabaDetailsData }));
+        return new Response(
+          JSON.stringify({
+            error:
+              phonesData?.error?.message ||
+              wabaDetailsData?.error?.message ||
+              "Nenhum número de telefone encontrado na conta WhatsApp Business.",
+          }),
+          { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
+
+    phoneNumberId = phoneRecord.id;
+    phoneNumber = phoneRecord.display_phone_number ?? "Não informado";
 
     // Step 4: Save connection using service role (adminClient already created above)
 
