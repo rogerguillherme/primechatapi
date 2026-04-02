@@ -40,6 +40,7 @@ export function SendingMetrics() {
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [syncingTemplates, setSyncingTemplates] = useState(false);
   const { accounts } = useWhatsAppAccounts();
 
   const handleRefresh = () => {
@@ -47,7 +48,30 @@ export function SendingMetrics() {
     queryClient.invalidateQueries({ queryKey: ["sending-metrics-summary"] });
     queryClient.invalidateQueries({ queryKey: ["sending-metrics-dispatches"] });
     queryClient.invalidateQueries({ queryKey: ["sending-metrics-by-account"] });
+    queryClient.invalidateQueries({ queryKey: ["template-sync-stats"] });
     setTimeout(() => setRefreshing(false), 800);
+  };
+
+  const handleSyncTemplates = async () => {
+    setSyncingTemplates(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("whatsapp-sync-templates", { body: {} });
+      if (error) throw error;
+      const results = data?.results || [];
+      const totalSynced = results.reduce((acc: number, r: any) => acc + (r.synced || 0), 0);
+      const errors = results.filter((r: any) => r.error);
+      if (errors.length > 0) {
+        toast.error(`Erro em ${errors.length} conta(s): ${errors[0].error}`);
+      } else {
+        toast.success(`${totalSynced} template(s) sincronizado(s)!`);
+      }
+      queryClient.invalidateQueries({ queryKey: ["user-templates"] });
+      queryClient.invalidateQueries({ queryKey: ["template-sync-stats"] });
+    } catch (err: any) {
+      toast.error(`Erro ao sincronizar: ${err.message}`);
+    } finally {
+      setSyncingTemplates(false);
+    }
   };
 
   const { data: stats, isLoading } = useQuery({
