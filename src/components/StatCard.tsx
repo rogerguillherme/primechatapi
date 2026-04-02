@@ -13,7 +13,7 @@ interface StatCardProps {
 export function StatCard({ title, value, icon: Icon, trend, className, accentColor }: StatCardProps) {
   return (
     <div className={cn(
-      "relative overflow-hidden glass-card rounded-xl p-5 hover:glass-card-hover transition-all duration-300 group cursor-default",
+      "relative overflow-hidden bg-card rounded-xl p-5 shadow-card hover:shadow-card-hover transition-all duration-300 border border-border group",
       className
     )}>
       {/* Subtle gradient accent at top */}
