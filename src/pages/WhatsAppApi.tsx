@@ -1573,6 +1573,20 @@ export default function WhatsAppApi() {
     setIsAddingAccount(false);
   };
 
+  const handleMetaOAuth = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke("meta-oauth-url");
+      if (error) throw error;
+      if (data?.url) {
+        window.location.href = data.url;
+      } else {
+        toast.error("Não foi possível gerar a URL de autenticação.");
+      }
+    } catch (err: any) {
+      toast.error(`Erro ao conectar com Meta: ${err.message}`);
+    }
+  };
+
   const startEditing = (account: any) => {
     setEditingAccount(account);
     setAccountName(account.name);
