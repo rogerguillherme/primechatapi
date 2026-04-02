@@ -41,13 +41,8 @@ function AppRoutes() {
         path="/"
         element={
           <ProtectedRoute>
-            <div className="min-h-screen flex flex-col">
-              <AppHeader />
-              <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-7xl mx-auto w-full">
-                <WhatsAppApi />
-              </main>
-              <HelpChatBubble />
-            </div>
+            <WhatsAppApi />
+            <HelpChatBubble />
           </ProtectedRoute>
         }
       />
