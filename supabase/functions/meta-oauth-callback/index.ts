@@ -13,7 +13,6 @@ Deno.serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const metaAppId = Deno.env.get("META_APP_ID")!;
     const metaAppSecret = Deno.env.get("META_APP_SECRET")!;
@@ -85,7 +84,7 @@ Deno.serve(async (req) => {
 
     const granularScopes = debugData?.data?.granular_scopes || [];
     const whatsappScope = granularScopes.find(
-      (s: any) => s.permission === "whatsapp_business_management"
+      (s: any) => s.scope === "whatsapp_business_management"
     );
     const targetWabaIds = whatsappScope?.target_ids || [];
 
@@ -123,15 +122,36 @@ Deno.serve(async (req) => {
     );
     const phonesData = await phonesRes.json();
 
-    if (phonesData?.data?.length > 0) {
-      phoneNumberId = phonesData.data[0].id;
-      phoneNumber = phonesData.data[0].display_phone_number;
-    } else {
-      return new Response(
-        JSON.stringify({ error: "Nenhum número de telefone encontrado na conta WhatsApp Business." }),
-        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    let phoneRecord: any = Array.isArray(phonesData?.data) ? phonesData.data[0] : null;
+
+    if (!phoneRecord) {
+      const wabaDetailsRes = await fetch(
+        `https://graph.facebook.com/v19.0/${wabaId}?fields=phone_numbers{id,display_phone_number,verified_name}&access_token=${accessToken}`
       );
+      const wabaDetailsData = await wabaDetailsRes.json();
+
+      phoneRecord = Array.isArray(wabaDetailsData?.phone_numbers?.data)
+        ? wabaDetailsData.phone_numbers.data[0]
+        : Array.isArray(wabaDetailsData?.phone_numbers)
+          ? wabaDetailsData.phone_numbers[0]
+          : null;
+
+      if (!phoneRecord) {
+        console.error("Phone number lookup failed:", JSON.stringify({ wabaId, phonesData, wabaDetailsData }));
+        return new Response(
+          JSON.stringify({
+            error:
+              phonesData?.error?.message ||
+              wabaDetailsData?.error?.message ||
+              "Nenhum número de telefone encontrado na conta WhatsApp Business.",
+          }),
+          { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
+
+    phoneNumberId = phoneRecord.id;
+    phoneNumber = phoneRecord.display_phone_number ?? "Não informado";
 
     // Step 4: Save connection using service role (adminClient already created above)
 
@@ -144,7 +164,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (existing) {
-      await adminClient
+      const { error: updateError } = await adminClient
         .from("meta_connections")
         .update({
           meta_access_token: accessToken,
@@ -153,8 +173,13 @@ Deno.serve(async (req) => {
           status: "connected",
         })
         .eq("id", existing.id);
+
+      if (updateError) {
+        console.error("Failed to update meta connection:", updateError);
+        throw updateError;
+      }
     } else {
-      await adminClient.from("meta_connections").insert({
+      const { error: insertError } = await adminClient.from("meta_connections").insert({
         user_id: userId,
         meta_access_token: accessToken,
         waba_id: wabaId,
@@ -162,6 +187,11 @@ Deno.serve(async (req) => {
         phone_number: phoneNumber,
         status: "connected",
       });
+
+      if (insertError) {
+        console.error("Failed to insert meta connection:", insertError);
+        throw insertError;
+      }
     }
 
     return new Response(
@@ -173,9 +203,15 @@ Deno.serve(async (req) => {
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
+    const message = error instanceof Error
+      ? error.message
+      : typeof error === "object" && error !== null && "message" in error
+        ? String((error as { message: unknown }).message)
+        : "Erro interno no callback da Meta";
+
     console.error("Meta OAuth callback error:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
