@@ -23,6 +23,7 @@ interface Flow {
   description: string | null;
   active: boolean;
   created_at: string;
+  trigger_type?: string | null;
 }
 
 const defaultEdgeOptions = {
