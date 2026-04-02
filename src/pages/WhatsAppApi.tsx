@@ -1709,61 +1709,61 @@ export default function WhatsAppApi() {
     <div className="animate-fade-in">
       <Tabs defaultValue="config" className="flex min-h-[calc(100vh-4rem)] gap-0" orientation="vertical">
         {/* Sidebar */}
-        <div className="w-56 shrink-0 border-r border-border bg-card flex flex-col">
-          <div className="p-4 border-b border-border">
+        <div className="w-56 shrink-0 border-r border-sidebar-border gradient-header flex flex-col">
+          <div className="p-4 border-b border-sidebar-border">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                <MessageCircle size={16} className="text-primary" />
+              <div className="w-8 h-8 rounded-lg bg-whatsapp/20 flex items-center justify-center">
+                <MessageCircle size={16} className="text-whatsapp" />
               </div>
               <div>
-                <h1 className="text-sm font-display font-bold text-foreground">Prime Chat</h1>
-                <p className="text-[10px] text-muted-foreground leading-none">WhatsApp Cloud API</p>
+                <h1 className="text-sm font-display font-bold text-white">Prime Chat</h1>
+                <p className="text-[10px] text-white/50 leading-none">WhatsApp Cloud API</p>
               </div>
             </div>
           </div>
           <TabsList className="flex flex-col items-stretch bg-transparent h-auto p-2 gap-0.5">
-            <TabsTrigger value="config" className="justify-start rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm gap-2.5 text-sm px-3 py-2.5 transition-all">
+            <TabsTrigger value="config" className="justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all">
               <Key size={16} />
               Configuração
             </TabsTrigger>
-            <TabsTrigger value="webhook" className="justify-start rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm gap-2.5 text-sm px-3 py-2.5 transition-all">
+            <TabsTrigger value="webhook" className="justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all">
               <Webhook size={16} />
               Webhooks
             </TabsTrigger>
-            <TabsTrigger value="test" className="justify-start rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm gap-2.5 text-sm px-3 py-2.5 transition-all">
+            <TabsTrigger value="test" className="justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all">
               <Send size={16} />
               Teste
             </TabsTrigger>
-            <TabsTrigger value="broadcast" className="justify-start rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm gap-2.5 text-sm px-3 py-2.5 transition-all">
+            <TabsTrigger value="broadcast" className="justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all">
               <Package size={16} />
               Disparo
             </TabsTrigger>
-            <TabsTrigger value="chat" className="justify-start rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm gap-2.5 text-sm px-3 py-2.5 transition-all">
+            <TabsTrigger value="chat" className="justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all">
               <MessageCircle size={16} />
               Chat
             </TabsTrigger>
-            <TabsTrigger value="history" className="justify-start rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm gap-2.5 text-sm px-3 py-2.5 transition-all">
+            <TabsTrigger value="history" className="justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all">
               <BarChart3 size={16} />
               Histórico
             </TabsTrigger>
           </TabsList>
-          <div className="mt-auto border-t border-border p-2 space-y-0.5">
+          <div className="mt-auto border-t border-sidebar-border p-2 space-y-0.5">
             {isAdmin && (
               <>
-                <button onClick={() => navigate("/auth/meta/callback")} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                <button onClick={() => navigate("/auth/meta/callback")} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors">
                   <Plug size={16} /> Conexão Meta
                 </button>
-                <button onClick={() => navigate("/admin/users")} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                <button onClick={() => navigate("/admin/users")} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors">
                   <Users size={16} /> Usuários
                 </button>
               </>
             )}
             <div className="flex items-center justify-between px-3 py-2">
-              <span className="text-xs text-muted-foreground truncate">{user?.email}</span>
+              <span className="text-xs text-sidebar-foreground/50 truncate">{user?.email}</span>
             </div>
             <div className="flex items-center gap-1 px-1">
               <ThemeToggle collapsed={false} />
-              <Button variant="ghost" size="icon" onClick={signOut} className="h-8 w-8 text-muted-foreground hover:text-foreground">
+              <Button variant="ghost" size="icon" onClick={signOut} className="h-8 w-8 text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent">
                 <LogOut size={16} />
               </Button>
             </div>
