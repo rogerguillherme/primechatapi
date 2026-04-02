@@ -1295,7 +1295,7 @@ function CloudChatTab() {
   return (
     <>
       <ChatLabelsManager open={labelsDialogOpen} onOpenChange={setLabelsDialogOpen} />
-      <div className="flex h-full flex-1 overflow-hidden bg-card">
+      <div className="flex h-full flex-1 overflow-hidden bg-card min-h-0">
         {/* Contact list */}
         <div className={cn("w-[300px] flex flex-col border-r border-border", selectedLeadId ? "hidden md:flex" : "flex flex-1 md:flex-none md:w-[300px]")}>
           <div className="p-2.5 border-b border-border space-y-2">
@@ -1392,7 +1392,7 @@ function CloudChatTab() {
 
         {/* Chat area */}
         {selectedLeadId && selectedLead ? (
-          <div className="flex-1 flex flex-col">
+          <div className="flex-1 flex flex-col min-h-0">
             {/* Header */}
             <div className="px-3 py-2 flex items-center gap-2 border-b border-border bg-muted/30">
               <button onClick={() => setSelectedLeadId(null)} className="md:hidden p-1 rounded hover:bg-accent">
