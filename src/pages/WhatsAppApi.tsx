@@ -2207,7 +2207,7 @@ export default function WhatsAppApi() {
         </TabsContent>
 
         {/* ── Test Tab ── */}
-        <TabsContent value="test" className="space-y-4">
+        <TabsContent value="test" className="space-y-4 p-6 max-w-6xl">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><Send size={20} /> Enviar Mensagem de Teste</CardTitle>
