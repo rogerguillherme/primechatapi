@@ -12,8 +12,12 @@ import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
 import AdminUsers from "./pages/AdminUsers";
 import { Loader2 } from "lucide-react";
+import { createContext, useContext, useState } from "react";
 
 const queryClient = new QueryClient();
+
+const SidebarContext = createContext({ collapsed: false, setCollapsed: (_: boolean) => {} });
+export const useSidebarState = () => useContext(SidebarContext);
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();
@@ -34,11 +38,15 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
+  const { collapsed } = useSidebarState();
   return (
     <ProtectedRoute>
       <div className="min-h-screen flex">
         <AppSidebar />
-        <main className="flex-1 ml-[68px] lg:ml-64 transition-all duration-300">
+        <main
+          className="flex-1 transition-all duration-300"
+          style={{ marginLeft: collapsed ? 68 : 256 }}
+        >
           <div className="p-6 max-w-7xl mx-auto w-full">
             {children}
           </div>
@@ -61,18 +69,23 @@ function AppRoutes() {
   );
 }
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <AppRoutes />
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+const App = () => {
+  const [collapsed, setCollapsed] = useState(false);
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AuthProvider>
+            <SidebarContext.Provider value={{ collapsed, setCollapsed }}>
+              <AppRoutes />
+            </SidebarContext.Provider>
+          </AuthProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;
