@@ -1704,6 +1704,10 @@ export default function WhatsAppApi() {
               <BarChart3 size={14} />
               Histórico
             </TabsTrigger>
+            <TabsTrigger value="webhooks" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm gap-1.5 text-sm px-4 py-2.5 transition-all">
+              <Webhook size={14} />
+              Webhooks
+            </TabsTrigger>
           </TabsList>
         </div>
 
