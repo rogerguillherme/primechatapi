@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
 
     const granularScopes = debugData?.data?.granular_scopes || [];
     const whatsappScope = granularScopes.find(
-      (s: any) => s.permission === "whatsapp_business_management"
+      (s: any) => s.scope === "whatsapp_business_management"
     );
     const targetWabaIds = whatsappScope?.target_ids || [];
 
