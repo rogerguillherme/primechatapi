@@ -2014,6 +2014,8 @@ export default function WhatsAppApi() {
         <TabsContent value="history" className="space-y-4">
           <SendingMetrics />
         </TabsContent>
+          </div>
+        </div>
       </Tabs>
     </div>
   );
