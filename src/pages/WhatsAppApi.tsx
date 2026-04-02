@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -22,7 +24,7 @@ import {
   Phone, Key, Link2, Send, CheckCircle2, AlertCircle, Copy, ExternalLink,
   Package, MessageCircle, Search, FileText, Check, CheckCheck, Paperclip,
   Truck, Users, ArrowLeft, BarChart3, MoreVertical, Pencil, Trash2, Star,
-  KeyRound, ChevronDown, Webhook,
+  KeyRound, ChevronDown, Webhook, LogOut, Plug,
 } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
@@ -1456,8 +1458,24 @@ function CloudChatTab() {
    MAIN PAGE
    ══════════════════════════════════════════════════ */
 export default function WhatsAppApi() {
-  const { user, session } = useAuth();
+  const { user, session, signOut } = useAuth();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+
+  const { data: isAdmin } = useQuery({
+    queryKey: ["user-role", user?.id],
+    queryFn: async () => {
+      if (!user) return false;
+      const { data } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .eq("role", "admin")
+        .maybeSingle();
+      return !!data;
+    },
+    enabled: !!user,
+  });
   const [editingAccount, setEditingAccount] = useState<any | null>(null);
   const [isAddingAccount, setIsAddingAccount] = useState(false);
   const [accountName, setAccountName] = useState("");
@@ -1688,39 +1706,73 @@ export default function WhatsAppApi() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <PageHeader
-        title="WhatsApp Cloud API"
-        description="Gerencie sua integração com a API oficial do WhatsApp via Meta/Facebook"
-      />
-
-      <Tabs defaultValue="config" className="space-y-6">
-        <div className="bg-card rounded-xl border border-border shadow-card p-1.5">
-          <TabsList className="flex-wrap w-full bg-transparent gap-1 h-auto p-0">
-            <TabsTrigger value="config" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm text-sm px-4 py-2.5 transition-all">
+    <div className="animate-fade-in">
+      <Tabs defaultValue="config" className="flex min-h-[calc(100vh-4rem)] gap-0" orientation="vertical">
+        {/* Sidebar */}
+        <div className="w-56 shrink-0 border-r border-border bg-card flex flex-col">
+          <div className="p-4 border-b border-border">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                <MessageCircle size={16} className="text-primary" />
+              </div>
+              <div>
+                <h1 className="text-sm font-display font-bold text-foreground">Prime Chat</h1>
+                <p className="text-[10px] text-muted-foreground leading-none">WhatsApp Cloud API</p>
+              </div>
+            </div>
+          </div>
+          <TabsList className="flex flex-col items-stretch bg-transparent h-auto p-2 gap-0.5">
+            <TabsTrigger value="config" className="justify-start rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm gap-2.5 text-sm px-3 py-2.5 transition-all">
+              <Key size={16} />
               Configuração
             </TabsTrigger>
-            <TabsTrigger value="webhook" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm gap-1.5 text-sm px-4 py-2.5 transition-all">
-              <Webhook size={14} />
+            <TabsTrigger value="webhook" className="justify-start rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm gap-2.5 text-sm px-3 py-2.5 transition-all">
+              <Webhook size={16} />
               Webhooks
             </TabsTrigger>
-            <TabsTrigger value="test" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm text-sm px-4 py-2.5 transition-all">
+            <TabsTrigger value="test" className="justify-start rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm gap-2.5 text-sm px-3 py-2.5 transition-all">
+              <Send size={16} />
               Teste
             </TabsTrigger>
-            <TabsTrigger value="broadcast" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm gap-1.5 text-sm px-4 py-2.5 transition-all">
-              <Send size={14} />
+            <TabsTrigger value="broadcast" className="justify-start rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm gap-2.5 text-sm px-3 py-2.5 transition-all">
+              <Package size={16} />
               Disparo
             </TabsTrigger>
-            <TabsTrigger value="chat" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm gap-1.5 text-sm px-4 py-2.5 transition-all">
-              <MessageCircle size={14} />
+            <TabsTrigger value="chat" className="justify-start rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm gap-2.5 text-sm px-3 py-2.5 transition-all">
+              <MessageCircle size={16} />
               Chat
             </TabsTrigger>
-            <TabsTrigger value="history" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm gap-1.5 text-sm px-4 py-2.5 transition-all">
-              <BarChart3 size={14} />
+            <TabsTrigger value="history" className="justify-start rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm gap-2.5 text-sm px-3 py-2.5 transition-all">
+              <BarChart3 size={16} />
               Histórico
             </TabsTrigger>
           </TabsList>
+          <div className="mt-auto border-t border-border p-2 space-y-0.5">
+            {isAdmin && (
+              <>
+                <button onClick={() => navigate("/auth/meta/callback")} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                  <Plug size={16} /> Conexão Meta
+                </button>
+                <button onClick={() => navigate("/admin/users")} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                  <Users size={16} /> Usuários
+                </button>
+              </>
+            )}
+            <div className="flex items-center justify-between px-3 py-2">
+              <span className="text-xs text-muted-foreground truncate">{user?.email}</span>
+            </div>
+            <div className="flex items-center gap-1 px-1">
+              <ThemeToggle collapsed={false} />
+              <Button variant="ghost" size="icon" onClick={signOut} className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                <LogOut size={16} />
+              </Button>
+            </div>
+          </div>
         </div>
+
+        {/* Main content */}
+        <div className="flex-1 overflow-auto">
+          <div className="p-6 max-w-6xl">
 
         {/* ── Config Tab ── */}
         <TabsContent value="config" className="space-y-4">
@@ -1998,6 +2050,8 @@ export default function WhatsAppApi() {
         <TabsContent value="history" className="space-y-4">
           <SendingMetrics />
         </TabsContent>
+          </div>
+        </div>
       </Tabs>
     </div>
   );
