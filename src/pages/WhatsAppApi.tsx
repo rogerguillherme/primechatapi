@@ -1873,6 +1873,7 @@ export default function WhatsAppApi() {
                 </div>
               </CardContent>
             </Card>
+          )}
 
           {/* Webhook do WhatsApp Cloud API */}
           <Card>
