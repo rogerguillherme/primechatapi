@@ -1977,11 +1977,6 @@ export default function WhatsAppApi() {
         <TabsContent value="history" className="space-y-4">
           <SendingMetrics />
         </TabsContent>
-
-        {/* ── Webhooks Tab ── */}
-        <TabsContent value="webhooks" className="space-y-4">
-          <WebhookEndpoints />
-        </TabsContent>
       </Tabs>
     </div>
   );
