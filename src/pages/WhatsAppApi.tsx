@@ -1573,6 +1573,20 @@ export default function WhatsAppApi() {
     setIsAddingAccount(false);
   };
 
+  const handleMetaOAuth = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke("meta-oauth-url");
+      if (error) throw error;
+      if (data?.url) {
+        window.location.href = data.url;
+      } else {
+        toast.error("Não foi possível gerar a URL de autenticação.");
+      }
+    } catch (err: any) {
+      toast.error(`Erro ao conectar com Meta: ${err.message}`);
+    }
+  };
+
   const startEditing = (account: any) => {
     setEditingAccount(account);
     setAccountName(account.name);
@@ -1726,9 +1740,21 @@ export default function WhatsAppApi() {
                     </a>
                   </CardDescription>
                 </div>
-                <Button onClick={() => { resetForm(); setIsAddingAccount(true); }} size="sm" className="gap-1.5">
-                  <span className="text-lg leading-none">+</span> Nova Conta
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="sm" className="gap-1.5">
+                      <span className="text-lg leading-none">+</span> Nova Conta <ChevronDown size={14} />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-52">
+                    <DropdownMenuItem onClick={() => { resetForm(); setIsAddingAccount(true); }} className="gap-2">
+                      <Key size={14} /> Manual (credenciais)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleMetaOAuth} className="gap-2">
+                      <ExternalLink size={14} /> Conectar via Meta OAuth
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </CardHeader>
             <CardContent>
@@ -1861,6 +1887,39 @@ export default function WhatsAppApi() {
                   <Input id="accessToken" type="password" placeholder="EAAxxxxxxx..." value={accessToken} onChange={(e) => setAccessToken(e.target.value)} />
                   <p className="text-xs text-muted-foreground">Use um token permanente do System User no Business Manager.</p>
                 </div>
+                {!editingAccount && (
+                  <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+                    <p className="text-sm font-medium flex items-center gap-2"><Link2 size={16} /> Webhook do WhatsApp</p>
+                    <p className="text-xs text-muted-foreground">Configure este webhook no App do Facebook para receber mensagens.</p>
+                    <div className="space-y-2">
+                      <Label>URL do Webhook (Callback URL)</Label>
+                      <div className="flex gap-2">
+                        <Input value={webhookUrl} readOnly className="font-mono text-xs" />
+                        <Button variant="outline" size="icon" onClick={handleCopyWebhook}><Copy size={16} /></Button>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="verifyToken">Verify Token</Label>
+                      <div className="flex gap-2">
+                        <Input id="verifyToken" placeholder="Defina um token de verificação" value={verifyToken} onChange={(e) => setVerifyToken(e.target.value)} />
+                        <Button onClick={handleSaveVerifyToken} disabled={isSavingToken} variant="default" size="sm" className="shrink-0">
+                          {isSavingToken ? "Salvando..." : <><CheckCircle2 size={16} /> Salvar</>}
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">Use este valor no campo "Verify Token" ao configurar o webhook no Facebook.</p>
+                    </div>
+                    <div className="rounded-lg border bg-muted/50 p-3 space-y-1">
+                      <p className="text-xs font-medium">Passo a passo:</p>
+                      <ol className="text-xs text-muted-foreground space-y-0.5 list-decimal list-inside">
+                        <li>Acesse seu App no Facebook Developers</li>
+                        <li>Vá em WhatsApp → Configuração</li>
+                        <li>Em "Webhook", clique em "Editar"</li>
+                        <li>Cole a URL do webhook e o Verify Token</li>
+                        <li>Inscreva-se no campo <code className="bg-muted px-1 rounded">messages</code></li>
+                      </ol>
+                    </div>
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
                   <Checkbox id="isDefault" checked={isDefault} onCheckedChange={(v) => setIsDefault(!!v)} />
                   <Label htmlFor="isDefault" className="text-sm cursor-pointer">Definir como conta padrão</Label>
@@ -1874,44 +1933,6 @@ export default function WhatsAppApi() {
               </CardContent>
             </Card>
           )}
-
-          {/* Webhook do WhatsApp Cloud API */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Link2 size={20} /> Webhook do WhatsApp</CardTitle>
-              <CardDescription>Configure este webhook no seu App do Facebook Developers para receber mensagens.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>URL do Webhook (Callback URL)</Label>
-                <div className="flex gap-2">
-                  <Input value={webhookUrl} readOnly className="font-mono text-xs" />
-                  <Button variant="outline" size="icon" onClick={handleCopyWebhook}><Copy size={16} /></Button>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="verifyToken">Verify Token</Label>
-                <div className="flex gap-2">
-                  <Input id="verifyToken" placeholder="Defina um token de verificação" value={verifyToken} onChange={(e) => setVerifyToken(e.target.value)} />
-                  <Button onClick={handleSaveVerifyToken} disabled={isSavingToken} variant="default" size="sm" className="shrink-0">
-                    {isSavingToken ? "Salvando..." : <><CheckCircle2 size={16} /> Salvar</>}
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">Use este mesmo valor no campo "Verify Token" ao configurar o webhook no Facebook.</p>
-              </div>
-              <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
-                <p className="text-sm font-medium">Passo a passo:</p>
-                <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
-                  <li>Acesse seu App no Facebook Developers</li>
-                  <li>Vá em WhatsApp → Configuração</li>
-                  <li>Em "Webhook", clique em "Editar"</li>
-                  <li>Cole a URL do webhook acima</li>
-                  <li>Cole o Verify Token definido acima</li>
-                  <li>Inscreva-se no campo <code className="bg-muted px-1 rounded">messages</code></li>
-                </ol>
-              </div>
-            </CardContent>
-          </Card>
         </TabsContent>
 
         {/* ── Webhook Tab (Event Webhooks) ── */}
