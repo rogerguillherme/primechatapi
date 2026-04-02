@@ -1295,7 +1295,7 @@ function CloudChatTab() {
   return (
     <>
       <ChatLabelsManager open={labelsDialogOpen} onOpenChange={setLabelsDialogOpen} />
-      <div className="flex h-full flex-1 overflow-hidden bg-card">
+      <div className="flex h-full flex-1 overflow-hidden bg-card min-h-0">
         {/* Contact list */}
         <div className={cn("w-[300px] flex flex-col border-r border-border", selectedLeadId ? "hidden md:flex" : "flex flex-1 md:flex-none md:w-[300px]")}>
           <div className="p-2.5 border-b border-border space-y-2">
