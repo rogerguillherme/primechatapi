@@ -1726,9 +1726,21 @@ export default function WhatsAppApi() {
                     </a>
                   </CardDescription>
                 </div>
-                <Button onClick={() => { resetForm(); setIsAddingAccount(true); }} size="sm" className="gap-1.5">
-                  <span className="text-lg leading-none">+</span> Nova Conta
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="sm" className="gap-1.5">
+                      <span className="text-lg leading-none">+</span> Nova Conta <ChevronDown size={14} />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-52">
+                    <DropdownMenuItem onClick={() => { resetForm(); setIsAddingAccount(true); }} className="gap-2">
+                      <Key size={14} /> Manual (credenciais)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleMetaOAuth} className="gap-2">
+                      <ExternalLink size={14} /> Conectar via Meta OAuth
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </CardHeader>
             <CardContent>
