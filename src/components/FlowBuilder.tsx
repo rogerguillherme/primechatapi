@@ -23,6 +23,7 @@ interface Flow {
   description: string | null;
   active: boolean;
   created_at: string;
+  trigger_type?: string | null;
 }
 
 const defaultEdgeOptions = {
@@ -364,7 +365,7 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
         .order("step_order");
 
       const steps = data || [];
-      const triggerNode = createTriggerNode();
+      const triggerNode = { ...createTriggerNode(), data: { trigger_type: flow.trigger_type || "" } };
 
       // Build nodes
       const stepNodes: Node[] = steps.map((s: any, i: number) => {
@@ -610,13 +611,17 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
 
       let flowId = flow?.id;
 
+      // Extract trigger_type from the trigger node
+      const triggerNode = nodes.find((n) => n.id === "trigger");
+      const triggerType = (triggerNode?.data?.trigger_type as string) || null;
+
       if (flowId) {
-        const { error } = await supabase.from("flows").update({ name, description: description || null }).eq("id", flowId);
+        const { error } = await supabase.from("flows").update({ name, description: description || null, trigger_type: triggerType }).eq("id", flowId);
         if (error) throw error;
       } else {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error("Usuário não autenticado");
-        const { data, error } = await supabase.from("flows").insert({ name, description: description || null, user_id: user.id }).select("id").single();
+        const { data, error } = await supabase.from("flows").insert({ name, description: description || null, user_id: user.id, trigger_type: triggerType }).select("id").single();
         if (error) throw error;
         flowId = data.id;
       }

@@ -22,7 +22,7 @@ import {
   Phone, Key, Link2, Send, CheckCircle2, AlertCircle, Copy, ExternalLink,
   Package, MessageCircle, Search, FileText, Check, CheckCheck, Paperclip,
   Truck, Users, ArrowLeft, BarChart3, MoreVertical, Pencil, Trash2, Star,
-  KeyRound, ChevronDown,
+  KeyRound, ChevronDown, Webhook,
 } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
@@ -32,6 +32,7 @@ import { FlowBuilder } from "@/components/FlowBuilder";
 import { TemplateManager } from "@/components/TemplateManager";
 import { BroadcastQueue } from "@/components/BroadcastQueue";
 import { SendingMetrics } from "@/components/SendingMetrics";
+import { WebhookEndpoints } from "@/components/WebhookEndpoints";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 import { useUserTemplates } from "@/hooks/use-user-templates";
 import { AccountSelector } from "@/components/AccountSelector";
@@ -1703,6 +1704,10 @@ export default function WhatsAppApi() {
               <BarChart3 size={14} />
               Histórico
             </TabsTrigger>
+            <TabsTrigger value="webhooks" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm gap-1.5 text-sm px-4 py-2.5 transition-all">
+              <Webhook size={14} />
+              Webhooks
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -1971,6 +1976,11 @@ export default function WhatsAppApi() {
         {/* ── History Tab ── */}
         <TabsContent value="history" className="space-y-4">
           <SendingMetrics />
+        </TabsContent>
+
+        {/* ── Webhooks Tab ── */}
+        <TabsContent value="webhooks" className="space-y-4">
+          <WebhookEndpoints />
         </TabsContent>
       </Tabs>
     </div>
