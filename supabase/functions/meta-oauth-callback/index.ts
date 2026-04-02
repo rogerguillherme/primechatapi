@@ -133,8 +133,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Step 4: Save connection using service role (to bypass RLS for insert)
-    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+    // Step 4: Save connection using service role (adminClient already created above)
 
     // Upsert: update existing or create new
     const { data: existing } = await adminClient
