@@ -1986,9 +1986,9 @@ export default function WhatsAppApi() {
         </div>
 
         {/* Main content */}
-        <div className="flex-1 overflow-auto flex flex-col">
+        <div className="flex-1 overflow-hidden flex flex-col min-h-0">
           {/* Non-chat tabs get padding */}
-          <TabsContent value="config" className="space-y-4 p-6 max-w-6xl flex-1">
+          <TabsContent value="config" className="space-y-4 p-6 max-w-6xl flex-1 overflow-auto">
 
           {/* Existing accounts list */}
           <Card>
@@ -2202,12 +2202,12 @@ export default function WhatsAppApi() {
         </TabsContent>
 
         {/* ── Webhook Tab (Event Webhooks) ── */}
-        <TabsContent value="webhook" className="space-y-4 p-6 max-w-6xl">
+        <TabsContent value="webhook" className="space-y-4 p-6 max-w-6xl overflow-auto">
           <WebhookEndpoints />
         </TabsContent>
 
         {/* ── Test Tab ── */}
-        <TabsContent value="test" className="space-y-4 p-6 max-w-6xl">
+        <TabsContent value="test" className="space-y-4 p-6 max-w-6xl overflow-auto">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><Send size={20} /> Enviar Mensagem de Teste</CardTitle>
@@ -2251,17 +2251,17 @@ export default function WhatsAppApi() {
         </TabsContent>
 
         {/* ── Broadcast Tab ── */}
-        <TabsContent value="broadcast" className="space-y-4 p-6 max-w-6xl">
+        <TabsContent value="broadcast" className="space-y-4 p-6 max-w-6xl overflow-auto">
           <BroadcastTab />
         </TabsContent>
 
         {/* ── Chat Tab — full height, no padding */}
-        <TabsContent value="chat" className="flex-1 flex flex-col m-0 p-0">
+        <TabsContent value="chat" className="flex-1 flex flex-col m-0 p-0 min-h-0">
           <CloudChatTab />
         </TabsContent>
 
         {/* ── History Tab ── */}
-        <TabsContent value="history" className="space-y-4 p-6 max-w-6xl">
+        <TabsContent value="history" className="space-y-4 p-6 max-w-6xl overflow-auto">
           <SendingMetrics />
         </TabsContent>
         </div>
