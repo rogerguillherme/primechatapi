@@ -1686,8 +1686,9 @@ export default function WhatsAppApi() {
             <TabsTrigger value="config" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm text-sm px-4 py-2.5 transition-all">
               Configuração
             </TabsTrigger>
-            <TabsTrigger value="webhook" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm text-sm px-4 py-2.5 transition-all">
-              Webhook
+            <TabsTrigger value="webhook" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm gap-1.5 text-sm px-4 py-2.5 transition-all">
+              <Webhook size={14} />
+              Webhooks
             </TabsTrigger>
             <TabsTrigger value="test" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm text-sm px-4 py-2.5 transition-all">
               Teste
@@ -1703,10 +1704,6 @@ export default function WhatsAppApi() {
             <TabsTrigger value="history" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm gap-1.5 text-sm px-4 py-2.5 transition-all">
               <BarChart3 size={14} />
               Histórico
-            </TabsTrigger>
-            <TabsTrigger value="webhooks" className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm gap-1.5 text-sm px-4 py-2.5 transition-all">
-              <Webhook size={14} />
-              Webhooks
             </TabsTrigger>
           </TabsList>
         </div>
@@ -1877,13 +1874,11 @@ export default function WhatsAppApi() {
               </CardContent>
             </Card>
           )}
-        </TabsContent>
 
-        {/* ── Webhook Tab ── */}
-        <TabsContent value="webhook" className="space-y-4">
+          {/* Webhook do WhatsApp Cloud API */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Link2 size={20} /> Configuração do Webhook</CardTitle>
+              <CardTitle className="flex items-center gap-2"><Link2 size={20} /> Webhook do WhatsApp</CardTitle>
               <CardDescription>Configure este webhook no seu App do Facebook Developers para receber mensagens.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1902,7 +1897,7 @@ export default function WhatsAppApi() {
                     {isSavingToken ? "Salvando..." : <><CheckCircle2 size={16} /> Salvar</>}
                   </Button>
                 </div>
-                <p className="text-xs text-muted-foreground">Use este mesmo valor no campo "Verify Token" ao configurar o webhook no Facebook. Clique em Salvar para aplicar.</p>
+                <p className="text-xs text-muted-foreground">Use este mesmo valor no campo "Verify Token" ao configurar o webhook no Facebook.</p>
               </div>
               <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
                 <p className="text-sm font-medium">Passo a passo:</p>
@@ -1917,6 +1912,11 @@ export default function WhatsAppApi() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ── Webhook Tab (Event Webhooks) ── */}
+        <TabsContent value="webhook" className="space-y-4">
+          <WebhookEndpoints />
         </TabsContent>
 
         {/* ── Test Tab ── */}
@@ -1976,11 +1976,6 @@ export default function WhatsAppApi() {
         {/* ── History Tab ── */}
         <TabsContent value="history" className="space-y-4">
           <SendingMetrics />
-        </TabsContent>
-
-        {/* ── Webhooks Tab ── */}
-        <TabsContent value="webhooks" className="space-y-4">
-          <WebhookEndpoints />
         </TabsContent>
       </Tabs>
     </div>
