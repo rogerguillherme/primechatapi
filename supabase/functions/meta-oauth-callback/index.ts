@@ -195,10 +195,10 @@ Deno.serve(async (req) => {
     }
 
     // Step 5: Also create/update whatsapp_accounts so number is available in broadcasts
+    // Search by phone_number_id only (not user_id) to handle cases where account was created by another admin
     const { data: existingAccount } = await adminClient
       .from("whatsapp_accounts")
       .select("id")
-      .eq("user_id", userId)
       .eq("phone_number_id", phoneNumberId)
       .maybeSingle();
 
@@ -209,6 +209,7 @@ Deno.serve(async (req) => {
           access_token: accessToken,
           business_account_id: wabaId,
           name: phoneNumber || "WhatsApp",
+          user_id: userId,
         })
         .eq("id", existingAccount.id);
     } else {
