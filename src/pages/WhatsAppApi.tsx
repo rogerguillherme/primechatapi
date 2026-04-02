@@ -1897,7 +1897,7 @@ export default function WhatsAppApi() {
     }
   };
 
-  const activeTab = typeof document !== "undefined" ? undefined : "config";
+  
 
   return (
     <div className="animate-fade-in">
