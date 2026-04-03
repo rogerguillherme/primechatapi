@@ -15,8 +15,6 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-
-
     const authHeader =
       req.headers.get("authorization") ??
       req.headers.get("Authorization") ??
@@ -30,13 +28,11 @@ Deno.serve(async (req) => {
     }
 
     const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
     const { data: { user }, error: userError } = await adminClient.auth.getUser(token);
 
     if (userError || !user) {
-      console.error("Auth error:", userError?.message);
       return new Response(JSON.stringify({ error: "Não autenticado" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -47,7 +43,7 @@ Deno.serve(async (req) => {
 
     const { data: accounts, error } = await adminClient
       .from("whatsapp_accounts")
-      .select("id, name, phone_number_id, access_token, is_default")
+      .select("id, name, phone_number_id, access_token, is_default, business_account_id")
       .eq("user_id", userId)
       .order("is_default", { ascending: false });
 
@@ -58,12 +54,32 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Fetch active meta_connections to use their (potentially fresher) tokens
+    const { data: metaConns } = await adminClient
+      .from("meta_connections")
+      .select("waba_id, meta_access_token")
+      .eq("user_id", userId)
+      .eq("status", "connected");
+
+    // Build a map of waba_id -> meta_access_token
+    const metaTokenByWaba: Record<string, string> = {};
+    if (metaConns) {
+      for (const mc of metaConns) {
+        metaTokenByWaba[mc.waba_id] = mc.meta_access_token;
+      }
+    }
+
     const limits = await Promise.all(
       accounts.map(async (acc) => {
         try {
+          // Prefer meta_connections token over stored access_token
+          const effectiveToken =
+            (acc.business_account_id && metaTokenByWaba[acc.business_account_id]) ||
+            acc.access_token;
+
           const url = `https://graph.facebook.com/v21.0/${acc.phone_number_id}?fields=messaging_limit_tier,quality_rating,display_phone_number,verified_name`;
           const res = await fetch(url, {
-            headers: { Authorization: `Bearer ${acc.access_token}` },
+            headers: { Authorization: `Bearer ${effectiveToken}` },
           });
           const data = await res.json();
           console.log(`WhatsApp limits for ${acc.name}:`, JSON.stringify(data));
