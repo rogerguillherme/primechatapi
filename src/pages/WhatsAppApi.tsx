@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 import { FlowBuilder } from "@/components/FlowBuilder";
 import { TemplateManager } from "@/components/TemplateManager";
 import { BroadcastQueue } from "@/components/BroadcastQueue";
+import { ContactImporter } from "@/components/ContactImporter";
 import { SendingMetrics } from "@/components/SendingMetrics";
 import { WebhookEndpoints } from "@/components/WebhookEndpoints";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
