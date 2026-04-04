@@ -208,6 +208,7 @@ Deno.serve(async (req) => {
     const waMessageId = waData.messages?.[0]?.id || null;
 
     if (lead_id) {
+      const activityAt = new Date().toISOString();
       let contentText = message || "";
       if (template_name) {
         // Try to get the real template content from DB
@@ -231,6 +232,15 @@ Deno.serve(async (req) => {
         zapi_message_id: waMessageId, status: "sent",
         account_id: account_id || null,
       });
+
+      const { error: leadUpdateError } = await supabase
+        .from("leads")
+        .update({ last_outbound_at: activityAt, updated_at: activityAt })
+        .eq("id", lead_id);
+
+      if (leadUpdateError) {
+        console.error("Failed to update lead outbound activity:", leadUpdateError);
+      }
     }
 
     return new Response(

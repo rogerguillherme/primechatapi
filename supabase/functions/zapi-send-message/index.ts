@@ -96,6 +96,7 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    const activityAt = new Date().toISOString();
     const contentText = message || (sentMediaType === "audio" ? "🎤 Áudio" : sentMediaType === "image" ? "📷 Imagem" : sentMediaType === "video" ? "🎥 Vídeo" : "📎 Arquivo");
 
     await supabase.from("chat_messages").insert({
@@ -107,6 +108,15 @@ Deno.serve(async (req) => {
       zapi_message_id: zapiData.messageId || null,
       status: "sent",
     });
+
+    const { error: leadUpdateError } = await supabase
+      .from("leads")
+      .update({ last_outbound_at: activityAt, updated_at: activityAt })
+      .eq("id", lead_id);
+
+    if (leadUpdateError) {
+      console.error("Failed to update lead outbound activity:", leadUpdateError);
+    }
 
     return new Response(
       JSON.stringify({ success: true, messageId: zapiData.messageId }),
