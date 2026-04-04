@@ -339,7 +339,7 @@ function AiFlowChat({ onGenerate }: { onGenerate: (steps: any[]) => void }) {
 }
 
 /* ── Flow Editor View (Visual Canvas) ── */
-function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => void }) {
+function FlowEditorView({ flow, onBack, initialTriggerType }: { flow: Flow | null; onBack: () => void; initialTriggerType?: string }) {
   const queryClient = useQueryClient();
   const draftKey = useMemo(() => `${FLOW_DRAFT_STORAGE_PREFIX}${flow?.id ?? "new"}`, [flow?.id]);
   const initialDraft = useMemo(() => readFlowDraft(draftKey), [draftKey]);
@@ -472,7 +472,11 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
     if (!flow) {
       setName("");
       setDescription("");
-      setNodes([createTriggerNode()]);
+      const trigger = createTriggerNode();
+      if (initialTriggerType) {
+        trigger.data = { ...trigger.data, trigger_type: initialTriggerType };
+      }
+      setNodes([trigger]);
       setEdges([]);
       setIsLoaded(true);
       return;
@@ -701,11 +705,19 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
 }
 
 /* ── Main FlowBuilder Component ── */
-export function FlowBuilder() {
-  const [editingFlow, setEditingFlow] = useState<Flow | null | undefined>(undefined);
+export function FlowBuilder({ initialTriggerType }: { initialTriggerType?: string }) {
+  const [editingFlow, setEditingFlow] = useState<Flow | null | undefined>(
+    initialTriggerType ? null : undefined
+  );
 
   if (editingFlow !== undefined) {
-    return <FlowEditorView flow={editingFlow} onBack={() => setEditingFlow(undefined)} />;
+    return (
+      <FlowEditorView
+        flow={editingFlow}
+        onBack={() => setEditingFlow(undefined)}
+        initialTriggerType={!editingFlow ? initialTriggerType : undefined}
+      />
+    );
   }
 
   return <FlowListView onEdit={(flow) => setEditingFlow(flow)} />;

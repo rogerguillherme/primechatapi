@@ -1686,6 +1686,13 @@ export default function WhatsAppApi() {
   const [isDefault, setIsDefault] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [activeMainTab, setActiveMainTab] = useState("config");
+  const [flowTriggerType, setFlowTriggerType] = useState<string | undefined>(undefined);
+
+  const handleCreateFlowFromWebhook = useCallback((triggerType: string) => {
+    setFlowTriggerType(triggerType);
+    setActiveMainTab("flows");
+  }, []);
 
   const [verifyToken, setVerifyToken] = useState("");
   const [isSavingToken, setIsSavingToken] = useState(false);
@@ -1911,7 +1918,7 @@ export default function WhatsAppApi() {
 
   return (
     <div className="animate-fade-in">
-      <Tabs defaultValue="config" className="flex h-screen gap-0" orientation="vertical">
+      <Tabs value={activeMainTab} onValueChange={(v) => { setActiveMainTab(v); if (v !== "flows") setFlowTriggerType(undefined); }} className="flex h-screen gap-0" orientation="vertical">
         {/* Sidebar */}
         <div className={cn("shrink-0 border-r border-sidebar-border gradient-header flex flex-col transition-all duration-300", sidebarCollapsed ? "w-14" : "w-56")}>
           <div className="p-3 border-b border-sidebar-border flex items-center justify-between">
@@ -2241,7 +2248,7 @@ export default function WhatsAppApi() {
 
         {/* ── Webhook Tab (Event Webhooks) ── */}
         <TabsContent value="webhook" className="space-y-4 p-6 max-w-6xl overflow-auto">
-          <WebhookEndpoints />
+          <WebhookEndpoints onCreateFlow={handleCreateFlowFromWebhook} />
         </TabsContent>
 
         {/* ── Test Tab ── */}
@@ -2300,7 +2307,7 @@ export default function WhatsAppApi() {
 
         {/* ── Flows Tab ── */}
         <TabsContent value="flows" className="space-y-4 p-6 max-w-6xl overflow-auto">
-          <FlowBuilder />
+          <FlowBuilder key={flowTriggerType || "default"} initialTriggerType={flowTriggerType} />
         </TabsContent>
 
         {/* ── History Tab ── */}

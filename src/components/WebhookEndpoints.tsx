@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { GitBranch } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -31,7 +32,7 @@ function getWebhookUrl(token: string) {
   return `https://${projectId}.supabase.co/functions/v1/custom-webhook/${token}`;
 }
 
-export function WebhookEndpoints() {
+export function WebhookEndpoints({ onCreateFlow }: { onCreateFlow?: (triggerType: string) => void }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [sendingTest, setSendingTest] = useState<string | null>(null);
@@ -233,7 +234,18 @@ export function WebhookEndpoints() {
                             <Send size={12} />
                           )}
                           Teste
-                        </Button>
+                         </Button>
+                        {onCreateFlow && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onCreateFlow(evt.value)}
+                            className="gap-1 text-xs"
+                          >
+                            <GitBranch size={12} />
+                            Criar Fluxo
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon"
@@ -252,15 +264,28 @@ export function WebhookEndpoints() {
                         </Button>
                       </>
                     ) : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleCreateEndpoint(evt.value)}
-                        className="gap-1 text-xs"
-                      >
-                        <Webhook size={12} />
-                        Ativar
-                      </Button>
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleCreateEndpoint(evt.value)}
+                          className="gap-1 text-xs"
+                        >
+                          <Webhook size={12} />
+                          Ativar
+                        </Button>
+                        {onCreateFlow && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onCreateFlow(evt.value)}
+                            className="gap-1 text-xs"
+                          >
+                            <GitBranch size={12} />
+                            Criar Fluxo
+                          </Button>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
