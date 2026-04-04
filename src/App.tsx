@@ -6,8 +6,11 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AppHeader } from "@/components/AppHeader";
 import { HelpChatBubble } from "@/components/HelpChatBubble";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { PlatformProvider } from "@/contexts/PlatformContext";
 import WhatsAppApi from "./pages/WhatsAppApi";
 import MetaConnect from "./pages/MetaConnect";
+import InstagramDashboard from "./pages/InstagramDashboard";
+import InstagramCallbackPage from "./pages/InstagramCallback";
 import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
 import AdminUsers from "./pages/AdminUsers";
@@ -47,6 +50,15 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/instagram"
+        element={
+          <ProtectedRoute>
+            <InstagramDashboard />
+            <HelpChatBubble />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/auth/meta/callback"
         element={
           <ProtectedRoute>
@@ -56,6 +68,14 @@ function AppRoutes() {
                 <MetaConnect />
               </main>
             </div>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/auth/instagram/callback"
+        element={
+          <ProtectedRoute>
+            <InstagramCallbackPage />
           </ProtectedRoute>
         }
       />
@@ -84,7 +104,9 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <AppRoutes />
+          <PlatformProvider>
+            <AppRoutes />
+          </PlatformProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
