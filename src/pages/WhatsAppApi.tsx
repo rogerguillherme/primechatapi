@@ -25,6 +25,7 @@ import {
   Package, MessageCircle, Search, FileText, Check, CheckCheck, Paperclip,
   Truck, Users, ArrowLeft, BarChart3, MoreVertical, Pencil, Trash2, Star,
   KeyRound, ChevronDown, Webhook, LogOut, Plug, Tag, ChevronLeft, ChevronRight,
+  Instagram,
 } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
@@ -1950,6 +1951,17 @@ export default function WhatsAppApi() {
             </TabsTrigger>
           </TabsList>
           <div className="mt-auto border-t border-sidebar-border p-2 space-y-0.5">
+            <button
+              onClick={() => navigate("/instagram")}
+              className={cn(
+                "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-pink-400 hover:text-pink-300 hover:bg-sidebar-accent transition-colors",
+                sidebarCollapsed && "justify-center px-0"
+              )}
+              title="Ir para Instagram"
+            >
+              <Instagram size={16} />
+              {!sidebarCollapsed && <span>Instagram</span>}
+            </button>
             {isAdmin && !sidebarCollapsed && (
               <>
                 <button onClick={() => navigate("/auth/meta/callback")} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors">
