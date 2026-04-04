@@ -93,6 +93,8 @@ export function BroadcastQueue() {
       status: "pending",
       successCount: 0,
       errorCount: 0,
+      deliveredCount: 0,
+      readCount: 0,
       lastError: "",
     };
     setQueue((prev) => [...prev, newItem]);
