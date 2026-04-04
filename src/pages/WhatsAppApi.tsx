@@ -2248,7 +2248,7 @@ export default function WhatsAppApi() {
 
         {/* ── Webhook Tab (Event Webhooks) ── */}
         <TabsContent value="webhook" className="space-y-4 p-6 max-w-6xl overflow-auto">
-          <WebhookEndpoints />
+          <WebhookEndpoints onCreateFlow={handleCreateFlowFromWebhook} />
         </TabsContent>
 
         {/* ── Test Tab ── */}
