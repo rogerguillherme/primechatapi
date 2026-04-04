@@ -64,6 +64,9 @@ interface BroadcastJob {
   read_count: number;
   last_cursor: number;
   last_error: string | null;
+  pause_reason: string | null;
+  error_rate: number;
+  consecutive_errors: number;
   created_at: string;
   updated_at: string;
 }
