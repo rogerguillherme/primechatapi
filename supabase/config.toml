@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.custom-webhook]
 verify_jwt = false
+
+[functions.broadcast-processor]
+verify_jwt = false
