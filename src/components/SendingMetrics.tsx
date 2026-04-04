@@ -287,7 +287,7 @@ function DispatchItem({ group, isExpanded, onToggle }: {
 }) {
   const { data: leads, isLoading } = useQuery({
     queryKey: ["dispatch-leads", group.key],
-    enabled: isExpanded && group.leadIds.length > 0,
+    enabled: isExpanded && (group.leadIds?.length ?? 0) > 0,
     queryFn: async () => {
       // Fetch in batches of 100 (supabase .in() limit)
       const allLeads: any[] = [];
@@ -315,7 +315,7 @@ function DispatchItem({ group, isExpanded, onToggle }: {
         </span>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium">{group.label}</p>
-          <p className="text-xs text-muted-foreground">{group.total} mensagen{group.total !== 1 ? "s" : ""} • {group.leadIds.length} lead(s)</p>
+          <p className="text-xs text-muted-foreground">{group.total} mensagen{group.total !== 1 ? "s" : ""} • {(group.leadIds?.length ?? 0)} lead(s)</p>
         </div>
       </button>
 
@@ -342,7 +342,7 @@ function DispatchItem({ group, isExpanded, onToggle }: {
           </div>
 
           {/* Leads list */}
-          {group.leadIds.length > 0 && (
+          {(group.leadIds?.length ?? 0) > 0 && (
             <div className="space-y-1">
               <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Leads enviados</p>
               {isLoading ? (
