@@ -940,6 +940,80 @@ function QueueItemCard({
               )}
             </div>
 
+            {/* ── SMART SENDING OPTIONS ── */}
+            <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+              <div className="flex items-center gap-2">
+                <Shield size={14} className="text-primary" />
+                <span className="text-xs font-semibold">Envio Inteligente (Anti-ban)</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {/* Shuffle */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <Shuffle size={12} className="text-muted-foreground" />
+                    <span className="text-[11px]">Embaralhar leads</span>
+                  </div>
+                  <Switch
+                    checked={item.shuffleLeads}
+                    onCheckedChange={(v) => onUpdate({ shuffleLeads: v })}
+                  />
+                </div>
+
+                {/* Warmup */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <Flame size={12} className="text-muted-foreground" />
+                    <span className="text-[11px]">Aquecimento</span>
+                  </div>
+                  <Switch
+                    checked={item.warmupMode}
+                    onCheckedChange={(v) => onUpdate({ warmupMode: v })}
+                  />
+                </div>
+              </div>
+
+              {item.warmupMode && (
+                <div className="flex items-center gap-2">
+                  <Label className="text-[10px] text-muted-foreground whitespace-nowrap">Início:</Label>
+                  <Input
+                    type="number"
+                    min={5}
+                    max={100}
+                    value={item.warmupDailyLimit}
+                    onChange={(e) => onUpdate({ warmupDailyLimit: parseInt(e.target.value) || 20 })}
+                    className="h-7 text-xs w-20"
+                  />
+                  <span className="text-[10px] text-muted-foreground">msgs/dia (dobra a cada dia)</span>
+                </div>
+              )}
+
+              {/* Multi-number */}
+              {accounts.length > 1 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <BarChart3 size={12} className="text-muted-foreground" />
+                      <span className="text-[11px]">Multi-número (round-robin)</span>
+                    </div>
+                    <Switch
+                      checked={item.multiNumber}
+                      onCheckedChange={(v) => onUpdate({ multiNumber: v, extraAccountIds: v ? accounts.filter(a => a.id !== item.accountId).map(a => a.id) : [] })}
+                    />
+                  </div>
+                  {item.multiNumber && (
+                    <p className="text-[10px] text-muted-foreground">
+                      Distribuindo entre {accounts.length} número(s): {accounts.map(a => a.name).join(", ")}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <p className="text-[10px] text-muted-foreground border-t border-border pt-2">
+                ✅ Delay aleatório (300-1500ms) • Detecção de bloqueios • Pausa automática (erro {">"}10%) • Log de auditoria
+              </p>
+            </div>
+
             {/* Lead selection */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
