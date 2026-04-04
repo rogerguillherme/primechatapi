@@ -1924,6 +1924,30 @@ export default function WhatsAppApi() {
               {sidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
             </button>
           </div>
+          {/* Platform selector */}
+          <div className="px-2 pt-2 pb-1">
+            <div className={cn("flex items-center rounded-lg bg-white/10 p-0.5", sidebarCollapsed ? "flex-col gap-0.5" : "")}>
+              <button
+                className={cn(
+                  "flex items-center gap-1.5 rounded-md text-xs font-medium transition-all bg-white/20 text-white shadow-sm",
+                  sidebarCollapsed ? "p-1.5 w-full justify-center" : "flex-1 px-2.5 py-1.5 justify-center"
+                )}
+              >
+                <MessageCircle size={13} />
+                {!sidebarCollapsed && "WhatsApp"}
+              </button>
+              <button
+                onClick={() => navigate("/instagram")}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-md text-xs font-medium transition-all text-white/50 hover:text-white/80",
+                  sidebarCollapsed ? "p-1.5 w-full justify-center" : "flex-1 px-2.5 py-1.5 justify-center"
+                )}
+              >
+                <Instagram size={13} />
+                {!sidebarCollapsed && "Instagram"}
+              </button>
+            </div>
+          </div>
           <TabsList className="flex flex-col items-stretch bg-transparent h-auto p-2 gap-0.5">
             <TabsTrigger value="config" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
               <Key size={16} />
@@ -1951,17 +1975,6 @@ export default function WhatsAppApi() {
             </TabsTrigger>
           </TabsList>
           <div className="mt-auto border-t border-sidebar-border p-2 space-y-0.5">
-            <button
-              onClick={() => navigate("/instagram")}
-              className={cn(
-                "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-pink-400 hover:text-pink-300 hover:bg-sidebar-accent transition-colors",
-                sidebarCollapsed && "justify-center px-0"
-              )}
-              title="Ir para Instagram"
-            >
-              <Instagram size={16} />
-              {!sidebarCollapsed && <span>Instagram</span>}
-            </button>
             {isAdmin && !sidebarCollapsed && (
               <>
                 <button onClick={() => navigate("/auth/meta/callback")} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors">
