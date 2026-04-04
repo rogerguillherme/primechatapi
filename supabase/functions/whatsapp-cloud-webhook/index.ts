@@ -106,6 +106,25 @@ Deno.serve(async (req) => {
           await sb.from("chat_messages")
             .update(updates)
             .eq("zapi_message_id", waMessageId);
+
+          // ── AUTO-TRACK: Register campaign event for delivered/read ──
+          if (status === "delivered" || status === "read") {
+            // Find the message_log to get campaign_id
+            const { data: msgLog } = await sb
+              .from("message_logs")
+              .select("job_id, lead_id, phone")
+              .eq("wa_message_id", waMessageId)
+              .maybeSingle();
+
+            if (msgLog?.job_id) {
+              await sb.from("campaign_events").insert({
+                campaign_id: msgLog.job_id,
+                lead_id: msgLog.lead_id,
+                lead_phone: msgLog.phone,
+                event_type: status,
+              }).catch(() => {});
+            }
+          }
         }
       }
       
@@ -269,6 +288,30 @@ Deno.serve(async (req) => {
         zapi_message_id: messageId,
         status: "received",
       });
+
+      // ── AUTO-TRACK: Register reply/click campaign events ──
+      if (lead) {
+        // Find the latest campaign that sent to this lead
+        const { data: latestLog } = await supabase
+          .from("message_logs")
+          .select("job_id")
+          .eq("lead_id", lead.id)
+          .eq("status", "sent")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (latestLog?.job_id) {
+          const eventType = buttonPayload ? "click" : "reply";
+          await supabase.from("campaign_events").insert({
+            campaign_id: latestLog.job_id,
+            lead_id: lead.id,
+            lead_phone: cleanPhone,
+            event_type: eventType,
+            metadata: buttonPayload ? { button: buttonPayload } : {},
+          }).catch(() => {});
+        }
+      }
 
       // Check for flow executions waiting for button reply
       if (buttonPayload && lead) {

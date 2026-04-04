@@ -274,6 +274,29 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ── AUTO-TRACK: Register purchase campaign event ──
+    if (status === "approved" && leadId) {
+      // Find the latest campaign that sent to this lead
+      const { data: latestLog } = await supabase
+        .from("message_logs")
+        .select("job_id")
+        .eq("lead_id", leadId)
+        .eq("status", "sent")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (latestLog?.job_id) {
+        await supabase.from("campaign_events").insert({
+          campaign_id: latestLog.job_id,
+          lead_id: leadId,
+          lead_phone: extracted.buyerPhone,
+          event_type: "purchase",
+          metadata: { valor: extracted.amount, produto: extracted.productName || null },
+        }).catch(() => {});
+      }
+    }
+
     await logWebhook(supabase, externalOrderId, status, 201, "Order created", payload);
     return new Response(
       JSON.stringify({ success: true, order_id: order.id, lead_id: leadId }),

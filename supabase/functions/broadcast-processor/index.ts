@@ -438,6 +438,14 @@ Deno.serve(async (req) => {
           zapi_message_id: waMessageId, status: "sent",
           account_id: currentAccount.id,
         });
+
+        // ── AUTO-TRACK: Register campaign event ──
+        await supabase.from("campaign_events").insert({
+          campaign_id: jobId,
+          lead_id: lead.id,
+          lead_phone: cleanPhone,
+          event_type: "sent",
+        }).catch(() => {});
       } catch (e: any) {
         await supabase.from("message_logs").insert({
           job_id: jobId, user_id: job.user_id, lead_id: lead.id,
