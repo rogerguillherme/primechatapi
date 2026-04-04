@@ -26,6 +26,15 @@ Deno.serve(async (req) => {
     }
 
     const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+
+    // Parse body BEFORE auth to avoid double-consuming the stream
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {
+      body = {};
+    }
+
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
     const { data: { user }, error: userError } = await adminClient.auth.getUser(token);
 
@@ -36,7 +45,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { redirect_uri } = await req.json();
+    const redirect_uri = body.redirect_uri;
     if (!redirect_uri) {
       return new Response(JSON.stringify({ error: "redirect_uri is required" }), {
         status: 400,
