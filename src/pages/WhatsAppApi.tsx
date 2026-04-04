@@ -36,6 +36,7 @@ import { TemplateManager } from "@/components/TemplateManager";
 import { BroadcastQueue } from "@/components/BroadcastQueue";
 import { ContactImporter } from "@/components/ContactImporter";
 import { SendingMetrics } from "@/components/SendingMetrics";
+import { CampaignAnalytics } from "@/components/CampaignAnalytics";
 import { TemplateAccountBar } from "@/components/TemplateAccountBar";
 import { WebhookEndpoints } from "@/components/WebhookEndpoints";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";

@@ -289,6 +289,30 @@ Deno.serve(async (req) => {
         status: "received",
       });
 
+      // ── AUTO-TRACK: Register reply/click campaign events ──
+      if (lead) {
+        // Find the latest campaign that sent to this lead
+        const { data: latestLog } = await supabase
+          .from("message_logs")
+          .select("job_id")
+          .eq("lead_id", lead.id)
+          .eq("status", "sent")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (latestLog?.job_id) {
+          const eventType = buttonPayload ? "click" : "reply";
+          await supabase.from("campaign_events").insert({
+            campaign_id: latestLog.job_id,
+            lead_id: lead.id,
+            lead_phone: cleanPhone,
+            event_type: eventType,
+            metadata: buttonPayload ? { button: buttonPayload } : {},
+          }).catch(() => {});
+        }
+      }
+
       // Check for flow executions waiting for button reply
       if (buttonPayload && lead) {
         const { data: executions } = await supabase
