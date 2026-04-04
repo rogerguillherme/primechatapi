@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Instagram, Plug, Unplug, Loader2, CheckCircle2, ExternalLink } from "lucide-react";
@@ -10,12 +10,24 @@ import { toast } from "sonner";
 
 const REDIRECT_URI = "https://primechatapi.lovable.app/auth/instagram/callback";
 
+interface InstagramConnection {
+  id: string;
+  user_id: string;
+  instagram_user_id: string;
+  instagram_username: string | null;
+  page_id: string | null;
+  page_name: string | null;
+  access_token: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export function InstagramSettings() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [isConnecting, setIsConnecting] = useState(false);
 
-  // Check admin
   const { data: isAdmin } = useQuery({
     queryKey: ["user-role", user?.id],
     queryFn: async () => {
@@ -31,21 +43,20 @@ export function InstagramSettings() {
     enabled: !!user,
   });
 
-  // Fetch instagram connections
   const { data: connections, isLoading } = useQuery({
     queryKey: ["instagram-connections"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("instagram_connections")
+        .from("instagram_connections" as any)
         .select("*")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data || [];
+      return (data || []) as unknown as InstagramConnection[];
     },
     enabled: !!user && isAdmin === true,
   });
 
-  const activeConnection = connections?.find((c: any) => c.status === "connected");
+  const activeConnection = connections?.find((c) => c.status === "connected");
 
   const handleConnect = async () => {
     setIsConnecting(true);
@@ -64,8 +75,7 @@ export function InstagramSettings() {
   };
 
   const handleDisconnect = async (id: string) => {
-    const { error } = await supabase
-      .from("instagram_connections")
+    const { error } = await (supabase.from("instagram_connections" as any) as any)
       .update({ status: "disconnected" })
       .eq("id", id);
     if (error) {
@@ -156,7 +166,6 @@ export function InstagramSettings() {
         </CardContent>
       </Card>
 
-      {/* Info card */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Requisitos para conexão</CardTitle>
