@@ -1065,6 +1065,9 @@ function BroadcastTab() {
       {/* Template Manager */}
       <TemplateManager />
 
+      {/* Template & Account overview bar */}
+      <TemplateAccountBar />
+
       {/* Flow Builder */}
       <FlowBuilder />
     </div>
