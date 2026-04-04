@@ -32,7 +32,7 @@ function getWebhookUrl(token: string) {
   return `https://${projectId}.supabase.co/functions/v1/custom-webhook/${token}`;
 }
 
-export function WebhookEndpoints() {
+export function WebhookEndpoints({ onCreateFlow }: { onCreateFlow?: (triggerType: string) => void }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [sendingTest, setSendingTest] = useState<string | null>(null);
