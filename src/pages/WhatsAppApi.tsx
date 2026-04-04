@@ -2247,49 +2247,6 @@ export default function WhatsAppApi() {
           <WebhookEndpoints onCreateFlow={handleCreateFlowFromWebhook} />
         </TabsContent>
 
-        {/* ── Test Tab ── */}
-        <TabsContent value="test" className="space-y-4 p-6 max-w-6xl overflow-auto">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Send size={20} /> Enviar Mensagem de Teste</CardTitle>
-              <CardDescription>Teste a conexão enviando uma mensagem via WhatsApp Cloud API.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {accounts && accounts.length > 1 && (
-                <div className="space-y-2">
-                  <Label>Conta</Label>
-                  <select
-                    value={selectedAccountId || ""}
-                    onChange={(e) => setSelectedAccountId(e.target.value || null)}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    {accounts.map((a: any) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name} {a.is_default ? "(padrão)" : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="testPhone">Número de Telefone</Label>
-                  <div className="flex items-center gap-2">
-                    <Phone size={16} className="text-muted-foreground" />
-                    <Input id="testPhone" placeholder="5511999999999" value={testPhone} onChange={(e) => setTestPhone(e.target.value)} />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="testMessage">Mensagem</Label>
-                  <Input id="testMessage" value={testMessage} onChange={(e) => setTestMessage(e.target.value)} />
-                </div>
-              </div>
-              <Button onClick={handleTestMessage} disabled={isTesting} className="w-full sm:w-auto">
-                {isTesting ? "Enviando..." : "Enviar Teste"}
-              </Button>
-            </CardContent>
-          </Card>
-        </TabsContent>
 
         {/* ── Broadcast Tab ── */}
         <TabsContent value="broadcast" className="space-y-4 p-6 max-w-6xl overflow-auto">
