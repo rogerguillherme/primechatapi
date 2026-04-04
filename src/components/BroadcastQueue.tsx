@@ -166,7 +166,7 @@ export function BroadcastQueue() {
           .maybeSingle();
         if (data) {
           setActiveJobs((prev) => ({ ...prev, [data.id]: data as BroadcastJob }));
-          if (data.status === "completed" || data.status === "error") {
+          if (data.status === "completed" || data.status === "error" || data.status === "paused_by_system") {
             setQueue((prev) =>
               prev.map((item) => {
                 if (item.jobId !== data.id) return item;
