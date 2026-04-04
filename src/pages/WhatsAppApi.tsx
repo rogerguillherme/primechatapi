@@ -2268,6 +2268,11 @@ export default function WhatsAppApi() {
           <FlowBuilder key={flowTriggerType || "default"} initialTriggerType={flowTriggerType} />
         </TabsContent>
 
+        {/* ── Analytics Tab ── */}
+        <TabsContent value="analytics" className="space-y-4 p-6 max-w-6xl overflow-auto">
+          <CampaignAnalytics />
+        </TabsContent>
+
         {/* ── History Tab ── */}
         <TabsContent value="history" className="space-y-4 p-6 max-w-6xl overflow-auto">
           <SendingMetrics />
