@@ -472,7 +472,11 @@ function FlowEditorView({ flow, onBack, initialTriggerType }: { flow: Flow | nul
     if (!flow) {
       setName("");
       setDescription("");
-      setNodes([createTriggerNode()]);
+      const trigger = createTriggerNode();
+      if (initialTriggerType) {
+        trigger.data = { ...trigger.data, trigger_type: initialTriggerType };
+      }
+      setNodes([trigger]);
       setEdges([]);
       setIsLoaded(true);
       return;
