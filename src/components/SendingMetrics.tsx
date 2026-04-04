@@ -342,7 +342,7 @@ function DispatchItem({ group, isExpanded, onToggle }: {
           </div>
 
           {/* Leads list */}
-          {group.leadIds.length > 0 && (
+          {(group.leadIds?.length ?? 0) > 0 && (
             <div className="space-y-1">
               <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Leads enviados</p>
               {isLoading ? (
