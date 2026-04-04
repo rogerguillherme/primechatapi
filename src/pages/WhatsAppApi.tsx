@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 import { FlowBuilder } from "@/components/FlowBuilder";
 import { TemplateManager } from "@/components/TemplateManager";
 import { BroadcastQueue } from "@/components/BroadcastQueue";
+import { ContactImporter } from "@/components/ContactImporter";
 import { SendingMetrics } from "@/components/SendingMetrics";
 import { WebhookEndpoints } from "@/components/WebhookEndpoints";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
@@ -745,17 +746,24 @@ function BroadcastTab() {
   return (
     <div className="space-y-6">
       <Tabs defaultValue="queue" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="queue" className="gap-1.5">
             <Send size={14} /> Fila de Disparos
           </TabsTrigger>
           <TabsTrigger value="simple" className="gap-1.5">
             <MessageCircle size={14} /> Disparo Simples
           </TabsTrigger>
+          <TabsTrigger value="import" className="gap-1.5">
+            <Users size={14} /> Importar Contatos
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="queue" className="mt-4">
           <BroadcastQueue />
+        </TabsContent>
+
+        <TabsContent value="import" className="mt-4">
+          <ContactImporter />
         </TabsContent>
 
         <TabsContent value="simple" className="mt-4 space-y-6">

@@ -17,7 +17,9 @@ import { toast } from "sonner";
 import {
   Send, Search, ArrowLeft, Trash2, Plus, CheckCircle2,
   AlertCircle, Loader2, ChevronDown, ChevronUp, Upload,
+  Inbox, Eye, CheckCheck,
 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 import * as XLSX from "xlsx";
@@ -44,6 +46,8 @@ interface QueueItem {
   status: "pending" | "sending" | "done" | "error";
   successCount: number;
   errorCount: number;
+  deliveredCount: number;
+  readCount: number;
   lastError: string;
 }
 
@@ -91,6 +95,8 @@ export function BroadcastQueue() {
       status: "pending",
       successCount: 0,
       errorCount: 0,
+      deliveredCount: 0,
+      readCount: 0,
       lastError: "",
     };
     setQueue((prev) => [...prev, newItem]);
@@ -163,7 +169,7 @@ export function BroadcastQueue() {
     setIsSendingAll(true);
 
     for (const item of pendingItems) {
-      updateQueueItem(item.id, { status: "sending" });
+      updateQueueItem(item.id, { status: "sending", successCount: 0, errorCount: 0, deliveredCount: 0, readCount: 0 });
       const template = templates?.find((t: any) => t.id === item.templateId);
       let successCount = 0, errorCount = 0, lastError = "";
 
@@ -182,20 +188,50 @@ export function BroadcastQueue() {
           if (error) throw error;
           if (sendData?.error) throw new Error(sendData.error);
           successCount++;
+          updateQueueItem(item.id, { successCount });
         } catch (e: any) {
           errorCount++;
           lastError = e?.message || "Erro desconhecido";
+          updateQueueItem(item.id, { errorCount, lastError });
         }
       }
 
+      // After sending, poll for delivered/read status
       updateQueueItem(item.id, {
         status: errorCount > 0 && successCount === 0 ? "error" : "done",
         successCount, errorCount, lastError,
       });
+
+      // Start background polling for delivery/read status
+      pollDeliveryStatus(item.id, item.selectedLeadIds);
     }
 
     setIsSendingAll(false);
     toast.success("Fila de disparos processada!");
+  };
+
+  const pollDeliveryStatus = (itemId: string, leadIds: Set<string>) => {
+    let pollCount = 0;
+    const interval = setInterval(async () => {
+      pollCount++;
+      if (pollCount > 20) { clearInterval(interval); return; } // Stop after ~2min
+
+      const { data: msgs } = await supabase
+        .from("chat_messages")
+        .select("status, delivered_at, read_at")
+        .eq("direction", "outbound")
+        .in("lead_id", Array.from(leadIds))
+        .order("created_at", { ascending: false })
+        .limit(leadIds.size);
+
+      if (!msgs) return;
+      const delivered = msgs.filter(m => m.status === "delivered" || m.status === "read" || m.delivered_at).length;
+      const read = msgs.filter(m => m.status === "read" || m.read_at).length;
+
+      updateQueueItem(itemId, { deliveredCount: delivered, readCount: read });
+
+      if (read === leadIds.size) clearInterval(interval);
+    }, 6000);
   };
 
   const totalPending = queue.filter((i) => i.status === "pending").length;
@@ -639,7 +675,7 @@ function QueueItemCard({
             </Badge>
           </div>
           {item.status === "done" && (
-            <span className="text-xs text-green-600">
+            <span className="text-xs text-emerald-600">
               ✓ {item.successCount} ok{item.errorCount > 0 ? `, ${item.errorCount} erro(s)` : ""}
             </span>
           )}
@@ -660,6 +696,60 @@ function QueueItemCard({
             {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </div>
         </button>
+
+        {/* Progress bars for sending/done */}
+        {(item.status === "sending" || item.status === "done") && (
+          <div className="px-4 pb-4 space-y-3">
+            {/* Sent progress */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-medium">
+                  <CheckCheck size={13} /> Enviadas
+                </span>
+                <span className="font-mono text-muted-foreground">
+                  {item.successCount}/{item.selectedLeadIds.size}
+                  {item.errorCount > 0 && <span className="text-destructive ml-1">({item.errorCount} erro)</span>}
+                </span>
+              </div>
+              <Progress
+                value={(item.successCount / Math.max(item.selectedLeadIds.size, 1)) * 100}
+                className="h-2 bg-muted"
+              />
+            </div>
+
+            {/* Delivered progress */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
+                  <Inbox size={13} /> Entregues
+                </span>
+                <span className="font-mono text-muted-foreground">
+                  {item.deliveredCount}/{item.successCount}
+                </span>
+              </div>
+              <Progress
+                value={(item.deliveredCount / Math.max(item.successCount, 1)) * 100}
+                className="h-2 bg-muted [&>div]:bg-emerald-500"
+              />
+            </div>
+
+            {/* Read progress */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-medium">
+                  <Eye size={13} /> Lidas
+                </span>
+                <span className="font-mono text-muted-foreground">
+                  {item.readCount}/{item.successCount}
+                </span>
+              </div>
+              <Progress
+                value={(item.readCount / Math.max(item.successCount, 1)) * 100}
+                className="h-2 bg-muted [&>div]:bg-blue-500"
+              />
+            </div>
+          </div>
+        )}
 
         {/* Expanded content */}
         {isExpanded && item.status === "pending" && (
