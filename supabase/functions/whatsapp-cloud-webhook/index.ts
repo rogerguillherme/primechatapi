@@ -313,25 +313,49 @@ Deno.serve(async (req) => {
 
       // ── AUTO-TRACK: Register reply/click campaign events ──
       if (lead) {
-        // Find the latest campaign that sent to this lead
-        const { data: latestLog } = await supabase
+        // Find the latest campaign that sent to this lead (by lead_id OR phone)
+        let latestLog: any = null;
+
+        // Try by lead_id first
+        const { data: logById } = await supabase
           .from("message_logs")
-          .select("job_id")
+          .select("job_id, lead_id, phone")
           .eq("lead_id", lead.id)
           .eq("status", "sent")
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
 
+        latestLog = logById;
+
+        // Fallback: search by phone variants
+        if (!latestLog) {
+          for (const variant of phoneVariants) {
+            const { data: logByPhone } = await supabase
+              .from("message_logs")
+              .select("job_id, lead_id, phone")
+              .eq("phone", variant)
+              .eq("status", "sent")
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (logByPhone) { latestLog = logByPhone; break; }
+          }
+        }
+
         if (latestLog?.job_id) {
           const eventType = buttonPayload ? "click" : "reply";
-          await supabase.from("campaign_events").insert({
+          console.log(`Tracking campaign event: type=${eventType}, campaign=${latestLog.job_id}, lead=${lead.id}, button=${buttonPayload}`);
+          const { error: trackErr } = await supabase.from("campaign_events").insert({
             campaign_id: latestLog.job_id,
             lead_id: lead.id,
             lead_phone: cleanPhone,
             event_type: eventType,
             metadata: buttonPayload ? { button: buttonPayload } : {},
-          }).catch(() => {});
+          });
+          if (trackErr) console.error("Failed to track campaign event:", trackErr);
+        } else {
+          console.log("No campaign found for lead:", lead.id, "phone variants:", phoneVariants);
         }
       }
 
