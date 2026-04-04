@@ -2298,6 +2298,11 @@ export default function WhatsAppApi() {
           <CloudChatTab />
         </TabsContent>
 
+        {/* ── Flows Tab ── */}
+        <TabsContent value="flows" className="space-y-4 p-6 max-w-6xl overflow-auto">
+          <FlowBuilder />
+        </TabsContent>
+
         {/* ── History Tab ── */}
         <TabsContent value="history" className="space-y-4 p-6 max-w-6xl overflow-auto">
           <SendingMetrics />
