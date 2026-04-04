@@ -339,7 +339,7 @@ function AiFlowChat({ onGenerate }: { onGenerate: (steps: any[]) => void }) {
 }
 
 /* ── Flow Editor View (Visual Canvas) ── */
-function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => void }) {
+function FlowEditorView({ flow, onBack, initialTriggerType }: { flow: Flow | null; onBack: () => void; initialTriggerType?: string }) {
   const queryClient = useQueryClient();
   const draftKey = useMemo(() => `${FLOW_DRAFT_STORAGE_PREFIX}${flow?.id ?? "new"}`, [flow?.id]);
   const initialDraft = useMemo(() => readFlowDraft(draftKey), [draftKey]);
