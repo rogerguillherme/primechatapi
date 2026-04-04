@@ -644,8 +644,11 @@ function QueueItemCard({
     }
   };
 
+  const isPaused = activeJob?.status === "paused_by_system";
+
   const statusIcon =
-    item.status === "done" ? <CheckCircle2 size={16} className="text-green-500" />
+    isPaused ? <PauseCircle size={16} className="text-amber-500" />
+    : item.status === "done" ? <CheckCircle2 size={16} className="text-green-500" />
     : item.status === "error" ? <AlertCircle size={16} className="text-destructive" />
     : item.status === "sending" ? <Loader2 size={16} className="animate-spin text-primary" />
     : null;
