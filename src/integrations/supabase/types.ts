@@ -68,6 +68,87 @@ export type Database = {
         }
         Relationships: []
       }
+      broadcast_jobs: {
+        Row: {
+          account_id: string
+          created_at: string
+          delivered_count: number
+          error_count: number
+          id: string
+          last_cursor: number
+          last_error: string | null
+          lead_ids: string[]
+          read_count: number
+          retry_map: Json | null
+          sent_count: number
+          status: string
+          template_id: string | null
+          template_language: string | null
+          template_name: string | null
+          template_params: Json | null
+          total_leads: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          delivered_count?: number
+          error_count?: number
+          id?: string
+          last_cursor?: number
+          last_error?: string | null
+          lead_ids?: string[]
+          read_count?: number
+          retry_map?: Json | null
+          sent_count?: number
+          status?: string
+          template_id?: string | null
+          template_language?: string | null
+          template_name?: string | null
+          template_params?: Json | null
+          total_leads?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          delivered_count?: number
+          error_count?: number
+          id?: string
+          last_cursor?: number
+          last_error?: string | null
+          lead_ids?: string[]
+          read_count?: number
+          retry_map?: Json | null
+          sent_count?: number
+          status?: string
+          template_id?: string | null
+          template_language?: string | null
+          template_name?: string | null
+          template_params?: Json | null
+          total_leads?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broadcast_jobs_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "broadcast_jobs_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "chat_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_labels: {
         Row: {
           color: string
