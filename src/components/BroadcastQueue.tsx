@@ -1,6 +1,7 @@
-import { useState, useMemo, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { useUserTemplates } from "@/hooks/use-user-templates";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,7 +18,7 @@ import { toast } from "sonner";
 import {
   Send, Search, ArrowLeft, Trash2, Plus, CheckCircle2,
   AlertCircle, Loader2, ChevronDown, ChevronUp, Upload,
-  Inbox, Eye, CheckCheck,
+  Inbox, Eye, CheckCheck, XCircle,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
@@ -44,11 +45,21 @@ interface QueueItem {
   selectedLeadIds: Set<string>;
   customParams: Record<number, string>;
   status: "pending" | "sending" | "done" | "error";
-  successCount: number;
-  errorCount: number;
-  deliveredCount: number;
-  readCount: number;
-  lastError: string;
+  jobId?: string; // linked broadcast_jobs row
+}
+
+interface BroadcastJob {
+  id: string;
+  status: string;
+  total_leads: number;
+  sent_count: number;
+  error_count: number;
+  delivered_count: number;
+  read_count: number;
+  last_cursor: number;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 function generateId() {
@@ -56,11 +67,14 @@ function generateId() {
 }
 
 export function BroadcastQueue() {
+  const { session } = useAuth();
+  const queryClient = useQueryClient();
   const { accounts, defaultAccount } = useWhatsAppAccounts();
 
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [isSendingAll, setIsSendingAll] = useState(false);
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+  const [activeJobs, setActiveJobs] = useState<Record<string, BroadcastJob>>({});
 
   const { data: leads } = useQuery({
     queryKey: ["broadcast-leads"],
@@ -84,6 +98,73 @@ export function BroadcastQueue() {
     },
   });
 
+  // Subscribe to realtime updates on broadcast_jobs
+  useEffect(() => {
+    const jobIds = Object.keys(activeJobs);
+    if (jobIds.length === 0) return;
+
+    const channel = supabase
+      .channel("broadcast-jobs-progress")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "broadcast_jobs" },
+        (payload) => {
+          const updated = payload.new as any;
+          setActiveJobs((prev) => {
+            if (!prev[updated.id]) return prev;
+            return { ...prev, [updated.id]: updated };
+          });
+
+          // Update queue item status based on job status
+          if (updated.status === "completed" || updated.status === "error") {
+            setQueue((prev) =>
+              prev.map((item) => {
+                if (item.jobId !== updated.id) return item;
+                return {
+                  ...item,
+                  status: updated.status === "completed" ? "done" : "error",
+                };
+              })
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [Object.keys(activeJobs).join(",")]);
+
+  // Also poll for delivery/read counts on active jobs
+  useEffect(() => {
+    const processingJobs = Object.values(activeJobs).filter(
+      (j) => j.status === "processing" || j.status === "pending"
+    );
+    if (processingJobs.length === 0) return;
+
+    const interval = setInterval(async () => {
+      for (const job of processingJobs) {
+        const { data } = await supabase
+          .from("broadcast_jobs")
+          .select("*")
+          .eq("id", job.id)
+          .maybeSingle();
+        if (data) {
+          setActiveJobs((prev) => ({ ...prev, [data.id]: data as BroadcastJob }));
+          if (data.status === "completed" || data.status === "error") {
+            setQueue((prev) =>
+              prev.map((item) => {
+                if (item.jobId !== data.id) return item;
+                return { ...item, status: data.status === "completed" ? "done" : "error" };
+              })
+            );
+          }
+        }
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [Object.keys(activeJobs).join(",")]);
+
   const addQueueItem = () => {
     const newItem: QueueItem = {
       id: generateId(),
@@ -93,11 +174,6 @@ export function BroadcastQueue() {
       selectedLeadIds: new Set(),
       customParams: {},
       status: "pending",
-      successCount: 0,
-      errorCount: 0,
-      deliveredCount: 0,
-      readCount: 0,
-      lastError: "",
     };
     setQueue((prev) => [...prev, newItem]);
     setExpandedItemId(newItem.id);
@@ -169,69 +245,80 @@ export function BroadcastQueue() {
     setIsSendingAll(true);
 
     for (const item of pendingItems) {
-      updateQueueItem(item.id, { status: "sending", successCount: 0, errorCount: 0, deliveredCount: 0, readCount: 0 });
       const template = templates?.find((t: any) => t.id === item.templateId);
-      let successCount = 0, errorCount = 0, lastError = "";
-
-      for (const leadId of item.selectedLeadIds) {
-        const lead = leads?.find((l) => l.id === leadId);
-        if (!lead) continue;
-
-        try {
-          const body: any = { phone: lead.phone, lead_id: lead.id, account_id: item.accountId };
-          if (template?.template_name) {
-            body.template_name = template.template_name;
-            body.template_language = template.template_language || "pt_BR";
-            body.template_params = resolveParams((template.template_params || []) as any[], lead.name, item.customParams);
-          }
-          const { data: sendData, error } = await supabase.functions.invoke("whatsapp-cloud-send", { body });
-          if (error) throw error;
-          if (sendData?.error) throw new Error(sendData.error);
-          successCount++;
-          updateQueueItem(item.id, { successCount });
-        } catch (e: any) {
-          errorCount++;
-          lastError = e?.message || "Erro desconhecido";
-          updateQueueItem(item.id, { errorCount, lastError });
-        }
+      if (!template?.template_name) {
+        toast.error(`Template sem nome API configurado: ${template?.name || "desconhecido"}`);
+        continue;
       }
 
-      // After sending, poll for delivered/read status
-      updateQueueItem(item.id, {
-        status: errorCount > 0 && successCount === 0 ? "error" : "done",
-        successCount, errorCount, lastError,
-      });
+      const leadIdsArray = Array.from(item.selectedLeadIds);
 
-      // Start background polling for delivery/read status
-      pollDeliveryStatus(item.id, item.selectedLeadIds);
+      // Resolve custom params for storage (will use {nome} placeholder for per-lead resolution in processor)
+      const storedParams = Array.isArray(template.template_params)
+        ? (template.template_params as any[]).map((p: any, i: number) => {
+            const customValue = item.customParams[i];
+            if (customValue !== undefined && customValue !== "") {
+              return { type: "text", text: customValue };
+            }
+            const text = typeof p === "string" ? p : p?.text || "";
+            return { type: "text", text };
+          })
+        : [];
+
+      // Create broadcast job in DB
+      const { data: job, error: jobError } = await supabase
+        .from("broadcast_jobs")
+        .insert({
+          user_id: session?.user.id,
+          account_id: item.accountId,
+          template_id: item.templateId,
+          template_name: template.template_name,
+          template_language: template.template_language || "pt_BR",
+          template_params: storedParams,
+          lead_ids: leadIdsArray,
+          total_leads: leadIdsArray.length,
+          status: "pending",
+        } as any)
+        .select()
+        .single();
+
+      if (jobError || !job) {
+        toast.error(`Erro ao criar job: ${jobError?.message || "Desconhecido"}`);
+        continue;
+      }
+
+      // Track active job
+      setActiveJobs((prev) => ({ ...prev, [(job as any).id]: job as any }));
+      updateQueueItem(item.id, { status: "sending", jobId: (job as any).id });
+
+      // Trigger the processor (fire and forget)
+      supabase.functions.invoke("broadcast-processor", {
+        body: { job_id: (job as any).id },
+      }).catch((e) => console.error("Failed to invoke processor:", e));
     }
 
     setIsSendingAll(false);
-    toast.success("Fila de disparos processada!");
+    toast.success("Disparos iniciados em background! Acompanhe o progresso abaixo.");
   };
 
-  const pollDeliveryStatus = (itemId: string, leadIds: Set<string>) => {
-    let pollCount = 0;
-    const interval = setInterval(async () => {
-      pollCount++;
-      if (pollCount > 20) { clearInterval(interval); return; } // Stop after ~2min
-
-      const { data: msgs } = await supabase
-        .from("chat_messages")
-        .select("status, delivered_at, read_at")
-        .eq("direction", "outbound")
-        .in("lead_id", Array.from(leadIds))
-        .order("created_at", { ascending: false })
-        .limit(leadIds.size);
-
-      if (!msgs) return;
-      const delivered = msgs.filter(m => m.status === "delivered" || m.status === "read" || m.delivered_at).length;
-      const read = msgs.filter(m => m.status === "read" || m.read_at).length;
-
-      updateQueueItem(itemId, { deliveredCount: delivered, readCount: read });
-
-      if (read === leadIds.size) clearInterval(interval);
-    }, 6000);
+  const cancelJob = async (jobId: string) => {
+    await supabase
+      .from("broadcast_jobs")
+      .update({ status: "cancelled", updated_at: new Date().toISOString() } as any)
+      .eq("id", jobId);
+    
+    setActiveJobs((prev) => {
+      const updated = { ...prev };
+      if (updated[jobId]) updated[jobId] = { ...updated[jobId], status: "cancelled" };
+      return updated;
+    });
+    
+    setQueue((prev) =>
+      prev.map((item) =>
+        item.jobId === jobId ? { ...item, status: "error" } : item
+      )
+    );
+    toast.info("Disparo cancelado.");
   };
 
   const totalPending = queue.filter((i) => i.status === "pending").length;
@@ -245,7 +332,7 @@ export function BroadcastQueue() {
             <Send size={16} /> Fila de Disparos
           </h3>
           <p className="text-xs text-muted-foreground">
-            Adicione itens com conta, template e lista de leads diferentes. Dispare todos de uma vez.
+            Disparos processados em background em lotes de 100. Suporta volumes grandes (100k+ leads).
           </p>
         </div>
         <Button size="sm" onClick={addQueueItem}>
@@ -277,6 +364,8 @@ export function BroadcastQueue() {
               onUpdate={(updates) => updateQueueItem(item.id, updates)}
               onRemove={() => removeQueueItem(item.id)}
               onLoadLastBroadcast={() => loadLastBroadcastLeads(item.id)}
+              onCancelJob={cancelJob}
+              activeJob={item.jobId ? activeJobs[item.jobId] : undefined}
               disabled={isSendingAll}
             />
           ))}
@@ -286,7 +375,7 @@ export function BroadcastQueue() {
       {queue.length > 0 && (
         <Button onClick={handleSendAll} disabled={isSendingAll || totalPending === 0} className="w-full" size="lg">
           {isSendingAll ? (
-            <><Loader2 size={16} className="animate-spin" /> Enviando...</>
+            <><Loader2 size={16} className="animate-spin" /> Criando jobs...</>
           ) : (
             <><Send size={16} /> Disparar {totalPending} item(ns) — {totalLeads} lead(s) total</>
           )}
@@ -311,12 +400,15 @@ interface QueueItemCardProps {
   onUpdate: (updates: Partial<QueueItem>) => void;
   onRemove: () => void;
   onLoadLastBroadcast: () => void;
+  onCancelJob: (jobId: string) => void;
+  activeJob?: BroadcastJob;
   disabled: boolean;
 }
 
 function QueueItemCard({
   item, index, accounts, templates, accountTemplates, leads,
-  isExpanded, onToggleExpand, onUpdate, onRemove, onLoadLastBroadcast, disabled,
+  isExpanded, onToggleExpand, onUpdate, onRemove, onLoadLastBroadcast, onCancelJob,
+  activeJob, disabled,
 }: QueueItemCardProps) {
   const [search, setSearch] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -334,50 +426,34 @@ function QueueItemCard({
   // Normaliza: remove tudo que não é dígito
   const normalizePhone = (raw: any): string => String(raw ?? "").replace(/\D/g, "");
 
-  // Converte valor do Excel para string numérica (trata notação científica e floats)
+  // Converte valor do Excel para string numérica
   const rawToPhone = (value: any): string => {
     if (value === null || value === undefined || value === "") return "";
-    if (typeof value === "number") {
-      // toFixed(0) evita notação científica
-      return value.toFixed(0);
-    }
+    if (typeof value === "number") return value.toFixed(0);
     const str = String(value).trim();
-    // ex: "5.59299E+12" ou "5.59299e+12"
-    if (/\d+\.?\d*[eE][+\-]\d+/.test(str)) {
-      return parseFloat(str).toFixed(0);
-    }
+    if (/\d+\.?\d*[eE][+\-]\d+/.test(str)) return parseFloat(str).toFixed(0);
     return str;
   };
 
   const matchOrCreateLeads = async (rawPhones: string[], names: Record<string, string>) => {
-    // Normaliza e filtra números com pelo menos 10 dígitos
-    const phones = rawPhones
-      .map(normalizePhone)
-      .filter((p) => p.length >= 10);
-
+    const phones = rawPhones.map(normalizePhone).filter((p) => p.length >= 10);
     if (phones.length === 0) {
-      toast.error("Nenhum número válido encontrado. Verifique a coluna de Telefone selecionada.");
+      toast.error("Nenhum número válido encontrado.");
       return;
     }
 
     const matchedIds = new Set<string>();
     const unmatchedPhones: string[] = [];
 
-    // Tenta casar com leads existentes pelos últimos 8 dígitos
     for (const phone of phones) {
       const suffix = phone.slice(-8);
       const found = leads.find((lead) => normalizePhone(lead.phone).endsWith(suffix));
-      if (found) {
-        matchedIds.add(found.id);
-      } else {
-        unmatchedPhones.push(phone);
-      }
+      if (found) matchedIds.add(found.id);
+      else unmatchedPhones.push(phone);
     }
 
-    // Cria/atualiza os leads não encontrados
     if (unmatchedPhones.length > 0) {
-      // Normaliza DDI e deduplica dentro do próprio batch para evitar conflito de unique
-      const phoneMap = new Map<string, string>(); // phone55 -> name
+      const phoneMap = new Map<string, string>();
       for (const p of unmatchedPhones) {
         const phone55 = p.length <= 11 ? `55${p}` : p;
         if (!phoneMap.has(phone55)) {
@@ -386,26 +462,19 @@ function QueueItemCard({
       }
 
       const uniqueEntries = Array.from(phoneMap.entries()).map(([phone, name]) => ({
-        phone,
-        name,
-        origin: "xls_import",
+        phone, name, origin: "xls_import",
       }));
 
       const BATCH = 50;
       for (let i = 0; i < uniqueEntries.length; i += BATCH) {
         const batch = uniqueEntries.slice(i, i + BATCH);
-
         const { data: upserted, error } = await supabase
           .from("leads")
           .upsert(batch, { onConflict: "phone", ignoreDuplicates: false })
           .select("id");
-
         if (error) {
-          console.error("[Import] Upsert error:", error);
-          // Fallback: busca pelos telefones já formatados
           const phones55 = batch.map((b) => b.phone);
-          const { data: existing } = await supabase
-            .from("leads").select("id").in("phone", phones55);
+          const { data: existing } = await supabase.from("leads").select("id").in("phone", phones55);
           for (const ex of existing || []) matchedIds.add(ex.id);
         } else {
           for (const nl of upserted || []) matchedIds.add(nl.id);
@@ -413,16 +482,13 @@ function QueueItemCard({
       }
     }
 
-    if (matchedIds.size === 0) {
-      toast.error("Nenhum lead pôde ser adicionado.");
-      return;
-    }
+    if (matchedIds.size === 0) { toast.error("Nenhum lead pôde ser adicionado."); return; }
 
     onUpdate({ selectedLeadIds: matchedIds, leadSource: "manual" });
     const existingCount = leads.filter((l) => matchedIds.has(l.id)).length;
     const newCount = matchedIds.size - existingCount;
     toast.success(
-      `${existingCount} existente(s)${newCount > 0 ? ` + ${newCount} novo(s) criado(s)` : ""} — total: ${matchedIds.size} lead(s)`,
+      `${existingCount} existente(s)${newCount > 0 ? ` + ${newCount} novo(s)` : ""} — total: ${matchedIds.size}`,
       { duration: 6000 }
     );
   };
@@ -444,15 +510,10 @@ function QueueItemCard({
     let paramIdx = 0;
     for (const col of cols) {
       const lower = col.toLowerCase();
-      if (/tel|phone|fone|celular|whatsapp|numero|n[uú]mero/.test(lower)) {
-        mapping[col] = "phone";
-      } else if (/nome|name|cliente/.test(lower)) {
-        mapping[col] = "name";
-      } else if (/param|codigo|c[oó]digo/.test(lower) && paramIdx < templateParamCount) {
-        mapping[col] = `param_${paramIdx++}`;
-      } else {
-        mapping[col] = "ignore";
-      }
+      if (/tel|phone|fone|celular|whatsapp|numero|n[uú]mero/.test(lower)) mapping[col] = "phone";
+      else if (/nome|name|cliente/.test(lower)) mapping[col] = "name";
+      else if (/param|codigo|c[oó]digo/.test(lower) && paramIdx < templateParamCount) mapping[col] = `param_${paramIdx++}`;
+      else mapping[col] = "ignore";
     }
     return mapping;
   };
@@ -475,13 +536,10 @@ function QueueItemCard({
     const names: Record<string, string> = {};
 
     for (const row of sheetRows) {
-      // rawToPhone trata número nativo do Excel e strings em notação científica
       const phone = normalizePhone(rawToPhone(row[phoneCol]));
       if (phone.length >= 10) {
         phones.push(phone);
-        if (nameCol) {
-          names[phone] = String(row[nameCol] ?? "").trim() || `Contato ${phone.slice(-4)}`;
-        }
+        if (nameCol) names[phone] = String(row[nameCol] ?? "").trim() || `Contato ${phone.slice(-4)}`;
       }
     }
 
@@ -503,7 +561,6 @@ function QueueItemCard({
         try {
           const workbook = XLSX.read(buffer, { type: "array" });
           const sheet = workbook.Sheets[workbook.SheetNames[0]];
-          // raw: true preserva números inteiros nativos sem notação científica
           const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { raw: true, defval: "" });
           openColumnMapModal(rows);
         } catch (err: any) {
@@ -514,7 +571,6 @@ function QueueItemCard({
         if (!text) { toast.error("CSV vazio."); return; }
         const lines = text.split(/\r?\n/).filter((l) => l.trim());
         if (lines.length < 2) { toast.error("CSV sem dados suficientes."); return; }
-        // Detecta separador ; ou ,
         const sep = lines[0].includes(";") ? ";" : ",";
         const headers = lines[0].split(sep).map((h) => h.trim().replace(/^["']|["']$/g, ""));
         const rows: Record<string, any>[] = [];
@@ -527,7 +583,6 @@ function QueueItemCard({
         }
         openColumnMapModal(rows);
       } else {
-        // Texto simples: lista de telefones linha a linha
         const text = ev.target?.result as string;
         if (!text) return;
         const phones = text
@@ -574,6 +629,17 @@ function QueueItemCard({
     : item.status === "sending" ? <Loader2 size={16} className="animate-spin text-primary" />
     : null;
 
+  // Job progress data
+  const job = activeJob;
+  const jobTotalLeads = job?.total_leads || item.selectedLeadIds.size;
+  const jobSent = job?.sent_count || 0;
+  const jobErrors = job?.error_count || 0;
+  const jobDelivered = job?.delivered_count || 0;
+  const jobRead = job?.read_count || 0;
+  const jobProgress = job ? Math.min(job.last_cursor, jobTotalLeads) : 0;
+  const jobPercent = jobTotalLeads > 0 ? (jobProgress / jobTotalLeads) * 100 : 0;
+  const isJobActive = job && (job.status === "processing" || job.status === "pending");
+
   return (
     <>
       {/* Column mapping modal */}
@@ -582,12 +648,10 @@ function QueueItemCard({
           <DialogHeader>
             <DialogTitle>Selecionar colunas do arquivo</DialogTitle>
           </DialogHeader>
-
           <div className="space-y-3 py-1" id="col-map-desc">
             <p className="text-xs text-muted-foreground">
               Defina o significado de cada coluna. A coluna <strong>Telefone</strong> é obrigatória.
             </p>
-
             <div className="rounded-md border overflow-hidden">
               <table className="w-full text-sm">
                 <thead className="bg-muted/50">
@@ -612,14 +676,10 @@ function QueueItemCard({
                           value={columnMapping[col] ?? "ignore"}
                           onValueChange={(val) => setColumnMapping((prev) => ({ ...prev, [col]: val }))}
                         >
-                          <SelectTrigger className="h-8 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
+                          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             {getAvailableFields().map((f) => (
-                              <SelectItem key={f.value} value={f.value} className="text-xs">
-                                {f.label}
-                              </SelectItem>
+                              <SelectItem key={f.value} value={f.value} className="text-xs">{f.label}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -629,18 +689,11 @@ function QueueItemCard({
                 </tbody>
               </table>
             </div>
-
             {!Object.values(columnMapping).includes("phone") && (
-              <p className="text-xs text-destructive">
-                ⚠️ Selecione ao menos uma coluna como <strong>Telefone</strong>.
-              </p>
+              <p className="text-xs text-destructive">⚠️ Selecione ao menos uma coluna como <strong>Telefone</strong>.</p>
             )}
-
-            <p className="text-[10px] text-muted-foreground">
-              {sheetRows.length} linha(s) encontrada(s) no arquivo.
-            </p>
+            <p className="text-[10px] text-muted-foreground">{sheetRows.length} linha(s) encontrada(s).</p>
           </div>
-
           <DialogFooter>
             <Button variant="outline" onClick={() => setColumnMapOpen(false)}>Cancelar</Button>
             <Button onClick={handleConfirmColumnMap} disabled={!Object.values(columnMapping).includes("phone")}>
@@ -674,23 +727,32 @@ function QueueItemCard({
               {item.selectedLeadIds.size} lead(s)
             </Badge>
           </div>
-          {item.status === "done" && (
+          {item.status === "done" && job && (
             <span className="text-xs text-emerald-600">
-              ✓ {item.successCount} ok{item.errorCount > 0 ? `, ${item.errorCount} erro(s)` : ""}
+              ✓ {jobSent} ok{jobErrors > 0 ? `, ${jobErrors} erro(s)` : ""}
             </span>
           )}
-          {item.status === "error" && (
-            <span className="text-xs text-destructive truncate max-w-[200px]">{item.lastError}</span>
+          {item.status === "error" && job?.last_error && (
+            <span className="text-xs text-destructive truncate max-w-[200px]">{job.last_error}</span>
           )}
           <div className="flex items-center gap-1 shrink-0">
             {item.status === "pending" && (
               <Button
-                variant="ghost"
-                size="icon"
+                variant="ghost" size="icon"
                 className="h-8 w-8 text-destructive hover:text-destructive"
                 onClick={(e) => { e.stopPropagation(); onRemove(); }}
               >
                 <Trash2 size={14} />
+              </Button>
+            )}
+            {isJobActive && item.jobId && (
+              <Button
+                variant="ghost" size="icon"
+                className="h-8 w-8 text-destructive hover:text-destructive"
+                onClick={(e) => { e.stopPropagation(); onCancelJob(item.jobId!); }}
+                title="Cancelar disparo"
+              >
+                <XCircle size={14} />
               </Button>
             )}
             {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -698,56 +760,71 @@ function QueueItemCard({
         </button>
 
         {/* Progress bars for sending/done */}
-        {(item.status === "sending" || item.status === "done") && (
+        {(item.status === "sending" || item.status === "done") && job && (
           <div className="px-4 pb-4 space-y-3">
-            {/* Sent progress */}
+            {/* Overall progress */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-medium text-muted-foreground">
+                  Progresso geral
+                </span>
+                <span className="font-mono text-muted-foreground">
+                  {jobProgress}/{jobTotalLeads} ({Math.round(jobPercent)}%)
+                </span>
+              </div>
+              <Progress value={jobPercent} className="h-2.5 bg-muted" />
+            </div>
+
+            {/* Sent */}
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs">
                 <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-medium">
                   <CheckCheck size={13} /> Enviadas
                 </span>
                 <span className="font-mono text-muted-foreground">
-                  {item.successCount}/{item.selectedLeadIds.size}
-                  {item.errorCount > 0 && <span className="text-destructive ml-1">({item.errorCount} erro)</span>}
+                  {jobSent}/{jobTotalLeads}
+                  {jobErrors > 0 && <span className="text-destructive ml-1">({jobErrors} erro)</span>}
                 </span>
               </div>
               <Progress
-                value={(item.successCount / Math.max(item.selectedLeadIds.size, 1)) * 100}
+                value={(jobSent / Math.max(jobTotalLeads, 1)) * 100}
                 className="h-2 bg-muted"
               />
             </div>
 
-            {/* Delivered progress */}
+            {/* Delivered */}
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs">
                 <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
                   <Inbox size={13} /> Entregues
                 </span>
-                <span className="font-mono text-muted-foreground">
-                  {item.deliveredCount}/{item.successCount}
-                </span>
+                <span className="font-mono text-muted-foreground">{jobDelivered}/{jobSent}</span>
               </div>
               <Progress
-                value={(item.deliveredCount / Math.max(item.successCount, 1)) * 100}
+                value={(jobDelivered / Math.max(jobSent, 1)) * 100}
                 className="h-2 bg-muted [&>div]:bg-emerald-500"
               />
             </div>
 
-            {/* Read progress */}
+            {/* Read */}
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs">
                 <span className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-medium">
                   <Eye size={13} /> Lidas
                 </span>
-                <span className="font-mono text-muted-foreground">
-                  {item.readCount}/{item.successCount}
-                </span>
+                <span className="font-mono text-muted-foreground">{jobRead}/{jobSent}</span>
               </div>
               <Progress
-                value={(item.readCount / Math.max(item.successCount, 1)) * 100}
+                value={(jobRead / Math.max(jobSent, 1)) * 100}
                 className="h-2 bg-muted [&>div]:bg-blue-500"
               />
             </div>
+
+            {isJobActive && (
+              <p className="text-[10px] text-muted-foreground text-center animate-pulse">
+                Processando em background... lotes de 100 mensagens
+              </p>
+            )}
           </div>
         )}
 
@@ -831,13 +908,7 @@ function QueueItemCard({
               <div className="flex items-center justify-between">
                 <Label className="text-xs">Leads ({item.selectedLeadIds.size} selecionados)</Label>
                 <div className="flex gap-2">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".csv,.txt,.xls,.xlsx"
-                    className="hidden"
-                    onChange={handleFileImport}
-                  />
+                  <input ref={fileInputRef} type="file" accept=".csv,.txt,.xls,.xlsx" className="hidden" onChange={handleFileImport} />
                   <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => fileInputRef.current?.click()}>
                     <Upload size={12} className="mr-1" /> Importar CSV / XLS
                   </Button>
