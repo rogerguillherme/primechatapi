@@ -167,7 +167,7 @@ export function BroadcastQueue() {
     setIsSendingAll(true);
 
     for (const item of pendingItems) {
-      updateQueueItem(item.id, { status: "sending" });
+      updateQueueItem(item.id, { status: "sending", successCount: 0, errorCount: 0, deliveredCount: 0, readCount: 0 });
       const template = templates?.find((t: any) => t.id === item.templateId);
       let successCount = 0, errorCount = 0, lastError = "";
 
@@ -186,20 +186,51 @@ export function BroadcastQueue() {
           if (error) throw error;
           if (sendData?.error) throw new Error(sendData.error);
           successCount++;
+          updateQueueItem(item.id, { successCount });
         } catch (e: any) {
           errorCount++;
           lastError = e?.message || "Erro desconhecido";
+          updateQueueItem(item.id, { errorCount, lastError });
         }
       }
 
+      // After sending, poll for delivered/read status
       updateQueueItem(item.id, {
         status: errorCount > 0 && successCount === 0 ? "error" : "done",
         successCount, errorCount, lastError,
       });
+
+      // Start background polling for delivery/read status
+      pollDeliveryStatus(item.id, item.selectedLeadIds);
     }
 
     setIsSendingAll(false);
     toast.success("Fila de disparos processada!");
+  };
+
+  const pollDeliveryStatus = (itemId: string, leadIds: Set<string>) => {
+    let pollCount = 0;
+    const interval = setInterval(async () => {
+      pollCount++;
+      if (pollCount > 20) { clearInterval(interval); return; } // Stop after ~2min
+
+      const { data: msgs } = await supabase
+        .from("chat_messages")
+        .select("status, delivered_at, read_at")
+        .eq("direction", "outbound")
+        .in("lead_id", Array.from(leadIds))
+        .order("created_at", { ascending: false })
+        .limit(leadIds.size);
+
+      if (!msgs) return;
+      const delivered = msgs.filter(m => m.status === "delivered" || m.status === "read" || m.delivered_at).length;
+      const read = msgs.filter(m => m.status === "read" || m.read_at).length;
+
+      updateQueueItem(itemId, { deliveredCount: delivered, readCount: read });
+
+      if (read === leadIds.size) clearInterval(interval);
+    }, 6000);
+  };
   };
 
   const totalPending = queue.filter((i) => i.status === "pending").length;
