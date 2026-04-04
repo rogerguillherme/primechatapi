@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Navigate } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { Navigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
 import { useAuth } from "@/contexts/AuthContext";
@@ -12,9 +12,20 @@ import { toast } from "sonner";
 
 export default function Auth() {
   const { session, loading } = useAuth();
+  const [searchParams] = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+
+  const redirectTo = useMemo(() => {
+    const rawRedirect = searchParams.get("redirect");
+
+    if (!rawRedirect || !rawRedirect.startsWith("/") || rawRedirect.startsWith("//") || rawRedirect === "/auth") {
+      return "/";
+    }
+
+    return rawRedirect;
+  }, [searchParams]);
 
   if (loading) {
     return (
@@ -25,7 +36,7 @@ export default function Auth() {
   }
 
   if (session) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={redirectTo} replace />;
   }
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -44,7 +55,7 @@ export default function Auth() {
   const handleGoogleLogin = async () => {
     setIsLoading(true);
     const { error } = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
+      redirect_uri: `${window.location.origin}/auth${redirectTo !== "/" ? `?redirect=${encodeURIComponent(redirectTo)}` : ""}`,
     });
     if (error) {
       toast.error("Erro ao fazer login com Google");
