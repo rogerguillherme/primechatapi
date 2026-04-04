@@ -101,8 +101,8 @@ export default function InstagramDashboard() {
               className={cn(
                 "flex items-center gap-2.5 rounded-lg text-sm px-3 py-2.5 transition-all text-sidebar-foreground",
                 activeTab === item.id
-                  ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
-                  : "hover:bg-sidebar-accent",
+                  ? "bg-gradient-to-r from-pink-500/80 to-purple-500/80 text-white shadow-sm"
+                  : "hover:bg-white/10",
                 sidebarCollapsed && "justify-center px-0"
               )}
             >
