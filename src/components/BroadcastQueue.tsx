@@ -784,7 +784,7 @@ function QueueItemCard({
         </button>
 
         {/* Progress bars for sending/done */}
-        {(item.status === "sending" || item.status === "done") && job && (
+        {(item.status === "sending" || item.status === "done" || isPaused) && job && (
           <div className="px-4 pb-4 space-y-3">
             {/* Overall progress */}
             <div className="space-y-1">
