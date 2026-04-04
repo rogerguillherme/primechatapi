@@ -127,7 +127,7 @@ export function BroadcastQueue() {
           });
 
           // Update queue item status based on job status
-          if (updated.status === "completed" || updated.status === "error") {
+          if (updated.status === "completed" || updated.status === "error" || updated.status === "paused_by_system") {
             setQueue((prev) =>
               prev.map((item) => {
                 if (item.jobId !== updated.id) return item;
@@ -137,6 +137,12 @@ export function BroadcastQueue() {
                 };
               })
             );
+
+            // Alert user on pause
+            if (updated.status === "paused_by_system") {
+              const { toast: toastFn } = await import("sonner");
+              toastFn.warning(`Campanha pausada: ${updated.pause_reason || "Proteção anti-ban ativada"}`, { duration: 10000 });
+            }
           }
         }
       )
