@@ -843,8 +843,24 @@ function QueueItemCard({
 
             {isJobActive && (
               <p className="text-[10px] text-muted-foreground text-center animate-pulse">
-                Processando em background... lotes de 100 mensagens
+                Processando em background... lotes de 100 mensagens | Delay aleatório anti-spam ativo
               </p>
+            )}
+
+            {/* Pause alert */}
+            {job.status === "paused_by_system" && (
+              <div className="flex items-start gap-2 p-3 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+                <PauseCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">Campanha pausada automaticamente</p>
+                  <p className="text-[10px] text-amber-700 dark:text-amber-400 mt-0.5">{job.pause_reason || "Motivo não especificado"}</p>
+                  {job.error_rate > 0 && (
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      Taxa de erro: {job.error_rate}% | Erros consecutivos: {job.consecutive_errors}
+                    </p>
+                  )}
+                </div>
+              </div>
             )}
           </div>
         )}
