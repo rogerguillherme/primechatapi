@@ -44,6 +44,8 @@ interface QueueItem {
   status: "pending" | "sending" | "done" | "error";
   successCount: number;
   errorCount: number;
+  deliveredCount: number;
+  readCount: number;
   lastError: string;
 }
 
