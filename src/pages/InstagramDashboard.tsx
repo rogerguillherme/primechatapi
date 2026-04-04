@@ -54,7 +54,7 @@ export default function InstagramDashboard() {
                 <Instagram size={16} className="text-pink-400" />
               </div>
               <div>
-                <h1 className="text-sm font-display font-bold text-white">Prime Chat</h1>
+                <h1 className="text-sm font-display font-bold text-white">Insta Prime</h1>
                 <p className="text-[10px] text-white/50 leading-none">Instagram</p>
               </div>
             </div>
