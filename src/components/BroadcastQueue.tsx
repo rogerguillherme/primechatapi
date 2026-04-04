@@ -45,7 +45,13 @@ interface QueueItem {
   selectedLeadIds: Set<string>;
   customParams: Record<number, string>;
   status: "pending" | "sending" | "done" | "error";
-  jobId?: string; // linked broadcast_jobs row
+  jobId?: string;
+  // Smart sending options
+  warmupMode: boolean;
+  warmupDailyLimit: number;
+  shuffleLeads: boolean;
+  multiNumber: boolean;
+  extraAccountIds: string[];
 }
 
 interface BroadcastJob {
