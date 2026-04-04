@@ -36,6 +36,7 @@ import { TemplateManager } from "@/components/TemplateManager";
 import { BroadcastQueue } from "@/components/BroadcastQueue";
 import { ContactImporter } from "@/components/ContactImporter";
 import { SendingMetrics } from "@/components/SendingMetrics";
+import { TemplateAccountBar } from "@/components/TemplateAccountBar";
 import { WebhookEndpoints } from "@/components/WebhookEndpoints";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 import { useUserTemplates } from "@/hooks/use-user-templates";
@@ -2285,6 +2286,10 @@ export default function WhatsAppApi() {
 
         {/* ── Broadcast Tab ── */}
         <TabsContent value="broadcast" className="space-y-4 p-6 max-w-6xl overflow-auto">
+          <div className="flex items-center justify-between mb-2">
+            <div />
+            <TemplateAccountBar />
+          </div>
           <BroadcastTab />
         </TabsContent>
 
