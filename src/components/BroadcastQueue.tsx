@@ -183,6 +183,11 @@ export function BroadcastQueue() {
       selectedLeadIds: new Set(),
       customParams: {},
       status: "pending",
+      warmupMode: false,
+      warmupDailyLimit: 20,
+      shuffleLeads: true,
+      multiNumber: false,
+      extraAccountIds: [],
     };
     setQueue((prev) => [...prev, newItem]);
     setExpandedItemId(newItem.id);
