@@ -71,16 +71,23 @@ export type Database = {
       broadcast_jobs: {
         Row: {
           account_id: string
+          account_ids: string[] | null
+          consecutive_errors: number
           created_at: string
           delivered_count: number
           error_count: number
+          error_rate: number
           id: string
           last_cursor: number
           last_error: string | null
           lead_ids: string[]
+          messages_per_second: number
+          multi_number: boolean
+          pause_reason: string | null
           read_count: number
           retry_map: Json | null
           sent_count: number
+          shuffle_leads: boolean
           status: string
           template_id: string | null
           template_language: string | null
@@ -89,19 +96,29 @@ export type Database = {
           total_leads: number
           updated_at: string
           user_id: string
+          warmup_daily_limit: number | null
+          warmup_day: number | null
+          warmup_mode: boolean
         }
         Insert: {
           account_id: string
+          account_ids?: string[] | null
+          consecutive_errors?: number
           created_at?: string
           delivered_count?: number
           error_count?: number
+          error_rate?: number
           id?: string
           last_cursor?: number
           last_error?: string | null
           lead_ids?: string[]
+          messages_per_second?: number
+          multi_number?: boolean
+          pause_reason?: string | null
           read_count?: number
           retry_map?: Json | null
           sent_count?: number
+          shuffle_leads?: boolean
           status?: string
           template_id?: string | null
           template_language?: string | null
@@ -110,19 +127,29 @@ export type Database = {
           total_leads?: number
           updated_at?: string
           user_id: string
+          warmup_daily_limit?: number | null
+          warmup_day?: number | null
+          warmup_mode?: boolean
         }
         Update: {
           account_id?: string
+          account_ids?: string[] | null
+          consecutive_errors?: number
           created_at?: string
           delivered_count?: number
           error_count?: number
+          error_rate?: number
           id?: string
           last_cursor?: number
           last_error?: string | null
           lead_ids?: string[]
+          messages_per_second?: number
+          multi_number?: boolean
+          pause_reason?: string | null
           read_count?: number
           retry_map?: Json | null
           sent_count?: number
+          shuffle_leads?: boolean
           status?: string
           template_id?: string | null
           template_language?: string | null
@@ -131,6 +158,9 @@ export type Database = {
           total_leads?: number
           updated_at?: string
           user_id?: string
+          warmup_daily_limit?: number | null
+          warmup_day?: number | null
+          warmup_mode?: boolean
         }
         Relationships: [
           {
@@ -577,6 +607,73 @@ export type Database = {
         }
         Relationships: []
       }
+      message_logs: {
+        Row: {
+          account_id: string | null
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          id: string
+          job_id: string
+          lead_id: string | null
+          phone: string
+          sent_at: string | null
+          status: string
+          user_id: string
+          wa_message_id: string | null
+        }
+        Insert: {
+          account_id?: string | null
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          job_id: string
+          lead_id?: string | null
+          phone: string
+          sent_at?: string | null
+          status?: string
+          user_id: string
+          wa_message_id?: string | null
+        }
+        Update: {
+          account_id?: string | null
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          job_id?: string
+          lead_id?: string | null
+          phone?: string
+          sent_at?: string | null
+          status?: string
+          user_id?: string
+          wa_message_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_logs_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_logs_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "broadcast_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_logs_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_connections: {
         Row: {
           created_at: string
@@ -788,6 +885,42 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_plan_limits: {
+        Row: {
+          created_at: string
+          id: string
+          last_reset_at: string
+          max_concurrent_campaigns: number
+          max_contacts_per_campaign: number
+          max_messages_per_day: number
+          messages_sent_today: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_reset_at?: string
+          max_concurrent_campaigns?: number
+          max_contacts_per_campaign?: number
+          max_messages_per_day?: number
+          messages_sent_today?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_reset_at?: string
+          max_concurrent_campaigns?: number
+          max_contacts_per_campaign?: number
+          max_messages_per_day?: number
+          messages_sent_today?: number
           updated_at?: string
           user_id?: string
         }
