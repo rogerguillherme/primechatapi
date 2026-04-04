@@ -113,6 +113,9 @@
   .gradient-header {
     background: linear-gradient(135deg, hsl(160 18% 8%), hsl(152 44% 22%));
   }
+  .gradient-instagram {
+    background: linear-gradient(135deg, hsl(280 60% 15%), hsl(330 70% 25%), hsl(15 80% 30%));
+  }
   .shadow-card {
     box-shadow: 0 1px 3px 0 hsl(0 0% 0% / 0.04), 0 1px 2px -1px hsl(0 0% 0% / 0.04);
   }

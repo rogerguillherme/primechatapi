@@ -46,7 +46,7 @@ export default function InstagramDashboard() {
   return (
     <div className="animate-fade-in flex h-screen">
       {/* Sidebar */}
-      <div className={cn("shrink-0 border-r border-sidebar-border gradient-header flex flex-col transition-all duration-300", sidebarCollapsed ? "w-14" : "w-56")}>
+      <div className={cn("shrink-0 border-r border-sidebar-border gradient-instagram flex flex-col transition-all duration-300", sidebarCollapsed ? "w-14" : "w-56")}>
         <div className="p-3 border-b border-sidebar-border flex items-center justify-between">
           {!sidebarCollapsed && (
             <div className="flex items-center gap-2.5 animate-fade-in">
