@@ -701,11 +701,19 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
 }
 
 /* ── Main FlowBuilder Component ── */
-export function FlowBuilder() {
-  const [editingFlow, setEditingFlow] = useState<Flow | null | undefined>(undefined);
+export function FlowBuilder({ initialTriggerType }: { initialTriggerType?: string }) {
+  const [editingFlow, setEditingFlow] = useState<Flow | null | undefined>(
+    initialTriggerType ? null : undefined
+  );
 
   if (editingFlow !== undefined) {
-    return <FlowEditorView flow={editingFlow} onBack={() => setEditingFlow(undefined)} />;
+    return (
+      <FlowEditorView
+        flow={editingFlow}
+        onBack={() => setEditingFlow(undefined)}
+        initialTriggerType={!editingFlow ? initialTriggerType : undefined}
+      />
+    );
   }
 
   return <FlowListView onEdit={(flow) => setEditingFlow(flow)} />;
