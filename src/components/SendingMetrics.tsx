@@ -287,7 +287,7 @@ function DispatchItem({ group, isExpanded, onToggle }: {
 }) {
   const { data: leads, isLoading } = useQuery({
     queryKey: ["dispatch-leads", group.key],
-    enabled: isExpanded && group.leadIds.length > 0,
+    enabled: isExpanded && (group.leadIds?.length ?? 0) > 0,
     queryFn: async () => {
       // Fetch in batches of 100 (supabase .in() limit)
       const allLeads: any[] = [];
