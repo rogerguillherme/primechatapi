@@ -106,6 +106,25 @@ Deno.serve(async (req) => {
           await sb.from("chat_messages")
             .update(updates)
             .eq("zapi_message_id", waMessageId);
+
+          // ── AUTO-TRACK: Register campaign event for delivered/read ──
+          if (status === "delivered" || status === "read") {
+            // Find the message_log to get campaign_id
+            const { data: msgLog } = await sb
+              .from("message_logs")
+              .select("job_id, lead_id, phone")
+              .eq("wa_message_id", waMessageId)
+              .maybeSingle();
+
+            if (msgLog?.job_id) {
+              await sb.from("campaign_events").insert({
+                campaign_id: msgLog.job_id,
+                lead_id: msgLog.lead_id,
+                lead_phone: msgLog.phone,
+                event_type: status,
+              }).catch(() => {});
+            }
+          }
         }
       }
       
