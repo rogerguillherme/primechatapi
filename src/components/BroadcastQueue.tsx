@@ -279,7 +279,7 @@ export function BroadcastQueue() {
           })
         : [];
 
-      // Create broadcast job in DB
+      // Create broadcast job in DB with smart sending options
       const { data: job, error: jobError } = await supabase
         .from("broadcast_jobs")
         .insert({
@@ -292,6 +292,11 @@ export function BroadcastQueue() {
           lead_ids: leadIdsArray,
           total_leads: leadIdsArray.length,
           status: "pending",
+          warmup_mode: item.warmupMode,
+          warmup_daily_limit: item.warmupDailyLimit,
+          shuffle_leads: item.shuffleLeads,
+          multi_number: item.multiNumber,
+          account_ids: item.multiNumber ? [item.accountId, ...item.extraAccountIds] : [],
         } as any)
         .select()
         .single();
