@@ -54,7 +54,7 @@ export default function InstagramDashboard() {
                 <Instagram size={16} className="text-pink-400" />
               </div>
               <div>
-                <h1 className="text-sm font-display font-bold text-white">Prime Chat</h1>
+                <h1 className="text-sm font-display font-bold text-white">Insta Prime</h1>
                 <p className="text-[10px] text-white/50 leading-none">Instagram</p>
               </div>
             </div>
@@ -101,8 +101,8 @@ export default function InstagramDashboard() {
               className={cn(
                 "flex items-center gap-2.5 rounded-lg text-sm px-3 py-2.5 transition-all text-sidebar-foreground",
                 activeTab === item.id
-                  ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
-                  : "hover:bg-sidebar-accent",
+                  ? "bg-gradient-to-r from-pink-500/80 to-purple-500/80 text-white shadow-sm"
+                  : "hover:bg-white/10",
                 sidebarCollapsed && "justify-center px-0"
               )}
             >
