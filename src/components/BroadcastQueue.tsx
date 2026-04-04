@@ -675,7 +675,7 @@ function QueueItemCard({
             </Badge>
           </div>
           {item.status === "done" && (
-            <span className="text-xs text-green-600">
+            <span className="text-xs text-emerald-600">
               ✓ {item.successCount} ok{item.errorCount > 0 ? `, ${item.errorCount} erro(s)` : ""}
             </span>
           )}
@@ -696,6 +696,60 @@ function QueueItemCard({
             {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </div>
         </button>
+
+        {/* Progress bars for sending/done */}
+        {(item.status === "sending" || item.status === "done") && (
+          <div className="px-4 pb-4 space-y-3">
+            {/* Sent progress */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-medium">
+                  <CheckCheck size={13} /> Enviadas
+                </span>
+                <span className="font-mono text-muted-foreground">
+                  {item.successCount}/{item.selectedLeadIds.size}
+                  {item.errorCount > 0 && <span className="text-destructive ml-1">({item.errorCount} erro)</span>}
+                </span>
+              </div>
+              <Progress
+                value={(item.successCount / Math.max(item.selectedLeadIds.size, 1)) * 100}
+                className="h-2 bg-muted"
+              />
+            </div>
+
+            {/* Delivered progress */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
+                  <Inbox size={13} /> Entregues
+                </span>
+                <span className="font-mono text-muted-foreground">
+                  {item.deliveredCount}/{item.successCount}
+                </span>
+              </div>
+              <Progress
+                value={(item.deliveredCount / Math.max(item.successCount, 1)) * 100}
+                className="h-2 bg-muted [&>div]:bg-emerald-500"
+              />
+            </div>
+
+            {/* Read progress */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-medium">
+                  <Eye size={13} /> Lidas
+                </span>
+                <span className="font-mono text-muted-foreground">
+                  {item.readCount}/{item.successCount}
+                </span>
+              </div>
+              <Progress
+                value={(item.readCount / Math.max(item.successCount, 1)) * 100}
+                className="h-2 bg-muted [&>div]:bg-blue-500"
+              />
+            </div>
+          </div>
+        )}
 
         {/* Expanded content */}
         {isExpanded && item.status === "pending" && (
