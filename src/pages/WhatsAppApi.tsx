@@ -1686,6 +1686,13 @@ export default function WhatsAppApi() {
   const [isDefault, setIsDefault] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [activeMainTab, setActiveMainTab] = useState("config");
+  const [flowTriggerType, setFlowTriggerType] = useState<string | undefined>(undefined);
+
+  const handleCreateFlowFromWebhook = useCallback((triggerType: string) => {
+    setFlowTriggerType(triggerType);
+    setActiveMainTab("flows");
+  }, []);
 
   const [verifyToken, setVerifyToken] = useState("");
   const [isSavingToken, setIsSavingToken] = useState(false);
