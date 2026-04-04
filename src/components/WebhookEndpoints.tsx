@@ -262,8 +262,18 @@ export function WebhookEndpoints({ onCreateFlow }: { onCreateFlow?: (triggerType
                         <Webhook size={12} />
                         Ativar
                       </Button>
-                    )}
-                  </div>
+                      {onCreateFlow && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onCreateFlow(evt.value)}
+                          className="gap-1 text-xs"
+                        >
+                          <GitBranch size={12} />
+                          Criar Fluxo
+                        </Button>
+                      )}
+                    </div>
                 </div>
 
                 {/* Expanded events log */}
