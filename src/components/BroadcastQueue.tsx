@@ -231,7 +231,6 @@ export function BroadcastQueue() {
       if (read === leadIds.size) clearInterval(interval);
     }, 6000);
   };
-  };
 
   const totalPending = queue.filter((i) => i.status === "pending").length;
   const totalLeads = queue.filter((i) => i.status === "pending").reduce((acc, i) => acc + i.selectedLeadIds.size, 0);
