@@ -18,9 +18,11 @@ import { toast } from "sonner";
 import {
   Send, Search, ArrowLeft, Trash2, Plus, CheckCircle2,
   AlertCircle, Loader2, ChevronDown, ChevronUp, Upload,
-  Inbox, Eye, CheckCheck, XCircle,
+  Inbox, Eye, CheckCheck, XCircle, Shield, Shuffle, Flame,
+  PauseCircle, AlertTriangle, BarChart3,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 import * as XLSX from "xlsx";
