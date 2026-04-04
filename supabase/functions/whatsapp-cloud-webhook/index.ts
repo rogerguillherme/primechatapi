@@ -256,6 +256,8 @@ Deno.serve(async (req) => {
       const phoneVariants = brazilianPhoneVariants(rawPhone);
       const phoneFilter = phoneVariants.map(p => `phone.eq.${p}`).join(",");
 
+      const activityAt = new Date().toISOString();
+
       // Find or create lead
       let { data: lead } = await supabase
         .from("leads")
@@ -267,13 +269,33 @@ Deno.serve(async (req) => {
       if (!lead) {
         const { data: newLead, error: createError } = await supabase
           .from("leads")
-          .insert({ name: senderName, phone: cleanPhone, origin: "whatsapp-cloud" })
+          .insert({
+            name: senderName,
+            phone: cleanPhone,
+            origin: "whatsapp-cloud",
+            last_inbound_at: activityAt,
+            updated_at: activityAt,
+          })
           .select("id, name, phone")
           .single();
         if (createError) throw createError;
         lead = newLead;
-      } else if (senderName && lead.name.startsWith("WhatsApp ")) {
-        await supabase.from("leads").update({ name: senderName }).eq("id", lead.id);
+      } else {
+        const leadUpdates: Record<string, string> = {
+          last_inbound_at: activityAt,
+          updated_at: activityAt,
+        };
+
+        if (senderName && lead.name.startsWith("WhatsApp ")) {
+          leadUpdates.name = senderName;
+        }
+
+        const { error: leadUpdateError } = await supabase
+          .from("leads")
+          .update(leadUpdates)
+          .eq("id", lead.id);
+
+        if (leadUpdateError) throw leadUpdateError;
       }
 
       // Save message

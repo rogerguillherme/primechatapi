@@ -1162,12 +1162,16 @@ function CloudChatTab() {
 
   // 24h window helper
   const get24hWindow = (lead: any) => {
-    // The window is active after the lead responds (inbound) and lasts 24h
-    // Or after we send (outbound) a template, a new 24h window opens on inbound reply
-    const lastInbound = lead.last_inbound_at ? new Date(lead.last_inbound_at) : null;
-    if (!lastInbound) return { active: false, remaining: 0, label: "Fechada" };
+    const timestamps = [lead.last_inbound_at, lead.last_outbound_at]
+      .filter(Boolean)
+      .map((value: string) => new Date(value).getTime())
+      .filter((value) => !Number.isNaN(value));
+
+    if (timestamps.length === 0) return { active: false, remaining: 0, label: "Fechada" };
+
+    const lastActivity = Math.max(...timestamps);
     const now = new Date();
-    const diff = 24 * 60 * 60 * 1000 - (now.getTime() - lastInbound.getTime());
+    const diff = 24 * 60 * 60 * 1000 - (now.getTime() - lastActivity);
     if (diff <= 0) return { active: false, remaining: 0, label: "Fechada" };
     const hours = Math.floor(diff / (60 * 60 * 1000));
     const mins = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));

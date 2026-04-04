@@ -431,6 +431,8 @@ Deno.serve(async (req) => {
           account_id: currentAccount.id,
         });
 
+        const activityAt = new Date().toISOString();
+
         // Save outbound message
         await supabase.from("chat_messages").insert({
           lead_id: lead.id, direction: "outbound",
@@ -438,6 +440,15 @@ Deno.serve(async (req) => {
           zapi_message_id: waMessageId, status: "sent",
           account_id: currentAccount.id,
         });
+
+        const { error: leadUpdateError } = await supabase
+          .from("leads")
+          .update({ last_outbound_at: activityAt, updated_at: activityAt })
+          .eq("id", lead.id);
+
+        if (leadUpdateError) {
+          console.error("Failed to update lead outbound activity:", leadUpdateError);
+        }
 
         // ── AUTO-TRACK: Register campaign event ──
         await supabase.from("campaign_events").insert({
