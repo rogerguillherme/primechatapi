@@ -18,9 +18,11 @@ import { toast } from "sonner";
 import {
   Send, Search, ArrowLeft, Trash2, Plus, CheckCircle2,
   AlertCircle, Loader2, ChevronDown, ChevronUp, Upload,
-  Inbox, Eye, CheckCheck, XCircle,
+  Inbox, Eye, CheckCheck, XCircle, Shield, Shuffle, Flame,
+  PauseCircle, AlertTriangle, BarChart3,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 import * as XLSX from "xlsx";
@@ -45,7 +47,13 @@ interface QueueItem {
   selectedLeadIds: Set<string>;
   customParams: Record<number, string>;
   status: "pending" | "sending" | "done" | "error";
-  jobId?: string; // linked broadcast_jobs row
+  jobId?: string;
+  // Smart sending options
+  warmupMode: boolean;
+  warmupDailyLimit: number;
+  shuffleLeads: boolean;
+  multiNumber: boolean;
+  extraAccountIds: string[];
 }
 
 interface BroadcastJob {
@@ -58,6 +66,9 @@ interface BroadcastJob {
   read_count: number;
   last_cursor: number;
   last_error: string | null;
+  pause_reason: string | null;
+  error_rate: number;
+  consecutive_errors: number;
   created_at: string;
   updated_at: string;
 }
@@ -116,7 +127,7 @@ export function BroadcastQueue() {
           });
 
           // Update queue item status based on job status
-          if (updated.status === "completed" || updated.status === "error") {
+          if (updated.status === "completed" || updated.status === "error" || updated.status === "paused_by_system") {
             setQueue((prev) =>
               prev.map((item) => {
                 if (item.jobId !== updated.id) return item;
@@ -126,6 +137,11 @@ export function BroadcastQueue() {
                 };
               })
             );
+
+            // Alert user on pause
+            if (updated.status === "paused_by_system") {
+              toast.warning(`Campanha pausada: ${updated.pause_reason || "Proteção anti-ban ativada"}`, { duration: 10000 });
+            }
           }
         }
       )
@@ -150,7 +166,7 @@ export function BroadcastQueue() {
           .maybeSingle();
         if (data) {
           setActiveJobs((prev) => ({ ...prev, [data.id]: data as BroadcastJob }));
-          if (data.status === "completed" || data.status === "error") {
+          if (data.status === "completed" || data.status === "error" || data.status === "paused_by_system") {
             setQueue((prev) =>
               prev.map((item) => {
                 if (item.jobId !== data.id) return item;
@@ -174,6 +190,11 @@ export function BroadcastQueue() {
       selectedLeadIds: new Set(),
       customParams: {},
       status: "pending",
+      warmupMode: false,
+      warmupDailyLimit: 20,
+      shuffleLeads: true,
+      multiNumber: false,
+      extraAccountIds: [],
     };
     setQueue((prev) => [...prev, newItem]);
     setExpandedItemId(newItem.id);
@@ -265,7 +286,7 @@ export function BroadcastQueue() {
           })
         : [];
 
-      // Create broadcast job in DB
+      // Create broadcast job in DB with smart sending options
       const { data: job, error: jobError } = await supabase
         .from("broadcast_jobs")
         .insert({
@@ -278,6 +299,11 @@ export function BroadcastQueue() {
           lead_ids: leadIdsArray,
           total_leads: leadIdsArray.length,
           status: "pending",
+          warmup_mode: item.warmupMode,
+          warmup_daily_limit: item.warmupDailyLimit,
+          shuffle_leads: item.shuffleLeads,
+          multi_number: item.multiNumber,
+          account_ids: item.multiNumber ? [item.accountId, ...item.extraAccountIds] : [],
         } as any)
         .select()
         .single();
@@ -623,8 +649,11 @@ function QueueItemCard({
     }
   };
 
+  const isPaused = activeJob?.status === "paused_by_system";
+
   const statusIcon =
-    item.status === "done" ? <CheckCircle2 size={16} className="text-green-500" />
+    isPaused ? <PauseCircle size={16} className="text-amber-500" />
+    : item.status === "done" ? <CheckCircle2 size={16} className="text-green-500" />
     : item.status === "error" ? <AlertCircle size={16} className="text-destructive" />
     : item.status === "sending" ? <Loader2 size={16} className="animate-spin text-primary" />
     : null;
@@ -760,7 +789,7 @@ function QueueItemCard({
         </button>
 
         {/* Progress bars for sending/done */}
-        {(item.status === "sending" || item.status === "done") && job && (
+        {(item.status === "sending" || item.status === "done" || isPaused) && job && (
           <div className="px-4 pb-4 space-y-3">
             {/* Overall progress */}
             <div className="space-y-1">
@@ -822,8 +851,24 @@ function QueueItemCard({
 
             {isJobActive && (
               <p className="text-[10px] text-muted-foreground text-center animate-pulse">
-                Processando em background... lotes de 100 mensagens
+                Processando em background... lotes de 100 mensagens | Delay aleatório anti-spam ativo
               </p>
+            )}
+
+            {/* Pause alert */}
+            {job.status === "paused_by_system" && (
+              <div className="flex items-start gap-2 p-3 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+                <PauseCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">Campanha pausada automaticamente</p>
+                  <p className="text-[10px] text-amber-700 dark:text-amber-400 mt-0.5">{job.pause_reason || "Motivo não especificado"}</p>
+                  {job.error_rate > 0 && (
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      Taxa de erro: {job.error_rate}% | Erros consecutivos: {job.consecutive_errors}
+                    </p>
+                  )}
+                </div>
+              </div>
             )}
           </div>
         )}
@@ -901,6 +946,80 @@ function QueueItemCard({
                   </p>
                 </div>
               )}
+            </div>
+
+            {/* ── SMART SENDING OPTIONS ── */}
+            <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+              <div className="flex items-center gap-2">
+                <Shield size={14} className="text-primary" />
+                <span className="text-xs font-semibold">Envio Inteligente (Anti-ban)</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {/* Shuffle */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <Shuffle size={12} className="text-muted-foreground" />
+                    <span className="text-[11px]">Embaralhar leads</span>
+                  </div>
+                  <Switch
+                    checked={item.shuffleLeads}
+                    onCheckedChange={(v) => onUpdate({ shuffleLeads: v })}
+                  />
+                </div>
+
+                {/* Warmup */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <Flame size={12} className="text-muted-foreground" />
+                    <span className="text-[11px]">Aquecimento</span>
+                  </div>
+                  <Switch
+                    checked={item.warmupMode}
+                    onCheckedChange={(v) => onUpdate({ warmupMode: v })}
+                  />
+                </div>
+              </div>
+
+              {item.warmupMode && (
+                <div className="flex items-center gap-2">
+                  <Label className="text-[10px] text-muted-foreground whitespace-nowrap">Início:</Label>
+                  <Input
+                    type="number"
+                    min={5}
+                    max={100}
+                    value={item.warmupDailyLimit}
+                    onChange={(e) => onUpdate({ warmupDailyLimit: parseInt(e.target.value) || 20 })}
+                    className="h-7 text-xs w-20"
+                  />
+                  <span className="text-[10px] text-muted-foreground">msgs/dia (dobra a cada dia)</span>
+                </div>
+              )}
+
+              {/* Multi-number */}
+              {accounts.length > 1 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <BarChart3 size={12} className="text-muted-foreground" />
+                      <span className="text-[11px]">Multi-número (round-robin)</span>
+                    </div>
+                    <Switch
+                      checked={item.multiNumber}
+                      onCheckedChange={(v) => onUpdate({ multiNumber: v, extraAccountIds: v ? accounts.filter(a => a.id !== item.accountId).map(a => a.id) : [] })}
+                    />
+                  </div>
+                  {item.multiNumber && (
+                    <p className="text-[10px] text-muted-foreground">
+                      Distribuindo entre {accounts.length} número(s): {accounts.map(a => a.name).join(", ")}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <p className="text-[10px] text-muted-foreground border-t border-border pt-2">
+                ✅ Delay aleatório (300-1500ms) • Detecção de bloqueios • Pausa automática (erro {">"}10%) • Log de auditoria
+              </p>
             </div>
 
             {/* Lead selection */}
