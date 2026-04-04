@@ -1686,7 +1686,7 @@ export default function WhatsAppApi() {
   const [isDefault, setIsDefault] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [activeMainTab, setActiveMainTab] = useState("config");
+  const [activeMainTab, setActiveMainTab] = useState("webhook");
   const [flowTriggerType, setFlowTriggerType] = useState<string | undefined>(undefined);
 
   const handleCreateFlowFromWebhook = useCallback((triggerType: string) => {
@@ -1965,21 +1965,9 @@ export default function WhatsAppApi() {
             </div>
           </div>
           <TabsList className="flex flex-col items-stretch bg-transparent h-auto p-2 gap-0.5">
-            <TabsTrigger value="flows" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
-              <GitBranch size={16} />
-              {!sidebarCollapsed && <span>Fluxos</span>}
-            </TabsTrigger>
-            <TabsTrigger value="config" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
-              <Key size={16} />
-              {!sidebarCollapsed && <span>Configuração</span>}
-            </TabsTrigger>
             <TabsTrigger value="webhook" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
               <Webhook size={16} />
               {!sidebarCollapsed && <span>Webhooks</span>}
-            </TabsTrigger>
-            <TabsTrigger value="test" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
-              <Send size={16} />
-              {!sidebarCollapsed && <span>Teste</span>}
             </TabsTrigger>
             <TabsTrigger value="broadcast" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
               <Package size={16} />
@@ -1992,6 +1980,14 @@ export default function WhatsAppApi() {
             <TabsTrigger value="history" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
               <BarChart3 size={16} />
               {!sidebarCollapsed && <span>Histórico</span>}
+            </TabsTrigger>
+            <TabsTrigger value="flows" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+              <GitBranch size={16} />
+              {!sidebarCollapsed && <span>Fluxos</span>}
+            </TabsTrigger>
+            <TabsTrigger value="config" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+              <Key size={16} />
+              {!sidebarCollapsed && <span>Configuração</span>}
             </TabsTrigger>
           </TabsList>
           <div className="mt-auto border-t border-sidebar-border p-2 space-y-0.5">
@@ -2251,49 +2247,6 @@ export default function WhatsAppApi() {
           <WebhookEndpoints onCreateFlow={handleCreateFlowFromWebhook} />
         </TabsContent>
 
-        {/* ── Test Tab ── */}
-        <TabsContent value="test" className="space-y-4 p-6 max-w-6xl overflow-auto">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Send size={20} /> Enviar Mensagem de Teste</CardTitle>
-              <CardDescription>Teste a conexão enviando uma mensagem via WhatsApp Cloud API.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {accounts && accounts.length > 1 && (
-                <div className="space-y-2">
-                  <Label>Conta</Label>
-                  <select
-                    value={selectedAccountId || ""}
-                    onChange={(e) => setSelectedAccountId(e.target.value || null)}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    {accounts.map((a: any) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name} {a.is_default ? "(padrão)" : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="testPhone">Número de Telefone</Label>
-                  <div className="flex items-center gap-2">
-                    <Phone size={16} className="text-muted-foreground" />
-                    <Input id="testPhone" placeholder="5511999999999" value={testPhone} onChange={(e) => setTestPhone(e.target.value)} />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="testMessage">Mensagem</Label>
-                  <Input id="testMessage" value={testMessage} onChange={(e) => setTestMessage(e.target.value)} />
-                </div>
-              </div>
-              <Button onClick={handleTestMessage} disabled={isTesting} className="w-full sm:w-auto">
-                {isTesting ? "Enviando..." : "Enviar Teste"}
-              </Button>
-            </CardContent>
-          </Card>
-        </TabsContent>
 
         {/* ── Broadcast Tab ── */}
         <TabsContent value="broadcast" className="space-y-4 p-6 max-w-6xl overflow-auto">
