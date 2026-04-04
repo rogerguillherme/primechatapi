@@ -1,20 +1,30 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { WhatsAppLimits } from "./WhatsAppLimits";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Send, CheckCheck, Eye, Inbox, RefreshCw, ChevronDown, ChevronRight, MessageCircle,
-  FileText, Loader2, CheckCircle2, AlertCircle,
+  Loader2,
 } from "lucide-react";
 import { useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
-import { toast } from "sonner";
+
+function getAvatarColor(name: string) {
+  const colors = ["bg-emerald-600", "bg-violet-600", "bg-amber-600", "bg-rose-600", "bg-cyan-600", "bg-indigo-600"];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return colors[Math.abs(hash) % colors.length];
+}
+function getInitials(name: string) {
+  return name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+}
 
 interface BroadcastGroup {
   key: string;
@@ -24,6 +34,7 @@ interface BroadcastGroup {
   delivered: number;
   read: number;
   failed: number;
+  leadIds: string[];
 }
 
 interface AccountStats {
@@ -40,7 +51,6 @@ export function SendingMetrics() {
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
-  const [syncingTemplates, setSyncingTemplates] = useState(false);
   const { accounts } = useWhatsAppAccounts();
 
   const handleRefresh = () => {
@@ -48,30 +58,7 @@ export function SendingMetrics() {
     queryClient.invalidateQueries({ queryKey: ["sending-metrics-summary"] });
     queryClient.invalidateQueries({ queryKey: ["sending-metrics-dispatches"] });
     queryClient.invalidateQueries({ queryKey: ["sending-metrics-by-account"] });
-    queryClient.invalidateQueries({ queryKey: ["template-sync-stats"] });
     setTimeout(() => setRefreshing(false), 800);
-  };
-
-  const handleSyncTemplates = async () => {
-    setSyncingTemplates(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("whatsapp-sync-templates", { body: {} });
-      if (error) throw error;
-      const results = data?.results || [];
-      const totalSynced = results.reduce((acc: number, r: any) => acc + (r.synced || 0), 0);
-      const errors = results.filter((r: any) => r.error);
-      if (errors.length > 0) {
-        toast.error(`Erro em ${errors.length} conta(s): ${errors[0].error}`);
-      } else {
-        toast.success(`${totalSynced} template(s) sincronizado(s)!`);
-      }
-      queryClient.invalidateQueries({ queryKey: ["user-templates"] });
-      queryClient.invalidateQueries({ queryKey: ["template-sync-stats"] });
-    } catch (err: any) {
-      toast.error(`Erro ao sincronizar: ${err.message}`);
-    } finally {
-      setSyncingTemplates(false);
-    }
   };
 
   const { data: stats, isLoading } = useQuery({
@@ -106,7 +93,6 @@ export function SendingMetrics() {
       for (const acc of accounts) {
         map.set(acc.id, { id: acc.id, name: acc.name, total: 0, sent: 0, delivered: 0, read: 0, failed: 0 });
       }
-      // For messages without account_id
       map.set("unknown", { id: "unknown", name: "Sem conta", total: 0, sent: 0, delivered: 0, read: 0, failed: 0 });
 
       for (const msg of outbound) {
@@ -130,7 +116,7 @@ export function SendingMetrics() {
     queryFn: async () => {
       const { data: outbound } = await supabase
         .from("chat_messages")
-        .select("status, delivered_at, read_at, created_at, content")
+        .select("status, delivered_at, read_at, created_at, content, lead_id")
         .eq("direction", "outbound")
         .order("created_at", { ascending: false });
 
@@ -163,6 +149,7 @@ export function SendingMetrics() {
 
   function buildGroup(msgs: any[], startDate: Date): BroadcastGroup {
     const dateStr = format(startDate, "dd/MM/yyyy HH:mm", { locale: ptBR });
+    const uniqueLeadIds = [...new Set(msgs.map(m => m.lead_id).filter(Boolean))];
     return {
       key: startDate.toISOString(),
       label: `Disparo ${dateStr}`,
@@ -171,6 +158,7 @@ export function SendingMetrics() {
       delivered: msgs.filter(m => m.status === "delivered" || m.status === "read" || m.delivered_at).length,
       read: msgs.filter(m => m.status === "read" || m.read_at).length,
       failed: msgs.filter(m => m.status === "failed").length,
+      leadIds: uniqueLeadIds,
     };
   }
 
@@ -187,34 +175,6 @@ export function SendingMetrics() {
     <div className="space-y-4">
       {/* WhatsApp Limits */}
       <WhatsAppLimits />
-
-      {/* Template Sync */}
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <FileText size={16} /> Templates da Meta
-            </CardTitle>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSyncTemplates}
-              disabled={syncingTemplates}
-              className="gap-1.5"
-            >
-              {syncingTemplates ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <RefreshCw size={14} />
-              )}
-              Sincronizar
-            </Button>
-          </div>
-          <CardDescription className="text-xs">
-            Sincronize os templates aprovados da Meta para usar nos disparos e fluxos.
-          </CardDescription>
-        </CardHeader>
-      </Card>
 
       {/* Header with refresh */}
       <div className="flex items-center justify-between">
@@ -297,48 +257,17 @@ export function SendingMetrics() {
           ) : !dispatches?.length ? (
             <p className="text-sm text-muted-foreground text-center py-8">Nenhum disparo registrado.</p>
           ) : (
-            <ScrollArea className="max-h-[400px]">
+            <ScrollArea className="max-h-[500px]">
               <div className="divide-y divide-border">
                 {dispatches.map((d) => {
                   const isExpanded = expandedKey === d.key;
                   return (
-                    <div key={d.key}>
-                      <button
-                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors text-left"
-                        onClick={() => setExpandedKey(isExpanded ? null : d.key)}
-                      >
-                        <span className="text-muted-foreground shrink-0">
-                          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium">{d.label}</p>
-                          <p className="text-xs text-muted-foreground">{d.total} mensagen{d.total !== 1 ? "s" : ""}</p>
-                        </div>
-                      </button>
-
-                      {isExpanded && (
-                        <div className="px-4 pb-3 pl-11 bg-muted/20">
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                            <div className="text-center py-2 rounded-md bg-background border border-border">
-                              <p className="text-lg font-bold">{d.total}</p>
-                              <p className="text-[10px] text-muted-foreground">Total</p>
-                            </div>
-                            <div className="text-center py-2 rounded-md bg-background border border-border">
-                              <p className="text-lg font-bold text-amber-500">{d.sent}</p>
-                              <p className="text-[10px] text-muted-foreground">Enviado</p>
-                            </div>
-                            <div className="text-center py-2 rounded-md bg-background border border-border">
-                              <p className="text-lg font-bold text-emerald-500">{d.delivered}</p>
-                              <p className="text-[10px] text-muted-foreground">Recebido</p>
-                            </div>
-                            <div className="text-center py-2 rounded-md bg-background border border-border">
-                              <p className="text-lg font-bold text-blue-500">{d.read}</p>
-                              <p className="text-[10px] text-muted-foreground">Lido</p>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                    <DispatchItem
+                      key={d.key}
+                      group={d}
+                      isExpanded={isExpanded}
+                      onToggle={() => setExpandedKey(isExpanded ? null : d.key)}
+                    />
                   );
                 })}
               </div>
@@ -346,6 +275,104 @@ export function SendingMetrics() {
           )}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+/* ── Dispatch Item with lead list ── */
+function DispatchItem({ group, isExpanded, onToggle }: {
+  group: BroadcastGroup;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  const { data: leads, isLoading } = useQuery({
+    queryKey: ["dispatch-leads", group.key],
+    enabled: isExpanded && group.leadIds.length > 0,
+    queryFn: async () => {
+      // Fetch in batches of 100 (supabase .in() limit)
+      const allLeads: any[] = [];
+      for (let i = 0; i < group.leadIds.length; i += 100) {
+        const batch = group.leadIds.slice(i, i + 100);
+        const { data } = await supabase
+          .from("leads")
+          .select("id, name, phone, photo_url")
+          .in("id", batch);
+        if (data) allLeads.push(...data);
+      }
+      return allLeads;
+    },
+    staleTime: 60000,
+  });
+
+  return (
+    <div>
+      <button
+        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors text-left"
+        onClick={onToggle}
+      >
+        <span className="text-muted-foreground shrink-0">
+          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </span>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium">{group.label}</p>
+          <p className="text-xs text-muted-foreground">{group.total} mensagen{group.total !== 1 ? "s" : ""} • {group.leadIds.length} lead(s)</p>
+        </div>
+      </button>
+
+      {isExpanded && (
+        <div className="px-4 pb-3 pl-11 bg-muted/20 space-y-3">
+          {/* Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="text-center py-2 rounded-md bg-background border border-border">
+              <p className="text-lg font-bold">{group.total}</p>
+              <p className="text-[10px] text-muted-foreground">Total</p>
+            </div>
+            <div className="text-center py-2 rounded-md bg-background border border-border">
+              <p className="text-lg font-bold text-amber-500">{group.sent}</p>
+              <p className="text-[10px] text-muted-foreground">Enviado</p>
+            </div>
+            <div className="text-center py-2 rounded-md bg-background border border-border">
+              <p className="text-lg font-bold text-emerald-500">{group.delivered}</p>
+              <p className="text-[10px] text-muted-foreground">Recebido</p>
+            </div>
+            <div className="text-center py-2 rounded-md bg-background border border-border">
+              <p className="text-lg font-bold text-blue-500">{group.read}</p>
+              <p className="text-[10px] text-muted-foreground">Lido</p>
+            </div>
+          </div>
+
+          {/* Leads list */}
+          {group.leadIds.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Leads enviados</p>
+              {isLoading ? (
+                <div className="flex items-center gap-2 py-3 justify-center text-muted-foreground">
+                  <Loader2 size={14} className="animate-spin" />
+                  <span className="text-xs">Carregando leads...</span>
+                </div>
+              ) : (
+                <ScrollArea className="max-h-[200px]">
+                  <div className="space-y-0.5">
+                    {leads?.map((lead) => (
+                      <div key={lead.id} className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-accent/30">
+                        <Avatar className="w-6 h-6">
+                          <AvatarFallback className={cn(getAvatarColor(lead.name), "text-[10px] text-white")}>
+                            {getInitials(lead.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-medium truncate">{lead.name}</p>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground font-mono">{lead.phone}</span>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
