@@ -140,8 +140,7 @@ export function BroadcastQueue() {
 
             // Alert user on pause
             if (updated.status === "paused_by_system") {
-              const { toast: toastFn } = await import("sonner");
-              toastFn.warning(`Campanha pausada: ${updated.pause_reason || "Proteção anti-ban ativada"}`, { duration: 10000 });
+              toast.warning(`Campanha pausada: ${updated.pause_reason || "Proteção anti-ban ativada"}`, { duration: 10000 });
             }
           }
         }
