@@ -666,50 +666,36 @@ function FlowEditorView({ flow, onBack }: { flow: Flow | null; onBack: () => voi
   if (!isLoaded) return <p className="text-sm text-muted-foreground text-center py-8">Carregando...</p>;
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center gap-2">
+    <div className="fixed inset-0 z-50 bg-background flex flex-col">
+      {/* Header bar */}
+      <div className="flex items-center gap-3 px-4 py-2 border-b border-border bg-background shrink-0">
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onBack}>
           <ArrowLeft size={16} />
         </Button>
-        <h3 className="text-base font-medium flex-1">{flow ? "Editar Fluxo" : "Novo Fluxo"}</h3>
+        <h3 className="text-sm font-medium">{flow ? "Editar Fluxo" : "Novo Fluxo"}</h3>
+        <div className="flex-1 flex items-center gap-3 ml-4">
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome do fluxo" className="h-8 max-w-[200px] text-sm" />
+          <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição (opcional)" className="h-8 max-w-[200px] text-sm" />
+        </div>
         <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} size="sm" className="gap-1.5">
           <Save size={14} />
           {saveMutation.isPending ? "Salvando..." : "Salvar"}
         </Button>
       </div>
 
-      {/* Name/Description */}
-      <Card>
-        <CardContent className="pt-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Nome do fluxo</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Boas-vindas" />
-            </div>
-            <div className="space-y-2">
-              <Label>Descrição (opcional)</Label>
-              <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ex: Fluxo para novos leads" />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Visual Canvas - Expanded */}
-      <Card className="overflow-hidden">
-        <div className="h-[calc(100vh-280px)] min-h-[500px] relative">
-          <FlowCanvas
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            setNodes={setNodes}
-            setEdges={setEdges}
-            templates={templates || []}
-          />
-          <AiFlowChat onGenerate={handleAiGenerate} />
-        </div>
-      </Card>
+      {/* Full-screen Canvas */}
+      <div className="flex-1 relative">
+        <FlowCanvas
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          setNodes={setNodes}
+          setEdges={setEdges}
+          templates={templates || []}
+        />
+        <AiFlowChat onGenerate={handleAiGenerate} />
+      </div>
     </div>
   );
 }
