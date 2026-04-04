@@ -25,7 +25,7 @@ import {
   Package, MessageCircle, Search, FileText, Check, CheckCheck, Paperclip,
   Truck, Users, ArrowLeft, BarChart3, MoreVertical, Pencil, Trash2, Star,
   KeyRound, ChevronDown, Webhook, LogOut, Plug, Tag, ChevronLeft, ChevronRight,
-  Instagram,
+  Instagram, GitBranch,
 } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
@@ -1067,9 +1067,6 @@ function BroadcastTab() {
 
       {/* Template & Account overview bar */}
       <TemplateAccountBar />
-
-      {/* Flow Builder */}
-      <FlowBuilder />
     </div>
   );
 }
@@ -1981,6 +1978,10 @@ export default function WhatsAppApi() {
               <MessageCircle size={16} />
               {!sidebarCollapsed && <span>Chat</span>}
             </TabsTrigger>
+            <TabsTrigger value="flows" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+              <GitBranch size={16} />
+              {!sidebarCollapsed && <span>Fluxos</span>}
+            </TabsTrigger>
             <TabsTrigger value="history" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
               <BarChart3 size={16} />
               {!sidebarCollapsed && <span>Histórico</span>}
@@ -2295,6 +2296,11 @@ export default function WhatsAppApi() {
         {/* ── Chat Tab — full height, no padding */}
         <TabsContent value="chat" className="flex-1 flex flex-col m-0 p-0 min-h-0">
           <CloudChatTab />
+        </TabsContent>
+
+        {/* ── Flows Tab ── */}
+        <TabsContent value="flows" className="space-y-4 p-6 max-w-6xl overflow-auto">
+          <FlowBuilder />
         </TabsContent>
 
         {/* ── History Tab ── */}
