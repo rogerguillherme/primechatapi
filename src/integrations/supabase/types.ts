@@ -179,6 +179,51 @@ export type Database = {
           },
         ]
       }
+      campaign_events: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          event_type: string
+          id: string
+          lead_id: string | null
+          lead_phone: string | null
+          metadata: Json | null
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          event_type?: string
+          id?: string
+          lead_id?: string | null
+          lead_phone?: string | null
+          metadata?: Json | null
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          event_type?: string
+          id?: string
+          lead_id?: string | null
+          lead_phone?: string | null
+          metadata?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_events_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "broadcast_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_events_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_labels: {
         Row: {
           color: string
@@ -301,6 +346,57 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      click_tracking_links: {
+        Row: {
+          campaign_id: string
+          click_count: number
+          clicked_at: string | null
+          created_at: string
+          id: string
+          lead_id: string | null
+          lead_phone: string | null
+          original_url: string
+          short_code: string
+        }
+        Insert: {
+          campaign_id: string
+          click_count?: number
+          clicked_at?: string | null
+          created_at?: string
+          id?: string
+          lead_id?: string | null
+          lead_phone?: string | null
+          original_url: string
+          short_code: string
+        }
+        Update: {
+          campaign_id?: string
+          click_count?: number
+          clicked_at?: string | null
+          created_at?: string
+          id?: string
+          lead_id?: string | null
+          lead_phone?: string | null
+          original_url?: string
+          short_code?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "click_tracking_links_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "broadcast_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "click_tracking_links_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       flow_executions: {
         Row: {
