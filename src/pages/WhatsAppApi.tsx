@@ -1982,6 +1982,10 @@ export default function WhatsAppApi() {
               <BarChart3 size={16} />
               {!sidebarCollapsed && <span>Histórico</span>}
             </TabsTrigger>
+            <TabsTrigger value="analytics" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+              <TrendingUp size={16} />
+              {!sidebarCollapsed && <span>Analytics</span>}
+            </TabsTrigger>
             <TabsTrigger value="flows" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
               <GitBranch size={16} />
               {!sidebarCollapsed && <span>Fluxos</span>}
