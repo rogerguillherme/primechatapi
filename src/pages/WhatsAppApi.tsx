@@ -1686,7 +1686,7 @@ export default function WhatsAppApi() {
   const [isDefault, setIsDefault] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [activeMainTab, setActiveMainTab] = useState("config");
+  const [activeMainTab, setActiveMainTab] = useState("webhook");
   const [flowTriggerType, setFlowTriggerType] = useState<string | undefined>(undefined);
 
   const handleCreateFlowFromWebhook = useCallback((triggerType: string) => {
