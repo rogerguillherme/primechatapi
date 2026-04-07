@@ -102,18 +102,19 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Schedule re-invocation if pending
-    const { data: pendingExecutions } = await supabase
+    // Check if there are more ready executions (beyond this batch) or future ones
+    const { data: moreReady } = await supabase
       .from("flow_executions")
       .select("next_action_at")
       .in("status", ["waiting_delay", "waiting_no_response"])
       .order("next_action_at")
       .limit(1);
 
-    if (pendingExecutions && pendingExecutions.length > 0) {
-      const nextAt = new Date(pendingExecutions[0].next_action_at).getTime();
-      const delayMs = Math.max(nextAt - Date.now(), 1000);
-      const cappedDelay = Math.min(delayMs, 55000);
+    if (moreReady && moreReady.length > 0) {
+      const nextAt = new Date(moreReady[0].next_action_at).getTime();
+      const nowMs = Date.now();
+      // If there are immediately ready ones (processed batch was full), chain quickly
+      const delayMs = nextAt <= nowMs ? 1000 : Math.min(nextAt - nowMs, 55000);
 
       setTimeout(async () => {
         try {
@@ -128,7 +129,7 @@ Deno.serve(async (req) => {
         } catch (e) {
           console.error("Self-invocation failed:", e);
         }
-      }, cappedDelay);
+      }, delayMs);
     }
 
     return new Response(
