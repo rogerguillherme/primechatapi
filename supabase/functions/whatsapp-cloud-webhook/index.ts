@@ -141,13 +141,17 @@ Deno.serve(async (req) => {
     // Resolve access token: try matching account by phone_number_id, then default, then env var
     const incomingPhoneNumberId = value.metadata?.phone_number_id || "";
     let ACCESS_TOKEN: string | undefined;
+    let resolvedAccountId: string | null = null;
     if (incomingPhoneNumberId) {
       const { data: matchedAccount } = await supabase
         .from("whatsapp_accounts")
-        .select("access_token")
+        .select("id, access_token")
         .eq("phone_number_id", incomingPhoneNumberId)
         .maybeSingle();
-      if (matchedAccount) ACCESS_TOKEN = matchedAccount.access_token;
+      if (matchedAccount) {
+        ACCESS_TOKEN = matchedAccount.access_token;
+        resolvedAccountId = matchedAccount.id;
+      }
     }
     if (!ACCESS_TOKEN) {
       const { data: defaultAccount } = await supabase
