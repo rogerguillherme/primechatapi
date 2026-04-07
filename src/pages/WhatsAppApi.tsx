@@ -339,6 +339,8 @@ function BroadcastTab() {
   const [csvRows, setCsvRows] = useState<CsvRow[]>([]);
   const [csvSelectedIdxs, setCsvSelectedIdxs] = useState<Set<number>>(new Set());
   const csvInputRef = useRef<HTMLInputElement>(null);
+  // Progress state for dispatches
+  const [dispatchProgress, setDispatchProgress] = useState<{ current: number; total: number; errors: number; errorDetails: Array<{ phone: string; reason: string }> } | null>(null);
   // Add lead manually
   const [showAddLead, setShowAddLead] = useState(false);
   const [newLeadName, setNewLeadName] = useState("");
