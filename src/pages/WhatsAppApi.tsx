@@ -1208,6 +1208,53 @@ function BroadcastTab() {
                 </>
               )}
             </Button>
+
+            {/* Progress bar */}
+            {dispatchProgress && (
+              <div className="space-y-2 mt-3">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-medium text-muted-foreground">
+                      {isSending ? "Processando..." : "Concluído"}
+                    </span>
+                    <span className="font-mono text-muted-foreground">
+                      {dispatchProgress.current}/{dispatchProgress.total} ({Math.round((dispatchProgress.current / Math.max(dispatchProgress.total, 1)) * 100)}%)
+                    </span>
+                  </div>
+                  <Progress value={(dispatchProgress.current / Math.max(dispatchProgress.total, 1)) * 100} className="h-2.5 bg-muted" />
+                </div>
+                
+                {dispatchProgress.errors > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-destructive font-medium">
+                      ⚠️ {dispatchProgress.errors} erro(s) encontrado(s)
+                    </p>
+                    {dispatchProgress.errorDetails.length > 0 && (
+                      <ScrollArea className="h-[100px] rounded border bg-muted/30">
+                        <div className="p-2 space-y-1">
+                          {dispatchProgress.errorDetails.slice(0, 50).map((err, i) => (
+                            <div key={i} className="text-[10px] flex items-start gap-1">
+                              <AlertCircle size={10} className="text-destructive shrink-0 mt-0.5" />
+                              <span className="font-mono text-muted-foreground">{err.phone}</span>
+                              <span className="text-destructive truncate">— {err.reason}</span>
+                            </div>
+                          ))}
+                          {dispatchProgress.errorDetails.length > 50 && (
+                            <p className="text-[10px] text-muted-foreground">... e mais {dispatchProgress.errorDetails.length - 50} erro(s)</p>
+                          )}
+                        </div>
+                      </ScrollArea>
+                    )}
+                  </div>
+                )}
+                
+                {!isSending && dispatchProgress.errors === 0 && dispatchProgress.current === dispatchProgress.total && (
+                  <p className="text-xs text-emerald-600 font-medium flex items-center gap-1">
+                    <CheckCircle2 size={14} /> Todos processados com sucesso!
+                  </p>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
