@@ -64,15 +64,38 @@ export function SendingMetrics() {
   const { data: stats, isLoading } = useQuery({
     queryKey: ["sending-metrics-summary"],
     queryFn: async () => {
-      const { data: outbound } = await supabase
-        .from("chat_messages")
-        .select("status, delivered_at, read_at")
-        .eq("direction", "outbound");
+      let allOutbound: Array<{ status: string; delivered_at: string | null; read_at: string | null; lead_id: string }> = [];
+      let page = 0;
+      const PAGE_SIZE = 1000;
+      while (true) {
+        const { data: batch } = await supabase
+          .from("chat_messages")
+          .select("status, delivered_at, read_at, lead_id")
+          .eq("direction", "outbound");
+        if (!batch || batch.length === 0) break;
+        allOutbound = allOutbound.concat(batch);
+        if (batch.length < PAGE_SIZE) break;
+        page++;
+      }
 
-      const total = outbound?.length || 0;
-      const sent = outbound?.filter(m => ["sent", "delivered", "read"].includes(m.status)).length || 0;
-      const delivered = outbound?.filter(m => m.status === "delivered" || m.status === "read" || m.delivered_at).length || 0;
-      const read = outbound?.filter(m => m.status === "read" || m.read_at).length || 0;
+      // Aggregate by unique lead - best status wins
+      const leadStatus = new Map<string, { sent: boolean; delivered: boolean; read: boolean }>();
+      for (const msg of allOutbound) {
+        if (!msg.lead_id) continue;
+        const cur = leadStatus.get(msg.lead_id) || { sent: false, delivered: false, read: false };
+        if (["sent", "delivered", "read"].includes(msg.status)) cur.sent = true;
+        if (msg.status === "delivered" || msg.status === "read" || !!msg.delivered_at) cur.delivered = true;
+        if (msg.status === "read" || !!msg.read_at) cur.read = true;
+        leadStatus.set(msg.lead_id, cur);
+      }
+
+      const total = leadStatus.size;
+      let sent = 0, delivered = 0, read = 0;
+      leadStatus.forEach((v) => {
+        if (v.sent) sent++;
+        if (v.delivered) delivered++;
+        if (v.read) read++;
+      });
 
       return { total, sent, delivered, read };
     },
