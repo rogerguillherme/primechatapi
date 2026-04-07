@@ -291,7 +291,7 @@ function DispatchItem({ group, isExpanded, onToggle }: {
         </span>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium">{group.label}</p>
-          <p className="text-xs text-muted-foreground">{group.total} mensagen{group.total !== 1 ? "s" : ""} • {(group.leadIds?.length ?? 0)} lead(s)</p>
+          <p className="text-xs text-muted-foreground">{group.total} lead{group.total !== 1 ? "s" : ""} disparado{group.total !== 1 ? "s" : ""}</p>
         </div>
       </button>
 
