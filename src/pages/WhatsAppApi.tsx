@@ -740,7 +740,17 @@ function BroadcastTab() {
         
         // Step 1: Ensure all CSV contacts exist as leads (batch upsert)
         const UPSERT_BATCH = 50;
-        const csvEntries = Array.from(csvSelectedIdxs).map(idx => csvRows[idx]).filter(Boolean);
+        const rawCsvEntries = Array.from(csvSelectedIdxs).map(idx => csvRows[idx]).filter(Boolean);
+        // Deduplicate CSV entries by phone
+        const csvSeenPhones = new Set<string>();
+        const csvEntries = rawCsvEntries.filter(row => {
+          const norm = row.telefone.replace(/\D/g, "");
+          if (csvSeenPhones.has(norm)) return false;
+          csvSeenPhones.add(norm);
+          return true;
+        });
+        const csvDupesSkipped = rawCsvEntries.length - csvEntries.length;
+        if (csvDupesSkipped > 0) toast.info(`${csvDupesSkipped} contato(s) duplicado(s) removidos.`);
         
         for (let i = 0; i < csvEntries.length; i += UPSERT_BATCH) {
           const batch = csvEntries.slice(i, i + UPSERT_BATCH);
