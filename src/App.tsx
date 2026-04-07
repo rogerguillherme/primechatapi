@@ -109,6 +109,7 @@ const App = () => (
         <AuthProvider>
           <PlatformProvider>
             <AppRoutes />
+            <BroadcastProgressFloat />
           </PlatformProvider>
         </AuthProvider>
       </BrowserRouter>
