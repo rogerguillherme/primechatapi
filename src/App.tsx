@@ -96,6 +96,7 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route path="/site" element={<LandingPage />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
