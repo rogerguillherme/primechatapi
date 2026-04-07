@@ -27,13 +27,16 @@ Deno.serve(async (req) => {
     const accountId = defaultAccount?.id || null;
     console.log("Using account_id:", accountId);
 
-    // Find executions where delay/timeout has expired
+    // Find executions where delay/timeout has expired (batch limit to avoid timeout)
+    const BATCH_LIMIT = 10;
     const now = new Date().toISOString();
     const { data: readyExecutions } = await supabase
       .from("flow_executions")
       .select("*, current_step:flow_steps!current_step_id(*)")
       .in("status", ["waiting_delay", "waiting_no_response"])
-      .lte("next_action_at", now);
+      .lte("next_action_at", now)
+      .order("next_action_at", { ascending: true })
+      .limit(BATCH_LIMIT);
 
     if (!readyExecutions || readyExecutions.length === 0) {
       return new Response(
