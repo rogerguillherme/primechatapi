@@ -15,6 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ChatMediaBubble } from "@/components/ChatMediaBubble";
+import { Progress } from "@/components/ui/progress";
 import { AudioRecorder } from "@/components/AudioRecorder";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
