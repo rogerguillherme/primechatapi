@@ -723,21 +723,36 @@ function BroadcastTab() {
     const accountIds = selectedAccountIds.size > 0 ? Array.from(selectedAccountIds) : (defaultAccount ? [defaultAccount.id] : []);
 
     if (isCsv) {
-      for (const idx of csvSelectedIdxs) {
-        const row = csvRows[idx];
-        if (!row) continue;
-
-        try {
-          if (sendType === "flow") {
-            const leadId = await findLeadByPhone(row.telefone);
-            if (!leadId) {
-              errorCount++;
-              continue;
-            }
-            if (!flowIdForDispatch) throw new Error("Selecione um fluxo antes de iniciar.");
-            await startFlowForLead(leadId, flowIdForDispatch, row.codigo);
-            successCount++;
+      if (sendType === "flow" && flowIdForDispatch) {
+        // Bulk flow for CSV: resolve lead IDs first, then batch insert
+        const leadIds: string[] = [];
+        const codigoMap: Record<string, string> = {};
+        for (const idx of csvSelectedIdxs) {
+          const row = csvRows[idx];
+          if (!row) continue;
+          const leadId = await findLeadByPhone(row.telefone);
+          if (leadId) {
+            leadIds.push(leadId);
+            if (row.codigo) codigoMap[leadId] = row.codigo;
           } else {
+            errorCount++;
+          }
+        }
+        if (leadIds.length > 0) {
+          try {
+            const result = await startFlowBulk(leadIds, flowIdForDispatch, codigoMap);
+            successCount = result.insertedCount;
+            errorCount += result.insertErrors;
+          } catch (e: any) {
+            errorCount += leadIds.length;
+            lastError = e?.message || "Erro desconhecido";
+          }
+        }
+      } else {
+        for (const idx of csvSelectedIdxs) {
+          const row = csvRows[idx];
+          if (!row) continue;
+          try {
             for (const accountId of accountIds) {
               const body: any = { phone: row.telefone, account_id: accountId };
               if (sendType === "template" && selectedTemplate?.template_name) {
@@ -749,29 +764,34 @@ function BroadcastTab() {
                   .replace(/\{nome\}/g, row.nome.split(" ")[0])
                   .replace(/\{codigo\}/g, row.codigo);
               }
-
               const { data: sendData, error } = await supabase.functions.invoke("whatsapp-cloud-send", { body });
               if (error) throw error;
               if (sendData?.error) throw new Error(sendData.error);
               successCount++;
             }
+          } catch (e: any) {
+            errorCount++;
+            lastError = e?.message || "Erro desconhecido";
           }
-        } catch (e: any) {
-          errorCount++;
-          lastError = e?.message || "Erro desconhecido";
         }
       }
     } else {
-      for (const leadId of selectedLeads) {
-        const lead = leads?.find((l) => l.id === leadId);
-        if (!lead) continue;
-
+      if (sendType === "flow" && flowIdForDispatch) {
+        // Bulk flow for leads: batch insert all at once
+        const leadIds = Array.from(selectedLeads);
         try {
-          if (sendType === "flow") {
-            if (!flowIdForDispatch) throw new Error("Selecione um fluxo antes de iniciar.");
-            await startFlowForLead(leadId, flowIdForDispatch);
-            successCount++;
-          } else {
+          const result = await startFlowBulk(leadIds, flowIdForDispatch);
+          successCount = result.insertedCount;
+          errorCount += result.insertErrors;
+        } catch (e: any) {
+          errorCount += leadIds.length;
+          lastError = e?.message || "Erro desconhecido";
+        }
+      } else {
+        for (const leadId of selectedLeads) {
+          const lead = leads?.find((l) => l.id === leadId);
+          if (!lead) continue;
+          try {
             for (const accountId of accountIds) {
               const body: any = { phone: lead.phone, lead_id: lead.id, account_id: accountId };
               if (sendType === "template" && selectedTemplate?.template_name) {
@@ -781,16 +801,15 @@ function BroadcastTab() {
               } else {
                 body.message = customMessage.replace(/\{nome\}/g, lead.name.split(" ")[0]);
               }
-
               const { data: sendData2, error } = await supabase.functions.invoke("whatsapp-cloud-send", { body });
               if (error) throw error;
               if (sendData2?.error) throw new Error(sendData2.error);
               successCount++;
             }
+          } catch (e: any) {
+            errorCount++;
+            lastError = e?.message || "Erro desconhecido";
           }
-        } catch (e: any) {
-          errorCount++;
-          lastError = e?.message || "Erro desconhecido";
         }
       }
     }
