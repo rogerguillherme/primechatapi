@@ -107,28 +107,60 @@ export function SendingMetrics() {
     queryFn: async () => {
       const { data: outbound } = await supabase
         .from("chat_messages")
-        .select("status, delivered_at, read_at, account_id")
+        .select("status, delivered_at, read_at, account_id, lead_id")
         .eq("direction", "outbound");
 
       if (!outbound || outbound.length === 0 || accounts.length === 0) return [] as AccountStats[];
 
-      const map = new Map<string, AccountStats>();
+      // Group by account -> lead -> best status
+      const accountLeads = new Map<string, Map<string, { sent: boolean; delivered: boolean; read: boolean; failed: boolean }>>();
+
       for (const acc of accounts) {
-        map.set(acc.id, { id: acc.id, name: acc.name, total: 0, sent: 0, delivered: 0, read: 0, failed: 0 });
+        accountLeads.set(acc.id, new Map());
       }
-      map.set("unknown", { id: "unknown", name: "Sem conta", total: 0, sent: 0, delivered: 0, read: 0, failed: 0 });
+      accountLeads.set("unknown", new Map());
 
       for (const msg of outbound) {
-        const key = msg.account_id && map.has(msg.account_id) ? msg.account_id : "unknown";
-        const entry = map.get(key)!;
-        entry.total++;
-        if (["sent", "delivered", "read"].includes(msg.status)) entry.sent++;
-        if (msg.status === "delivered" || msg.status === "read" || msg.delivered_at) entry.delivered++;
-        if (msg.status === "read" || msg.read_at) entry.read++;
-        if (msg.status === "failed") entry.failed++;
+        if (!msg.lead_id) continue;
+        const accKey = msg.account_id && accountLeads.has(msg.account_id) ? msg.account_id : "unknown";
+        const leads = accountLeads.get(accKey)!;
+        const cur = leads.get(msg.lead_id) || { sent: false, delivered: false, read: false, failed: false };
+
+        if (["sent", "delivered", "read"].includes(msg.status)) cur.sent = true;
+        if (msg.status === "delivered" || msg.status === "read" || !!msg.delivered_at) cur.delivered = true;
+        if (msg.status === "read" || !!msg.read_at) cur.read = true;
+        if (msg.status === "failed") cur.failed = true;
+
+        leads.set(msg.lead_id, cur);
       }
 
-      return Array.from(map.values()).filter(a => a.total > 0);
+      const result: AccountStats[] = [];
+      for (const acc of accounts) {
+        const leads = accountLeads.get(acc.id);
+        if (!leads || leads.size === 0) continue;
+        let sent = 0, delivered = 0, read = 0, failed = 0;
+        leads.forEach((v) => {
+          if (v.sent) sent++;
+          if (v.delivered) delivered++;
+          if (v.read) read++;
+          if (v.failed && !v.sent && !v.delivered && !v.read) failed++;
+        });
+        result.push({ id: acc.id, name: acc.name, total: leads.size, sent, delivered, read, failed });
+      }
+
+      const unknownLeads = accountLeads.get("unknown");
+      if (unknownLeads && unknownLeads.size > 0) {
+        let sent = 0, delivered = 0, read = 0, failed = 0;
+        unknownLeads.forEach((v) => {
+          if (v.sent) sent++;
+          if (v.delivered) delivered++;
+          if (v.read) read++;
+          if (v.failed && !v.sent && !v.delivered && !v.read) failed++;
+        });
+        result.push({ id: "unknown", name: "Sem conta", total: unknownLeads.size, sent, delivered, read, failed });
+      }
+
+      return result;
     },
     enabled: accounts.length > 0,
     refetchInterval: 30000,
