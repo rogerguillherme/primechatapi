@@ -886,11 +886,15 @@ function BroadcastTab() {
         const errorDetails: Array<{ phone: string; reason: string }> = [];
         let processed = 0;
         
+        const seenPhones2 = new Set<string>();
         let accountRR2 = 0;
         for (const leadId of leadIds) {
           if (cancelRef.current) break;
           const lead = leads?.find((l) => l.id === leadId);
           if (!lead) continue;
+          const normPhone = lead.phone.replace(/\D/g, "");
+          if (seenPhones2.has(normPhone)) { processed++; continue; }
+          seenPhones2.add(normPhone);
           try {
             const accountId = accountIds[accountRR2 % accountIds.length];
             accountRR2++;
