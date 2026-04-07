@@ -235,12 +235,14 @@ Deno.serve(async (req) => {
 
       // Interactive button reply
       let buttonPayload: string | null = null;
+      let buttonTitle: string | null = null;
       if (msg.type === "interactive") {
         const reply = msg.interactive?.button_reply || msg.interactive?.list_reply;
         if (reply) {
           text = reply.title || reply.id || "";
           buttonPayload = reply.id || reply.title || "";
-          console.log("Button reply received:", buttonPayload);
+          buttonTitle = reply.title || null;
+          console.log("Button reply received - id:", buttonPayload, "title:", buttonTitle);
         }
       }
       // Quick reply (from template buttons)
