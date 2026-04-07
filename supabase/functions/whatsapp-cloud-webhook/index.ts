@@ -376,16 +376,18 @@ Deno.serve(async (req) => {
           let matchedStep: any = null;
 
           if (currentStepId) {
-            // Find child step whose trigger_value matches the button clicked
+            // Find child step whose trigger_value matches the button id or title
             const { data: childSteps } = await supabase
               .from("flow_steps")
               .select("*")
               .eq("flow_id", exec.flow_id)
-              .eq("parent_step_id", currentStepId)
-              .eq("trigger_value", buttonPayload);
+              .eq("parent_step_id", currentStepId);
 
             if (childSteps && childSteps.length > 0) {
-              matchedStep = childSteps[0];
+              // Try matching by button id first, then by title
+              matchedStep = childSteps.find((s: any) => s.trigger_value === buttonPayload)
+                || (buttonTitle ? childSteps.find((s: any) => s.trigger_value === buttonTitle) : null)
+                || null;
             }
           }
 
