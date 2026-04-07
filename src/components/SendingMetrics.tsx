@@ -114,21 +114,34 @@ export function SendingMetrics() {
   const { data: dispatches, isLoading: loadingDispatches } = useQuery({
     queryKey: ["sending-metrics-dispatches"],
     queryFn: async () => {
-      const { data: outbound } = await supabase
-        .from("chat_messages")
-        .select("status, delivered_at, read_at, created_at, content, lead_id")
-        .eq("direction", "outbound")
-        .order("created_at", { ascending: false });
+      // Fetch all outbound messages (paginate if > 1000)
+      let allOutbound: any[] = [];
+      let page = 0;
+      const PAGE_SIZE = 1000;
+      while (true) {
+        const { data: batch } = await supabase
+          .from("chat_messages")
+          .select("status, delivered_at, read_at, created_at, content, lead_id")
+          .eq("direction", "outbound")
+          .order("created_at", { ascending: false })
+          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+        if (!batch || batch.length === 0) break;
+        allOutbound = allOutbound.concat(batch);
+        if (batch.length < PAGE_SIZE) break;
+        page++;
+      }
 
-      if (!outbound || outbound.length === 0) return [] as BroadcastGroup[];
+      if (allOutbound.length === 0) return [] as BroadcastGroup[];
 
+      // Group by 30-minute windows (captures full large dispatches)
+      const WINDOW_MS = 30 * 60 * 1000;
       const groups: BroadcastGroup[] = [];
-      let current: typeof outbound = [];
+      let current: typeof allOutbound = [];
       let currentStart: Date | null = null;
 
-      for (const msg of outbound) {
+      for (const msg of allOutbound) {
         const msgDate = new Date(msg.created_at);
-        if (!currentStart || (currentStart.getTime() - msgDate.getTime()) > 5 * 60 * 1000) {
+        if (!currentStart || (currentStart.getTime() - msgDate.getTime()) > WINDOW_MS) {
           if (current.length > 0 && currentStart) {
             groups.push(buildGroup(current, currentStart));
           }
