@@ -114,66 +114,29 @@ export function SendingMetrics() {
   const { data: dispatches, isLoading: loadingDispatches } = useQuery({
     queryKey: ["sending-metrics-dispatches"],
     queryFn: async () => {
-      // Fetch all outbound messages (paginate if > 1000)
-      let allOutbound: any[] = [];
-      let page = 0;
-      const PAGE_SIZE = 1000;
-      while (true) {
-        const { data: batch } = await supabase
-          .from("chat_messages")
-          .select("status, delivered_at, read_at, created_at, content, lead_id")
-          .eq("direction", "outbound")
-          .order("created_at", { ascending: false })
-          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-        if (!batch || batch.length === 0) break;
-        allOutbound = allOutbound.concat(batch);
-        if (batch.length < PAGE_SIZE) break;
-        page++;
-      }
+      const { data: jobs } = await supabase
+        .from("broadcast_jobs")
+        .select("id, created_at, total_leads, sent_count, delivered_count, read_count, error_count, lead_ids, status")
+        .order("created_at", { ascending: false });
 
-      if (allOutbound.length === 0) return [] as BroadcastGroup[];
+      if (!jobs || jobs.length === 0) return [] as BroadcastGroup[];
 
-      // Group by 30-minute windows (captures full large dispatches)
-      const WINDOW_MS = 30 * 60 * 1000;
-      const groups: BroadcastGroup[] = [];
-      let current: typeof allOutbound = [];
-      let currentStart: Date | null = null;
-
-      for (const msg of allOutbound) {
-        const msgDate = new Date(msg.created_at);
-        if (!currentStart || (currentStart.getTime() - msgDate.getTime()) > WINDOW_MS) {
-          if (current.length > 0 && currentStart) {
-            groups.push(buildGroup(current, currentStart));
-          }
-          current = [msg];
-          currentStart = msgDate;
-        } else {
-          current.push(msg);
-        }
-      }
-      if (current.length > 0 && currentStart) {
-        groups.push(buildGroup(current, currentStart));
-      }
-
-      return groups;
+      return jobs.map((job): BroadcastGroup => {
+        const dateStr = format(new Date(job.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR });
+        return {
+          key: job.id,
+          label: `Disparo ${dateStr}`,
+          total: job.total_leads || job.lead_ids?.length || 0,
+          sent: job.sent_count || 0,
+          delivered: job.delivered_count || 0,
+          read: job.read_count || 0,
+          failed: job.error_count || 0,
+          leadIds: job.lead_ids || [],
+        };
+      });
     },
     refetchInterval: 30000,
   });
-
-  function buildGroup(msgs: any[], startDate: Date): BroadcastGroup {
-    const dateStr = format(startDate, "dd/MM/yyyy HH:mm", { locale: ptBR });
-    const uniqueLeadIds = [...new Set(msgs.map(m => m.lead_id).filter(Boolean))];
-    return {
-      key: startDate.toISOString(),
-      label: `Disparo ${dateStr}`,
-      total: msgs.length,
-      sent: msgs.filter(m => ["sent", "delivered", "read"].includes(m.status)).length,
-      delivered: msgs.filter(m => m.status === "delivered" || m.status === "read" || m.delivered_at).length,
-      read: msgs.filter(m => m.status === "read" || m.read_at).length,
-      failed: msgs.filter(m => m.status === "failed").length,
-      leadIds: uniqueLeadIds,
-    };
-  }
 
   const pct = (n: number, t: number) => t > 0 ? `${Math.round((n / t) * 100)}%` : "—";
 
