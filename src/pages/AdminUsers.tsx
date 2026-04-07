@@ -52,9 +52,12 @@ export default function AdminUsers() {
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
   const [form, setForm] = useState({ email: "", password: "", display_name: "", role: "user" });
 
+  const isSuperAdmin = user?.email === "admin@primechat.com";
+
   const { data: users = [], isLoading } = useQuery<AppUser[]>({
     queryKey: ["admin-users"],
     queryFn: () => adminFetch("list", "GET"),
+    enabled: isSuperAdmin,
   });
 
   const createMutation = useMutation({
