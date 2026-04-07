@@ -64,38 +64,17 @@ export function SendingMetrics() {
   const { data: stats, isLoading } = useQuery({
     queryKey: ["sending-metrics-summary"],
     queryFn: async () => {
-      let allOutbound: Array<{ status: string; delivered_at: string | null; read_at: string | null; lead_id: string }> = [];
-      let page = 0;
-      const PAGE_SIZE = 1000;
-      while (true) {
-        const { data: batch } = await supabase
-          .from("chat_messages")
-          .select("status, delivered_at, read_at, lead_id")
-          .eq("direction", "outbound");
-        if (!batch || batch.length === 0) break;
-        allOutbound = allOutbound.concat(batch);
-        if (batch.length < PAGE_SIZE) break;
-        page++;
-      }
+      // Derive metrics from broadcast_jobs (has user RLS) instead of chat_messages (open)
+      const { data: jobs } = await supabase
+        .from("broadcast_jobs")
+        .select("total_leads, sent_count, delivered_count, read_count, error_count");
 
-      // Aggregate by unique lead - best status wins
-      const leadStatus = new Map<string, { sent: boolean; delivered: boolean; read: boolean }>();
-      for (const msg of allOutbound) {
-        if (!msg.lead_id) continue;
-        const cur = leadStatus.get(msg.lead_id) || { sent: false, delivered: false, read: false };
-        if (["sent", "delivered", "read"].includes(msg.status)) cur.sent = true;
-        if (msg.status === "delivered" || msg.status === "read" || !!msg.delivered_at) cur.delivered = true;
-        if (msg.status === "read" || !!msg.read_at) cur.read = true;
-        leadStatus.set(msg.lead_id, cur);
-      }
+      if (!jobs || jobs.length === 0) return { total: 0, sent: 0, delivered: 0, read: 0 };
 
-      const total = leadStatus.size;
-      let sent = 0, delivered = 0, read = 0;
-      leadStatus.forEach((v) => {
-        if (v.sent) sent++;
-        if (v.delivered) delivered++;
-        if (v.read) read++;
-      });
+      const total = jobs.reduce((sum, j) => sum + (j.total_leads || 0), 0);
+      const sent = jobs.reduce((sum, j) => sum + (j.sent_count || 0), 0);
+      const delivered = jobs.reduce((sum, j) => sum + (j.delivered_count || 0), 0);
+      const read = jobs.reduce((sum, j) => sum + (j.read_count || 0), 0);
 
       return { total, sent, delivered, read };
     },
@@ -105,59 +84,37 @@ export function SendingMetrics() {
   const { data: accountStats } = useQuery({
     queryKey: ["sending-metrics-by-account"],
     queryFn: async () => {
-      const { data: outbound } = await supabase
-        .from("chat_messages")
-        .select("status, delivered_at, read_at, account_id, lead_id")
-        .eq("direction", "outbound");
+      // Get all user's broadcast jobs (RLS filters by user_id)
+      const { data: jobs } = await supabase
+        .from("broadcast_jobs")
+        .select("id, account_id, total_leads, sent_count, delivered_count, read_count, error_count");
 
-      if (!outbound || outbound.length === 0 || accounts.length === 0) return [] as AccountStats[];
+      if (!jobs || jobs.length === 0 || accounts.length === 0) return [] as AccountStats[];
 
-      // Group by account -> lead -> best status
-      const accountLeads = new Map<string, Map<string, { sent: boolean; delivered: boolean; read: boolean; failed: boolean }>>();
+      // Group by account_id
+      const accountMap = new Map<string, { total: number; sent: number; delivered: number; read: number; failed: number }>();
 
-      for (const acc of accounts) {
-        accountLeads.set(acc.id, new Map());
-      }
-      accountLeads.set("unknown", new Map());
-
-      for (const msg of outbound) {
-        if (!msg.lead_id) continue;
-        const accKey = msg.account_id && accountLeads.has(msg.account_id) ? msg.account_id : "unknown";
-        const leads = accountLeads.get(accKey)!;
-        const cur = leads.get(msg.lead_id) || { sent: false, delivered: false, read: false, failed: false };
-
-        if (["sent", "delivered", "read"].includes(msg.status)) cur.sent = true;
-        if (msg.status === "delivered" || msg.status === "read" || !!msg.delivered_at) cur.delivered = true;
-        if (msg.status === "read" || !!msg.read_at) cur.read = true;
-        if (msg.status === "failed") cur.failed = true;
-
-        leads.set(msg.lead_id, cur);
+      for (const job of jobs) {
+        const accId = job.account_id || "unknown";
+        const cur = accountMap.get(accId) || { total: 0, sent: 0, delivered: 0, read: 0, failed: 0 };
+        cur.total += job.total_leads || 0;
+        cur.sent += job.sent_count || 0;
+        cur.delivered += job.delivered_count || 0;
+        cur.read += job.read_count || 0;
+        cur.failed += job.error_count || 0;
+        accountMap.set(accId, cur);
       }
 
       const result: AccountStats[] = [];
       for (const acc of accounts) {
-        const leads = accountLeads.get(acc.id);
-        if (!leads || leads.size === 0) continue;
-        let sent = 0, delivered = 0, read = 0, failed = 0;
-        leads.forEach((v) => {
-          if (v.sent) sent++;
-          if (v.delivered) delivered++;
-          if (v.read) read++;
-          if (v.failed && !v.sent && !v.delivered && !v.read) failed++;
-        });
-        result.push({ id: acc.id, name: acc.name, total: leads.size, sent, delivered, read, failed });
+        const stats = accountMap.get(acc.id);
+        if (!stats || stats.total === 0) continue;
+        result.push({ id: acc.id, name: acc.name, ...stats });
       }
 
-      const unknownLeads = accountLeads.get("unknown");
-      if (unknownLeads && unknownLeads.size > 0) {
-        let sent = 0, delivered = 0, read = 0, failed = 0;
-        unknownLeads.forEach((v) => {
-          if (v.sent) sent++;
-          if (v.delivered) delivered++;
-          if (v.read) read++;
-          if (v.failed && !v.sent && !v.delivered && !v.read) failed++;
-        });
-        result.push({ id: "unknown", name: "Sem conta", total: unknownLeads.size, sent, delivered, read, failed });
+      const unknown = accountMap.get("unknown");
+      if (unknown && unknown.total > 0) {
+        result.push({ id: "unknown", name: "Sem conta", ...unknown });
       }
 
       return result;
@@ -174,122 +131,24 @@ export function SendingMetrics() {
         .select("id, created_at, total_leads, sent_count, delivered_count, read_count, error_count, lead_ids")
         .order("created_at", { ascending: false });
 
-      if (jobs && jobs.length > 0) {
-        return jobs.map((job): BroadcastGroup => {
-          const dateStr = format(new Date(job.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR });
-          return {
-            key: job.id,
-            label: `Disparo ${dateStr}`,
-            total: job.total_leads || job.lead_ids?.length || 0,
-            sent: job.sent_count || 0,
-            delivered: job.delivered_count || 0,
-            read: job.read_count || 0,
-            failed: job.error_count || 0,
-            leadIds: job.lead_ids || [],
-          };
-        });
-      }
+      if (!jobs || jobs.length === 0) return [] as BroadcastGroup[];
 
-      let allOutbound: Array<{
-        status: string;
-        delivered_at: string | null;
-        read_at: string | null;
-        created_at: string;
-        lead_id: string;
-      }> = [];
-      let page = 0;
-      const PAGE_SIZE = 1000;
-
-      while (true) {
-        const { data: batch } = await supabase
-          .from("chat_messages")
-          .select("status, delivered_at, read_at, created_at, lead_id")
-          .eq("direction", "outbound")
-          .order("created_at", { ascending: false })
-          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-
-        if (!batch || batch.length === 0) break;
-        allOutbound = allOutbound.concat(batch);
-        if (batch.length < PAGE_SIZE) break;
-        page++;
-      }
-
-      if (allOutbound.length === 0) return [] as BroadcastGroup[];
-
-      const WINDOW_MS = 30 * 60 * 1000;
-      const groups: BroadcastGroup[] = [];
-      let current: typeof allOutbound = [];
-      let currentStart: Date | null = null;
-
-      for (const msg of allOutbound) {
-        const msgDate = new Date(msg.created_at);
-        if (!currentStart || (currentStart.getTime() - msgDate.getTime()) > WINDOW_MS) {
-          if (current.length > 0 && currentStart) {
-            groups.push(buildGroupFromMessages(current, currentStart));
-          }
-          current = [msg];
-          currentStart = msgDate;
-        } else {
-          current.push(msg);
-        }
-      }
-
-      if (current.length > 0 && currentStart) {
-        groups.push(buildGroupFromMessages(current, currentStart));
-      }
-
-      return groups;
+      return jobs.map((job): BroadcastGroup => {
+        const dateStr = format(new Date(job.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR });
+        return {
+          key: job.id,
+          label: `Disparo ${dateStr}`,
+          total: job.total_leads || job.lead_ids?.length || 0,
+          sent: job.sent_count || 0,
+          delivered: job.delivered_count || 0,
+          read: job.read_count || 0,
+          failed: job.error_count || 0,
+          leadIds: job.lead_ids || [],
+        };
+      });
     },
     refetchInterval: 30000,
   });
-
-  function buildGroupFromMessages(msgs: Array<{
-    status: string;
-    delivered_at: string | null;
-    read_at: string | null;
-    created_at: string;
-    lead_id: string;
-  }>, startDate: Date): BroadcastGroup {
-    const dateStr = format(startDate, "dd/MM/yyyy HH:mm", { locale: ptBR });
-    const leadStatus = new Map<string, { sent: boolean; delivered: boolean; read: boolean; failed: boolean }>();
-
-    for (const msg of msgs) {
-      if (!msg.lead_id) continue;
-      const current = leadStatus.get(msg.lead_id) || { sent: false, delivered: false, read: false, failed: false };
-
-      if (["sent", "delivered", "read"].includes(msg.status)) current.sent = true;
-      if (msg.status === "delivered" || msg.status === "read" || !!msg.delivered_at) current.delivered = true;
-      if (msg.status === "read" || !!msg.read_at) current.read = true;
-      if (msg.status === "failed") current.failed = true;
-
-      leadStatus.set(msg.lead_id, current);
-    }
-
-    const leadIds = Array.from(leadStatus.keys());
-    const totals = leadIds.reduce(
-      (acc, leadId) => {
-        const current = leadStatus.get(leadId);
-        if (!current) return acc;
-        if (current.sent) acc.sent++;
-        if (current.delivered) acc.delivered++;
-        if (current.read) acc.read++;
-        if (current.failed && !current.sent && !current.delivered && !current.read) acc.failed++;
-        return acc;
-      },
-      { sent: 0, delivered: 0, read: 0, failed: 0 }
-    );
-
-    return {
-      key: startDate.toISOString(),
-      label: `Disparo ${dateStr}`,
-      total: leadIds.length,
-      sent: totals.sent,
-      delivered: totals.delivered,
-      read: totals.read,
-      failed: totals.failed,
-      leadIds,
-    };
-  }
 
   const pct = (n: number, t: number) => t > 0 ? `${Math.round((n / t) * 100)}%` : "—";
 
