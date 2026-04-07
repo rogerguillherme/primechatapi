@@ -726,31 +726,86 @@ function BroadcastTab() {
 
     if (isCsv) {
       if (sendType === "flow" && flowIdForDispatch) {
-        // Bulk flow for CSV: resolve lead IDs first, then batch insert
+        // Bulk flow for CSV: auto-create leads if needed, then batch insert flow executions
+        const totalContacts = Array.from(csvSelectedIdxs).length;
+        setDispatchProgress({ current: 0, total: totalContacts, errors: 0, errorDetails: [] });
+        
         const leadIds: string[] = [];
         const codigoMap: Record<string, string> = {};
-        for (const idx of csvSelectedIdxs) {
-          const row = csvRows[idx];
-          if (!row) continue;
-          const leadId = await findLeadByPhone(row.telefone);
-          if (leadId) {
-            leadIds.push(leadId);
-            if (row.codigo) codigoMap[leadId] = row.codigo;
+        const errorDetails: Array<{ phone: string; reason: string }> = [];
+        
+        // Step 1: Ensure all CSV contacts exist as leads (batch upsert)
+        const UPSERT_BATCH = 50;
+        const csvEntries = Array.from(csvSelectedIdxs).map(idx => csvRows[idx]).filter(Boolean);
+        
+        for (let i = 0; i < csvEntries.length; i += UPSERT_BATCH) {
+          const batch = csvEntries.slice(i, i + UPSERT_BATCH);
+          const upsertRows = batch.map(row => ({
+            phone: row.telefone.length <= 11 ? `55${row.telefone}` : row.telefone,
+            name: row.nome || `Contato ${row.telefone.slice(-4)}`,
+            origin: "csv_import" as const,
+          }));
+          
+          const { data: upserted, error: upsertErr } = await supabase
+            .from("leads")
+            .upsert(upsertRows, { onConflict: "phone", ignoreDuplicates: false })
+            .select("id, phone");
+          
+          if (upsertErr) {
+            // Fallback: try to find existing ones
+            const phones = upsertRows.map(r => r.phone);
+            const { data: existing } = await supabase.from("leads").select("id, phone").in("phone", phones);
+            for (const ex of existing || []) {
+              leadIds.push(ex.id);
+              const csvRow = batch.find(r => {
+                const p = r.telefone.length <= 11 ? `55${r.telefone}` : r.telefone;
+                return p === ex.phone;
+              });
+              if (csvRow?.codigo) codigoMap[ex.id] = csvRow.codigo;
+            }
+            const existingPhones = new Set((existing || []).map(e => e.phone));
+            for (const row of batch) {
+              const phone = row.telefone.length <= 11 ? `55${row.telefone}` : row.telefone;
+              if (!existingPhones.has(phone)) {
+                errorDetails.push({ phone: row.telefone, reason: `Erro ao criar lead: ${upsertErr.message}` });
+              }
+            }
           } else {
-            errorCount++;
+            for (const lead of upserted || []) {
+              leadIds.push(lead.id);
+              const csvRow = batch.find(r => {
+                const p = r.telefone.length <= 11 ? `55${r.telefone}` : r.telefone;
+                return p === lead.phone;
+              });
+              if (csvRow?.codigo) codigoMap[lead.id] = csvRow.codigo;
+            }
           }
+          
+          setDispatchProgress(prev => prev ? { ...prev, current: Math.min(i + UPSERT_BATCH, csvEntries.length), errors: errorDetails.length, errorDetails: [...errorDetails] } : null);
         }
+        
+        // Step 2: Bulk insert flow executions
         if (leadIds.length > 0) {
           try {
             const result = await startFlowBulk(leadIds, flowIdForDispatch, codigoMap);
             successCount = result.insertedCount;
-            errorCount += result.insertErrors;
+            errorCount = errorDetails.length + result.insertErrors;
           } catch (e: any) {
-            errorCount += leadIds.length;
+            errorCount = leadIds.length + errorDetails.length;
             lastError = e?.message || "Erro desconhecido";
+            errorDetails.push({ phone: "—", reason: e?.message || "Erro ao criar execuções" });
           }
+        } else {
+          errorCount = errorDetails.length;
         }
+        
+        setDispatchProgress(prev => prev ? { ...prev, current: totalContacts, errors: errorCount, errorDetails } : null);
       } else {
+        const totalContacts = Array.from(csvSelectedIdxs).length;
+        setDispatchProgress({ current: 0, total: totalContacts, errors: 0, errorDetails: [] });
+        const errorDetails: Array<{ phone: string; reason: string }> = [];
+        let processed = 0;
+        
         for (const idx of csvSelectedIdxs) {
           const row = csvRows[idx];
           if (!row) continue;
@@ -774,13 +829,17 @@ function BroadcastTab() {
           } catch (e: any) {
             errorCount++;
             lastError = e?.message || "Erro desconhecido";
+            errorDetails.push({ phone: row.telefone, reason: e?.message || "Erro desconhecido" });
           }
+          processed++;
+          setDispatchProgress({ current: processed, total: totalContacts, errors: errorCount, errorDetails: [...errorDetails] });
         }
       }
     } else {
       if (sendType === "flow" && flowIdForDispatch) {
-        // Bulk flow for leads: batch insert all at once
         const leadIds = Array.from(selectedLeads);
+        const totalContacts = leadIds.length;
+        setDispatchProgress({ current: 0, total: totalContacts, errors: 0, errorDetails: [] });
         try {
           const result = await startFlowBulk(leadIds, flowIdForDispatch);
           successCount = result.insertedCount;
@@ -789,8 +848,15 @@ function BroadcastTab() {
           errorCount += leadIds.length;
           lastError = e?.message || "Erro desconhecido";
         }
+        setDispatchProgress({ current: totalContacts, total: totalContacts, errors: errorCount, errorDetails: [] });
       } else {
-        for (const leadId of selectedLeads) {
+        const leadIds = Array.from(selectedLeads);
+        const totalContacts = leadIds.length;
+        setDispatchProgress({ current: 0, total: totalContacts, errors: 0, errorDetails: [] });
+        const errorDetails: Array<{ phone: string; reason: string }> = [];
+        let processed = 0;
+        
+        for (const leadId of leadIds) {
           const lead = leads?.find((l) => l.id === leadId);
           if (!lead) continue;
           try {
@@ -811,7 +877,10 @@ function BroadcastTab() {
           } catch (e: any) {
             errorCount++;
             lastError = e?.message || "Erro desconhecido";
+            errorDetails.push({ phone: lead.phone, reason: e?.message || "Erro desconhecido" });
           }
+          processed++;
+          setDispatchProgress({ current: processed, total: totalContacts, errors: errorCount, errorDetails: [...errorDetails] });
         }
       }
     }
