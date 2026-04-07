@@ -545,6 +545,7 @@ function BroadcastTab() {
     }
 
     setIsSending(true);
+    cancelRef.current = false;
     setDispatchProgress(null);
     let successCount = 0;
     let errorCount = 0;
