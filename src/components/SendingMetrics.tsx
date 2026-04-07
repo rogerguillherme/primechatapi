@@ -64,38 +64,17 @@ export function SendingMetrics() {
   const { data: stats, isLoading } = useQuery({
     queryKey: ["sending-metrics-summary"],
     queryFn: async () => {
-      let allOutbound: Array<{ status: string; delivered_at: string | null; read_at: string | null; lead_id: string }> = [];
-      let page = 0;
-      const PAGE_SIZE = 1000;
-      while (true) {
-        const { data: batch } = await supabase
-          .from("chat_messages")
-          .select("status, delivered_at, read_at, lead_id")
-          .eq("direction", "outbound");
-        if (!batch || batch.length === 0) break;
-        allOutbound = allOutbound.concat(batch);
-        if (batch.length < PAGE_SIZE) break;
-        page++;
-      }
+      // Derive metrics from broadcast_jobs (has user RLS) instead of chat_messages (open)
+      const { data: jobs } = await supabase
+        .from("broadcast_jobs")
+        .select("total_leads, sent_count, delivered_count, read_count, error_count");
 
-      // Aggregate by unique lead - best status wins
-      const leadStatus = new Map<string, { sent: boolean; delivered: boolean; read: boolean }>();
-      for (const msg of allOutbound) {
-        if (!msg.lead_id) continue;
-        const cur = leadStatus.get(msg.lead_id) || { sent: false, delivered: false, read: false };
-        if (["sent", "delivered", "read"].includes(msg.status)) cur.sent = true;
-        if (msg.status === "delivered" || msg.status === "read" || !!msg.delivered_at) cur.delivered = true;
-        if (msg.status === "read" || !!msg.read_at) cur.read = true;
-        leadStatus.set(msg.lead_id, cur);
-      }
+      if (!jobs || jobs.length === 0) return { total: 0, sent: 0, delivered: 0, read: 0 };
 
-      const total = leadStatus.size;
-      let sent = 0, delivered = 0, read = 0;
-      leadStatus.forEach((v) => {
-        if (v.sent) sent++;
-        if (v.delivered) delivered++;
-        if (v.read) read++;
-      });
+      const total = jobs.reduce((sum, j) => sum + (j.total_leads || 0), 0);
+      const sent = jobs.reduce((sum, j) => sum + (j.sent_count || 0), 0);
+      const delivered = jobs.reduce((sum, j) => sum + (j.delivered_count || 0), 0);
+      const read = jobs.reduce((sum, j) => sum + (j.read_count || 0), 0);
 
       return { total, sent, delivered, read };
     },
