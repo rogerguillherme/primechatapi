@@ -1,9 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 export function useWhatsAppAccounts() {
+  const { user } = useAuth();
+
   const { data: accounts, isLoading } = useQuery({
-    queryKey: ["whatsapp-accounts"],
+    queryKey: ["whatsapp-accounts", user?.id],
+    enabled: !!user,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("whatsapp_accounts")

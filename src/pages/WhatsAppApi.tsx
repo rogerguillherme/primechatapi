@@ -1335,72 +1335,141 @@ function CloudChatTab() {
 
   // Fetch profiles for assignment
   const { data: profiles = [] } = useQuery({
-    queryKey: ["chat-profiles"],
+    queryKey: ["chat-profiles", user?.id],
+    enabled: !!user,
     queryFn: async () => {
       const { data } = await supabase.from("profiles").select("user_id, display_name");
       return data || [];
     },
   });
 
-  const { data: leads } = useQuery({
-    queryKey: ["cloud-chat-leads"],
+  const accountIds = useMemo(() => accounts.map((account) => account.id), [accounts]);
+  const accountIdsKey = useMemo(() => accountIds.slice().sort().join(","), [accountIds]);
+
+  const { data: visibleLeadIds = [] } = useQuery({
+    queryKey: ["cloud-chat-visible-leads", user?.id, accountIdsKey],
+    enabled: !!user && accountIds.length > 0,
     queryFn: async () => {
+      const leadIds = new Set<string>();
+
+      const { data: ownMessageLogs } = await supabase
+        .from("message_logs")
+        .select("lead_id")
+        .not("lead_id", "is", null);
+
+      for (const log of ownMessageLogs || []) {
+        if (log.lead_id) leadIds.add(log.lead_id);
+      }
+
+      const { data: scopedMessages } = await supabase
+        .from("chat_messages")
+        .select("lead_id, account_id")
+        .in("account_id", accountIds);
+
+      for (const scopedMessage of scopedMessages || []) {
+        if (scopedMessage.lead_id) leadIds.add(scopedMessage.lead_id);
+      }
+
+      return Array.from(leadIds);
+    },
+  });
+
+  const visibleLeadIdsKey = useMemo(() => visibleLeadIds.slice().sort().join(","), [visibleLeadIds]);
+
+  const { data: leads } = useQuery({
+    queryKey: ["cloud-chat-leads", user?.id, visibleLeadIdsKey],
+    enabled: !!user,
+    queryFn: async () => {
+      if (visibleLeadIds.length === 0) return [];
       const { data } = await supabase
         .from("leads")
         .select("id, name, phone, photo_url, assigned_to, last_outbound_at, last_inbound_at, chat_status")
+        .in("id", visibleLeadIds)
         .order("name");
       return data || [];
     },
   });
 
   const { data: leadAccountMap } = useQuery({
-    queryKey: ["cloud-chat-lead-accounts"],
+    queryKey: ["cloud-chat-lead-accounts", user?.id, accountIdsKey],
+    enabled: !!user && accountIds.length > 0,
     queryFn: async () => {
-      const { data } = await supabase
+      const map = new Map<string, Set<string>>();
+
+      const { data: ownMessageLogs } = await supabase
+        .from("message_logs")
+        .select("lead_id, account_id")
+        .not("lead_id", "is", null)
+        .not("account_id", "is", null);
+
+      for (const log of ownMessageLogs || []) {
+        if (!log.account_id || !log.lead_id) continue;
+        if (!map.has(log.account_id)) map.set(log.account_id, new Set());
+        map.get(log.account_id)!.add(log.lead_id);
+      }
+
+      const { data: scopedMessages } = await supabase
         .from("chat_messages")
         .select("lead_id, account_id")
-        .not("account_id", "is", null);
-      const map = new Map<string, Set<string>>();
-      for (const m of data || []) {
-        if (!map.has(m.account_id!)) map.set(m.account_id!, new Set());
-        map.get(m.account_id!)!.add(m.lead_id);
+        .in("account_id", accountIds);
+
+      for (const scopedMessage of scopedMessages || []) {
+        if (!scopedMessage.account_id || !scopedMessage.lead_id) continue;
+        if (!map.has(scopedMessage.account_id)) map.set(scopedMessage.account_id, new Set());
+        map.get(scopedMessage.account_id)!.add(scopedMessage.lead_id);
       }
+
       return map;
     },
   });
 
   const { data: latestMessages } = useQuery({
-    queryKey: ["cloud-chat-latest"],
+    queryKey: ["cloud-chat-latest", user?.id, accountIdsKey, visibleLeadIdsKey],
+    enabled: !!user,
     queryFn: async () => {
+      const map = new Map<string, { content: string; created_at: string; direction: string; account_id: string | null }>();
+      if (visibleLeadIds.length === 0 || accountIds.length === 0) return map;
+
       const { data } = await supabase
         .from("chat_messages")
-        .select("lead_id, content, created_at, direction")
+        .select("lead_id, content, created_at, direction, account_id")
+        .in("lead_id", visibleLeadIds)
+        .in("account_id", accountIds)
         .order("created_at", { ascending: false });
-      const map = new Map<string, { content: string; created_at: string; direction: string }>();
-      for (const m of data || []) {
-        if (!map.has(m.lead_id)) map.set(m.lead_id, m);
+
+      for (const item of data || []) {
+        if (!map.has(item.lead_id)) map.set(item.lead_id, item);
       }
       return map;
     },
   });
 
   const { data: messages } = useQuery({
-    queryKey: ["cloud-chat-messages", selectedLeadId],
+    queryKey: ["cloud-chat-messages", user?.id, selectedLeadId, accountIdsKey],
     queryFn: async () => {
-      if (!selectedLeadId) return [];
+      if (!selectedLeadId || accountIds.length === 0) return [];
       const { data } = await supabase
         .from("chat_messages")
         .select("*")
         .eq("lead_id", selectedLeadId)
+        .in("account_id", accountIds)
         .order("created_at", { ascending: true });
       return data || [];
     },
-    enabled: !!selectedLeadId,
+    enabled: !!selectedLeadId && accountIds.length > 0,
   });
 
   const { templates } = useUserTemplates();
 
   const selectedLead = leads?.find((l) => l.id === selectedLeadId);
+  const activeAccountId = useMemo(() => {
+    if (filterAccountId) return filterAccountId;
+    if (selectedLeadId) {
+      const latestForLead = latestMessages?.get(selectedLeadId);
+      if (latestForLead?.account_id) return latestForLead.account_id;
+    }
+    return accounts[0]?.id || null;
+  }, [filterAccountId, selectedLeadId, latestMessages, accounts]);
 
   // 24h window helper
   const get24hWindow = (lead: any) => {
@@ -1437,17 +1506,21 @@ function CloudChatTab() {
     const channel = supabase
       .channel("cloud-chat-rt")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["cloud-chat-messages", selectedLeadId] });
+        queryClient.invalidateQueries({ queryKey: ["cloud-chat-messages", user?.id, selectedLeadId] });
         queryClient.invalidateQueries({ queryKey: ["cloud-chat-latest"] });
         queryClient.invalidateQueries({ queryKey: ["cloud-chat-leads"] });
+        queryClient.invalidateQueries({ queryKey: ["cloud-chat-lead-accounts"] });
+        queryClient.invalidateQueries({ queryKey: ["cloud-chat-visible-leads"] });
       })
       .subscribe();
     const interval = setInterval(() => {
-      queryClient.invalidateQueries({ queryKey: ["cloud-chat-messages", selectedLeadId] });
+      queryClient.invalidateQueries({ queryKey: ["cloud-chat-messages", user?.id, selectedLeadId] });
       queryClient.invalidateQueries({ queryKey: ["cloud-chat-latest"] });
+      queryClient.invalidateQueries({ queryKey: ["cloud-chat-lead-accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["cloud-chat-visible-leads"] });
     }, 5000);
     return () => { supabase.removeChannel(channel); clearInterval(interval); };
-  }, [selectedLeadId, queryClient]);
+  }, [selectedLeadId, queryClient, user?.id]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
@@ -1461,8 +1534,9 @@ function CloudChatTab() {
   const sendMutation = useMutation({
     mutationFn: async ({ text, mediaUrl, mediaType, templateName, templateLanguage, templateParams }: { text?: string; mediaUrl?: string; mediaType?: string; templateName?: string; templateLanguage?: string; templateParams?: any[] }) => {
       if (!selectedLead) throw new Error("No lead");
+      if (!activeAccountId) throw new Error("Nenhuma conta disponível para envio");
       const { data, error } = await supabase.functions.invoke("whatsapp-cloud-send", {
-        body: { phone: selectedLead.phone, message: text || "", lead_id: selectedLead.id, media_url: mediaUrl, media_type: mediaType, template_name: templateName, template_language: templateLanguage, template_params: templateParams },
+        body: { phone: selectedLead.phone, message: text || "", lead_id: selectedLead.id, media_url: mediaUrl, media_type: mediaType, template_name: templateName, template_language: templateLanguage, template_params: templateParams, account_id: activeAccountId },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -1470,9 +1544,11 @@ function CloudChatTab() {
     },
     onSuccess: () => {
       setMessage("");
-      queryClient.invalidateQueries({ queryKey: ["cloud-chat-messages", selectedLeadId] });
+      queryClient.invalidateQueries({ queryKey: ["cloud-chat-messages", user?.id, selectedLeadId] });
       queryClient.invalidateQueries({ queryKey: ["cloud-chat-latest"] });
       queryClient.invalidateQueries({ queryKey: ["cloud-chat-leads"] });
+      queryClient.invalidateQueries({ queryKey: ["cloud-chat-lead-accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["cloud-chat-visible-leads"] });
     },
     onError: (err: any) => toast.error(`Erro: ${err.message}`),
   });
