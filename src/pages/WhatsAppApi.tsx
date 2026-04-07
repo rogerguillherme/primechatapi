@@ -862,24 +862,26 @@ function BroadcastTab() {
         const errorDetails: Array<{ phone: string; reason: string }> = [];
         let processed = 0;
         
+        let accountRR2 = 0;
         for (const leadId of leadIds) {
+          if (cancelRef.current) break;
           const lead = leads?.find((l) => l.id === leadId);
           if (!lead) continue;
           try {
-            for (const accountId of accountIds) {
-              const body: any = { phone: lead.phone, lead_id: lead.id, account_id: accountId };
-              if (sendType === "template" && selectedTemplate?.template_name) {
-                body.template_name = selectedTemplate.template_name;
-                body.template_language = selectedTemplate.template_language || "pt_BR";
-                body.template_params = resolveParams((selectedTemplate.template_params || []) as any[], lead.name, "");
-              } else {
-                body.message = customMessage.replace(/\{nome\}/g, lead.name.split(" ")[0]);
-              }
-              const { data: sendData2, error } = await supabase.functions.invoke("whatsapp-cloud-send", { body });
-              if (error) throw error;
-              if (sendData2?.error) throw new Error(sendData2.error);
-              successCount++;
+            const accountId = accountIds[accountRR2 % accountIds.length];
+            accountRR2++;
+            const body: any = { phone: lead.phone, lead_id: lead.id, account_id: accountId };
+            if (sendType === "template" && selectedTemplate?.template_name) {
+              body.template_name = selectedTemplate.template_name;
+              body.template_language = selectedTemplate.template_language || "pt_BR";
+              body.template_params = resolveParams((selectedTemplate.template_params || []) as any[], lead.name, "");
+            } else {
+              body.message = customMessage.replace(/\{nome\}/g, lead.name.split(" ")[0]);
             }
+            const { data: sendData2, error } = await supabase.functions.invoke("whatsapp-cloud-send", { body });
+            if (error) throw error;
+            if (sendData2?.error) throw new Error(sendData2.error);
+            successCount++;
           } catch (e: any) {
             errorCount++;
             lastError = e?.message || "Erro desconhecido";
