@@ -15,6 +15,7 @@ import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
 import AdminUsers from "./pages/AdminUsers";
 import { Loader2 } from "lucide-react";
+import { BroadcastProgressFloat } from "@/components/BroadcastProgressFloat";
 
 const queryClient = new QueryClient();
 
@@ -108,6 +109,7 @@ const App = () => (
         <AuthProvider>
           <PlatformProvider>
             <AppRoutes />
+            <BroadcastProgressFloat />
           </PlatformProvider>
         </AuthProvider>
       </BrowserRouter>
