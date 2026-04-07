@@ -128,6 +128,21 @@ export default function AdminUsers() {
 
   const isPending = createMutation.isPending || updateMutation.isPending;
 
+  if (!isSuperAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 space-y-4">
+        <Shield size={48} className="text-muted-foreground" />
+        <h2 className="text-xl font-semibold">Acesso Restrito</h2>
+        <p className="text-muted-foreground text-center max-w-md">
+          Apenas a conta principal (admin@primechat.com) pode gerenciar usuários do sistema.
+        </p>
+        <Button variant="outline" onClick={() => navigate("/")}>
+          <ArrowLeft size={16} className="mr-2" /> Voltar ao início
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
