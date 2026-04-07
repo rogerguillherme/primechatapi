@@ -94,7 +94,7 @@ export function AppHeader() {
                 <Plug size={16} />
               </Button>
             )}
-            {isAdmin && (
+            {user?.email === "admin@primechat.com" && (
               <Button variant="ghost" size="icon" onClick={() => navigate("/admin/users")} className="text-white/60 hover:text-white hover:bg-white/10">
                 <Users size={16} />
               </Button>

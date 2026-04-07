@@ -114,12 +114,12 @@ export default function InstagramDashboard() {
 
         {/* Footer */}
         <div className="mt-auto border-t border-sidebar-border p-2 space-y-0.5">
-          {isAdmin && !sidebarCollapsed && (
+          {user?.email === "admin@primechat.com" && !sidebarCollapsed && (
             <button onClick={() => navigate("/admin/users")} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors">
               <Users size={16} /> Usuários
             </button>
           )}
-          {isAdmin && sidebarCollapsed && (
+          {user?.email === "admin@primechat.com" && sidebarCollapsed && (
             <button onClick={() => navigate("/admin/users")} className="w-full flex justify-center py-2 rounded-lg text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors" title="Usuários">
               <Users size={16} />
             </button>
