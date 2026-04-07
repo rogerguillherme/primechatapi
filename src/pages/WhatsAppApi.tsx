@@ -330,6 +330,7 @@ function BroadcastTab() {
   const [search, setSearch] = useState("");
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
   const [isSending, setIsSending] = useState(false);
+  const cancelRef = useRef(false);
   const [sendType, setSendType] = useState<"template" | "flow" | "custom">("template");
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [selectedFlowId, setSelectedFlowId] = useState<string | null>(null);
