@@ -546,9 +546,8 @@ function BroadcastTab() {
 
     const flowIdForDispatch = sendType === "flow" ? selectedFlowId : null;
 
-    // Helper to start a flow for a lead
+    // Helper to start a flow for a single lead (used for small batches)
     const startFlowForLead = async (leadId: string, flowId: string, codigo?: string) => {
-      // Prefer root step (parent_step_id null) for branched flows
       const { data: rootSteps, error: rootStepError } = await supabase
         .from("flow_steps")
         .select("*")
@@ -557,13 +556,10 @@ function BroadcastTab() {
         .order("step_order")
         .limit(1);
 
-      if (rootStepError) {
-        throw new Error(`Erro ao carregar etapas do fluxo: ${rootStepError.message}`);
-      }
+      if (rootStepError) throw new Error(`Erro ao carregar etapas do fluxo: ${rootStepError.message}`);
 
       let firstStep = rootSteps?.[0];
 
-      // Fallback for legacy flows without parent_step_id roots
       if (!firstStep) {
         const { data: anySteps, error: anyStepError } = await supabase
           .from("flow_steps")
@@ -571,11 +567,7 @@ function BroadcastTab() {
           .eq("flow_id", flowId)
           .order("step_order")
           .limit(1);
-
-        if (anyStepError) {
-          throw new Error(`Erro ao carregar etapas do fluxo: ${anyStepError.message}`);
-        }
-
+        if (anyStepError) throw new Error(`Erro ao carregar etapas do fluxo: ${anyStepError.message}`);
         firstStep = anySteps?.[0];
       }
 
@@ -597,37 +589,107 @@ function BroadcastTab() {
             ? new Date(Date.now() + (firstStep.timeout_minutes || 10) * 60 * 1000).toISOString()
             : new Date().toISOString();
 
-      const execData: any = {
-        flow_id: flowId,
-        lead_id: leadId,
-        current_step_id: firstStep.id,
-        status: firstStepStatus,
-        next_action_at: firstStepNextActionAt,
-        metadata: { codigo: codigo || "" },
-      };
-
-      // Cancel any existing active executions for this lead before creating a new one
       await supabase
         .from("flow_executions")
         .update({ status: "cancelled" })
         .eq("lead_id", leadId)
         .in("status", ["running", "waiting_delay", "waiting_reply", "waiting_no_response"]);
 
-      const { error: insertExecutionError } = await supabase.from("flow_executions").insert(execData);
-      if (insertExecutionError) {
-        throw new Error(`Erro ao iniciar execução do fluxo: ${insertExecutionError.message}`);
+      const { error: insertExecutionError } = await supabase.from("flow_executions").insert({
+        flow_id: flowId,
+        lead_id: leadId,
+        current_step_id: firstStep.id,
+        status: firstStepStatus,
+        next_action_at: firstStepNextActionAt,
+        metadata: { codigo: codigo || "" },
+      });
+      if (insertExecutionError) throw new Error(`Erro ao iniciar execução do fluxo: ${insertExecutionError.message}`);
+    };
+
+    // Bulk flow dispatch: insert all executions, then trigger processor once
+    const startFlowBulk = async (leadIds: string[], flowId: string, codigoMap?: Record<string, string>) => {
+      const { data: rootSteps, error: rootStepError } = await supabase
+        .from("flow_steps")
+        .select("*")
+        .eq("flow_id", flowId)
+        .is("parent_step_id", null)
+        .order("step_order")
+        .limit(1);
+
+      if (rootStepError) throw new Error(`Erro ao carregar etapas do fluxo: ${rootStepError.message}`);
+
+      let firstStep = rootSteps?.[0];
+      if (!firstStep) {
+        const { data: anySteps, error: anyStepError } = await supabase
+          .from("flow_steps")
+          .select("*")
+          .eq("flow_id", flowId)
+          .order("step_order")
+          .limit(1);
+        if (anyStepError) throw new Error(`Erro ao carregar etapas do fluxo: ${anyStepError.message}`);
+        firstStep = anySteps?.[0];
       }
 
-      // Immediately trigger the flow processor to send the first step
-      const { data: processorData, error: processorError } = await supabase.functions.invoke("flow-processor", {
-        body: { auto: true },
-      });
-      if (processorError) {
-        throw new Error(`Erro ao iniciar o processador de fluxo: ${processorError.message}`);
+      if (!firstStep) throw new Error("Fluxo sem etapas. Abra o Flow Builder e salve o fluxo novamente.");
+
+      const firstStepStatus =
+        firstStep.step_type === "delay"
+          ? "waiting_delay"
+          : firstStep.step_type === "no_response"
+            ? "waiting_no_response"
+            : firstStep.step_type === "condition"
+              ? "waiting_reply"
+              : "waiting_delay";
+
+      const firstStepNextActionAt =
+        firstStep.step_type === "delay"
+          ? new Date(Date.now() + (firstStep.delay_minutes || 0) * 60 * 1000).toISOString()
+          : firstStep.step_type === "no_response"
+            ? new Date(Date.now() + (firstStep.timeout_minutes || 10) * 60 * 1000).toISOString()
+            : new Date().toISOString();
+
+      // Cancel existing active executions for all leads in bulk
+      const CANCEL_BATCH = 200;
+      for (let i = 0; i < leadIds.length; i += CANCEL_BATCH) {
+        const batch = leadIds.slice(i, i + CANCEL_BATCH);
+        await supabase
+          .from("flow_executions")
+          .update({ status: "cancelled" })
+          .in("lead_id", batch)
+          .in("status", ["running", "waiting_delay", "waiting_reply", "waiting_no_response"]);
       }
-      if ((processorData as any)?.error) {
-        throw new Error((processorData as any).error);
+
+      // Insert all flow_executions in batches
+      const INSERT_BATCH = 50;
+      let insertedCount = 0;
+      let insertErrors = 0;
+
+      for (let i = 0; i < leadIds.length; i += INSERT_BATCH) {
+        const batch = leadIds.slice(i, i + INSERT_BATCH);
+        const rows = batch.map((leadId) => ({
+          flow_id: flowId,
+          lead_id: leadId,
+          current_step_id: firstStep!.id,
+          status: firstStepStatus,
+          next_action_at: firstStepNextActionAt,
+          metadata: { codigo: codigoMap?.[leadId] || "" },
+        }));
+
+        const { error: batchError } = await supabase.from("flow_executions").insert(rows);
+        if (batchError) {
+          console.error("Batch insert error:", batchError);
+          insertErrors += batch.length;
+        } else {
+          insertedCount += batch.length;
+        }
       }
+
+      // Trigger flow-processor once (it will process pending executions)
+      supabase.functions.invoke("flow-processor", { body: { auto: true } }).catch((e: any) =>
+        console.error("Failed to invoke flow-processor:", e)
+      );
+
+      return { insertedCount, insertErrors };
     };
 
     // Helper: generate Brazilian phone variants (with/without 9th digit)
