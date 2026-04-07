@@ -235,12 +235,14 @@ Deno.serve(async (req) => {
 
       // Interactive button reply
       let buttonPayload: string | null = null;
+      let buttonTitle: string | null = null;
       if (msg.type === "interactive") {
         const reply = msg.interactive?.button_reply || msg.interactive?.list_reply;
         if (reply) {
           text = reply.title || reply.id || "";
           buttonPayload = reply.id || reply.title || "";
-          console.log("Button reply received:", buttonPayload);
+          buttonTitle = reply.title || null;
+          console.log("Button reply received - id:", buttonPayload, "title:", buttonTitle);
         }
       }
       // Quick reply (from template buttons)
@@ -374,16 +376,18 @@ Deno.serve(async (req) => {
           let matchedStep: any = null;
 
           if (currentStepId) {
-            // Find child step whose trigger_value matches the button clicked
+            // Find child step whose trigger_value matches the button id or title
             const { data: childSteps } = await supabase
               .from("flow_steps")
               .select("*")
               .eq("flow_id", exec.flow_id)
-              .eq("parent_step_id", currentStepId)
-              .eq("trigger_value", buttonPayload);
+              .eq("parent_step_id", currentStepId);
 
             if (childSteps && childSteps.length > 0) {
-              matchedStep = childSteps[0];
+              // Try matching by button id first, then by title
+              matchedStep = childSteps.find((s: any) => s.trigger_value === buttonPayload)
+                || (buttonTitle ? childSteps.find((s: any) => s.trigger_value === buttonTitle) : null)
+                || null;
             }
           }
 
