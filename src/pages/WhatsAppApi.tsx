@@ -740,7 +740,17 @@ function BroadcastTab() {
         
         // Step 1: Ensure all CSV contacts exist as leads (batch upsert)
         const UPSERT_BATCH = 50;
-        const csvEntries = Array.from(csvSelectedIdxs).map(idx => csvRows[idx]).filter(Boolean);
+        const rawCsvEntries = Array.from(csvSelectedIdxs).map(idx => csvRows[idx]).filter(Boolean);
+        // Deduplicate CSV entries by phone
+        const csvSeenPhones = new Set<string>();
+        const csvEntries = rawCsvEntries.filter(row => {
+          const norm = row.telefone.replace(/\D/g, "");
+          if (csvSeenPhones.has(norm)) return false;
+          csvSeenPhones.add(norm);
+          return true;
+        });
+        const csvDupesSkipped = rawCsvEntries.length - csvEntries.length;
+        if (csvDupesSkipped > 0) toast.info(`${csvDupesSkipped} contato(s) duplicado(s) removidos.`);
         
         for (let i = 0; i < csvEntries.length; i += UPSERT_BATCH) {
           const batch = csvEntries.slice(i, i + UPSERT_BATCH);
@@ -805,13 +815,27 @@ function BroadcastTab() {
         
         setDispatchProgress(prev => prev ? { ...prev, current: totalContacts, errors: errorCount, errorDetails } : null);
       } else {
-        const totalContacts = Array.from(csvSelectedIdxs).length;
+        // Deduplicate by phone
+        const seenPhones = new Set<string>();
+        const dedupedIdxs: number[] = [];
+        for (const idx of csvSelectedIdxs) {
+          const row = csvRows[idx];
+          if (!row) continue;
+          const normalizedPhone = row.telefone.replace(/\D/g, "");
+          if (seenPhones.has(normalizedPhone)) continue;
+          seenPhones.add(normalizedPhone);
+          dedupedIdxs.push(idx);
+        }
+        const skippedDupes = Array.from(csvSelectedIdxs).length - dedupedIdxs.length;
+        if (skippedDupes > 0) toast.info(`${skippedDupes} contato(s) duplicado(s) removidos.`);
+
+        const totalContacts = dedupedIdxs.length;
         setDispatchProgress({ current: 0, total: totalContacts, errors: 0, errorDetails: [] });
         const errorDetails: Array<{ phone: string; reason: string }> = [];
         let processed = 0;
         
         let accountRR = 0;
-        for (const idx of csvSelectedIdxs) {
+        for (const idx of dedupedIdxs) {
           if (cancelRef.current) break;
           const row = csvRows[idx];
           if (!row) continue;
@@ -862,11 +886,15 @@ function BroadcastTab() {
         const errorDetails: Array<{ phone: string; reason: string }> = [];
         let processed = 0;
         
+        const seenPhones2 = new Set<string>();
         let accountRR2 = 0;
         for (const leadId of leadIds) {
           if (cancelRef.current) break;
           const lead = leads?.find((l) => l.id === leadId);
           if (!lead) continue;
+          const normPhone = lead.phone.replace(/\D/g, "");
+          if (seenPhones2.has(normPhone)) { processed++; continue; }
+          seenPhones2.add(normPhone);
           try {
             const accountId = accountIds[accountRR2 % accountIds.length];
             accountRR2++;
