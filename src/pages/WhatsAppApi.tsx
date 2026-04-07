@@ -805,13 +805,27 @@ function BroadcastTab() {
         
         setDispatchProgress(prev => prev ? { ...prev, current: totalContacts, errors: errorCount, errorDetails } : null);
       } else {
-        const totalContacts = Array.from(csvSelectedIdxs).length;
+        // Deduplicate by phone
+        const seenPhones = new Set<string>();
+        const dedupedIdxs: number[] = [];
+        for (const idx of csvSelectedIdxs) {
+          const row = csvRows[idx];
+          if (!row) continue;
+          const normalizedPhone = row.telefone.replace(/\D/g, "");
+          if (seenPhones.has(normalizedPhone)) continue;
+          seenPhones.add(normalizedPhone);
+          dedupedIdxs.push(idx);
+        }
+        const skippedDupes = Array.from(csvSelectedIdxs).length - dedupedIdxs.length;
+        if (skippedDupes > 0) toast.info(`${skippedDupes} contato(s) duplicado(s) removidos.`);
+
+        const totalContacts = dedupedIdxs.length;
         setDispatchProgress({ current: 0, total: totalContacts, errors: 0, errorDetails: [] });
         const errorDetails: Array<{ phone: string; reason: string }> = [];
         let processed = 0;
         
         let accountRR = 0;
-        for (const idx of csvSelectedIdxs) {
+        for (const idx of dedupedIdxs) {
           if (cancelRef.current) break;
           const row = csvRows[idx];
           if (!row) continue;
