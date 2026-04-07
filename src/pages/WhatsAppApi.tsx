@@ -1223,11 +1223,18 @@ function BroadcastTab() {
                 <div className="space-y-1">
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-medium text-muted-foreground">
-                      {isSending ? "Processando..." : "Concluído"}
+                      {isSending ? (cancelRef.current ? "Cancelando..." : "Processando...") : "Concluído"}
                     </span>
-                    <span className="font-mono text-muted-foreground">
-                      {dispatchProgress.current}/{dispatchProgress.total} ({Math.round((dispatchProgress.current / Math.max(dispatchProgress.total, 1)) * 100)}%)
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-muted-foreground">
+                        {dispatchProgress.current}/{dispatchProgress.total} ({Math.round((dispatchProgress.current / Math.max(dispatchProgress.total, 1)) * 100)}%)
+                      </span>
+                      {isSending && !cancelRef.current && (
+                        <Button size="sm" variant="destructive" className="h-5 text-[10px] px-2" onClick={() => { cancelRef.current = true; }}>
+                          Pausar
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   <Progress value={(dispatchProgress.current / Math.max(dispatchProgress.total, 1)) * 100} className="h-2.5 bg-muted" />
                 </div>
