@@ -68,6 +68,36 @@ export type Database = {
         }
         Relationships: []
       }
+      audit_logs: {
+        Row: {
+          action: string
+          created_at: string
+          details: Json | null
+          id: string
+          record_id: string | null
+          table_name: string | null
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          record_id?: string | null
+          table_name?: string | null
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          record_id?: string | null
+          table_name?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       broadcast_jobs: {
         Row: {
           account_id: string
@@ -86,6 +116,7 @@ export type Database = {
           pause_reason: string | null
           read_count: number
           retry_map: Json | null
+          scheduled_at: string | null
           sent_count: number
           shuffle_leads: boolean
           status: string
@@ -117,6 +148,7 @@ export type Database = {
           pause_reason?: string | null
           read_count?: number
           retry_map?: Json | null
+          scheduled_at?: string | null
           sent_count?: number
           shuffle_leads?: boolean
           status?: string
@@ -148,6 +180,7 @@ export type Database = {
           pause_reason?: string | null
           read_count?: number
           retry_map?: Json | null
+          scheduled_at?: string | null
           sent_count?: number
           shuffle_leads?: boolean
           status?: string
@@ -320,6 +353,7 @@ export type Database = {
           template_name: string | null
           template_params: Json | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           category?: string | null
@@ -332,6 +366,7 @@ export type Database = {
           template_name?: string | null
           template_params?: Json | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           category?: string | null
@@ -344,6 +379,7 @@ export type Database = {
           template_name?: string | null
           template_params?: Json | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -809,6 +845,39 @@ export type Database = {
         }
         Relationships: []
       }
+      notifications: {
+        Row: {
+          created_at: string
+          id: string
+          link: string | null
+          message: string | null
+          read: boolean
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          link?: string | null
+          message?: string | null
+          read?: boolean
+          title: string
+          type?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          link?: string | null
+          message?: string | null
+          read?: boolean
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       order_items: {
         Row: {
           id: string
@@ -1185,6 +1254,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_advanced_dashboard_stats: {
+        Args: { p_user_id: string }
+        Returns: {
+          active_flows: number
+          avg_response_time_minutes: number
+          response_rate: number
+          total_campaigns: number
+          total_delivered: number
+          total_errors: number
+          total_leads: number
+          total_messages_sent: number
+          total_read: number
+        }[]
+      }
       get_dashboard_stats: {
         Args: never
         Returns: {
