@@ -328,6 +328,7 @@ function parseCsv(text: string): CsvRow[] {
    BROADCAST TAB COMPONENT
    ══════════════════════════════════════════════════ */
 function BroadcastTab() {
+  const { user } = useAuth();
   const [mode, setMode] = useState<"leads" | "csv">("leads");
   const [search, setSearch] = useState("");
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
