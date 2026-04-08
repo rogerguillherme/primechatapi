@@ -35,12 +35,27 @@ function getWebhookUrl(token: string) {
   return `https://${projectId}.supabase.co/functions/v1/custom-webhook/${token}`;
 }
 
-export function WebhookEndpoints({ onCreateFlow }: { onCreateFlow?: (triggerType: string) => void }) {
+export function WebhookEndpoints({ onCreateFlow, onSelectFlow }: { 
+  onCreateFlow?: (triggerType: string) => void;
+  onSelectFlow?: (flowId: string, triggerType: string) => void;
+}) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [sendingTest, setSendingTest] = useState<string | null>(null);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [expandedEvent, setExpandedEvent] = useState<string | null>(null);
+
+  const { data: flows } = useQuery({
+    queryKey: ["flows-list"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("flows")
+        .select("id, name, trigger_type, active")
+        .order("name");
+      return data || [];
+    },
+    enabled: !!user,
+  });
 
   const { data: endpoints, isLoading } = useQuery({
     queryKey: ["webhook-endpoints"],
