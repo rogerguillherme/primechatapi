@@ -2599,7 +2599,7 @@ export default function WhatsAppApi() {
 
         {/* ── Flows Tab ── */}
         <TabsContent value="flows" className="space-y-4 p-6 max-w-6xl flex-1 overflow-auto">
-          <FlowBuilder key={flowTriggerType || "default"} initialTriggerType={flowTriggerType} />
+          <FlowBuilder key={flowTriggerType || flowEditId || "default"} initialTriggerType={flowTriggerType} initialFlowId={flowEditId} />
         </TabsContent>
 
         {/* ── Analytics Tab ── */}
