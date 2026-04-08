@@ -54,6 +54,8 @@ interface QueueItem {
   shuffleLeads: boolean;
   multiNumber: boolean;
   extraAccountIds: string[];
+  // Scheduling
+  scheduledAt: string;
 }
 
 interface BroadcastJob {
