@@ -117,14 +117,16 @@ serve(async (req) => {
         }
       }
 
-      // Update role - use upsert instead of delete+insert
+      // Update role - delete existing then insert new
       if (role) {
-        const { error: roleError } = await supabaseAdmin.from("user_roles")
-          .upsert({ user_id, role }, { onConflict: "user_id" });
-        if (roleError) {
-          console.error("Error updating role:", roleError.message);
-          // Don't throw - user was already updated, just log
-        }
+        const { error: delError } = await supabaseAdmin.from("user_roles")
+          .delete()
+          .eq("user_id", user_id);
+        if (delError) console.error("Error deleting old role:", delError.message);
+
+        const { error: insError } = await supabaseAdmin.from("user_roles")
+          .insert({ user_id, role });
+        if (insError) console.error("Error inserting new role:", insError.message);
       }
 
       return jsonResponse({ success: true });
