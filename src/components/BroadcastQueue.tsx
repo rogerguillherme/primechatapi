@@ -19,7 +19,7 @@ import {
   Send, Search, ArrowLeft, Trash2, Plus, CheckCircle2,
   AlertCircle, Loader2, ChevronDown, ChevronUp, Upload,
   Inbox, Eye, CheckCheck, XCircle, Shield, Shuffle, Flame,
-  PauseCircle, AlertTriangle, BarChart3,
+  PauseCircle, AlertTriangle, BarChart3, CalendarClock,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
