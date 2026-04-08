@@ -343,6 +343,61 @@ export function WebhookEndpoints({ onCreateFlow, onSelectFlow }: {
   );
 }
 
+function FlowDropdown({ triggerType, flows, onCreateFlow, onSelectFlow }: {
+  triggerType: string;
+  flows: { id: string; name: string; trigger_type: string | null; active: boolean }[];
+  onCreateFlow?: (triggerType: string) => void;
+  onSelectFlow?: (flowId: string, triggerType: string) => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="gap-1 text-xs">
+          <GitBranch size={12} />
+          Fluxo
+          <ChevronDown size={10} />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        {onCreateFlow && (
+          <DropdownMenuItem onClick={() => onCreateFlow(triggerType)} className="gap-2">
+            <Plus size={14} />
+            Criar novo fluxo
+          </DropdownMenuItem>
+        )}
+        {flows.length > 0 && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+              Usar fluxo existente
+            </DropdownMenuLabel>
+            <ScrollArea className={flows.length > 5 ? "max-h-[200px]" : ""}>
+              {flows.map((flow) => (
+                <DropdownMenuItem
+                  key={flow.id}
+                  onClick={() => onSelectFlow?.(flow.id, triggerType)}
+                  className="gap-2 text-xs"
+                >
+                  <List size={12} />
+                  <span className="truncate flex-1">{flow.name}</span>
+                  {flow.active && (
+                    <Badge variant="outline" className="text-[9px] px-1 ml-auto">Ativo</Badge>
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </ScrollArea>
+          </>
+        )}
+        {!onCreateFlow && flows.length === 0 && (
+          <DropdownMenuItem disabled className="text-xs text-muted-foreground">
+            Nenhum fluxo disponível
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function buildTestPayload(eventType: string) {
   const base = {
     _test: true,
