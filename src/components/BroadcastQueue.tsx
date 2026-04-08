@@ -1025,6 +1025,26 @@ function QueueItemCard({
                 </div>
               )}
 
+              {/* Scheduling */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <CalendarClock size={12} className="text-muted-foreground" />
+                  <span className="text-[11px]">Agendar disparo</span>
+                </div>
+                <input
+                  type="datetime-local"
+                  value={item.scheduledAt}
+                  onChange={(e) => onUpdate({ scheduledAt: e.target.value })}
+                  min={new Date().toISOString().slice(0, 16)}
+                  className="w-full h-8 rounded-md border border-input bg-background px-3 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+                {item.scheduledAt && (
+                  <p className="text-[10px] text-amber-500">
+                    ⏰ Disparo agendado para {new Date(item.scheduledAt).toLocaleString("pt-BR")}
+                  </p>
+                )}
+              </div>
+
               <p className="text-[10px] text-muted-foreground border-t border-border pt-2">
                 ✅ Delay aleatório (300-1500ms) • Detecção de bloqueios • Pausa automática (erro {">"}10%) • Log de auditoria
               </p>
