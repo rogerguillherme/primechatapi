@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Send, CheckCheck, Eye, Inbox, RefreshCw, ChevronDown, ChevronRight, MessageCircle,
-  Loader2,
+  Loader2, Zap,
 } from "lucide-react";
 import { useState } from "react";
 import { format } from "date-fns";
@@ -35,6 +35,7 @@ interface BroadcastGroup {
   read: number;
   failed: number;
   leadIds: string[];
+  type?: "broadcast" | "flow";
 }
 
 interface AccountStats {
@@ -64,19 +65,47 @@ export function SendingMetrics() {
   const { data: stats, isLoading } = useQuery({
     queryKey: ["sending-metrics-summary"],
     queryFn: async () => {
-      // Derive metrics from broadcast_jobs (has user RLS) instead of chat_messages (open)
+      // Combine broadcast_jobs + outbound chat_messages
       const { data: jobs } = await supabase
         .from("broadcast_jobs")
         .select("total_leads, sent_count, delivered_count, read_count, error_count");
 
-      if (!jobs || jobs.length === 0) return { total: 0, sent: 0, delivered: 0, read: 0 };
+      let bjTotal = 0, bjSent = 0, bjDelivered = 0, bjRead = 0;
+      if (jobs && jobs.length > 0) {
+        bjTotal = jobs.reduce((sum, j) => sum + (j.total_leads || 0), 0);
+        bjSent = jobs.reduce((sum, j) => sum + (j.sent_count || 0), 0);
+        bjDelivered = jobs.reduce((sum, j) => sum + (j.delivered_count || 0), 0);
+        bjRead = jobs.reduce((sum, j) => sum + (j.read_count || 0), 0);
+      }
 
-      const total = jobs.reduce((sum, j) => sum + (j.total_leads || 0), 0);
-      const sent = jobs.reduce((sum, j) => sum + (j.sent_count || 0), 0);
-      const delivered = jobs.reduce((sum, j) => sum + (j.delivered_count || 0), 0);
-      const read = jobs.reduce((sum, j) => sum + (j.read_count || 0), 0);
+      // Count outbound messages (covers flow sends, manual sends, etc.)
+      const { count: outboundCount } = await supabase
+        .from("chat_messages")
+        .select("id", { count: "exact", head: true })
+        .eq("direction", "outbound");
 
-      return { total, sent, delivered, read };
+      const { count: deliveredCount } = await supabase
+        .from("chat_messages")
+        .select("id", { count: "exact", head: true })
+        .eq("direction", "outbound")
+        .not("delivered_at", "is", null);
+
+      const { count: readCount } = await supabase
+        .from("chat_messages")
+        .select("id", { count: "exact", head: true })
+        .eq("direction", "outbound")
+        .not("read_at", "is", null);
+
+      const msgTotal = outboundCount || 0;
+      const msgDelivered = deliveredCount || 0;
+      const msgRead = readCount || 0;
+
+      return {
+        total: Math.max(bjTotal, msgTotal),
+        sent: Math.max(bjSent, msgTotal),
+        delivered: Math.max(bjDelivered, msgDelivered),
+        read: Math.max(bjRead, msgRead),
+      };
     },
     refetchInterval: 30000,
   });
@@ -84,32 +113,48 @@ export function SendingMetrics() {
   const { data: accountStats } = useQuery({
     queryKey: ["sending-metrics-by-account"],
     queryFn: async () => {
-      // Get all user's broadcast jobs (RLS filters by user_id)
+      const accountMap = new Map<string, { total: number; sent: number; delivered: number; read: number; failed: number }>();
+
+      // Broadcast jobs
       const { data: jobs } = await supabase
         .from("broadcast_jobs")
         .select("id, account_id, total_leads, sent_count, delivered_count, read_count, error_count");
 
-      if (!jobs || jobs.length === 0 || accounts.length === 0) return [] as AccountStats[];
+      if (jobs) {
+        for (const job of jobs) {
+          const accId = job.account_id || "unknown";
+          const cur = accountMap.get(accId) || { total: 0, sent: 0, delivered: 0, read: 0, failed: 0 };
+          cur.total += job.total_leads || 0;
+          cur.sent += job.sent_count || 0;
+          cur.delivered += job.delivered_count || 0;
+          cur.read += job.read_count || 0;
+          cur.failed += job.error_count || 0;
+          accountMap.set(accId, cur);
+        }
+      }
 
-      // Group by account_id
-      const accountMap = new Map<string, { total: number; sent: number; delivered: number; read: number; failed: number }>();
+      // Outbound messages per account
+      for (const acc of accounts) {
+        const { count: outCount } = await supabase
+          .from("chat_messages")
+          .select("id", { count: "exact", head: true })
+          .eq("direction", "outbound")
+          .eq("account_id", acc.id);
 
-      for (const job of jobs) {
-        const accId = job.account_id || "unknown";
-        const cur = accountMap.get(accId) || { total: 0, sent: 0, delivered: 0, read: 0, failed: 0 };
-        cur.total += job.total_leads || 0;
-        cur.sent += job.sent_count || 0;
-        cur.delivered += job.delivered_count || 0;
-        cur.read += job.read_count || 0;
-        cur.failed += job.error_count || 0;
-        accountMap.set(accId, cur);
+        const existing = accountMap.get(acc.id) || { total: 0, sent: 0, delivered: 0, read: 0, failed: 0 };
+        const msgCount = outCount || 0;
+        if (msgCount > existing.total) {
+          existing.total = msgCount;
+          existing.sent = msgCount;
+        }
+        if (msgCount > 0) accountMap.set(acc.id, existing);
       }
 
       const result: AccountStats[] = [];
       for (const acc of accounts) {
-        const stats = accountMap.get(acc.id);
-        if (!stats || stats.total === 0) continue;
-        result.push({ id: acc.id, name: acc.name, ...stats });
+        const s = accountMap.get(acc.id);
+        if (!s || s.total === 0) continue;
+        result.push({ id: acc.id, name: acc.name, ...s });
       }
 
       const unknown = accountMap.get("unknown");
@@ -126,26 +171,78 @@ export function SendingMetrics() {
   const { data: dispatches, isLoading: loadingDispatches } = useQuery({
     queryKey: ["sending-metrics-dispatches"],
     queryFn: async () => {
+      const groups: BroadcastGroup[] = [];
+
+      // 1. Broadcast jobs
       const { data: jobs } = await supabase
         .from("broadcast_jobs")
-        .select("id, created_at, total_leads, sent_count, delivered_count, read_count, error_count, lead_ids")
+        .select("id, created_at, total_leads, sent_count, delivered_count, read_count, error_count, lead_ids, template_name")
         .order("created_at", { ascending: false });
 
-      if (!jobs || jobs.length === 0) return [] as BroadcastGroup[];
+      if (jobs) {
+        for (const job of jobs) {
+          const dateStr = format(new Date(job.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR });
+          groups.push({
+            key: job.id,
+            label: `Disparo ${dateStr}${job.template_name ? ` — ${job.template_name}` : ""}`,
+            total: job.total_leads || job.lead_ids?.length || 0,
+            sent: job.sent_count || 0,
+            delivered: job.delivered_count || 0,
+            read: job.read_count || 0,
+            failed: job.error_count || 0,
+            leadIds: job.lead_ids || [],
+            type: "broadcast",
+          });
+        }
+      }
 
-      return jobs.map((job): BroadcastGroup => {
-        const dateStr = format(new Date(job.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR });
-        return {
-          key: job.id,
-          label: `Disparo ${dateStr}`,
-          total: job.total_leads || job.lead_ids?.length || 0,
-          sent: job.sent_count || 0,
-          delivered: job.delivered_count || 0,
-          read: job.read_count || 0,
-          failed: job.error_count || 0,
-          leadIds: job.lead_ids || [],
-        };
-      });
+      // 2. Flow executions grouped by flow + date
+      const { data: flowExecs } = await supabase
+        .from("flow_executions")
+        .select("id, flow_id, lead_id, status, started_at")
+        .order("started_at", { ascending: false })
+        .limit(1000);
+
+      if (flowExecs && flowExecs.length > 0) {
+        const flowIds = [...new Set(flowExecs.map(fe => fe.flow_id))];
+        const { data: flows } = await supabase
+          .from("flows")
+          .select("id, name")
+          .in("id", flowIds);
+        const flowNameMap = new Map((flows || []).map(f => [f.id, f.name]));
+
+        // Group by flow_id + date
+        const flowGroups = new Map<string, { flowId: string; date: string; leadIds: string[]; completed: number; failed: number; startedAt: string }>();
+        for (const fe of flowExecs) {
+          const dateKey = fe.started_at.slice(0, 10);
+          const groupKey = `flow-${fe.flow_id}-${dateKey}`;
+          const existing = flowGroups.get(groupKey) || { flowId: fe.flow_id, date: dateKey, leadIds: [], completed: 0, failed: 0, startedAt: fe.started_at };
+          existing.leadIds.push(fe.lead_id);
+          if (fe.status === "completed" || fe.status === "waiting_reply") existing.completed++;
+          else if (fe.status === "error") existing.failed++;
+          else existing.completed++; // running = in progress but sent
+          flowGroups.set(groupKey, existing);
+        }
+
+        for (const [key, group] of flowGroups) {
+          const flowName = flowNameMap.get(group.flowId) || "Fluxo";
+          const dateStr = format(new Date(group.date), "dd/MM/yyyy", { locale: ptBR });
+          groups.push({
+            key,
+            label: `⚡ ${flowName} — ${dateStr}`,
+            total: group.leadIds.length,
+            sent: group.completed + group.failed,
+            delivered: group.completed,
+            read: 0,
+            failed: group.failed,
+            leadIds: group.leadIds,
+            type: "flow",
+          });
+        }
+      }
+
+      // Sort: most recent first
+      return groups;
     },
     refetchInterval: 30000,
   });
@@ -161,10 +258,8 @@ export function SendingMetrics() {
 
   return (
     <div className="space-y-4">
-      {/* WhatsApp Limits */}
       <WhatsAppLimits />
 
-      {/* Header with refresh */}
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium text-muted-foreground">Métricas gerais</h3>
         <Button variant="outline" size="sm" onClick={handleRefresh} className="gap-1.5">
@@ -173,7 +268,6 @@ export function SendingMetrics() {
         </Button>
       </div>
 
-      {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {metrics.map((m) => (
           <Card key={m.label}>
@@ -191,7 +285,6 @@ export function SendingMetrics() {
         ))}
       </div>
 
-      {/* Per-account stats */}
       {accountStats && accountStats.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
@@ -232,7 +325,6 @@ export function SendingMetrics() {
         </Card>
       )}
 
-      {/* Dispatches list */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
@@ -277,7 +369,6 @@ function DispatchItem({ group, isExpanded, onToggle }: {
     queryKey: ["dispatch-leads", group.key],
     enabled: isExpanded && (group.leadIds?.length ?? 0) > 0,
     queryFn: async () => {
-      // Fetch in batches of 100 (supabase .in() limit)
       const allLeads: any[] = [];
       for (let i = 0; i < group.leadIds.length; i += 100) {
         const batch = group.leadIds.slice(i, i + 100);
@@ -302,14 +393,20 @@ function DispatchItem({ group, isExpanded, onToggle }: {
           {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </span>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium">{group.label}</p>
+          <div className="flex items-center gap-2">
+            {group.type === "flow" && <Zap size={12} className="text-amber-500 shrink-0" />}
+            <p className="text-sm font-medium truncate">{group.label}</p>
+          </div>
           <p className="text-xs text-muted-foreground">{group.total} lead{group.total !== 1 ? "s" : ""} disparado{group.total !== 1 ? "s" : ""}</p>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <Badge variant="outline" className="text-[10px]">{group.sent} env</Badge>
+          {group.failed > 0 && <Badge variant="destructive" className="text-[10px]">{group.failed} err</Badge>}
         </div>
       </button>
 
       {isExpanded && (
         <div className="px-4 pb-3 pl-11 bg-muted/20 space-y-3">
-          {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="text-center py-2 rounded-md bg-background border border-border">
               <p className="text-lg font-bold">{group.total}</p>
@@ -329,7 +426,6 @@ function DispatchItem({ group, isExpanded, onToggle }: {
             </div>
           </div>
 
-          {/* Leads list */}
           {(group.leadIds?.length ?? 0) > 0 && (
             <div className="space-y-1">
               <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Leads enviados</p>
