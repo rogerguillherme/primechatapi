@@ -289,16 +289,13 @@ export function WebhookEndpoints({ onCreateFlow, onSelectFlow }: {
                           <Webhook size={12} />
                           Ativar
                         </Button>
-                        {onCreateFlow && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => onCreateFlow(evt.value)}
-                            className="gap-1 text-xs"
-                          >
-                            <GitBranch size={12} />
-                            Criar Fluxo
-                          </Button>
+                        {(onCreateFlow || onSelectFlow) && (
+                          <FlowDropdown
+                            triggerType={evt.value}
+                            flows={flows || []}
+                            onCreateFlow={onCreateFlow}
+                            onSelectFlow={onSelectFlow}
+                          />
                         )}
                       </>
                     )}
