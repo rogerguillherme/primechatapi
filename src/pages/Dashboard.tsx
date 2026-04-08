@@ -64,6 +64,17 @@ export default function Dashboard() {
     },
   });
 
+  // Advanced messaging stats
+  const { data: advStats } = useQuery({
+    queryKey: ["advanced-dashboard-stats", user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      const { data, error } = await supabase.rpc("get_advanced_dashboard_stats", { p_user_id: user.id });
+      if (error) return null;
+      return data?.[0] || null;
+    },
+    enabled: !!user,
+  });
   const { data: recentOrders } = useQuery({
     queryKey: ["recent-orders", dateRange.from?.toISOString(), dateRange.to?.toISOString()],
     queryFn: async () => {
