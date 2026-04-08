@@ -146,7 +146,11 @@ export default function MetaConnect() {
   };
 
   const handleAddNumber = async (waba: any, phone: any) => {
-    if (!activeConnection) return;
+    if (!activeConnection || !user) {
+      toast.error("Sessão expirada. Faça login novamente.");
+      return;
+    }
+
     setAddingPhoneId(phone.id);
     try {
       const { data: existing } = await supabase
@@ -165,6 +169,7 @@ export default function MetaConnect() {
         .select("id");
 
       const { error } = await supabase.from("whatsapp_accounts").insert({
+        user_id: user.id,
         name: phone.verified_name || phone.display_phone_number || "WhatsApp",
         phone_number_id: phone.id,
         business_account_id: waba.id,
