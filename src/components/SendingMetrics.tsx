@@ -48,6 +48,37 @@ interface AccountStats {
   failed: number;
 }
 
+interface CampaignEventRow {
+  campaign_id: string;
+  event_type: string;
+}
+
+function buildCampaignEventCountMap(events: CampaignEventRow[] | null | undefined) {
+  const map = new Map<string, { delivered: number; read: number }>();
+
+  for (const event of events || []) {
+    if (event.event_type !== "delivered" && event.event_type !== "read") continue;
+    const current = map.get(event.campaign_id) || { delivered: 0, read: 0 };
+    if (event.event_type === "delivered") current.delivered += 1;
+    if (event.event_type === "read") current.read += 1;
+    map.set(event.campaign_id, current);
+  }
+
+  return map;
+}
+
+function getEffectiveJobCounts(
+  job: { id: string; delivered_count: number | null; read_count: number | null },
+  eventMap: Map<string, { delivered: number; read: number }>
+) {
+  const eventCounts = eventMap.get(job.id);
+
+  return {
+    delivered: Math.max(job.delivered_count || 0, eventCounts?.delivered || 0),
+    read: Math.max(job.read_count || 0, eventCounts?.read || 0),
+  };
+}
+
 export function SendingMetrics() {
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
@@ -68,14 +99,21 @@ export function SendingMetrics() {
       // Combine broadcast_jobs + outbound chat_messages
       const { data: jobs } = await supabase
         .from("broadcast_jobs")
-        .select("total_leads, sent_count, delivered_count, read_count, error_count");
+        .select("id, total_leads, sent_count, delivered_count, read_count, error_count");
 
       let bjTotal = 0, bjSent = 0, bjDelivered = 0, bjRead = 0;
       if (jobs && jobs.length > 0) {
+        const { data: events } = await supabase
+          .from("campaign_events")
+          .select("campaign_id, event_type")
+          .in("campaign_id", jobs.map((job) => job.id));
+
+        const eventMap = buildCampaignEventCountMap(events as CampaignEventRow[] | null | undefined);
+
         bjTotal = jobs.reduce((sum, j) => sum + (j.total_leads || 0), 0);
         bjSent = jobs.reduce((sum, j) => sum + (j.sent_count || 0), 0);
-        bjDelivered = jobs.reduce((sum, j) => sum + (j.delivered_count || 0), 0);
-        bjRead = jobs.reduce((sum, j) => sum + (j.read_count || 0), 0);
+        bjDelivered = jobs.reduce((sum, j) => sum + getEffectiveJobCounts(j, eventMap).delivered, 0);
+        bjRead = jobs.reduce((sum, j) => sum + getEffectiveJobCounts(j, eventMap).read, 0);
       }
 
       // Count outbound messages (covers flow sends, manual sends, etc.)
@@ -120,14 +158,24 @@ export function SendingMetrics() {
         .from("broadcast_jobs")
         .select("id, account_id, total_leads, sent_count, delivered_count, read_count, error_count");
 
+      const { data: events } = jobs && jobs.length > 0
+        ? await supabase
+            .from("campaign_events")
+            .select("campaign_id, event_type")
+            .in("campaign_id", jobs.map((job) => job.id))
+        : { data: [] };
+
+      const eventMap = buildCampaignEventCountMap(events as CampaignEventRow[] | null | undefined);
+
       if (jobs) {
         for (const job of jobs) {
+          const effective = getEffectiveJobCounts(job, eventMap);
           const accId = job.account_id || "unknown";
           const cur = accountMap.get(accId) || { total: 0, sent: 0, delivered: 0, read: 0, failed: 0 };
           cur.total += job.total_leads || 0;
           cur.sent += job.sent_count || 0;
-          cur.delivered += job.delivered_count || 0;
-          cur.read += job.read_count || 0;
+          cur.delivered += effective.delivered;
+          cur.read += effective.read;
           cur.failed += job.error_count || 0;
           accountMap.set(accId, cur);
         }
@@ -179,16 +227,26 @@ export function SendingMetrics() {
         .select("id, created_at, total_leads, sent_count, delivered_count, read_count, error_count, lead_ids, template_name")
         .order("created_at", { ascending: false });
 
+      const { data: events } = jobs && jobs.length > 0
+        ? await supabase
+            .from("campaign_events")
+            .select("campaign_id, event_type")
+            .in("campaign_id", jobs.map((job) => job.id))
+        : { data: [] };
+
+      const eventMap = buildCampaignEventCountMap(events as CampaignEventRow[] | null | undefined);
+
       if (jobs) {
         for (const job of jobs) {
+          const effective = getEffectiveJobCounts(job, eventMap);
           const dateStr = format(new Date(job.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR });
           groups.push({
             key: job.id,
             label: `Disparo ${dateStr}${job.template_name ? ` — ${job.template_name}` : ""}`,
             total: job.total_leads || job.lead_ids?.length || 0,
             sent: job.sent_count || 0,
-            delivered: job.delivered_count || 0,
-            read: job.read_count || 0,
+            delivered: effective.delivered,
+            read: effective.read,
             failed: job.error_count || 0,
             leadIds: job.lead_ids || [],
             type: "broadcast",

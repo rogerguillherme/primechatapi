@@ -102,27 +102,104 @@ Deno.serve(async (req) => {
           const updates: any = { status };
           if (status === "delivered") updates.delivered_at = ts;
           if (status === "read") { updates.read_at = ts; updates.delivered_at = ts; }
-          
+
           await sb.from("chat_messages")
             .update(updates)
             .eq("zapi_message_id", waMessageId);
 
-          // ── AUTO-TRACK: Register campaign event for delivered/read ──
-          if (status === "delivered" || status === "read") {
-            // Find the message_log to get campaign_id
-            const { data: msgLog } = await sb
+          let logTracking:
+            | { job_id: string; lead_id: string | null; phone: string; delivered: boolean; read: boolean }
+            | null = null;
+
+          if (status === "delivered") {
+            const { data: deliveredLog } = await sb
               .from("message_logs")
-              .select("job_id, lead_id, phone")
+              .update({ status: "delivered" })
               .eq("wa_message_id", waMessageId)
+              .not("status", "in", '("delivered","read")')
+              .select("job_id, lead_id, phone")
               .maybeSingle();
 
-            if (msgLog?.job_id) {
-              await sb.from("campaign_events").insert({
-                campaign_id: msgLog.job_id,
-                lead_id: msgLog.lead_id,
-                lead_phone: msgLog.phone,
-                event_type: status,
-              }).catch(() => {});
+            if (deliveredLog) {
+              logTracking = { ...deliveredLog, delivered: true, read: false };
+            }
+          } else if (status === "read") {
+            const { data: readFromSentLog } = await sb
+              .from("message_logs")
+              .update({ status: "read" })
+              .eq("wa_message_id", waMessageId)
+              .not("status", "in", '("delivered","read")')
+              .select("job_id, lead_id, phone")
+              .maybeSingle();
+
+            if (readFromSentLog) {
+              logTracking = { ...readFromSentLog, delivered: true, read: true };
+            } else {
+              const { data: readFromDeliveredLog } = await sb
+                .from("message_logs")
+                .update({ status: "read" })
+                .eq("wa_message_id", waMessageId)
+                .eq("status", "delivered")
+                .select("job_id, lead_id, phone")
+                .maybeSingle();
+
+              if (readFromDeliveredLog) {
+                logTracking = { ...readFromDeliveredLog, delivered: false, read: true };
+              }
+            }
+          } else {
+            await sb
+              .from("message_logs")
+              .update({ status })
+              .eq("wa_message_id", waMessageId)
+              .neq("status", status);
+          }
+
+          if (logTracking?.job_id && (logTracking.delivered || logTracking.read)) {
+            const { data: jobMetrics } = await sb
+              .from("broadcast_jobs")
+              .select("delivered_count, read_count")
+              .eq("id", logTracking.job_id)
+              .maybeSingle();
+
+            if (jobMetrics) {
+              await sb
+                .from("broadcast_jobs")
+                .update({
+                  delivered_count: (jobMetrics.delivered_count || 0) + (logTracking.delivered ? 1 : 0),
+                  read_count: (jobMetrics.read_count || 0) + (logTracking.read ? 1 : 0),
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", logTracking.job_id);
+            }
+
+            const eventsToInsert = [] as Array<{
+              campaign_id: string;
+              lead_id: string | null;
+              lead_phone: string;
+              event_type: "delivered" | "read";
+            }>;
+
+            if (logTracking.delivered) {
+              eventsToInsert.push({
+                campaign_id: logTracking.job_id,
+                lead_id: logTracking.lead_id,
+                lead_phone: logTracking.phone,
+                event_type: "delivered",
+              });
+            }
+
+            if (logTracking.read) {
+              eventsToInsert.push({
+                campaign_id: logTracking.job_id,
+                lead_id: logTracking.lead_id,
+                lead_phone: logTracking.phone,
+                event_type: "read",
+              });
+            }
+
+            if (eventsToInsert.length > 0) {
+              await sb.from("campaign_events").insert(eventsToInsert).catch(() => {});
             }
           }
         }
