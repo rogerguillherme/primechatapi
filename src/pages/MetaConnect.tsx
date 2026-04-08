@@ -490,6 +490,38 @@ export default function MetaConnect() {
                     {acc.business_account_id && (
                       <span className="text-xs text-muted-foreground">WABA: {acc.business_account_id}</span>
                     )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={registeringPhoneId === acc.phone_number_id}
+                      onClick={async () => {
+                        setRegisteringPhoneId(acc.phone_number_id);
+                        try {
+                          const { data, error } = await supabase.functions.invoke("whatsapp-register-phone", {
+                            body: { phone_number_id: acc.phone_number_id },
+                          });
+                          if (error) throw error;
+                          if (data?.error) {
+                            toast.error(`Falha: ${data.error}`);
+                          } else {
+                            toast.success("Número registrado na API do WhatsApp!");
+                            queryClient.invalidateQueries({ queryKey: ["meta-wabas"] });
+                          }
+                        } catch (err: any) {
+                          toast.error(err.message || "Erro ao registrar");
+                        } finally {
+                          setRegisteringPhoneId(null);
+                        }
+                      }}
+                      className="gap-1"
+                    >
+                      {registeringPhoneId === acc.phone_number_id ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Zap className="h-3 w-3" />
+                      )}
+                      Registrar na API
+                    </Button>
                   </div>
                 </div>
               ))}
