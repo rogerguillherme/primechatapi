@@ -38,6 +38,7 @@ interface ImportedContact {
 }
 
 export function ContactImporter() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
