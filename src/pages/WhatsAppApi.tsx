@@ -48,6 +48,8 @@ import { ChatLabelsManager, useLabels, LeadLabelSelector } from "@/components/Ch
 const isUnauthorizedFunctionError = (error: unknown) =>
   error instanceof Error && error.message.includes("401");
 
+const META_REDIRECT_URI = "https://primechatapi.lovable.app/auth/meta/callback";
+
 /* ── Helpers ── */
 function getAvatarColor(name: string) {
   const colors = ["bg-emerald-600", "bg-violet-600", "bg-amber-600", "bg-rose-600", "bg-cyan-600", "bg-indigo-600"];
@@ -2125,10 +2127,14 @@ export default function WhatsAppApi() {
 
   const handleMetaOAuth = async () => {
     try {
-      const { data, error } = await supabase.functions.invoke("meta-oauth-url");
+      const { data, error } = await supabase.functions.invoke("meta-oauth-url", {
+        body: { redirect_uri: META_REDIRECT_URI },
+      });
       if (error) throw error;
-      if (data?.url) {
-        window.location.href = data.url;
+      if (data?.error) throw new Error(data.error);
+      const oauthUrl = data?.oauth_url ?? data?.url;
+      if (oauthUrl) {
+        window.location.href = oauthUrl;
       } else {
         toast.error("Não foi possível gerar a URL de autenticação.");
       }
