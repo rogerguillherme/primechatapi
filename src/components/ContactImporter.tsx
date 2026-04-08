@@ -197,6 +197,7 @@ export function ContactImporter() {
         phone: c.phone.length <= 11 ? `55${c.phone}` : c.phone,
         email: c.email || null,
         origin: "import_list",
+        user_id: user?.id,
       }));
 
       const BATCH = 50;
