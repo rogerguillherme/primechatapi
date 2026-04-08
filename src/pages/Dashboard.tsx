@@ -15,6 +15,7 @@ import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined });
