@@ -1350,10 +1350,11 @@ function CloudChatTab() {
 
   const { data: visibleLeadIds = [] } = useQuery({
     queryKey: ["cloud-chat-visible-leads", user?.id, accountIdsKey],
-    enabled: !!user && accountIds.length > 0,
+    enabled: !!user,
     queryFn: async () => {
       const leadIds = new Set<string>();
 
+      // Leads from message_logs (RLS filtered by user_id)
       const { data: ownMessageLogs } = await supabase
         .from("message_logs")
         .select("lead_id")
@@ -1363,13 +1364,26 @@ function CloudChatTab() {
         if (log.lead_id) leadIds.add(log.lead_id);
       }
 
-      const { data: scopedMessages } = await supabase
-        .from("chat_messages")
-        .select("lead_id, account_id")
-        .in("account_id", accountIds);
+      // Leads from chat_messages scoped to user's accounts
+      if (accountIds.length > 0) {
+        const { data: scopedMessages } = await supabase
+          .from("chat_messages")
+          .select("lead_id, account_id")
+          .in("account_id", accountIds);
 
-      for (const scopedMessage of scopedMessages || []) {
-        if (scopedMessage.lead_id) leadIds.add(scopedMessage.lead_id);
+        for (const scopedMessage of scopedMessages || []) {
+          if (scopedMessage.lead_id) leadIds.add(scopedMessage.lead_id);
+        }
+      }
+
+      // Leads from chat_messages with NULL account_id (legacy messages)
+      const { data: legacyMessages } = await supabase
+        .from("chat_messages")
+        .select("lead_id")
+        .is("account_id", null);
+
+      for (const msg of legacyMessages || []) {
+        if (msg.lead_id) leadIds.add(msg.lead_id);
       }
 
       return Array.from(leadIds);
