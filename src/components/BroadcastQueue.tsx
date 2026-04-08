@@ -323,10 +323,12 @@ export function BroadcastQueue() {
       setActiveJobs((prev) => ({ ...prev, [(job as any).id]: job as any }));
       updateQueueItem(item.id, { status: "sending", jobId: (job as any).id });
 
-      // Trigger the processor (fire and forget)
-      supabase.functions.invoke("broadcast-processor", {
-        body: { job_id: (job as any).id },
-      }).catch((e) => console.error("Failed to invoke processor:", e));
+      // Trigger the processor (fire and forget) — skip for scheduled
+      if (!item.scheduledAt) {
+        supabase.functions.invoke("broadcast-processor", {
+          body: { job_id: (job as any).id },
+        }).catch((e) => console.error("Failed to invoke processor:", e));
+      }
     }
 
     setIsSendingAll(false);
