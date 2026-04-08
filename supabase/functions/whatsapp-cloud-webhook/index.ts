@@ -142,15 +142,17 @@ Deno.serve(async (req) => {
     const incomingPhoneNumberId = value.metadata?.phone_number_id || "";
     let ACCESS_TOKEN: string | undefined;
     let resolvedAccountId: string | null = null;
+    let resolvedUserId: string | null = null;
     if (incomingPhoneNumberId) {
       const { data: matchedAccount } = await supabase
         .from("whatsapp_accounts")
-        .select("id, access_token")
+        .select("id, access_token, user_id")
         .eq("phone_number_id", incomingPhoneNumberId)
         .maybeSingle();
       if (matchedAccount) {
         ACCESS_TOKEN = matchedAccount.access_token;
         resolvedAccountId = matchedAccount.id;
+        resolvedUserId = matchedAccount.user_id;
       }
     }
     if (!ACCESS_TOKEN) {
