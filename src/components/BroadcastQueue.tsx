@@ -290,24 +290,27 @@ export function BroadcastQueue() {
         : [];
 
       // Create broadcast job in DB with smart sending options
+      const insertData: any = {
+        user_id: session?.user.id,
+        account_id: item.accountId,
+        template_id: item.templateId,
+        template_name: template.template_name,
+        template_language: template.template_language || "pt_BR",
+        template_params: storedParams,
+        lead_ids: leadIdsArray,
+        total_leads: leadIdsArray.length,
+        status: item.scheduledAt ? "scheduled" : "pending",
+        warmup_mode: item.warmupMode,
+        warmup_daily_limit: item.warmupDailyLimit,
+        shuffle_leads: item.shuffleLeads,
+        multi_number: item.multiNumber,
+        account_ids: item.multiNumber ? [item.accountId, ...item.extraAccountIds] : [],
+      };
+      if (item.scheduledAt) insertData.scheduled_at = new Date(item.scheduledAt).toISOString();
+
       const { data: job, error: jobError } = await supabase
         .from("broadcast_jobs")
-        .insert({
-          user_id: session?.user.id,
-          account_id: item.accountId,
-          template_id: item.templateId,
-          template_name: template.template_name,
-          template_language: template.template_language || "pt_BR",
-          template_params: storedParams,
-          lead_ids: leadIdsArray,
-          total_leads: leadIdsArray.length,
-          status: "pending",
-          warmup_mode: item.warmupMode,
-          warmup_daily_limit: item.warmupDailyLimit,
-          shuffle_leads: item.shuffleLeads,
-          multi_number: item.multiNumber,
-          account_ids: item.multiNumber ? [item.accountId, ...item.extraAccountIds] : [],
-        } as any)
+        .insert(insertData)
         .select()
         .single();
 
