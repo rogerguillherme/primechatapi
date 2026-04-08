@@ -266,13 +266,17 @@ Deno.serve(async (req) => {
 
       const activityAt = new Date().toISOString();
 
-      // Find or create lead
-      let { data: lead } = await supabase
+      // Find or create lead (scoped by user_id for multi-tenant isolation)
+      let leadQuery = supabase
         .from("leads")
         .select("id, name, phone")
-        .or(phoneFilter)
-        .limit(1)
-        .maybeSingle();
+        .or(phoneFilter);
+      
+      if (resolvedUserId) {
+        leadQuery = leadQuery.eq("user_id", resolvedUserId);
+      }
+
+      let { data: lead } = await leadQuery.limit(1).maybeSingle();
 
       if (!lead) {
         const { data: newLead, error: createError } = await supabase
@@ -283,6 +287,7 @@ Deno.serve(async (req) => {
             origin: "whatsapp-cloud",
             last_inbound_at: activityAt,
             updated_at: activityAt,
+            user_id: resolvedUserId,
           })
           .select("id, name, phone")
           .single();
