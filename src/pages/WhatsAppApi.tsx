@@ -2416,99 +2416,131 @@ export default function WhatsAppApi() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {accounts.map((account: any) => (
-                    <div key={account.id} className="flex items-center gap-4 p-4 rounded-lg border border-border bg-muted/20 hover:bg-muted/40 transition-colors">
-                      <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center flex-shrink-0">
-                        <MessageCircle size={18} className="text-primary-foreground" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium text-sm truncate">{account.name}</p>
-                          {account.is_default && (
-                            <Badge variant="default" className="text-[10px] px-1.5 py-0">Padrão</Badge>
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Phone ID: {account.phone_number_id.slice(0, 8)}...
-                          {account.business_account_id && ` • BA: ${account.business_account_id.slice(0, 8)}...`}
-                        </p>
-                        {(() => {
-                          const lim = limitsMap.get(account.id);
-                          if (!lim) return null;
-                          const tierLabels: Record<string, string> = {
-                            TIER_NOT_SET: "Não definido", TIER_50: "50/dia", TIER_250: "250/dia",
-                            TIER_1K: "1K/dia", TIER_10K: "10K/dia", TIER_100K: "100K/dia", TIER_UNLIMITED: "Ilimitado",
-                          };
-                          const qualityColors: Record<string, string> = { GREEN: "text-emerald-500", YELLOW: "text-amber-500", RED: "text-destructive" };
-                          const qualityLabels: Record<string, string> = { GREEN: "Alta", YELLOW: "Média", RED: "Baixa" };
-                          return (
-                            <div className="flex items-center gap-3 mt-1">
-                              {lim.tier && (
-                                <span className="text-[11px] font-medium text-muted-foreground">
-                                  📨 {tierLabels[lim.tier] || lim.tier}
-                                </span>
-                              )}
-                              {lim.quality && (
-                                <span className={`text-[11px] font-medium ${qualityColors[lim.quality] || "text-muted-foreground"}`}>
-                                  🛡️ {qualityLabels[lim.quality] || lim.quality}
-                                </span>
+                  {accounts.map((account: any) => {
+                    const lim = limitsMap.get(account.id);
+                    const tierLabels: Record<string, string> = {
+                      TIER_NOT_SET: "Não definido",
+                      TIER_50: "50/dia",
+                      TIER_250: "250/dia",
+                      TIER_1K: "1K/dia",
+                      TIER_10K: "10K/dia",
+                      TIER_100K: "100K/dia",
+                      TIER_UNLIMITED: "Ilimitado",
+                    };
+                    const qualityColors: Record<string, string> = {
+                      GREEN: "text-emerald-500",
+                      YELLOW: "text-amber-500",
+                      RED: "text-destructive",
+                    };
+                    const qualityLabels: Record<string, string> = {
+                      GREEN: "Alta",
+                      YELLOW: "Média",
+                      RED: "Baixa",
+                    };
+
+                    return (
+                      <div key={account.id} className="flex flex-col gap-3 p-4 rounded-lg border border-border bg-muted/20 hover:bg-muted/40 transition-colors">
+                        <div className="flex items-start gap-4">
+                          <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center flex-shrink-0">
+                            <MessageCircle size={18} className="text-primary-foreground" />
+                          </div>
+
+                          <div className="flex-1 min-w-0 space-y-1.5">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-medium text-sm">{account.name}</p>
+                              {account.is_default && (
+                                <Badge variant="default" className="text-[10px] px-1.5 py-0">Padrão</Badge>
                               )}
                             </div>
-                          );
-                        })()}
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        {!account.is_default && (
-                          <Button variant="ghost" size="sm" onClick={() => handleSetDefault(account.id)} className="text-xs h-8 gap-1 text-muted-foreground hover:text-foreground">
-                            <Star size={14} /> Padrão
-                          </Button>
-                        )}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreVertical size={16} />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48">
-                            <DropdownMenuItem onClick={() => startEditing(account)} className="gap-2">
-                              <Pencil size={14} /> Editar conta
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => {
-                              setEditingAccount(account);
-                              setAccountName(account.name);
-                              setPhoneNumberId(account.phone_number_id);
-                              setAccessToken("");
-                              setBusinessAccountId(account.business_account_id || "");
-                              setIsDefault(account.is_default);
-                              setIsAddingAccount(true);
-                            }} className="gap-2">
-                              <KeyRound size={14} /> Atualizar token
-                            </DropdownMenuItem>
-                            {!account.is_default && (
-                              <DropdownMenuItem onClick={() => handleSetDefault(account.id)} className="gap-2">
-                                <Star size={14} /> Definir como padrão
-                              </DropdownMenuItem>
+
+                            <div className="space-y-1 text-xs text-muted-foreground">
+                              <p className="break-all">
+                                Phone Number ID: <span className="font-mono text-foreground/80">{account.phone_number_id}</span>
+                              </p>
+                              {account.business_account_id && (
+                                <p className="break-all">
+                                  Business Account ID: <span className="font-mono text-foreground/80">{account.business_account_id}</span>
+                                </p>
+                              )}
+                              <p className="break-all">
+                                Access Token: <span className="font-mono text-foreground/80">••••••••{account.access_token?.slice(-8)}</span>
+                              </p>
+                            </div>
+
+                            {lim && (
+                              <div className="flex flex-wrap items-center gap-3 pt-1">
+                                {lim.tier && (
+                                  <span className="text-[11px] font-medium text-muted-foreground">
+                                    📨 {tierLabels[lim.tier] || lim.tier}
+                                  </span>
+                                )}
+                                {lim.quality && (
+                                  <span className={`text-[11px] font-medium ${qualityColors[lim.quality] || "text-muted-foreground"}`}>
+                                    🛡️ {qualityLabels[lim.quality] || lim.quality}
+                                  </span>
+                                )}
+                              </div>
                             )}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => handleDeleteAccount(account.id)} className="gap-2 text-destructive focus:text-destructive">
-                              <Trash2 size={14} /> Excluir conta
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {!account.is_default && (
+                              <Button variant="ghost" size="sm" onClick={() => handleSetDefault(account.id)} className="text-xs h-8 gap-1 text-muted-foreground hover:text-foreground">
+                                <Star size={14} /> Padrão
+                              </Button>
+                            )}
+
+                            <Button variant="outline" size="sm" onClick={() => startEditing(account)} className="text-xs h-8 gap-1">
+                              <Pencil size={14} /> Configurações
+                            </Button>
+
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <MoreVertical size={16} />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-48">
+                                <DropdownMenuItem onClick={() => startEditing(account)} className="gap-2">
+                                  <Pencil size={14} /> Editar conta
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => {
+                                  setEditingAccount(account);
+                                  setAccountName(account.name);
+                                  setPhoneNumberId(account.phone_number_id);
+                                  setAccessToken("");
+                                  setBusinessAccountId(account.business_account_id || "");
+                                  setIsDefault(account.is_default);
+                                  setIsAddingAccount(true);
+                                }} className="gap-2">
+                                  <KeyRound size={14} /> Atualizar token
+                                </DropdownMenuItem>
+                                {!account.is_default && (
+                                  <DropdownMenuItem onClick={() => handleSetDefault(account.id)} className="gap-2">
+                                    <Star size={14} /> Definir como padrão
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => handleDeleteAccount(account.id)} className="gap-2 text-destructive focus:text-destructive">
+                                  <Trash2 size={14} /> Excluir conta
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {/* Add/Edit form */}
           {isAddingAccount && (
             <Card className="border-primary/30">
               <CardHeader>
                 <CardTitle className="text-base">
-                  {editingAccount ? `Editar: ${editingAccount.name}` : "Nova Conta"}
+                  {editingAccount ? `Configurações completas: ${editingAccount.name}` : "Nova Conta"}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -2516,58 +2548,50 @@ export default function WhatsAppApi() {
                   <Label htmlFor="accountName">Nome da Conta</Label>
                   <Input id="accountName" placeholder="Ex: Minha Loja Principal" value={accountName} onChange={(e) => setAccountName(e.target.value)} />
                 </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="phoneNumberId">Phone Number ID</Label>
-                    <Input id="phoneNumberId" placeholder="Ex: 123456789012345" value={phoneNumberId} onChange={(e) => setPhoneNumberId(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="businessAccountId">Business Account ID</Label>
-                    <Input id="businessAccountId" placeholder="Ex: 987654321098765" value={businessAccountId} onChange={(e) => setBusinessAccountId(e.target.value)} />
-                  </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="phoneNumberId">Phone Number ID</Label>
+                  <Input id="phoneNumberId" placeholder="Ex: 123456789012345" value={phoneNumberId} onChange={(e) => setPhoneNumberId(e.target.value)} />
                 </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="businessAccountId">Business Account ID</Label>
+                  <Input id="businessAccountId" placeholder="Ex: 987654321098765" value={businessAccountId} onChange={(e) => setBusinessAccountId(e.target.value)} />
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="accessToken">Access Token (permanente)</Label>
                   <Input id="accessToken" type="password" placeholder="EAAxxxxxxx..." value={accessToken} onChange={(e) => setAccessToken(e.target.value)} />
                   <p className="text-xs text-muted-foreground">Use um token permanente do System User no Business Manager.</p>
                 </div>
-                {!editingAccount && (
-                  <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-                    <p className="text-sm font-medium flex items-center gap-2"><Link2 size={16} /> Webhook do WhatsApp</p>
-                    <p className="text-xs text-muted-foreground">Configure este webhook no App do Facebook para receber mensagens.</p>
-                    <div className="space-y-2">
-                      <Label>URL do Webhook (Callback URL)</Label>
-                      <div className="flex gap-2">
-                        <Input value={webhookUrl} readOnly className="font-mono text-xs" />
-                        <Button variant="outline" size="icon" onClick={handleCopyWebhook}><Copy size={16} /></Button>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="verifyToken">Verify Token</Label>
-                      <div className="flex gap-2">
-                        <Input id="verifyToken" placeholder="Defina um token de verificação" value={verifyToken} onChange={(e) => setVerifyToken(e.target.value)} />
-                        <Button onClick={handleSaveVerifyToken} disabled={isSavingToken} variant="default" size="sm" className="shrink-0">
-                          {isSavingToken ? "Salvando..." : <><CheckCircle2 size={16} /> Salvar</>}
-                        </Button>
-                      </div>
-                      <p className="text-xs text-muted-foreground">Use este valor no campo "Verify Token" ao configurar o webhook no Facebook.</p>
-                    </div>
-                    <div className="rounded-lg border bg-muted/50 p-3 space-y-1">
-                      <p className="text-xs font-medium">Passo a passo:</p>
-                      <ol className="text-xs text-muted-foreground space-y-0.5 list-decimal list-inside">
-                        <li>Acesse seu App no Facebook Developers</li>
-                        <li>Vá em WhatsApp → Configuração</li>
-                        <li>Em "Webhook", clique em "Editar"</li>
-                        <li>Cole a URL do webhook e o Verify Token</li>
-                        <li>Inscreva-se no campo <code className="bg-muted px-1 rounded">messages</code></li>
-                      </ol>
+
+                <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+                  <p className="text-sm font-medium flex items-center gap-2"><Link2 size={16} /> Webhook do WhatsApp</p>
+                  <p className="text-xs text-muted-foreground">Configure este webhook no App do Facebook para receber mensagens.</p>
+                  <div className="space-y-2">
+                    <Label>URL do Webhook (Callback URL)</Label>
+                    <div className="flex gap-2">
+                      <Input value={webhookUrl} readOnly className="font-mono text-xs" />
+                      <Button variant="outline" size="icon" onClick={handleCopyWebhook}><Copy size={16} /></Button>
                     </div>
                   </div>
-                )}
+                  <div className="space-y-2">
+                    <Label htmlFor="verifyToken">Verify Token</Label>
+                    <div className="flex gap-2">
+                      <Input id="verifyToken" placeholder="Defina um token de verificação" value={verifyToken} onChange={(e) => setVerifyToken(e.target.value)} />
+                      <Button onClick={handleSaveVerifyToken} disabled={isSavingToken} variant="default" size="sm" className="shrink-0">
+                        {isSavingToken ? "Salvando..." : <><CheckCircle2 size={16} /> Salvar</>}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Use este valor no campo "Verify Token" ao configurar o webhook no Facebook.</p>
+                  </div>
+                </div>
+
                 <div className="flex items-center gap-2">
                   <Checkbox id="isDefault" checked={isDefault} onCheckedChange={(v) => setIsDefault(!!v)} />
                   <Label htmlFor="isDefault" className="text-sm cursor-pointer">Definir como conta padrão</Label>
                 </div>
+
                 <div className="flex gap-2">
                   <Button onClick={handleSaveAccount} disabled={isSaving}>
                     {isSaving ? "Salvando..." : editingAccount ? "Atualizar" : "Salvar Conta"}
