@@ -197,6 +197,7 @@ export function BroadcastQueue() {
       shuffleLeads: true,
       multiNumber: false,
       extraAccountIds: [],
+      scheduledAt: "",
     };
     setQueue((prev) => [...prev, newItem]);
     setExpandedItemId(newItem.id);
