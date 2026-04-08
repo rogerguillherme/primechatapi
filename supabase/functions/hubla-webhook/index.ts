@@ -21,7 +21,42 @@ function mapHublaStatus(type: string, invoiceStatus: string): string {
   if (type === "invoice.refunded" || invoiceStatus === "refunded") return "refunded";
   if (type === "invoice.chargeback" || invoiceStatus === "chargeback") return "chargeback";
   if (type === "invoice.cancelled" || invoiceStatus === "cancelled") return "cancelled";
+  if (type === "invoice.payment_failed" || invoiceStatus === "failed") return "failed";
+  if (type === "invoice.expired" || invoiceStatus === "expired") return "expired";
+  if (type === "checkout.abandoned" || invoiceStatus === "abandoned") return "abandoned";
   return invoiceStatus || "approved";
+}
+
+// Maps order status + payment method to a flow trigger_type
+function mapToFlowTrigger(status: string, paymentMethod: string | null, eventType: string): string | null {
+  // Abandoned cart
+  if (status === "abandoned" || eventType.includes("abandoned") || eventType.includes("checkout.abandoned")) {
+    return "carrinho_abandonado";
+  }
+  // Declined card
+  if (status === "failed" && paymentMethod?.toLowerCase()?.includes("card")) {
+    return "cartao";
+  }
+  if (status === "failed" && paymentMethod?.toLowerCase()?.includes("credit")) {
+    return "cartao";
+  }
+  // Unpaid PIX (expired or pending too long)
+  if ((status === "expired" || status === "failed") && paymentMethod?.toLowerCase()?.includes("pix")) {
+    return "pix";
+  }
+  // Approved purchase
+  if (status === "approved") {
+    return "compra_aprovada";
+  }
+  // Refund
+  if (status === "refunded" || status === "chargeback") {
+    return "reembolso";
+  }
+  // Cancellation
+  if (status === "cancelled") {
+    return "cancelamento";
+  }
+  return null;
 }
 
 function extractPayload(payload: any) {
