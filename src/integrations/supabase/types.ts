@@ -668,6 +668,7 @@ export type Database = {
           phone: string
           photo_url: string | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           assigned_to?: string | null
@@ -684,6 +685,7 @@ export type Database = {
           phone: string
           photo_url?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           assigned_to?: string | null
@@ -700,6 +702,7 @@ export type Database = {
           phone?: string
           photo_url?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: []
       }
