@@ -47,6 +47,7 @@ export default function MetaConnect() {
   const [addingPhoneId, setAddingPhoneId] = useState<string | null>(null);
   const [expandedWaba, setExpandedWaba] = useState<string | null>(null);
   const [registeringPhoneId, setRegisteringPhoneId] = useState<string | null>(null);
+  const [registrationPin, setRegistrationPin] = useState("123456");
 
   const { data: connections, isLoading } = useQuery({
     queryKey: ["meta-connections"],
