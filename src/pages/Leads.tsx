@@ -6,6 +6,7 @@ import { DataTable } from "@/components/DataTable";
 import { DateRangeFilter, type DateRange } from "@/components/DateRangeFilter";
 import { LeadChatDrawer } from "@/components/LeadChatDrawer";
 import { LeadDetailDrawer } from "@/components/LeadDetailDrawer";
+import { ExportButton } from "@/components/ExportButton";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Input } from "@/components/ui/input";
