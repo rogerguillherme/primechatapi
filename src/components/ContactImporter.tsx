@@ -1,5 +1,6 @@
 import { useState, useRef, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -37,6 +38,7 @@ interface ImportedContact {
 }
 
 export function ContactImporter() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
@@ -195,6 +197,7 @@ export function ContactImporter() {
         phone: c.phone.length <= 11 ? `55${c.phone}` : c.phone,
         email: c.email || null,
         origin: "import_list",
+        user_id: user?.id,
       }));
 
       const BATCH = 50;

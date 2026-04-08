@@ -328,6 +328,7 @@ function parseCsv(text: string): CsvRow[] {
    BROADCAST TAB COMPONENT
    ══════════════════════════════════════════════════ */
 function BroadcastTab() {
+  const { user } = useAuth();
   const [mode, setMode] = useState<"leads" | "csv">("leads");
   const [search, setSearch] = useState("");
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
@@ -440,7 +441,7 @@ function BroadcastTab() {
     try {
       const phone = newLeadPhone.replace(/\D/g, "");
       const cleanPhone = phone.startsWith("55") ? phone : "55" + phone;
-      const { data, error } = await supabase.from("leads").insert({ name: newLeadName.trim(), phone: cleanPhone, origin: "manual" }).select("id").single();
+      const { data, error } = await supabase.from("leads").insert({ name: newLeadName.trim(), phone: cleanPhone, origin: "manual", user_id: user?.id }).select("id").single();
       if (error) throw error;
       queryClient.invalidateQueries({ queryKey: ["broadcast-leads"] });
       setSelectedLeads((prev) => new Set([...prev, data.id]));
@@ -1348,59 +1349,14 @@ function CloudChatTab() {
   const accountIds = useMemo(() => accounts.map((account) => account.id), [accounts]);
   const accountIdsKey = useMemo(() => accountIds.slice().sort().join(","), [accountIds]);
 
-  const { data: visibleLeadIds = [] } = useQuery({
-    queryKey: ["cloud-chat-visible-leads", user?.id, accountIdsKey],
-    enabled: !!user,
-    queryFn: async () => {
-      const leadIds = new Set<string>();
-
-      // Leads from message_logs (RLS filtered by user_id)
-      const { data: ownMessageLogs } = await supabase
-        .from("message_logs")
-        .select("lead_id")
-        .not("lead_id", "is", null);
-
-      for (const log of ownMessageLogs || []) {
-        if (log.lead_id) leadIds.add(log.lead_id);
-      }
-
-      // Leads from chat_messages scoped to user's accounts
-      if (accountIds.length > 0) {
-        const { data: scopedMessages } = await supabase
-          .from("chat_messages")
-          .select("lead_id, account_id")
-          .in("account_id", accountIds);
-
-        for (const scopedMessage of scopedMessages || []) {
-          if (scopedMessage.lead_id) leadIds.add(scopedMessage.lead_id);
-        }
-      }
-
-      // Leads from chat_messages with NULL account_id (legacy messages)
-      const { data: legacyMessages } = await supabase
-        .from("chat_messages")
-        .select("lead_id")
-        .is("account_id", null);
-
-      for (const msg of legacyMessages || []) {
-        if (msg.lead_id) leadIds.add(msg.lead_id);
-      }
-
-      return Array.from(leadIds);
-    },
-  });
-
-  const visibleLeadIdsKey = useMemo(() => visibleLeadIds.slice().sort().join(","), [visibleLeadIds]);
-
+  // RLS now handles isolation - just fetch all leads the user can see
   const { data: leads } = useQuery({
-    queryKey: ["cloud-chat-leads", user?.id, visibleLeadIdsKey],
+    queryKey: ["cloud-chat-leads", user?.id],
     enabled: !!user,
     queryFn: async () => {
-      if (visibleLeadIds.length === 0) return [];
       const { data } = await supabase
         .from("leads")
         .select("id, name, phone, photo_url, assigned_to, last_outbound_at, last_inbound_at, chat_status")
-        .in("id", visibleLeadIds)
         .order("name");
       return data || [];
     },
@@ -1442,17 +1398,15 @@ function CloudChatTab() {
   });
 
   const { data: latestMessages } = useQuery({
-    queryKey: ["cloud-chat-latest", user?.id, accountIdsKey, visibleLeadIdsKey],
+    queryKey: ["cloud-chat-latest", user?.id, accountIdsKey],
     enabled: !!user,
     queryFn: async () => {
       const map = new Map<string, { content: string; created_at: string; direction: string; account_id: string | null }>();
-      if (visibleLeadIds.length === 0 || accountIds.length === 0) return map;
 
+      // RLS filters by user's leads automatically
       const { data } = await supabase
         .from("chat_messages")
         .select("lead_id, content, created_at, direction, account_id")
-        .in("lead_id", visibleLeadIds)
-        .in("account_id", accountIds)
         .order("created_at", { ascending: false });
 
       for (const item of data || []) {

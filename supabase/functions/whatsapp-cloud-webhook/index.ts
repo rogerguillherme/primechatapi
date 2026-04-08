@@ -142,15 +142,17 @@ Deno.serve(async (req) => {
     const incomingPhoneNumberId = value.metadata?.phone_number_id || "";
     let ACCESS_TOKEN: string | undefined;
     let resolvedAccountId: string | null = null;
+    let resolvedUserId: string | null = null;
     if (incomingPhoneNumberId) {
       const { data: matchedAccount } = await supabase
         .from("whatsapp_accounts")
-        .select("id, access_token")
+        .select("id, access_token, user_id")
         .eq("phone_number_id", incomingPhoneNumberId)
         .maybeSingle();
       if (matchedAccount) {
         ACCESS_TOKEN = matchedAccount.access_token;
         resolvedAccountId = matchedAccount.id;
+        resolvedUserId = matchedAccount.user_id;
       }
     }
     if (!ACCESS_TOKEN) {
@@ -264,13 +266,17 @@ Deno.serve(async (req) => {
 
       const activityAt = new Date().toISOString();
 
-      // Find or create lead
-      let { data: lead } = await supabase
+      // Find or create lead (scoped by user_id for multi-tenant isolation)
+      let leadQuery = supabase
         .from("leads")
         .select("id, name, phone")
-        .or(phoneFilter)
-        .limit(1)
-        .maybeSingle();
+        .or(phoneFilter);
+      
+      if (resolvedUserId) {
+        leadQuery = leadQuery.eq("user_id", resolvedUserId);
+      }
+
+      let { data: lead } = await leadQuery.limit(1).maybeSingle();
 
       if (!lead) {
         const { data: newLead, error: createError } = await supabase
@@ -281,6 +287,7 @@ Deno.serve(async (req) => {
             origin: "whatsapp-cloud",
             last_inbound_at: activityAt,
             updated_at: activityAt,
+            user_id: resolvedUserId,
           })
           .select("id, name, phone")
           .single();
