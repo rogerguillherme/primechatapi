@@ -158,6 +158,16 @@ export default function Leads() {
           <Input placeholder="Buscar por nome, telefone ou e-mail..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
         <DateRangeFilter value={dateRange} onChange={setDateRange} />
+        <ExportButton
+          table="leads"
+          filename="leads"
+          columns={[
+            { key: "name", header: "Nome" },
+            { key: "phone", header: "Telefone" },
+            { key: "email", header: "E-mail" },
+            { key: "created_at", header: "Data" },
+          ]}
+        />
       </div>
       <DataTable columns={columns} data={leads || []} emptyMessage={isLoading ? "Carregando..." : "Nenhum lead encontrado."} onRowClick={(row) => setDetailLead(row)} />
       <LeadDetailDrawer
