@@ -236,6 +236,16 @@ export default function Dashboard() {
         )}
       </div>
 
+      {/* Messaging metrics */}
+      {advStats && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard title="Mensagens Enviadas" value={Number(advStats.total_messages_sent) || 0} icon={MessageCircle} />
+          <StatCard title="Taxa de Resposta" value={`${advStats.response_rate ?? 0}%`} icon={Percent} />
+          <StatCard title="Tempo Médio Resposta" value={`${advStats.avg_response_time_minutes ?? 0} min`} icon={Clock} />
+          <StatCard title="Fluxos Ativos" value={Number(advStats.active_flows) || 0} icon={GitBranch} />
+        </div>
+      )}
+
       {/* Tables */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-card rounded-xl border border-border p-5 shadow-card">
@@ -247,12 +257,25 @@ export default function Dashboard() {
         <div className="bg-card rounded-xl border border-border p-5 shadow-card">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-display font-semibold text-foreground">Pedidos Recentes</h2>
-            <button
-              onClick={() => navigate("/orders")}
-              className="text-xs text-primary hover:text-primary/80 font-medium flex items-center gap-1 transition-colors"
-            >
-              Ver todos <ArrowUpRight size={12} />
-            </button>
+            <div className="flex items-center gap-2">
+              <ExportButton
+                table="orders"
+                filename="pedidos"
+                columns={[
+                  { key: "external_order_id", header: "ID" },
+                  { key: "amount", header: "Valor" },
+                  { key: "status", header: "Status" },
+                  { key: "created_at", header: "Data" },
+                ]}
+                label="CSV"
+              />
+              <button
+                onClick={() => navigate("/orders")}
+                className="text-xs text-primary hover:text-primary/80 font-medium flex items-center gap-1 transition-colors"
+              >
+                Ver todos <ArrowUpRight size={12} />
+              </button>
+            </div>
           </div>
           <DataTable columns={orderColumns} data={recentOrders || []} />
         </div>
