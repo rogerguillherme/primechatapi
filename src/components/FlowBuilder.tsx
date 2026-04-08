@@ -705,10 +705,27 @@ function FlowEditorView({ flow, onBack, initialTriggerType }: { flow: Flow | nul
 }
 
 /* ── Main FlowBuilder Component ── */
-export function FlowBuilder({ initialTriggerType }: { initialTriggerType?: string }) {
+export function FlowBuilder({ initialTriggerType, initialFlowId }: { initialTriggerType?: string; initialFlowId?: string }) {
+  const { user } = useAuth();
   const [editingFlow, setEditingFlow] = useState<Flow | null | undefined>(
     initialTriggerType ? null : undefined
   );
+
+  // Load flow by ID when initialFlowId is provided
+  useEffect(() => {
+    if (!initialFlowId || !user) return;
+    const loadFlow = async () => {
+      const { data } = await supabase
+        .from("flows")
+        .select("*")
+        .eq("id", initialFlowId)
+        .single();
+      if (data) {
+        setEditingFlow(data as Flow);
+      }
+    };
+    loadFlow();
+  }, [initialFlowId, user]);
 
   if (editingFlow !== undefined) {
     return (

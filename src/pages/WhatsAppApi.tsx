@@ -1983,9 +1983,17 @@ export default function WhatsAppApi() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeMainTab, setActiveMainTab] = useState("webhook");
   const [flowTriggerType, setFlowTriggerType] = useState<string | undefined>(undefined);
+  const [flowEditId, setFlowEditId] = useState<string | undefined>(undefined);
 
   const handleCreateFlowFromWebhook = useCallback((triggerType: string) => {
+    setFlowEditId(undefined);
     setFlowTriggerType(triggerType);
+    setActiveMainTab("flows");
+  }, []);
+
+  const handleSelectFlowFromWebhook = useCallback((flowId: string, triggerType: string) => {
+    setFlowTriggerType(undefined);
+    setFlowEditId(flowId);
     setActiveMainTab("flows");
   }, []);
 
@@ -2575,7 +2583,7 @@ export default function WhatsAppApi() {
 
         {/* ── Webhook Tab (Event Webhooks) ── */}
         <TabsContent value="webhook" className="space-y-4 p-6 max-w-6xl overflow-auto">
-          <WebhookEndpoints onCreateFlow={handleCreateFlowFromWebhook} />
+          <WebhookEndpoints onCreateFlow={handleCreateFlowFromWebhook} onSelectFlow={handleSelectFlowFromWebhook} />
         </TabsContent>
 
 
@@ -2591,7 +2599,7 @@ export default function WhatsAppApi() {
 
         {/* ── Flows Tab ── */}
         <TabsContent value="flows" className="space-y-4 p-6 max-w-6xl flex-1 overflow-auto">
-          <FlowBuilder key={flowTriggerType || "default"} initialTriggerType={flowTriggerType} />
+          <FlowBuilder key={flowTriggerType || flowEditId || "default"} initialTriggerType={flowTriggerType} initialFlowId={flowEditId} />
         </TabsContent>
 
         {/* ── Analytics Tab ── */}

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { GitBranch } from "lucide-react";
+import { GitBranch, ChevronDown, Plus, List } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -17,6 +17,9 @@ import {
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
 
 const EVENT_TYPES = [
   { value: "carrinho_abandonado", label: "Carrinho Abandonado", icon: ShoppingCart, color: "text-amber-500" },
@@ -32,12 +35,27 @@ function getWebhookUrl(token: string) {
   return `https://${projectId}.supabase.co/functions/v1/custom-webhook/${token}`;
 }
 
-export function WebhookEndpoints({ onCreateFlow }: { onCreateFlow?: (triggerType: string) => void }) {
+export function WebhookEndpoints({ onCreateFlow, onSelectFlow }: { 
+  onCreateFlow?: (triggerType: string) => void;
+  onSelectFlow?: (flowId: string, triggerType: string) => void;
+}) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [sendingTest, setSendingTest] = useState<string | null>(null);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [expandedEvent, setExpandedEvent] = useState<string | null>(null);
+
+  const { data: flows } = useQuery({
+    queryKey: ["flows-list"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("flows")
+        .select("id, name, trigger_type, active")
+        .order("name");
+      return data || [];
+    },
+    enabled: !!user,
+  });
 
   const { data: endpoints, isLoading } = useQuery({
     queryKey: ["webhook-endpoints"],
@@ -235,16 +253,13 @@ export function WebhookEndpoints({ onCreateFlow }: { onCreateFlow?: (triggerType
                           )}
                           Teste
                          </Button>
-                        {onCreateFlow && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => onCreateFlow(evt.value)}
-                            className="gap-1 text-xs"
-                          >
-                            <GitBranch size={12} />
-                            Criar Fluxo
-                          </Button>
+                        {(onCreateFlow || onSelectFlow) && (
+                          <FlowDropdown
+                            triggerType={evt.value}
+                            flows={flows || []}
+                            onCreateFlow={onCreateFlow}
+                            onSelectFlow={onSelectFlow}
+                          />
                         )}
                         <Button
                           variant="ghost"
@@ -274,16 +289,13 @@ export function WebhookEndpoints({ onCreateFlow }: { onCreateFlow?: (triggerType
                           <Webhook size={12} />
                           Ativar
                         </Button>
-                        {onCreateFlow && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => onCreateFlow(evt.value)}
-                            className="gap-1 text-xs"
-                          >
-                            <GitBranch size={12} />
-                            Criar Fluxo
-                          </Button>
+                        {(onCreateFlow || onSelectFlow) && (
+                          <FlowDropdown
+                            triggerType={evt.value}
+                            flows={flows || []}
+                            onCreateFlow={onCreateFlow}
+                            onSelectFlow={onSelectFlow}
+                          />
                         )}
                       </>
                     )}
@@ -328,6 +340,61 @@ export function WebhookEndpoints({ onCreateFlow }: { onCreateFlow?: (triggerType
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function FlowDropdown({ triggerType, flows, onCreateFlow, onSelectFlow }: {
+  triggerType: string;
+  flows: { id: string; name: string; trigger_type: string | null; active: boolean }[];
+  onCreateFlow?: (triggerType: string) => void;
+  onSelectFlow?: (flowId: string, triggerType: string) => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="gap-1 text-xs">
+          <GitBranch size={12} />
+          Fluxo
+          <ChevronDown size={10} />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        {onCreateFlow && (
+          <DropdownMenuItem onClick={() => onCreateFlow(triggerType)} className="gap-2">
+            <Plus size={14} />
+            Criar novo fluxo
+          </DropdownMenuItem>
+        )}
+        {flows.length > 0 && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+              Usar fluxo existente
+            </DropdownMenuLabel>
+            <ScrollArea className={flows.length > 5 ? "max-h-[200px]" : ""}>
+              {flows.map((flow) => (
+                <DropdownMenuItem
+                  key={flow.id}
+                  onClick={() => onSelectFlow?.(flow.id, triggerType)}
+                  className="gap-2 text-xs"
+                >
+                  <List size={12} />
+                  <span className="truncate flex-1">{flow.name}</span>
+                  {flow.active && (
+                    <Badge variant="outline" className="text-[9px] px-1 ml-auto">Ativo</Badge>
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </ScrollArea>
+          </>
+        )}
+        {!onCreateFlow && flows.length === 0 && (
+          <DropdownMenuItem disabled className="text-xs text-muted-foreground">
+            Nenhum fluxo disponível
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
