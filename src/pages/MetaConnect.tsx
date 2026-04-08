@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useSearchParams, Navigate } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -63,22 +63,6 @@ export default function MetaConnect() {
   const [selectedPhoneId, setSelectedPhoneId] = useState<string>("");
   const [isAdding, setIsAdding] = useState(false);
 
-  // Check if user is admin
-  const { data: isAdmin, isLoading: isAdminLoading } = useQuery({
-    queryKey: ["user-role", user?.id],
-    queryFn: async () => {
-      if (!user) return false;
-      const { data } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id)
-        .eq("role", "admin")
-        .maybeSingle();
-      return !!data;
-    },
-    enabled: !!user,
-  });
-
   // Fetch user connections
   const { data: connections, isLoading } = useQuery({
     queryKey: ["meta-connections"],
@@ -90,7 +74,7 @@ export default function MetaConnect() {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!session && isAdmin === true,
+    enabled: !!session,
   });
   const activeConnection = connections?.find((c: any) => c.status === "connected");
 
@@ -122,10 +106,11 @@ export default function MetaConnect() {
   // Handle OAuth callback
   useEffect(() => {
     const code = searchParams.get("code");
-    if (code && !isExchanging && isAdmin) {
+    if (code && !isExchanging && session) {
       setIsExchanging(true);
-      searchParams.delete("code");
-      setSearchParams(searchParams, { replace: true });
+      const nextSearchParams = new URLSearchParams(searchParams);
+      nextSearchParams.delete("code");
+      setSearchParams(nextSearchParams, { replace: true });
 
       (async () => {
         try {
@@ -160,12 +145,7 @@ export default function MetaConnect() {
         }
       })();
     }
-  }, [searchParams, isAdmin]);
-
-  // Redirect non-admins
-  if (!isAdminLoading && !isAdmin) {
-    return <Navigate to="/" replace />;
-  }
+  }, [isExchanging, queryClient, searchParams, session, setSearchParams]);
 
   const handleConnect = async () => {
     try {
