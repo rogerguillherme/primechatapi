@@ -98,10 +98,16 @@ export function CampaignAnalytics() {
         }
       }
 
-      return jobs.map(job => ({
-        ...job,
-        events: eventMap.get(job.id) || { sent: 0, delivered: 0, read: 0, click: 0, reply: 0, purchase: 0, revenue: 0 },
-      }));
+      return jobs.map(job => {
+        const eventsForJob = eventMap.get(job.id) || { sent: 0, delivered: 0, read: 0, click: 0, reply: 0, purchase: 0, revenue: 0 };
+
+        return {
+          ...job,
+          delivered_count: Math.max(job.delivered_count || 0, eventsForJob.delivered),
+          read_count: Math.max(job.read_count || 0, eventsForJob.read),
+          events: eventsForJob,
+        };
+      });
     },
     refetchInterval: 15000,
   });
