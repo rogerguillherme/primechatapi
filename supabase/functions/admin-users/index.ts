@@ -38,16 +38,9 @@ serve(async (req) => {
       });
     }
 
-    // Check admin role
-    const { data: roleData } = await supabaseAdmin
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", caller.id)
-      .eq("role", "admin")
-      .maybeSingle();
-
-    if (!roleData) {
-      return new Response(JSON.stringify({ error: "Acesso negado. Apenas administradores." }), {
+    // Only admin@primechat.com can manage users
+    if (caller.email !== "admin@primechat.com") {
+      return new Response(JSON.stringify({ error: "Acesso negado. Apenas o administrador principal." }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
