@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Users, ShoppingCart, Package, DollarSign, CalendarClock, Repeat, TrendingUp, ArrowUpRight } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { Users, ShoppingCart, Package, DollarSign, CalendarClock, Repeat, TrendingUp, ArrowUpRight, MessageCircle, Clock, Percent, GitBranch } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { DateRangeFilter, type DateRange } from "@/components/DateRangeFilter";
+import { ExportButton } from "@/components/ExportButton";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useNavigate } from "react-router-dom";
