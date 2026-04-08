@@ -81,7 +81,7 @@ serve(async (req) => {
         await supabaseAdmin.from("user_roles").upsert({
           user_id: data.user.id,
           role,
-        }, { onConflict: "user_id" });
+        });
       }
 
       return jsonResponse({ success: true, user: data.user });
