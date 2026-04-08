@@ -311,8 +311,13 @@ Deno.serve(async (req) => {
         if (leadUpdateError) throw leadUpdateError;
       }
 
-      // Save message
-      const contentText = text || (mediaType === "audio" ? "🎤 Áudio" : mediaType === "image" ? "📷 Imagem" : mediaType === "video" ? "🎥 Vídeo" : "📎 Arquivo");
+      // Save message — include button info for visibility
+      let contentText = text || (mediaType === "audio" ? "🎤 Áudio" : mediaType === "image" ? "📷 Imagem" : mediaType === "video" ? "🎥 Vídeo" : "📎 Arquivo");
+      
+      // If it's a button reply, prefix with emoji for clarity
+      if (buttonPayload && !contentText.startsWith("🔘")) {
+        contentText = `🔘 ${contentText}`;
+      }
 
       await supabase.from("chat_messages").insert({
         lead_id: lead!.id,
@@ -322,6 +327,7 @@ Deno.serve(async (req) => {
         media_url: mediaUrl,
         zapi_message_id: messageId,
         status: "received",
+        account_id: resolvedAccountId,
       });
 
       // ── AUTO-TRACK: Register reply/click campaign events ──
