@@ -182,6 +182,21 @@ export default function MetaConnect() {
       queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
       queryClient.invalidateQueries({ queryKey: ["meta-wabas"] });
 
+      // Register the phone number with WhatsApp Cloud API
+      try {
+        const { data: regData, error: regError } = await supabase.functions.invoke("whatsapp-register-phone", {
+          body: { phone_number_id: phone.id },
+        });
+        if (regError || regData?.error) {
+          console.warn("Registro automático falhou:", regData?.error || regError?.message);
+          toast.info("Número adicionado, mas o registro na API pode estar pendente. Verifique o status.");
+        } else {
+          toast.success("Número registrado na API do WhatsApp com sucesso!");
+        }
+      } catch (regErr) {
+        console.warn("Erro no registro automático:", regErr);
+      }
+
       try {
         await supabase.functions.invoke("whatsapp-sync-templates", { body: {} });
         queryClient.invalidateQueries({ queryKey: ["user-templates"] });
