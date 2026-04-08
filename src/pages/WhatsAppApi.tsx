@@ -1983,9 +1983,17 @@ export default function WhatsAppApi() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeMainTab, setActiveMainTab] = useState("webhook");
   const [flowTriggerType, setFlowTriggerType] = useState<string | undefined>(undefined);
+  const [flowEditId, setFlowEditId] = useState<string | undefined>(undefined);
 
   const handleCreateFlowFromWebhook = useCallback((triggerType: string) => {
+    setFlowEditId(undefined);
     setFlowTriggerType(triggerType);
+    setActiveMainTab("flows");
+  }, []);
+
+  const handleSelectFlowFromWebhook = useCallback((flowId: string, triggerType: string) => {
+    setFlowTriggerType(undefined);
+    setFlowEditId(flowId);
     setActiveMainTab("flows");
   }, []);
 
