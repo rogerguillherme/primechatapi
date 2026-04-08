@@ -187,11 +187,11 @@ export default function MetaConnect() {
       // Register the phone number with WhatsApp Cloud API
       try {
         const { data: regData, error: regError } = await supabase.functions.invoke("whatsapp-register-phone", {
-          body: { phone_number_id: phone.id },
+          body: { phone_number_id: phone.id, pin: registrationPin },
         });
         if (regError || regData?.error) {
           console.warn("Registro automático falhou:", regData?.error || regError?.message);
-          toast.info("Número adicionado, mas o registro na API pode estar pendente. Verifique o status.");
+          toast.info("Número adicionado, mas o registro na API pode estar pendente. Clique em 'Registrar na API' e informe o PIN correto.");
         } else {
           toast.success("Número registrado na API do WhatsApp com sucesso!");
         }
