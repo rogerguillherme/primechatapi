@@ -6,6 +6,7 @@ import { DataTable } from "@/components/DataTable";
 import { DateRangeFilter, type DateRange } from "@/components/DateRangeFilter";
 import { LeadChatDrawer } from "@/components/LeadChatDrawer";
 import { LeadDetailDrawer } from "@/components/LeadDetailDrawer";
+import { ExportButton } from "@/components/ExportButton";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Input } from "@/components/ui/input";
@@ -157,6 +158,16 @@ export default function Leads() {
           <Input placeholder="Buscar por nome, telefone ou e-mail..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
         <DateRangeFilter value={dateRange} onChange={setDateRange} />
+        <ExportButton
+          table="leads"
+          filename="leads"
+          columns={[
+            { key: "name", header: "Nome" },
+            { key: "phone", header: "Telefone" },
+            { key: "email", header: "E-mail" },
+            { key: "created_at", header: "Data" },
+          ]}
+        />
       </div>
       <DataTable columns={columns} data={leads || []} emptyMessage={isLoading ? "Carregando..." : "Nenhum lead encontrado."} onRowClick={(row) => setDetailLead(row)} />
       <LeadDetailDrawer

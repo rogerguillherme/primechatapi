@@ -19,7 +19,7 @@ import {
   Send, Search, ArrowLeft, Trash2, Plus, CheckCircle2,
   AlertCircle, Loader2, ChevronDown, ChevronUp, Upload,
   Inbox, Eye, CheckCheck, XCircle, Shield, Shuffle, Flame,
-  PauseCircle, AlertTriangle, BarChart3,
+  PauseCircle, AlertTriangle, BarChart3, CalendarClock,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
@@ -54,6 +54,8 @@ interface QueueItem {
   shuffleLeads: boolean;
   multiNumber: boolean;
   extraAccountIds: string[];
+  // Scheduling
+  scheduledAt: string;
 }
 
 interface BroadcastJob {
@@ -195,6 +197,7 @@ export function BroadcastQueue() {
       shuffleLeads: true,
       multiNumber: false,
       extraAccountIds: [],
+      scheduledAt: "",
     };
     setQueue((prev) => [...prev, newItem]);
     setExpandedItemId(newItem.id);
@@ -287,24 +290,27 @@ export function BroadcastQueue() {
         : [];
 
       // Create broadcast job in DB with smart sending options
+      const insertData: any = {
+        user_id: session?.user.id,
+        account_id: item.accountId,
+        template_id: item.templateId,
+        template_name: template.template_name,
+        template_language: template.template_language || "pt_BR",
+        template_params: storedParams,
+        lead_ids: leadIdsArray,
+        total_leads: leadIdsArray.length,
+        status: item.scheduledAt ? "scheduled" : "pending",
+        warmup_mode: item.warmupMode,
+        warmup_daily_limit: item.warmupDailyLimit,
+        shuffle_leads: item.shuffleLeads,
+        multi_number: item.multiNumber,
+        account_ids: item.multiNumber ? [item.accountId, ...item.extraAccountIds] : [],
+      };
+      if (item.scheduledAt) insertData.scheduled_at = new Date(item.scheduledAt).toISOString();
+
       const { data: job, error: jobError } = await supabase
         .from("broadcast_jobs")
-        .insert({
-          user_id: session?.user.id,
-          account_id: item.accountId,
-          template_id: item.templateId,
-          template_name: template.template_name,
-          template_language: template.template_language || "pt_BR",
-          template_params: storedParams,
-          lead_ids: leadIdsArray,
-          total_leads: leadIdsArray.length,
-          status: "pending",
-          warmup_mode: item.warmupMode,
-          warmup_daily_limit: item.warmupDailyLimit,
-          shuffle_leads: item.shuffleLeads,
-          multi_number: item.multiNumber,
-          account_ids: item.multiNumber ? [item.accountId, ...item.extraAccountIds] : [],
-        } as any)
+        .insert(insertData)
         .select()
         .single();
 
@@ -317,10 +323,12 @@ export function BroadcastQueue() {
       setActiveJobs((prev) => ({ ...prev, [(job as any).id]: job as any }));
       updateQueueItem(item.id, { status: "sending", jobId: (job as any).id });
 
-      // Trigger the processor (fire and forget)
-      supabase.functions.invoke("broadcast-processor", {
-        body: { job_id: (job as any).id },
-      }).catch((e) => console.error("Failed to invoke processor:", e));
+      // Trigger the processor (fire and forget) — skip for scheduled
+      if (!item.scheduledAt) {
+        supabase.functions.invoke("broadcast-processor", {
+          body: { job_id: (job as any).id },
+        }).catch((e) => console.error("Failed to invoke processor:", e));
+      }
     }
 
     setIsSendingAll(false);
@@ -1016,6 +1024,26 @@ function QueueItemCard({
                   )}
                 </div>
               )}
+
+              {/* Scheduling */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <CalendarClock size={12} className="text-muted-foreground" />
+                  <span className="text-[11px]">Agendar disparo</span>
+                </div>
+                <input
+                  type="datetime-local"
+                  value={item.scheduledAt}
+                  onChange={(e) => onUpdate({ scheduledAt: e.target.value })}
+                  min={new Date().toISOString().slice(0, 16)}
+                  className="w-full h-8 rounded-md border border-input bg-background px-3 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+                {item.scheduledAt && (
+                  <p className="text-[10px] text-amber-500">
+                    ⏰ Disparo agendado para {new Date(item.scheduledAt).toLocaleString("pt-BR")}
+                  </p>
+                )}
+              </div>
 
               <p className="text-[10px] text-muted-foreground border-t border-border pt-2">
                 ✅ Delay aleatório (300-1500ms) • Detecção de bloqueios • Pausa automática (erro {">"}10%) • Log de auditoria

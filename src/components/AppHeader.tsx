@@ -7,6 +7,8 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { NotificationBell } from "@/components/NotificationBell";
+import { GlobalSearch } from "@/components/GlobalSearch";
 
 export function AppHeader() {
   const { user, signOut } = useAuth();
@@ -86,9 +88,11 @@ export function AppHeader() {
           </div>
 
           <div className="flex items-center gap-2">
+            <GlobalSearch />
             {user && (
               <span className="text-xs text-white/60 hidden sm:inline">{user.email}</span>
             )}
+            {user && <NotificationBell />}
             {user && platform === "whatsapp" && (
               <Button variant="ghost" size="icon" onClick={() => navigate("/auth/meta/callback")} className="text-white/60 hover:text-white hover:bg-white/10" title="Conexão WhatsApp">
                 <Plug size={16} />
