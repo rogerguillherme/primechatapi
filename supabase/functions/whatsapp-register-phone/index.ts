@@ -15,7 +15,7 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    const authHeader = req.headers.get("authorization") ?? "";
+    const authHeader = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
     if (!authHeader.toLowerCase().startsWith("bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
@@ -25,7 +25,11 @@ Deno.serve(async (req) => {
 
     const token = authHeader.replace(/^Bearer\s+/i, "").trim();
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
-    const { data: { user }, error: userError } = await adminClient.auth.getUser(token);
+    const {
+      data: { user },
+      error: userError,
+    } = await adminClient.auth.getUser(token);
+
     if (userError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
@@ -33,20 +37,46 @@ Deno.serve(async (req) => {
       });
     }
 
-    const body = await req.json();
-    const phone_number_id = body.phone_number_id;
-    const pin = body.pin || "123456";
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {
+      body = {};
+    }
 
-    if (!phone_number_id) {
+    const phoneNumberId = typeof body?.phone_number_id === "string" ? body.phone_number_id.trim() : "";
+    const pin = typeof body?.pin === "string" ? body.pin.trim() : "";
+
+    if (!phoneNumberId) {
       return new Response(JSON.stringify({ error: "phone_number_id is required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Try to get access token from meta_connections first (longer-lived), then whatsapp_accounts
-    let accessToken: string | null = null;
+    if (pin && !/^\d{6}$/.test(pin)) {
+      return new Response(JSON.stringify({ error: "PIN inválido. Use 6 dígitos numéricos." }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
+    const { data: account } = await adminClient
+      .from("whatsapp_accounts")
+      .select("id, access_token")
+      .eq("phone_number_id", phoneNumberId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (!account) {
+      return new Response(JSON.stringify({ error: "Número não encontrado na sua conta" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Prioritize OAuth token from active connection, fallback to account token
+    let accessToken = account.access_token;
     const { data: metaConn } = await adminClient
       .from("meta_connections")
       .select("meta_access_token")
@@ -58,67 +88,60 @@ Deno.serve(async (req) => {
 
     if (metaConn?.meta_access_token) {
       accessToken = metaConn.meta_access_token;
-    } else {
-      const { data: account } = await adminClient
-        .from("whatsapp_accounts")
-        .select("access_token")
-        .eq("phone_number_id", phone_number_id)
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (account?.access_token) {
-        accessToken = account.access_token;
-      }
     }
 
     if (!accessToken) {
-      return new Response(JSON.stringify({ error: "Nenhum token de acesso encontrado. Reconecte sua conta Meta." }), {
+      return new Response(JSON.stringify({ error: "Token de acesso não encontrado" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    console.log(`Registering phone ${phone_number_id} with WhatsApp Cloud API...`);
+    const registerPayload: Record<string, string> = {
+      messaging_product: "whatsapp",
+    };
 
-    // Register the phone number with WhatsApp Cloud API
-    const registerRes = await fetch(
-      `https://graph.facebook.com/v19.0/${phone_number_id}/register`,
-      {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          pin: pin,
-        }),
-      }
-    );
+    if (pin) {
+      registerPayload.pin = pin;
+    }
+
+    console.log(`Registering phone ${phoneNumberId}...`);
+
+    const registerRes = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}/register`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(registerPayload),
+    });
 
     const registerData = await registerRes.json();
     console.log(`Register response (${registerRes.status}):`, JSON.stringify(registerData));
 
     if (!registerRes.ok) {
       return new Response(
-        JSON.stringify({ 
+        JSON.stringify({
           error: registerData?.error?.message || "Falha ao registrar número na API do WhatsApp",
           error_code: registerData?.error?.code,
-          details: registerData 
+          details: registerData,
         }),
-        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        {
+          status: 422,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
-    return new Response(
-      JSON.stringify({ success: true, data: registerData }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ success: true, data: registerData }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (error) {
     console.error("Register phone error:", error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Erro interno" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Erro interno" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
