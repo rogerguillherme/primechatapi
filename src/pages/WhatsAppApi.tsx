@@ -440,7 +440,7 @@ function BroadcastTab() {
     try {
       const phone = newLeadPhone.replace(/\D/g, "");
       const cleanPhone = phone.startsWith("55") ? phone : "55" + phone;
-      const { data, error } = await supabase.from("leads").insert({ name: newLeadName.trim(), phone: cleanPhone, origin: "manual" }).select("id").single();
+      const { data, error } = await supabase.from("leads").insert({ name: newLeadName.trim(), phone: cleanPhone, origin: "manual", user_id: user?.id }).select("id").single();
       if (error) throw error;
       queryClient.invalidateQueries({ queryKey: ["broadcast-leads"] });
       setSelectedLeads((prev) => new Set([...prev, data.id]));
