@@ -2416,88 +2416,121 @@ export default function WhatsAppApi() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {accounts.map((account: any) => (
-                    <div key={account.id} className="flex items-center gap-4 p-4 rounded-lg border border-border bg-muted/20 hover:bg-muted/40 transition-colors">
-                      <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center flex-shrink-0">
-                        <MessageCircle size={18} className="text-primary-foreground" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium text-sm truncate">{account.name}</p>
-                          {account.is_default && (
-                            <Badge variant="default" className="text-[10px] px-1.5 py-0">Padrão</Badge>
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Phone ID: {account.phone_number_id.slice(0, 8)}...
-                          {account.business_account_id && ` • BA: ${account.business_account_id.slice(0, 8)}...`}
-                        </p>
-                        {(() => {
-                          const lim = limitsMap.get(account.id);
-                          if (!lim) return null;
-                          const tierLabels: Record<string, string> = {
-                            TIER_NOT_SET: "Não definido", TIER_50: "50/dia", TIER_250: "250/dia",
-                            TIER_1K: "1K/dia", TIER_10K: "10K/dia", TIER_100K: "100K/dia", TIER_UNLIMITED: "Ilimitado",
-                          };
-                          const qualityColors: Record<string, string> = { GREEN: "text-emerald-500", YELLOW: "text-amber-500", RED: "text-destructive" };
-                          const qualityLabels: Record<string, string> = { GREEN: "Alta", YELLOW: "Média", RED: "Baixa" };
-                          return (
-                            <div className="flex items-center gap-3 mt-1">
-                              {lim.tier && (
-                                <span className="text-[11px] font-medium text-muted-foreground">
-                                  📨 {tierLabels[lim.tier] || lim.tier}
-                                </span>
-                              )}
-                              {lim.quality && (
-                                <span className={`text-[11px] font-medium ${qualityColors[lim.quality] || "text-muted-foreground"}`}>
-                                  🛡️ {qualityLabels[lim.quality] || lim.quality}
-                                </span>
+                  {accounts.map((account: any) => {
+                    const lim = limitsMap.get(account.id);
+                    const tierLabels: Record<string, string> = {
+                      TIER_NOT_SET: "Não definido",
+                      TIER_50: "50/dia",
+                      TIER_250: "250/dia",
+                      TIER_1K: "1K/dia",
+                      TIER_10K: "10K/dia",
+                      TIER_100K: "100K/dia",
+                      TIER_UNLIMITED: "Ilimitado",
+                    };
+                    const qualityColors: Record<string, string> = {
+                      GREEN: "text-emerald-500",
+                      YELLOW: "text-amber-500",
+                      RED: "text-destructive",
+                    };
+                    const qualityLabels: Record<string, string> = {
+                      GREEN: "Alta",
+                      YELLOW: "Média",
+                      RED: "Baixa",
+                    };
+
+                    return (
+                      <div key={account.id} className="flex flex-col gap-3 p-4 rounded-lg border border-border bg-muted/20 hover:bg-muted/40 transition-colors">
+                        <div className="flex items-start gap-4">
+                          <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center flex-shrink-0">
+                            <MessageCircle size={18} className="text-primary-foreground" />
+                          </div>
+
+                          <div className="flex-1 min-w-0 space-y-1.5">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-medium text-sm">{account.name}</p>
+                              {account.is_default && (
+                                <Badge variant="default" className="text-[10px] px-1.5 py-0">Padrão</Badge>
                               )}
                             </div>
-                          );
-                        })()}
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        {!account.is_default && (
-                          <Button variant="ghost" size="sm" onClick={() => handleSetDefault(account.id)} className="text-xs h-8 gap-1 text-muted-foreground hover:text-foreground">
-                            <Star size={14} /> Padrão
-                          </Button>
-                        )}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreVertical size={16} />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48">
-                            <DropdownMenuItem onClick={() => startEditing(account)} className="gap-2">
-                              <Pencil size={14} /> Editar conta
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => {
-                              setEditingAccount(account);
-                              setAccountName(account.name);
-                              setPhoneNumberId(account.phone_number_id);
-                              setAccessToken("");
-                              setBusinessAccountId(account.business_account_id || "");
-                              setIsDefault(account.is_default);
-                              setIsAddingAccount(true);
-                            }} className="gap-2">
-                              <KeyRound size={14} /> Atualizar token
-                            </DropdownMenuItem>
-                            {!account.is_default && (
-                              <DropdownMenuItem onClick={() => handleSetDefault(account.id)} className="gap-2">
-                                <Star size={14} /> Definir como padrão
-                              </DropdownMenuItem>
+
+                            <div className="space-y-1 text-xs text-muted-foreground">
+                              <p className="break-all">
+                                Phone Number ID: <span className="font-mono text-foreground/80">{account.phone_number_id}</span>
+                              </p>
+                              {account.business_account_id && (
+                                <p className="break-all">
+                                  Business Account ID: <span className="font-mono text-foreground/80">{account.business_account_id}</span>
+                                </p>
+                              )}
+                              <p className="break-all">
+                                Access Token: <span className="font-mono text-foreground/80">••••••••{account.access_token?.slice(-8)}</span>
+                              </p>
+                            </div>
+
+                            {lim && (
+                              <div className="flex flex-wrap items-center gap-3 pt-1">
+                                {lim.tier && (
+                                  <span className="text-[11px] font-medium text-muted-foreground">
+                                    📨 {tierLabels[lim.tier] || lim.tier}
+                                  </span>
+                                )}
+                                {lim.quality && (
+                                  <span className={`text-[11px] font-medium ${qualityColors[lim.quality] || "text-muted-foreground"}`}>
+                                    🛡️ {qualityLabels[lim.quality] || lim.quality}
+                                  </span>
+                                )}
+                              </div>
                             )}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => handleDeleteAccount(account.id)} className="gap-2 text-destructive focus:text-destructive">
-                              <Trash2 size={14} /> Excluir conta
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {!account.is_default && (
+                              <Button variant="ghost" size="sm" onClick={() => handleSetDefault(account.id)} className="text-xs h-8 gap-1 text-muted-foreground hover:text-foreground">
+                                <Star size={14} /> Padrão
+                              </Button>
+                            )}
+
+                            <Button variant="outline" size="sm" onClick={() => startEditing(account)} className="text-xs h-8 gap-1">
+                              <Pencil size={14} /> Configurações
+                            </Button>
+
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <MoreVertical size={16} />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-48">
+                                <DropdownMenuItem onClick={() => startEditing(account)} className="gap-2">
+                                  <Pencil size={14} /> Editar conta
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => {
+                                  setEditingAccount(account);
+                                  setAccountName(account.name);
+                                  setPhoneNumberId(account.phone_number_id);
+                                  setAccessToken("");
+                                  setBusinessAccountId(account.business_account_id || "");
+                                  setIsDefault(account.is_default);
+                                  setIsAddingAccount(true);
+                                }} className="gap-2">
+                                  <KeyRound size={14} /> Atualizar token
+                                </DropdownMenuItem>
+                                {!account.is_default && (
+                                  <DropdownMenuItem onClick={() => handleSetDefault(account.id)} className="gap-2">
+                                    <Star size={14} /> Definir como padrão
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => handleDeleteAccount(account.id)} className="gap-2 text-destructive focus:text-destructive">
+                                  <Trash2 size={14} /> Excluir conta
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
