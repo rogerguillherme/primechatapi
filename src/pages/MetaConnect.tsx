@@ -470,63 +470,79 @@ export default function MetaConnect() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              {registeredAccounts.map((acc: any) => (
-                <div key={acc.id} className="flex items-center justify-between py-3 px-4 rounded-lg border">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Phone className="h-4 w-4 text-primary" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-sm">{acc.name}</p>
-                      <p className="text-xs text-muted-foreground font-mono">{acc.phone_number_id}</p>
-                    </div>
-                  </div>
+                <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                  <p className="text-xs font-medium">PIN de registro do WhatsApp (6 dígitos)</p>
                   <div className="flex items-center gap-2">
-                    {acc.is_default && (
-                      <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs">
-                        Padrão
-                      </Badge>
-                    )}
-                    {acc.business_account_id && (
-                      <span className="text-xs text-muted-foreground">WABA: {acc.business_account_id}</span>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={registeringPhoneId === acc.phone_number_id}
-                      onClick={async () => {
-                        setRegisteringPhoneId(acc.phone_number_id);
-                        try {
-                          const { data, error } = await supabase.functions.invoke("whatsapp-register-phone", {
-                            body: { phone_number_id: acc.phone_number_id },
-                          });
-                          if (error) throw error;
-                          if (data?.error) {
-                            toast.error(`Falha: ${data.error}`);
-                          } else {
-                            toast.success("Número registrado na API do WhatsApp!");
-                            queryClient.invalidateQueries({ queryKey: ["meta-wabas"] });
-                          }
-                        } catch (err: any) {
-                          toast.error(err.message || "Erro ao registrar");
-                        } finally {
-                          setRegisteringPhoneId(null);
-                        }
-                      }}
-                      className="gap-1"
-                    >
-                      {registeringPhoneId === acc.phone_number_id ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <Zap className="h-3 w-3" />
-                      )}
-                      Registrar na API
-                    </Button>
+                    <Input
+                      value={registrationPin}
+                      onChange={(e) => setRegistrationPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      placeholder="Ex: 123456"
+                      maxLength={6}
+                      className="max-w-[180px]"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Use o PIN configurado no Gerenciador da Meta para tirar o status pendente.
+                    </p>
                   </div>
                 </div>
-              ))}
-            </div>
+
+                <div className="space-y-2">
+                  {registeredAccounts.map((acc: any) => (
+                    <div key={acc.id} className="flex items-center justify-between py-3 px-4 rounded-lg border">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                          <Phone className="h-4 w-4 text-primary" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm">{acc.name}</p>
+                          <p className="text-xs text-muted-foreground font-mono">{acc.phone_number_id}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {acc.is_default && (
+                          <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs">
+                            Padrão
+                          </Badge>
+                        )}
+                        {acc.business_account_id && (
+                          <span className="text-xs text-muted-foreground">WABA: {acc.business_account_id}</span>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={registeringPhoneId === acc.phone_number_id || registrationPin.length !== 6}
+                          onClick={async () => {
+                            setRegisteringPhoneId(acc.phone_number_id);
+                            try {
+                              const { data, error } = await supabase.functions.invoke("whatsapp-register-phone", {
+                                body: { phone_number_id: acc.phone_number_id, pin: registrationPin },
+                              });
+                              if (error) throw error;
+                              if (data?.error) {
+                                toast.error(`Falha: ${data.error}`);
+                              } else {
+                                toast.success("Número validado e registrado na API do WhatsApp!");
+                                queryClient.invalidateQueries({ queryKey: ["meta-wabas"] });
+                              }
+                            } catch (err: any) {
+                              toast.error(err.message || "Erro ao registrar");
+                            } finally {
+                              setRegisteringPhoneId(null);
+                            }
+                          }}
+                          className="gap-1"
+                        >
+                          {registeringPhoneId === acc.phone_number_id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Zap className="h-3 w-3" />
+                          )}
+                          Registrar na API
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
           </CardContent>
         </Card>
       )}
