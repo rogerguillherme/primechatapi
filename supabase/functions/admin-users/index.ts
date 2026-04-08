@@ -118,15 +118,13 @@ serve(async (req) => {
 
       // Update role
       if (role) {
-        await supabaseAdmin.from("user_roles").upsert(
-          { user_id, role },
-          { onConflict: "user_id,role" }
-        );
-        // Remove other roles
         await supabaseAdmin.from("user_roles")
           .delete()
-          .eq("user_id", user_id)
-          .neq("role", role);
+          .eq("user_id", user_id);
+        await supabaseAdmin.from("user_roles").insert({
+          user_id,
+          role,
+        });
       }
 
       return new Response(JSON.stringify({ success: true }), {
