@@ -775,34 +775,34 @@ export type Database = {
           created_at: string
           id: string
           meta_access_token: string
-          phone_number: string
-          phone_number_id: string
+          phone_number: string | null
+          phone_number_id: string | null
           status: string
           updated_at: string
           user_id: string
-          waba_id: string
+          waba_id: string | null
         }
         Insert: {
           created_at?: string
           id?: string
           meta_access_token: string
-          phone_number: string
-          phone_number_id: string
+          phone_number?: string | null
+          phone_number_id?: string | null
           status?: string
           updated_at?: string
           user_id: string
-          waba_id: string
+          waba_id?: string | null
         }
         Update: {
           created_at?: string
           id?: string
           meta_access_token?: string
-          phone_number?: string
-          phone_number_id?: string
+          phone_number?: string | null
+          phone_number_id?: string | null
           status?: string
           updated_at?: string
           user_id?: string
-          waba_id?: string
+          waba_id?: string | null
         }
         Relationships: []
       }
