@@ -33,7 +33,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { phone_number_id } = await req.json();
+    const body = await req.json();
+    const phone_number_id = body.phone_number_id;
+    const pin = body.pin || "123456";
+
     if (!phone_number_id) {
       return new Response(JSON.stringify({ error: "phone_number_id is required" }), {
         status: 400,
@@ -41,20 +44,41 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get the account to find the access token
-    const { data: account } = await adminClient
-      .from("whatsapp_accounts")
-      .select("access_token")
-      .eq("phone_number_id", phone_number_id)
+    // Try to get access token from meta_connections first (longer-lived), then whatsapp_accounts
+    let accessToken: string | null = null;
+
+    const { data: metaConn } = await adminClient
+      .from("meta_connections")
+      .select("meta_access_token")
       .eq("user_id", user.id)
+      .eq("status", "connected")
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
 
-    if (!account) {
-      return new Response(JSON.stringify({ error: "Conta não encontrada" }), {
+    if (metaConn?.meta_access_token) {
+      accessToken = metaConn.meta_access_token;
+    } else {
+      const { data: account } = await adminClient
+        .from("whatsapp_accounts")
+        .select("access_token")
+        .eq("phone_number_id", phone_number_id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (account?.access_token) {
+        accessToken = account.access_token;
+      }
+    }
+
+    if (!accessToken) {
+      return new Response(JSON.stringify({ error: "Nenhum token de acesso encontrado. Reconecte sua conta Meta." }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    console.log(`Registering phone ${phone_number_id} with WhatsApp Cloud API...`);
 
     // Register the phone number with WhatsApp Cloud API
     const registerRes = await fetch(
@@ -62,22 +86,26 @@ Deno.serve(async (req) => {
       {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${account.access_token}`,
+          "Authorization": `Bearer ${accessToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           messaging_product: "whatsapp",
-          pin: "123456",
+          pin: pin,
         }),
       }
     );
 
     const registerData = await registerRes.json();
+    console.log(`Register response (${registerRes.status}):`, JSON.stringify(registerData));
 
     if (!registerRes.ok) {
-      console.error("WhatsApp register failed:", registerData);
       return new Response(
-        JSON.stringify({ error: "Falha ao registrar número", details: registerData }),
+        JSON.stringify({ 
+          error: registerData?.error?.message || "Falha ao registrar número na API do WhatsApp",
+          error_code: registerData?.error?.code,
+          details: registerData 
+        }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
