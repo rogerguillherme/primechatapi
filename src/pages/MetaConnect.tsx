@@ -6,15 +6,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MessageCircle, Phone, Send, Plug, Unplug, Loader2, CheckCircle2, XCircle, ExternalLink, Plus, RefreshCw, Building2, Shield, Zap, Globe } from "lucide-react";
+import { MessageCircle, Phone, Send, Plug, Unplug, Loader2, CheckCircle2, ExternalLink, Plus, RefreshCw, Building2, Shield, Zap, Globe, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 
 const REDIRECT_URI = "https://primechatapi.lovable.app/auth/meta/callback";
 
-/* ── helper badges ── */
 function QualityBadge({ rating }: { rating?: string }) {
   if (!rating) return null;
   const colors: Record<string, string> = {
@@ -39,18 +36,6 @@ function StatusBadgeInline({ status }: { status?: string }) {
   );
 }
 
-function NameStatusBadge({ status }: { status?: string }) {
-  if (!status) return null;
-  const map: Record<string, { label: string; cls: string }> = {
-    APPROVED: { label: "Aprovado", cls: "bg-green-500/10 text-green-600 border-green-500/20" },
-    DECLINED: { label: "Recusado", cls: "bg-destructive/10 text-destructive border-destructive/20" },
-    PENDING_REVIEW: { label: "Em análise", cls: "bg-yellow-500/10 text-yellow-600 border-yellow-500/20" },
-    AVAILABLE_WITHOUT_REVIEW: { label: "Disponível", cls: "bg-green-500/10 text-green-600 border-green-500/20" },
-  };
-  const info = map[status] || { label: status, cls: "" };
-  return <Badge variant="outline" className={info.cls}>{info.label}</Badge>;
-}
-
 export default function MetaConnect() {
   const { session, user } = useAuth();
   const queryClient = useQueryClient();
@@ -59,11 +44,9 @@ export default function MetaConnect() {
   const [testPhone, setTestPhone] = useState("");
   const [testMessage, setTestMessage] = useState("Teste de conexão OAuth WhatsApp");
   const [isSending, setIsSending] = useState(false);
-  const [selectedWabaId, setSelectedWabaId] = useState<string>("");
-  const [selectedPhoneId, setSelectedPhoneId] = useState<string>("");
-  const [isAdding, setIsAdding] = useState(false);
+  const [addingPhoneId, setAddingPhoneId] = useState<string | null>(null);
+  const [expandedWaba, setExpandedWaba] = useState<string | null>(null);
 
-  // Fetch user connections
   const { data: connections, isLoading } = useQuery({
     queryKey: ["meta-connections"],
     queryFn: async () => {
@@ -78,7 +61,6 @@ export default function MetaConnect() {
   });
   const activeConnection = connections?.find((c: any) => c.status === "connected");
 
-  // Fetch WABAs & numbers from Meta API
   const { data: metaData, isLoading: isLoadingMeta, refetch: refetchMeta } = useQuery({
     queryKey: ["meta-wabas"],
     queryFn: async () => {
@@ -89,7 +71,6 @@ export default function MetaConnect() {
     enabled: !!activeConnection,
   });
 
-  // Fetch registered accounts
   const { data: registeredAccounts } = useQuery({
     queryKey: ["whatsapp-accounts"],
     queryFn: async () => {
@@ -125,18 +106,9 @@ export default function MetaConnect() {
             throw new Error(errorPayload?.error || error.message || "Erro ao conectar WhatsApp");
           }
           if (data?.error) throw new Error(data.error);
-          toast.success(`WhatsApp conectado! Número: ${data.phone_number}`);
+          toast.success("Conta Meta conectada! Agora selecione uma BM e número abaixo.");
           queryClient.invalidateQueries({ queryKey: ["meta-connections"] });
-          queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
           queryClient.invalidateQueries({ queryKey: ["meta-wabas"] });
-
-          try {
-            await supabase.functions.invoke("whatsapp-sync-templates", { body: {} });
-            toast.success("Templates sincronizados automaticamente!");
-            queryClient.invalidateQueries({ queryKey: ["user-templates"] });
-          } catch {
-            console.warn("Auto template sync failed");
-          }
         } catch (err: any) {
           console.error("OAuth callback error:", err);
           toast.error(err.message || "Erro ao conectar WhatsApp");
@@ -173,18 +145,10 @@ export default function MetaConnect() {
     }
   };
 
-  const handleAddNumber = async () => {
-    if (!selectedWabaId || !selectedPhoneId) {
-      toast.error("Selecione uma BM e um número");
-      return;
-    }
-    const waba = metaData?.find((w: any) => w.id === selectedWabaId);
-    const phone = waba?.phone_numbers?.find((p: any) => p.id === selectedPhoneId);
-    if (!phone || !activeConnection) return;
-
-    setIsAdding(true);
+  const handleAddNumber = async (waba: any, phone: any) => {
+    if (!activeConnection) return;
+    setAddingPhoneId(phone.id);
     try {
-      // Check if already registered
       const { data: existing } = await supabase
         .from("whatsapp_accounts")
         .select("id")
@@ -193,7 +157,6 @@ export default function MetaConnect() {
 
       if (existing) {
         toast.info("Este número já está registrado");
-        setIsAdding(false);
         return;
       }
 
@@ -204,7 +167,7 @@ export default function MetaConnect() {
       const { error } = await supabase.from("whatsapp_accounts").insert({
         name: phone.verified_name || phone.display_phone_number || "WhatsApp",
         phone_number_id: phone.id,
-        business_account_id: selectedWabaId,
+        business_account_id: waba.id,
         access_token: activeConnection.meta_access_token,
         is_default: !existingAccounts || existingAccounts.length === 0,
       });
@@ -213,11 +176,15 @@ export default function MetaConnect() {
       toast.success(`Número ${phone.display_phone_number} adicionado!`);
       queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
       queryClient.invalidateQueries({ queryKey: ["meta-wabas"] });
-      setSelectedPhoneId("");
+
+      try {
+        await supabase.functions.invoke("whatsapp-sync-templates", { body: {} });
+        queryClient.invalidateQueries({ queryKey: ["user-templates"] });
+      } catch {}
     } catch (err: any) {
       toast.error(err.message || "Erro ao adicionar número");
     } finally {
-      setIsAdding(false);
+      setAddingPhoneId(null);
     }
   };
 
@@ -247,22 +214,21 @@ export default function MetaConnect() {
         <div className="text-center space-y-3">
           <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
           <p className="text-muted-foreground">
-            {isExchanging ? "Conectando WhatsApp..." : "Carregando..."}
+            {isExchanging ? "Conectando conta Meta..." : "Carregando..."}
           </p>
         </div>
       </div>
     );
   }
 
-  const selectedWaba = metaData?.find((w: any) => w.id === selectedWabaId);
-  const selectedPhone = selectedWaba?.phone_numbers?.find((p: any) => p.id === selectedPhoneId);
+  const registeredPhoneIds = new Set((registeredAccounts || []).map((a: any) => a.phone_number_id));
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <div>
         <h1 className="text-2xl font-display font-bold">Conexão WhatsApp</h1>
         <p className="text-muted-foreground">
-          Conecte sua conta WhatsApp Business via Meta para enviar mensagens.
+          Conecte sua conta Meta e escolha qual Business Manager e número configurar.
         </p>
       </div>
 
@@ -278,8 +244,8 @@ export default function MetaConnect() {
                 <h2 className="text-lg font-semibold">Conexão via OAuth</h2>
                 <p className="text-sm text-muted-foreground">
                   {activeConnection
-                    ? "Conecte seu WhatsApp em 1 clique via login do Facebook. Não requer configuração manual."
-                    : "Conecte seu WhatsApp Business para gerenciar números e enviar mensagens."}
+                    ? "Conta Meta conectada. Selecione abaixo qual BM e número deseja usar."
+                    : "Conecte seu WhatsApp Business via login do Facebook."}
                 </p>
               </div>
             </div>
@@ -289,60 +255,26 @@ export default function MetaConnect() {
                   <Badge className="bg-green-500/10 text-green-600 border-green-500/20">
                     <CheckCircle2 className="h-3 w-3 mr-1" /> Conectado
                   </Badge>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => handleDisconnect(activeConnection.id)}
-                  >
-                    <Unplug className="h-4 w-4 mr-1" />
-                    Desconectar WhatsApp
+                  <Button variant="destructive" size="sm" onClick={() => handleDisconnect(activeConnection.id)}>
+                    <Unplug className="h-4 w-4 mr-1" /> Desconectar
                   </Button>
                 </>
               ) : (
                 <Button onClick={handleConnect} className="gap-2">
                   <Plug className="h-4 w-4" />
-                  Conectar WhatsApp
+                  Conectar com Meta
                   <ExternalLink className="h-3 w-3" />
                 </Button>
               )}
             </div>
           </div>
 
-          {/* Connection info row */}
-          {activeConnection && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-              <div className="rounded-lg border bg-card p-3">
-                <p className="text-xs text-muted-foreground mb-1">Número conectado</p>
-                <p className="font-medium">{activeConnection.phone_number}</p>
-              </div>
-              <div className="rounded-lg border bg-card p-3">
-                <p className="text-xs text-muted-foreground mb-1">Phone Number ID</p>
-                <p className="font-medium font-mono text-sm">{activeConnection.phone_number_id}</p>
-              </div>
-              <div className="rounded-lg border bg-card p-3">
-                <p className="text-xs text-muted-foreground mb-1">WABA ID</p>
-                <p className="font-medium font-mono text-sm">{activeConnection.waba_id}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Test message inline */}
           {activeConnection && (
             <div className="mt-4">
               <p className="text-sm font-medium mb-2">Enviar teste</p>
               <div className="flex gap-2">
-                <Input
-                  placeholder="Telefone (ex: 1199999888)"
-                  value={testPhone}
-                  onChange={(e) => setTestPhone(e.target.value)}
-                  className="max-w-[180px]"
-                />
-                <Input
-                  placeholder="Mensagem de teste"
-                  value={testMessage}
-                  onChange={(e) => setTestMessage(e.target.value)}
-                  className="flex-1"
-                />
+                <Input placeholder="Telefone (ex: 5511999998888)" value={testPhone} onChange={(e) => setTestPhone(e.target.value)} className="max-w-[200px]" />
+                <Input placeholder="Mensagem de teste" value={testMessage} onChange={(e) => setTestMessage(e.target.value)} className="flex-1" />
                 <Button onClick={handleSendTest} disabled={isSending} size="default">
                   {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
                   Enviar
@@ -353,7 +285,7 @@ export default function MetaConnect() {
         </CardContent>
       </Card>
 
-      {/* ── BM & Number Explorer ── */}
+      {/* ── BMs & Numbers ── */}
       {activeConnection && (
         <Card>
           <CardHeader>
@@ -361,10 +293,10 @@ export default function MetaConnect() {
               <div>
                 <CardTitle className="flex items-center gap-2">
                   <Building2 className="h-5 w-5" />
-                  Números disponíveis na Meta
+                  Business Managers & Números
                 </CardTitle>
                 <CardDescription>
-                  Selecione uma Business Manager e um número para adicionar ao sistema.
+                  Visualize todas as BMs vinculadas à sua conta Meta e adicione os números que deseja usar.
                 </CardDescription>
               </div>
               <Button variant="outline" size="sm" onClick={() => refetchMeta()} disabled={isLoadingMeta}>
@@ -375,162 +307,129 @@ export default function MetaConnect() {
           </CardHeader>
           <CardContent className="space-y-4">
             {isLoadingMeta ? (
-              <div className="flex items-center gap-2 text-muted-foreground py-4">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Buscando dados da Meta...
+              <div className="flex items-center gap-2 text-muted-foreground py-6 justify-center">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Buscando BMs e números da Meta...
               </div>
             ) : !metaData || metaData.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4">
-                Nenhuma Business Manager encontrada. Verifique se sua conta tem acesso a uma WABA.
-              </p>
+              <div className="text-center py-8 text-muted-foreground">
+                <Building2 className="h-10 w-10 mx-auto mb-3 opacity-40" />
+                <p className="font-medium">Nenhuma Business Manager encontrada</p>
+                <p className="text-sm mt-1">Verifique se sua conta Meta tem acesso a uma conta WhatsApp Business.</p>
+              </div>
             ) : (
-              <>
-                {/* BM selector */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Business Manager (WABA)</Label>
-                    <Select value={selectedWabaId} onValueChange={(v) => { setSelectedWabaId(v); setSelectedPhoneId(""); }}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione uma BM" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {metaData.map((waba: any) => (
-                          <SelectItem key={waba.id} value={waba.id}>
-                            {waba.name} ({waba.id})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+              <div className="space-y-3">
+                {metaData.map((waba: any) => {
+                  const isExpanded = expandedWaba === waba.id;
+                  const phoneCount = waba.phone_numbers?.length || 0;
+                  const registeredCount = waba.phone_numbers?.filter((p: any) => registeredPhoneIds.has(p.id)).length || 0;
 
-                  {/* Number selector */}
-                  <div className="space-y-2">
-                    <Label>Número de telefone</Label>
-                    <Select
-                      value={selectedPhoneId}
-                      onValueChange={setSelectedPhoneId}
-                      disabled={!selectedWabaId}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={selectedWabaId ? "Selecione um número" : "Selecione uma BM primeiro"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {selectedWaba?.phone_numbers?.map((phone: any) => (
-                          <SelectItem key={phone.id} value={phone.id}>
-                            {phone.display_phone_number} — {phone.verified_name || "Sem nome"}{phone.is_registered ? " ✅" : ""}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                  return (
+                    <div key={waba.id} className="rounded-lg border overflow-hidden">
+                      {/* WABA Header */}
+                      <button
+                        onClick={() => setExpandedWaba(isExpanded ? null : waba.id)}
+                        className="w-full flex items-center justify-between p-4 hover:bg-muted/50 transition-colors text-left"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                            <Building2 className="h-5 w-5 text-primary" />
+                          </div>
+                          <div>
+                            <p className="font-semibold">{waba.name || waba.id}</p>
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                              <span className="font-mono">ID: {waba.id}</span>
+                              {waba.currency && <span>• {waba.currency}</span>}
+                              {waba.account_review_status && <span>• {waba.account_review_status}</span>}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="text-right text-sm">
+                            <span className="text-muted-foreground">{phoneCount} número{phoneCount !== 1 ? "s" : ""}</span>
+                            {registeredCount > 0 && (
+                              <span className="ml-2 text-green-600">{registeredCount} adicionado{registeredCount !== 1 ? "s" : ""}</span>
+                            )}
+                          </div>
+                          {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                        </div>
+                      </button>
 
-                {/* WABA details */}
-                {selectedWaba && (
-                  <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-                    <h4 className="text-sm font-semibold flex items-center gap-2">
-                      <Building2 className="h-4 w-4" />
-                      Detalhes da BM: {selectedWaba.name}
-                    </h4>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                      <div>
-                        <p className="text-muted-foreground text-xs">WABA ID</p>
-                        <p className="font-mono">{selectedWaba.id}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground text-xs">Moeda</p>
-                        <p>{selectedWaba.currency || "—"}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground text-xs">Status de revisão</p>
-                        <p>{selectedWaba.account_review_status || "—"}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground text-xs">Namespace</p>
-                        <p className="font-mono text-xs break-all">{selectedWaba.message_template_namespace || "—"}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Selected phone details */}
-                {selectedPhone && (
-                  <div className="rounded-lg border p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-sm font-semibold flex items-center gap-2">
-                        <Phone className="h-4 w-4" />
-                        {selectedPhone.display_phone_number}
-                      </h4>
-                      <div className="flex items-center gap-2">
-                        <QualityBadge rating={selectedPhone.quality_rating} />
-                        <StatusBadgeInline status={selectedPhone.status} />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-                      <div>
-                        <p className="text-muted-foreground text-xs">Nome verificado</p>
-                        <p className="font-medium">{selectedPhone.verified_name || "—"}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground text-xs">Status do nome</p>
-                        <NameStatusBadge status={selectedPhone.name_status} />
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground text-xs">Phone Number ID</p>
-                        <p className="font-mono text-xs">{selectedPhone.id}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground text-xs">Plataforma</p>
-                        <p>{selectedPhone.platform_type || "—"}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground text-xs">Limite de mensagens</p>
-                        <p className="flex items-center gap-1">
-                          <Zap className="h-3 w-3 text-muted-foreground" />
-                          {selectedPhone.messaging_limit_tier || "—"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground text-xs">Throughput</p>
-                        <p>{selectedPhone.throughput?.level || "—"}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground text-xs">Verificação de código</p>
-                        <p>{selectedPhone.code_verification_status || "—"}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground text-xs">Conta oficial</p>
-                        <p className="flex items-center gap-1">
-                          {selectedPhone.is_official_business_account ? (
-                            <><Shield className="h-3 w-3 text-green-500" /> Sim</>
+                      {/* Phone Numbers */}
+                      {isExpanded && (
+                        <div className="border-t bg-muted/20">
+                          {phoneCount === 0 ? (
+                            <div className="p-4 text-sm text-muted-foreground text-center">
+                              Nenhum número encontrado nesta BM.
+                            </div>
                           ) : (
-                            "Não"
-                          )}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground text-xs">Último onboarding</p>
-                        <p>{selectedPhone.last_onboarded_time ? new Date(selectedPhone.last_onboarded_time).toLocaleDateString("pt-BR") : "—"}</p>
-                      </div>
-                    </div>
+                            <div className="divide-y">
+                              {waba.phone_numbers.map((phone: any) => {
+                                const isRegistered = registeredPhoneIds.has(phone.id);
+                                const isAddingThis = addingPhoneId === phone.id;
 
-                    {/* Add button */}
-                    <div className="pt-2">
-                      {selectedPhone.is_registered ? (
-                        <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20">
-                          <CheckCircle2 className="h-3 w-3 mr-1" /> Já adicionado ao sistema
-                        </Badge>
-                      ) : (
-                        <Button onClick={handleAddNumber} disabled={isAdding} className="gap-2">
-                          {isAdding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                          Adicionar este número
-                        </Button>
+                                return (
+                                  <div key={phone.id} className="p-4 flex items-start justify-between gap-4">
+                                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${isRegistered ? "bg-green-500/10" : "bg-muted"}`}>
+                                        <Phone className={`h-4 w-4 ${isRegistered ? "text-green-500" : "text-muted-foreground"}`} />
+                                      </div>
+                                      <div className="min-w-0">
+                                        <p className="font-medium text-sm">{phone.display_phone_number}</p>
+                                        <p className="text-xs text-muted-foreground">{phone.verified_name || "Sem nome verificado"}</p>
+
+                                        <div className="flex flex-wrap items-center gap-2 mt-2">
+                                          <QualityBadge rating={phone.quality_rating} />
+                                          <StatusBadgeInline status={phone.status} />
+                                          {phone.messaging_limit_tier && (
+                                            <Badge variant="outline" className="text-xs">
+                                              <Zap className="h-3 w-3 mr-1" />
+                                              Tier: {phone.messaging_limit_tier}
+                                            </Badge>
+                                          )}
+                                          {phone.is_official_business_account && (
+                                            <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/20 text-xs">
+                                              <Shield className="h-3 w-3 mr-1" /> Oficial
+                                            </Badge>
+                                          )}
+                                        </div>
+
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
+                                          <span>ID: <span className="font-mono">{phone.id}</span></span>
+                                          {phone.platform_type && <span>Plataforma: {phone.platform_type}</span>}
+                                          {phone.code_verification_status && <span>Verificação: {phone.code_verification_status}</span>}
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="shrink-0">
+                                      {isRegistered ? (
+                                        <Badge className="bg-green-500/10 text-green-600 border-green-500/20">
+                                          <CheckCircle2 className="h-3 w-3 mr-1" /> Adicionado
+                                        </Badge>
+                                      ) : (
+                                        <Button
+                                          size="sm"
+                                          onClick={() => handleAddNumber(waba, phone)}
+                                          disabled={isAddingThis}
+                                          className="gap-1"
+                                        >
+                                          {isAddingThis ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                                          Adicionar
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
-                  </div>
-                )}
-              </>
+                  );
+                })}
+              </div>
             )}
           </CardContent>
         </Card>
@@ -568,9 +467,7 @@ export default function MetaConnect() {
                       </Badge>
                     )}
                     {acc.business_account_id && (
-                      <span className="text-xs text-muted-foreground">
-                        WABA: {acc.business_account_id}
-                      </span>
+                      <span className="text-xs text-muted-foreground">WABA: {acc.business_account_id}</span>
                     )}
                   </div>
                 </div>
