@@ -1398,17 +1398,15 @@ function CloudChatTab() {
   });
 
   const { data: latestMessages } = useQuery({
-    queryKey: ["cloud-chat-latest", user?.id, accountIdsKey, visibleLeadIdsKey],
+    queryKey: ["cloud-chat-latest", user?.id, accountIdsKey],
     enabled: !!user,
     queryFn: async () => {
       const map = new Map<string, { content: string; created_at: string; direction: string; account_id: string | null }>();
-      if (visibleLeadIds.length === 0 || accountIds.length === 0) return map;
 
+      // RLS filters by user's leads automatically
       const { data } = await supabase
         .from("chat_messages")
         .select("lead_id, content, created_at, direction, account_id")
-        .in("lead_id", visibleLeadIds)
-        .in("account_id", accountIds)
         .order("created_at", { ascending: false });
 
       for (const item of data || []) {
