@@ -21,7 +21,42 @@ function mapHublaStatus(type: string, invoiceStatus: string): string {
   if (type === "invoice.refunded" || invoiceStatus === "refunded") return "refunded";
   if (type === "invoice.chargeback" || invoiceStatus === "chargeback") return "chargeback";
   if (type === "invoice.cancelled" || invoiceStatus === "cancelled") return "cancelled";
+  if (type === "invoice.payment_failed" || invoiceStatus === "failed") return "failed";
+  if (type === "invoice.expired" || invoiceStatus === "expired") return "expired";
+  if (type === "checkout.abandoned" || invoiceStatus === "abandoned") return "abandoned";
   return invoiceStatus || "approved";
+}
+
+// Maps order status + payment method to a flow trigger_type
+function mapToFlowTrigger(status: string, paymentMethod: string | null, eventType: string): string | null {
+  // Abandoned cart
+  if (status === "abandoned" || eventType.includes("abandoned") || eventType.includes("checkout.abandoned")) {
+    return "carrinho_abandonado";
+  }
+  // Declined card
+  if (status === "failed" && paymentMethod?.toLowerCase()?.includes("card")) {
+    return "cartao";
+  }
+  if (status === "failed" && paymentMethod?.toLowerCase()?.includes("credit")) {
+    return "cartao";
+  }
+  // Unpaid PIX (expired or pending too long)
+  if ((status === "expired" || status === "failed") && paymentMethod?.toLowerCase()?.includes("pix")) {
+    return "pix";
+  }
+  // Approved purchase
+  if (status === "approved") {
+    return "compra_aprovada";
+  }
+  // Refund
+  if (status === "refunded" || status === "chargeback") {
+    return "reembolso";
+  }
+  // Cancellation
+  if (status === "cancelled") {
+    return "cancelamento";
+  }
+  return null;
 }
 
 function extractPayload(payload: any) {
@@ -297,9 +332,87 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ── AUTO-TRIGGER: Start matching flows based on event type ──
+    const triggerType = mapToFlowTrigger(status, extracted.paymentMethod, payload?.type || "");
+    if (triggerType && leadId) {
+      try {
+        // Find active flows matching this trigger
+        const { data: matchingFlows } = await supabase
+          .from("flows")
+          .select("id")
+          .eq("trigger_type", triggerType)
+          .eq("active", true);
+
+        if (matchingFlows && matchingFlows.length > 0) {
+          for (const flow of matchingFlows) {
+            // Check if there's already a running execution for this lead+flow
+            const { data: existingExec } = await supabase
+              .from("flow_executions")
+              .select("id")
+              .eq("flow_id", flow.id)
+              .eq("lead_id", leadId)
+              .in("status", ["running", "waiting_delay", "waiting_reply", "waiting_no_response"])
+              .maybeSingle();
+
+            if (existingExec) continue; // Skip if already running
+
+            // Get the first step of the flow
+            const { data: firstStep } = await supabase
+              .from("flow_steps")
+              .select("id, step_type, delay_minutes")
+              .eq("flow_id", flow.id)
+              .is("parent_step_id", null)
+              .order("step_order")
+              .limit(1)
+              .maybeSingle();
+
+            if (!firstStep) continue;
+
+            const nextActionAt = firstStep.step_type === "delay"
+              ? new Date(Date.now() + (firstStep.delay_minutes || 0) * 60 * 1000).toISOString()
+              : new Date().toISOString();
+
+            const execStatus = firstStep.step_type === "delay" ? "waiting_delay" : "waiting_delay";
+
+            await supabase.from("flow_executions").insert({
+              flow_id: flow.id,
+              lead_id: leadId,
+              current_step_id: firstStep.id,
+              status: execStatus,
+              next_action_at: nextActionAt,
+              metadata: {
+                trigger: triggerType,
+                order_id: order.id,
+                product_name: extracted.productName,
+                amount: extracted.amount,
+              },
+            });
+
+            console.log(`Flow ${flow.id} triggered for lead ${leadId} (trigger: ${triggerType})`);
+          }
+
+          // Kick the flow processor
+          try {
+            await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/flow-processor`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+              },
+              body: JSON.stringify({ auto: true }),
+            });
+          } catch (e) {
+            console.error("Failed to invoke flow-processor:", e);
+          }
+        }
+      } catch (flowErr) {
+        console.error("Flow trigger error (non-fatal):", flowErr);
+      }
+    }
+
     await logWebhook(supabase, externalOrderId, status, 201, "Order created", payload);
     return new Response(
-      JSON.stringify({ success: true, order_id: order.id, lead_id: leadId }),
+      JSON.stringify({ success: true, order_id: order.id, lead_id: leadId, trigger: triggerType }),
       { status: 201, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
