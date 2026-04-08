@@ -7,6 +7,13 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+function jsonResponse(data: any, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -17,13 +24,9 @@ serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
-    // Verify caller is admin
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Não autorizado" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: "Não autorizado" }, 401);
     }
 
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -32,18 +35,11 @@ serve(async (req) => {
     });
     const { data: { user: caller } } = await callerClient.auth.getUser();
     if (!caller) {
-      return new Response(JSON.stringify({ error: "Não autorizado" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: "Não autorizado" }, 401);
     }
 
-    // Only admin@primechat.com can manage users
     if (caller.email !== "admin@primechat.com") {
-      return new Response(JSON.stringify({ error: "Acesso negado. Apenas o administrador principal." }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: "Acesso negado. Apenas o administrador principal." }, 403);
     }
 
     const url = new URL(req.url);
@@ -54,7 +50,6 @@ serve(async (req) => {
       const { data: { users }, error } = await supabaseAdmin.auth.admin.listUsers();
       if (error) throw error;
 
-      // Get roles for all users
       const { data: roles } = await supabaseAdmin.from("user_roles").select("*");
       const roleMap = new Map<string, string>();
       roles?.forEach((r: any) => roleMap.set(r.user_id, r.role));
@@ -68,9 +63,7 @@ serve(async (req) => {
         role: roleMap.get(u.id) || "user",
       }));
 
-      return new Response(JSON.stringify(mapped), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse(mapped);
     }
 
     // CREATE USER
@@ -84,72 +77,83 @@ serve(async (req) => {
       });
       if (error) throw error;
 
-      // Assign role
       if (role && data.user) {
-        await supabaseAdmin.from("user_roles").insert({
+        await supabaseAdmin.from("user_roles").upsert({
           user_id: data.user.id,
           role,
         });
       }
 
-      return new Response(JSON.stringify({ success: true, user: data.user }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ success: true, user: data.user });
     }
 
     // UPDATE USER
     if (req.method === "PUT" && action === "update") {
-      const { user_id, email, password, display_name, role } = await req.json();
+      let body;
+      try {
+        body = await req.json();
+      } catch (e) {
+        return jsonResponse({ error: "Body inválido" }, 400);
+      }
+
+      const { user_id, email, password, display_name, role } = body;
+
+      if (!user_id) {
+        return jsonResponse({ error: "user_id é obrigatório" }, 400);
+      }
+
+      console.log("Updating user:", user_id, "role:", role, "display_name:", display_name);
 
       const updateData: any = {};
       if (email) updateData.email = email;
       if (password) updateData.password = password;
-      if (display_name) updateData.user_metadata = { full_name: display_name };
+      if (display_name !== undefined) updateData.user_metadata = { full_name: display_name };
 
-      const { error } = await supabaseAdmin.auth.admin.updateUserById(user_id, updateData);
-      if (error) throw error;
-
-      // Update role
-      if (role) {
-        await supabaseAdmin.from("user_roles")
-          .delete()
-          .eq("user_id", user_id);
-        await supabaseAdmin.from("user_roles").insert({
-          user_id,
-          role,
-        });
+      if (Object.keys(updateData).length > 0) {
+        const { error } = await supabaseAdmin.auth.admin.updateUserById(user_id, updateData);
+        if (error) {
+          console.error("Error updating user:", error.message);
+          throw error;
+        }
       }
 
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      // Update role - delete existing then insert new
+      if (role) {
+        const { error: delError } = await supabaseAdmin.from("user_roles")
+          .delete()
+          .eq("user_id", user_id);
+        if (delError) console.error("Error deleting old role:", delError.message);
+
+        const { error: insError } = await supabaseAdmin.from("user_roles")
+          .insert({ user_id, role });
+        if (insError) console.error("Error inserting new role:", insError.message);
+      }
+
+      return jsonResponse({ success: true });
     }
 
     // DELETE USER
     if (req.method === "DELETE" && action === "delete") {
-      const { user_id } = await req.json();
+      let body;
+      try {
+        body = await req.json();
+      } catch (e) {
+        return jsonResponse({ error: "Body inválido" }, 400);
+      }
+
+      const { user_id } = body;
       if (user_id === caller.id) {
-        return new Response(JSON.stringify({ error: "Não é possível excluir sua própria conta" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return jsonResponse({ error: "Não é possível excluir sua própria conta" }, 400);
       }
       const { error } = await supabaseAdmin.auth.admin.deleteUser(user_id);
       if (error) throw error;
 
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ success: true });
     }
 
-    return new Response(JSON.stringify({ error: "Ação inválida" }), {
-      status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse({ error: "Ação inválida" }, 400);
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    console.error("admin-users error:", error.message);
+    return jsonResponse({ error: error.message }, 500);
   }
 });
