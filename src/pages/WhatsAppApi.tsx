@@ -2611,7 +2611,7 @@ export default function WhatsAppApi() {
         </TabsContent>
 
         {/* ── History Tab ── */}
-        <TabsContent value="history" className="space-y-4 p-6 max-w-6xl overflow-auto">
+        <TabsContent value="history" className="space-y-4 p-6 max-w-6xl overflow-auto m-0">
           <SendingMetrics />
         </TabsContent>
 
