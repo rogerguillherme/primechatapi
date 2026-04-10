@@ -2591,7 +2591,7 @@ export default function WhatsAppApi() {
 
 
         {/* ── Broadcast Tab ── */}
-        <TabsContent value="broadcast" className="space-y-4 p-6 max-w-6xl overflow-auto">
+        <TabsContent value="broadcast" className="space-y-4 p-6 max-w-6xl overflow-auto m-0">
           <BroadcastTab />
         </TabsContent>
 
@@ -2601,22 +2601,22 @@ export default function WhatsAppApi() {
         </TabsContent>
 
         {/* ── Flows Tab ── */}
-        <TabsContent value="flows" className="space-y-4 p-6 max-w-6xl flex-1 overflow-auto">
+        <TabsContent value="flows" className="space-y-4 p-6 max-w-6xl flex-1 overflow-auto m-0">
           <FlowBuilder key={flowTriggerType || flowEditId || "default"} initialTriggerType={flowTriggerType} initialFlowId={flowEditId} />
         </TabsContent>
 
         {/* ── Analytics Tab ── */}
-        <TabsContent value="analytics" className="space-y-4 p-6 max-w-6xl overflow-auto">
+        <TabsContent value="analytics" className="space-y-4 p-6 max-w-6xl overflow-auto m-0">
           <CampaignAnalytics />
         </TabsContent>
 
         {/* ── History Tab ── */}
-        <TabsContent value="history" className="space-y-4 p-6 max-w-6xl overflow-auto">
+        <TabsContent value="history" className="space-y-4 p-6 max-w-6xl overflow-auto m-0">
           <SendingMetrics />
         </TabsContent>
 
         {/* ── AI Assistant Tab ── */}
-        <TabsContent value="ai-assistant" className="space-y-4 p-6 max-w-6xl overflow-auto">
+        <TabsContent value="ai-assistant" className="space-y-4 p-6 max-w-6xl overflow-auto m-0">
           <AiAssistantSettings />
         </TabsContent>
         </div>
