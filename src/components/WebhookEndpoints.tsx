@@ -346,6 +346,16 @@ export function WebhookEndpoints({ onCreateFlow, onSelectFlow }: {
           })}
         </CardContent>
       </Card>
+
+      {/* Modal de detalhes do evento */}
+      {modalEvent && (
+        <WebhookEventModal
+          open={!!modalEvent}
+          onOpenChange={(open) => !open && setModalEvent(null)}
+          eventType={modalEvent}
+          endpoint={getEndpoint(modalEvent)}
+        />
+      )}
     </div>
   );
 }
