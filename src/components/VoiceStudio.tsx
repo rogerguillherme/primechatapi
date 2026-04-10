@@ -1,21 +1,23 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Mic, Plus, Play, Pause, Volume2 } from "lucide-react";
+import { Mic, Plus, Play, Pause, Volume2, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
+// Map to real ElevenLabs voice IDs
 const preConfiguredVoices = [
-  { id: "julieta", name: "Julieta", label: "Pré Configurada", color: "bg-purple-500" },
-  { id: "marcos", name: "Marcos Vinicius", label: "Pré Configurada", color: "bg-emerald-500" },
-  { id: "carla", name: "Carla", label: "Pré Configurada", color: "bg-amber-500" },
-  { id: "joao", name: "João Pedro", label: "Pré Configurada", color: "bg-cyan-500" },
-  { id: "maria", name: "Maria Eduarda", label: "Pré Configurada", color: "bg-rose-500" },
-  { id: "otavio", name: "Otavio Luiz", label: "Pré Configurada", color: "bg-indigo-500" },
-  { id: "bia", name: "Bia", label: "Pré Configurada", color: "bg-pink-500" },
-  { id: "samuel", name: "Samuel", label: "Pré Configurada", color: "bg-violet-500" },
+  { id: "EXAVITQu4vr4xnSDxMaL", name: "Sarah", label: "Feminina - Suave", color: "bg-purple-500" },
+  { id: "JBFqnCBsd6RMkjVDRZzb", name: "George", label: "Masculino - Profissional", color: "bg-emerald-500" },
+  { id: "FGY2WhTYpPnrIDTdsKH5", name: "Laura", label: "Feminina - Acolhedora", color: "bg-amber-500" },
+  { id: "TX3LPaxmHKxFdv7VOQHJ", name: "Liam", label: "Masculino - Jovem", color: "bg-cyan-500" },
+  { id: "XrExE9yKIg1WjnnlVkGX", name: "Matilda", label: "Feminina - Expressiva", color: "bg-rose-500" },
+  { id: "onwK4e9ZLuTAKqWW03F9", name: "Daniel", label: "Masculino - Calmo", color: "bg-indigo-500" },
+  { id: "pFZP5JQG7iQjIQuC4Bku", name: "Lily", label: "Feminina - Amigável", color: "bg-pink-500" },
+  { id: "nPczCjzI2devNBz1zQrb", name: "Brian", label: "Masculino - Narrador", color: "bg-violet-500" },
 ];
 
 export function VoiceStudio() {
@@ -27,21 +29,133 @@ export function VoiceStudio() {
   const [selectedVoice, setSelectedVoice] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [playingVoice, setPlayingVoice] = useState<string | null>(null);
-  const [tokensUsed] = useState(0);
-  const [tokensTotal] = useState(1000);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  const handleGenerate = () => {
-    if (!text.trim()) return;
+  const handleGenerate = async () => {
+    if (!text.trim()) {
+      toast.error("Digite um texto para gerar o áudio.");
+      return;
+    }
+    if (!selectedVoice) {
+      toast.error("Selecione uma voz primeiro.");
+      return;
+    }
+
     setIsGenerating(true);
-    setTimeout(() => setIsGenerating(false), 2000);
+    setAudioUrl(null);
+
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({
+            text,
+            voiceId: selectedVoice,
+            stability: stability[0],
+            similarity_boost: similarity[0],
+            style: accent[0],
+            speed: speed[0],
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || `Erro ${response.status}`);
+      }
+
+      const audioBlob = await response.blob();
+      const url = URL.createObjectURL(audioBlob);
+      setAudioUrl(url);
+      toast.success("Áudio gerado com sucesso!");
+
+      // Auto-play
+      if (audioRef.current) {
+        audioRef.current.src = url;
+        audioRef.current.play();
+        setIsPlaying(true);
+      }
+    } catch (e: any) {
+      console.error("TTS error:", e);
+      toast.error(e.message || "Erro ao gerar áudio.");
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
-  const handlePlayVoice = (voiceId: string) => {
-    setPlayingVoice(playingVoice === voiceId ? null : voiceId);
+  const handlePlayPause = () => {
+    if (!audioRef.current || !audioUrl) return;
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      audioRef.current.play();
+      setIsPlaying(true);
+    }
   };
+
+  const handlePreviewVoice = async (voiceId: string) => {
+    if (playingVoice === voiceId) {
+      previewAudioRef.current?.pause();
+      setPlayingVoice(null);
+      return;
+    }
+
+    setPlayingVoice(voiceId);
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({
+            text: "Olá! Eu sou uma voz do Prime Chat. Como posso te ajudar hoje?",
+            voiceId,
+            stability: 0.5,
+            similarity_boost: 0.75,
+            style: 0.5,
+            speed: 1.0,
+          }),
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to preview voice");
+
+      const audioBlob = await response.blob();
+      const url = URL.createObjectURL(audioBlob);
+
+      if (previewAudioRef.current) {
+        previewAudioRef.current.src = url;
+        previewAudioRef.current.onended = () => setPlayingVoice(null);
+        previewAudioRef.current.play();
+      }
+    } catch {
+      toast.error("Erro ao reproduzir preview da voz.");
+      setPlayingVoice(null);
+    }
+  };
+
+  const selectedVoiceName = preConfiguredVoices.find(v => v.id === selectedVoice)?.name;
 
   return (
     <div className="space-y-6">
+      {/* Hidden audio elements */}
+      <audio ref={audioRef} onEnded={() => setIsPlaying(false)} />
+      <audio ref={previewAudioRef} />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -50,14 +164,8 @@ export function VoiceStudio() {
             Voice Studio
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Gerenciar as vozes disponíveis, assim como personalizar vozes de acordo com suas preferências.
+            Gere áudios com vozes realistas usando ElevenLabs.
           </p>
-        </div>
-        <div className="text-right">
-          <p className="text-lg font-display font-bold text-foreground">
-            Usados {tokensUsed} de {tokensTotal.toLocaleString()} tokens
-          </p>
-          <p className="text-xs text-muted-foreground">+0 de tokens bônus</p>
         </div>
       </div>
 
@@ -90,33 +198,38 @@ export function VoiceStudio() {
               </div>
 
               <div className="text-sm text-muted-foreground space-y-1">
-                <p>Modelo: {selectedVoice ? preConfiguredVoices.find(v => v.id === selectedVoice)?.name : "Não Selecionado"}</p>
-                <p>Custo de tokens: 0 tokens</p>
+                <p>Modelo: {selectedVoiceName || "Não Selecionado"}</p>
               </div>
 
-              {/* Audio player placeholder */}
+              {/* Audio player */}
               <div className="flex items-center gap-3 bg-primary rounded-lg px-4 py-3 text-primary-foreground">
                 <Button
                   size="icon"
                   variant="ghost"
                   className="h-8 w-8 text-primary-foreground hover:bg-white/20"
+                  onClick={handlePlayPause}
+                  disabled={!audioUrl}
                 >
-                  <Play size={16} />
+                  {isPlaying ? <Pause size={16} /> : <Play size={16} />}
                 </Button>
                 <div className="flex-1 h-1 bg-white/30 rounded-full">
-                  <div className="h-1 w-0 bg-white rounded-full" />
+                  <div className={`h-1 ${audioUrl ? "w-full" : "w-0"} bg-white rounded-full transition-all`} />
                 </div>
-                <span className="text-xs font-mono">0:00</span>
-                <span className="text-xs font-mono">0:00</span>
               </div>
 
               <div className="flex justify-center">
                 <Button
                   onClick={handleGenerate}
-                  disabled={isGenerating || !text.trim()}
-                  className="bg-primary hover:bg-primary/90 px-8"
+                  disabled={isGenerating || !text.trim() || !selectedVoice}
+                  className="bg-primary hover:bg-primary/90 px-8 gap-2"
                 >
-                  {isGenerating ? "Gerando..." : "Gerar áudio"}
+                  {isGenerating ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" /> Gerando...
+                    </>
+                  ) : (
+                    "Gerar áudio"
+                  )}
                 </Button>
               </div>
             </TabsContent>
@@ -147,7 +260,7 @@ export function VoiceStudio() {
           </div>
 
           <div>
-            <h3 className="text-lg font-display font-semibold text-foreground mb-3">Modelos pré aprovados</h3>
+            <h3 className="text-lg font-display font-semibold text-foreground mb-3">Vozes disponíveis</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {preConfiguredVoices.map((voice) => (
                 <Card
@@ -175,11 +288,11 @@ export function VoiceStudio() {
                       className="h-8 w-8 rounded-full"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handlePlayVoice(voice.id);
+                        handlePreviewVoice(voice.id);
                       }}
                     >
                       {playingVoice === voice.id ? (
-                        <Pause size={16} />
+                        <Loader2 size={16} className="animate-spin" />
                       ) : (
                         <Play size={16} />
                       )}
