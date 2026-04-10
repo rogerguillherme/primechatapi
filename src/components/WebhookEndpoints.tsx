@@ -392,6 +392,15 @@ export function WebhookEndpoints({ onCreateFlow, onSelectFlow }: {
           endpoint={getEndpoint(modalEvent)}
         />
       )}
+
+      {/* Modal de plataforma */}
+      {platformModal && (
+        <PlatformIntegrationModal
+          open={!!platformModal}
+          onOpenChange={(open) => !open && setPlatformModal(null)}
+          platform={platformModal}
+        />
+      )}
     </div>
   );
 }
