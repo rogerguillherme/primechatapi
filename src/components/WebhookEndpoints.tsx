@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { GitBranch, ChevronDown, Plus, List } from "lucide-react";
+import { WebhookEventModal } from "@/components/webhook/WebhookEventModal";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
