@@ -2629,6 +2629,15 @@ export default function WhatsAppApi() {
         <TabsContent value="ai-assistant" className="space-y-4 p-6 max-w-6xl overflow-auto m-0">
           <AiAssistantSettings />
         </TabsContent>
+        {/* ── Voice Studio Tab ── */}
+        <TabsContent value="voice-studio" className="space-y-4 p-6 max-w-6xl overflow-auto m-0">
+          <VoiceStudio />
+        </TabsContent>
+
+        {/* ── AI Agent Tab ── */}
+        <TabsContent value="ai-agent" className="space-y-4 p-6 max-w-6xl overflow-auto m-0">
+          <AiAgentConfig />
+        </TabsContent>
         </div>
       </Tabs>
     </div>
