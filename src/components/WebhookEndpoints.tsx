@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { GitBranch, ChevronDown, Plus, List } from "lucide-react";
+import { GitBranch, ChevronDown, Plus, List, ExternalLink } from "lucide-react";
 import { WebhookEventModal } from "@/components/webhook/WebhookEventModal";
+import { PlatformIntegrationModal, PLATFORMS, type PlatformConfig } from "@/components/webhook/PlatformIntegrationModal";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -46,6 +47,7 @@ export function WebhookEndpoints({ onCreateFlow, onSelectFlow }: {
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [expandedEvent, setExpandedEvent] = useState<string | null>(null);
   const [modalEvent, setModalEvent] = useState<string | null>(null);
+  const [platformModal, setPlatformModal] = useState<PlatformConfig | null>(null);
 
   const { data: flows } = useQuery({
     queryKey: ["flows-list"],
@@ -170,7 +172,41 @@ export function WebhookEndpoints({ onCreateFlow, onSelectFlow }: {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* Plataformas de Pagamento */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Webhook size={20} />
+            Integrações de Pagamento
+          </CardTitle>
+          <CardDescription>
+            Conecte sua plataforma de pagamento para receber eventos automaticamente (compras, reembolsos, carrinho abandonado, etc.).
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {PLATFORMS.map((platform) => (
+              <button
+                key={platform.id}
+                onClick={() => setPlatformModal(platform)}
+                className="flex items-center gap-3 p-4 rounded-xl border bg-card hover:bg-muted/50 hover:border-primary/30 transition-all text-left group"
+              >
+                <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center text-lg shrink-0", platform.bgColor)}>
+                  {platform.icon}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold group-hover:text-primary transition-colors">{platform.name}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">{platform.description}</p>
+                </div>
+                <ExternalLink size={14} className="text-muted-foreground group-hover:text-primary shrink-0 transition-colors" />
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Webhooks de Eventos */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -354,6 +390,15 @@ export function WebhookEndpoints({ onCreateFlow, onSelectFlow }: {
           onOpenChange={(open) => !open && setModalEvent(null)}
           eventType={modalEvent}
           endpoint={getEndpoint(modalEvent)}
+        />
+      )}
+
+      {/* Modal de plataforma */}
+      {platformModal && (
+        <PlatformIntegrationModal
+          open={!!platformModal}
+          onOpenChange={(open) => !open && setPlatformModal(null)}
+          platform={platformModal}
         />
       )}
     </div>
