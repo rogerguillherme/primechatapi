@@ -26,7 +26,7 @@ import {
   Package, MessageCircle, Search, FileText, Check, CheckCheck, Paperclip,
   Truck, Users, ArrowLeft, BarChart3, MoreVertical, Pencil, Trash2, Star,
   KeyRound, ChevronDown, Webhook, LogOut, Plug, Tag, ChevronLeft, ChevronRight,
-  Instagram, GitBranch, TrendingUp,
+  Instagram, GitBranch, TrendingUp, Bot,
 } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
@@ -44,6 +44,7 @@ import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 import { useUserTemplates } from "@/hooks/use-user-templates";
 import { AccountSelector } from "@/components/AccountSelector";
 import { ChatLabelsManager, useLabels, LeadLabelSelector } from "@/components/ChatLabelsManager";
+import { AiAssistantSettings } from "@/components/AiAssistantSettings";
 
 const isUnauthorizedFunctionError = (error: unknown) =>
   error instanceof Error && error.message.includes("401");
@@ -2296,6 +2297,10 @@ export default function WhatsAppApi() {
               <GitBranch size={16} />
               {!sidebarCollapsed && <span>Fluxos</span>}
             </TabsTrigger>
+            <TabsTrigger value="ai-assistant" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+              <Bot size={16} />
+              {!sidebarCollapsed && <span>Assistente IA</span>}
+            </TabsTrigger>
             <TabsTrigger value="config" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
               <Key size={16} />
               {!sidebarCollapsed && <span>Configuração</span>}
@@ -2610,6 +2615,11 @@ export default function WhatsAppApi() {
         {/* ── History Tab ── */}
         <TabsContent value="history" className="space-y-4 p-6 max-w-6xl overflow-auto">
           <SendingMetrics />
+        </TabsContent>
+
+        {/* ── AI Assistant Tab ── */}
+        <TabsContent value="ai-assistant" className="space-y-4 p-6 max-w-6xl overflow-auto">
+          <AiAssistantSettings />
         </TabsContent>
         </div>
       </Tabs>
