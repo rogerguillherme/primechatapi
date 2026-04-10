@@ -198,7 +198,12 @@ export function WebhookEndpoints({ onCreateFlow, onSelectFlow }: {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm">{evt.label}</span>
+                      <button
+                        className="font-medium text-sm hover:text-primary hover:underline transition-colors text-left"
+                        onClick={() => setModalEvent(evt.value)}
+                      >
+                        {evt.label}
+                      </button>
                       {endpoint && (
                         <Badge
                           variant={endpoint.is_active ? "default" : "secondary"}
