@@ -45,6 +45,7 @@ export function WebhookEndpoints({ onCreateFlow, onSelectFlow }: {
   const [sendingTest, setSendingTest] = useState<string | null>(null);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [expandedEvent, setExpandedEvent] = useState<string | null>(null);
+  const [modalEvent, setModalEvent] = useState<string | null>(null);
 
   const { data: flows } = useQuery({
     queryKey: ["flows-list"],
