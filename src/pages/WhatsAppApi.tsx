@@ -26,7 +26,7 @@ import {
   Package, MessageCircle, Search, FileText, Check, CheckCheck, Paperclip,
   Truck, Users, ArrowLeft, BarChart3, MoreVertical, Pencil, Trash2, Star,
   KeyRound, ChevronDown, Webhook, LogOut, Plug, Tag, ChevronLeft, ChevronRight,
-  Instagram, GitBranch, TrendingUp, Bot,
+  Instagram, GitBranch, TrendingUp, Bot, Volume2, Sparkles,
 } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
@@ -45,6 +45,8 @@ import { useUserTemplates } from "@/hooks/use-user-templates";
 import { AccountSelector } from "@/components/AccountSelector";
 import { ChatLabelsManager, useLabels, LeadLabelSelector } from "@/components/ChatLabelsManager";
 import { AiAssistantSettings } from "@/components/AiAssistantSettings";
+import { VoiceStudio } from "@/components/VoiceStudio";
+import { AiAgentConfig } from "@/components/AiAgentConfig";
 
 const isUnauthorizedFunctionError = (error: unknown) =>
   error instanceof Error && error.message.includes("401");
@@ -2295,8 +2297,16 @@ export default function WhatsAppApi() {
               <GitBranch size={16} />
               {!sidebarCollapsed && <span>Fluxos</span>}
             </TabsTrigger>
-            <TabsTrigger value="ai-assistant" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+            <TabsTrigger value="voice-studio" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+              <Volume2 size={16} />
+              {!sidebarCollapsed && <span>Voice Studio</span>}
+            </TabsTrigger>
+            <TabsTrigger value="ai-agent" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
               <Bot size={16} />
+              {!sidebarCollapsed && <span>Agente IA</span>}
+            </TabsTrigger>
+            <TabsTrigger value="ai-assistant" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+              <Sparkles size={16} />
               {!sidebarCollapsed && <span>Assistente IA</span>}
             </TabsTrigger>
             <TabsTrigger value="config" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
@@ -2618,6 +2628,15 @@ export default function WhatsAppApi() {
         {/* ── AI Assistant Tab ── */}
         <TabsContent value="ai-assistant" className="space-y-4 p-6 max-w-6xl overflow-auto m-0">
           <AiAssistantSettings />
+        </TabsContent>
+        {/* ── Voice Studio Tab ── */}
+        <TabsContent value="voice-studio" className="space-y-4 p-6 max-w-6xl overflow-auto m-0">
+          <VoiceStudio />
+        </TabsContent>
+
+        {/* ── AI Agent Tab ── */}
+        <TabsContent value="ai-agent" className="space-y-4 p-6 max-w-6xl overflow-auto m-0">
+          <AiAgentConfig />
         </TabsContent>
         </div>
       </Tabs>
