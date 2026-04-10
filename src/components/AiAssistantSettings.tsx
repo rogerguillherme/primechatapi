@@ -1,0 +1,179 @@
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { Bot, Save, Sparkles } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+
+const AI_KEYS = [
+  "ai_auto_reply_enabled",
+  "ai_company_name",
+  "ai_company_description",
+  "ai_products_services",
+  "ai_custom_instructions",
+] as const;
+
+export function AiAssistantSettings() {
+  const [enabled, setEnabled] = useState(false);
+  const [companyName, setCompanyName] = useState("");
+  const [companyDesc, setCompanyDesc] = useState("");
+  const [products, setProducts] = useState("");
+  const [customInstructions, setCustomInstructions] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
+  async function loadSettings() {
+    const { data } = await supabase
+      .from("app_settings")
+      .select("key, value")
+      .in("key", [...AI_KEYS]);
+
+    const map: Record<string, string> = {};
+    for (const row of data || []) map[row.key] = row.value;
+
+    setEnabled(map.ai_auto_reply_enabled === "true");
+    setCompanyName(map.ai_company_name || "");
+    setCompanyDesc(map.ai_company_description || "");
+    setProducts(map.ai_products_services || "");
+    setCustomInstructions(map.ai_custom_instructions || "");
+    setLoaded(true);
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      const entries = [
+        { key: "ai_auto_reply_enabled", value: enabled ? "true" : "false" },
+        { key: "ai_company_name", value: companyName },
+        { key: "ai_company_description", value: companyDesc },
+        { key: "ai_products_services", value: products },
+        { key: "ai_custom_instructions", value: customInstructions },
+      ];
+
+      for (const entry of entries) {
+        await supabase
+          .from("app_settings")
+          .upsert(
+            { key: entry.key, value: entry.value, updated_at: new Date().toISOString() },
+            { onConflict: "key" }
+          );
+      }
+
+      toast({ title: "Configurações salvas", description: "O assistente de IA foi atualizado." });
+    } catch (err) {
+      toast({ title: "Erro ao salvar", description: "Tente novamente.", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!loaded) return null;
+
+  return (
+    <div className="space-y-6 max-w-3xl">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-gradient-to-br from-violet-500/20 to-pink-500/20">
+                <Bot className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">Assistente de IA</CardTitle>
+                <CardDescription>
+                  Responde automaticamente mensagens recebidas no WhatsApp
+                </CardDescription>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant={enabled ? "default" : "secondary"} className={enabled ? "bg-emerald-500" : ""}>
+                {enabled ? "Ativo" : "Desativado"}
+              </Badge>
+              <Switch checked={enabled} onCheckedChange={setEnabled} />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="space-y-2">
+            <Label htmlFor="ai-company">Nome da Empresa</Label>
+            <Input
+              id="ai-company"
+              placeholder="Ex: PrimeChat"
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="ai-desc">Descrição do Negócio</Label>
+            <Textarea
+              id="ai-desc"
+              placeholder="Descreva o que sua empresa faz, seu público-alvo, etc."
+              value={companyDesc}
+              onChange={(e) => setCompanyDesc(e.target.value)}
+              rows={3}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="ai-products">Produtos / Serviços</Label>
+            <Textarea
+              id="ai-products"
+              placeholder="Liste seus produtos, preços, planos, serviços oferecidos..."
+              value={products}
+              onChange={(e) => setProducts(e.target.value)}
+              rows={4}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="ai-instructions">Instruções Personalizadas (opcional)</Label>
+            <Textarea
+              id="ai-instructions"
+              placeholder="Ex: Sempre ofereça o plano anual primeiro. Nunca dê desconto. Mencione que temos suporte 24h..."
+              value={customInstructions}
+              onChange={(e) => setCustomInstructions(e.target.value)}
+              rows={4}
+            />
+            <p className="text-xs text-muted-foreground">
+              Adicione regras específicas para personalizar o comportamento do assistente.
+            </p>
+          </div>
+
+          <Button onClick={save} disabled={saving} className="gap-2">
+            <Save className="h-4 w-4" />
+            {saving ? "Salvando..." : "Salvar Configurações"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="border-dashed">
+        <CardContent className="pt-6">
+          <div className="flex items-start gap-3">
+            <Sparkles className="h-5 w-5 text-amber-500 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Como funciona?</p>
+              <ul className="text-sm text-muted-foreground space-y-1">
+                <li>• Quando ativado, toda mensagem de texto recebida será respondida automaticamente pela IA</li>
+                <li>• A IA usa o histórico da conversa para manter o contexto</li>
+                <li>• Respostas de botões interativos (fluxos) não são afetadas</li>
+                <li>• O assistente nunca revela que é uma IA</li>
+                <li>• Se o cliente pedir atendimento humano, a IA encaminha</li>
+              </ul>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
