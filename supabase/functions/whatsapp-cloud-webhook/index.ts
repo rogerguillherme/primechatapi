@@ -407,6 +407,33 @@ Deno.serve(async (req) => {
         account_id: resolvedAccountId,
       });
 
+      // ── AI AUTO-REPLY: Trigger AI response if enabled ──
+      // Only for text messages (not button replies which are handled by flows)
+      if (!buttonPayload && text) {
+        try {
+          const aiRes = await fetch(`${supabaseUrl}/functions/v1/ai-auto-reply`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${supabaseKey}`,
+            },
+            body: JSON.stringify({
+              lead_id: lead!.id,
+              message: text,
+              account_id: resolvedAccountId,
+            }),
+          });
+          if (!aiRes.ok) {
+            console.error("AI auto-reply call failed:", aiRes.status);
+          } else {
+            const aiResult = await aiRes.json();
+            console.log("AI auto-reply result:", JSON.stringify(aiResult));
+          }
+        } catch (aiErr) {
+          console.error("AI auto-reply error:", aiErr);
+        }
+      }
+
       // ── AUTO-TRACK: Register reply/click campaign events ──
       if (lead) {
         // Find the latest campaign that sent to this lead (by lead_id OR phone)
