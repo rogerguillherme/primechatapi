@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { GitBranch, ChevronDown, Plus, List } from "lucide-react";
+import { WebhookEventModal } from "@/components/webhook/WebhookEventModal";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -44,6 +45,7 @@ export function WebhookEndpoints({ onCreateFlow, onSelectFlow }: {
   const [sendingTest, setSendingTest] = useState<string | null>(null);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [expandedEvent, setExpandedEvent] = useState<string | null>(null);
+  const [modalEvent, setModalEvent] = useState<string | null>(null);
 
   const { data: flows } = useQuery({
     queryKey: ["flows-list"],
@@ -196,7 +198,12 @@ export function WebhookEndpoints({ onCreateFlow, onSelectFlow }: {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm">{evt.label}</span>
+                      <button
+                        className="font-medium text-sm hover:text-primary hover:underline transition-colors text-left"
+                        onClick={() => setModalEvent(evt.value)}
+                      >
+                        {evt.label}
+                      </button>
                       {endpoint && (
                         <Badge
                           variant={endpoint.is_active ? "default" : "secondary"}
@@ -339,6 +346,16 @@ export function WebhookEndpoints({ onCreateFlow, onSelectFlow }: {
           })}
         </CardContent>
       </Card>
+
+      {/* Modal de detalhes do evento */}
+      {modalEvent && (
+        <WebhookEventModal
+          open={!!modalEvent}
+          onOpenChange={(open) => !open && setModalEvent(null)}
+          eventType={modalEvent}
+          endpoint={getEndpoint(modalEvent)}
+        />
+      )}
     </div>
   );
 }
