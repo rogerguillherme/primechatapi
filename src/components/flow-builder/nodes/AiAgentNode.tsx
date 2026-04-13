@@ -2,6 +2,8 @@ import { Handle, Position } from "@xyflow/react";
 import { Bot, Trash2 } from "lucide-react";
 
 interface AiAgentNodeData {
+  agent_id?: string;
+  agent_name?: string;
   ai_prompt?: string;
   ai_model?: string;
   max_interactions?: number;
@@ -25,9 +27,16 @@ export function AiAgentNode({ id, data }: { id: string; data: AiAgentNodeData })
         </button>
       </div>
       <div className="p-3 space-y-1">
-        <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap line-clamp-3">
-          {data.ai_prompt || "IA responderá automaticamente..."}
-        </p>
+        {data.agent_name ? (
+          <p className="text-xs font-medium text-primary">{data.agent_name}</p>
+        ) : (
+          <p className="text-xs text-muted-foreground italic">Nenhum agente selecionado</p>
+        )}
+        {data.ai_prompt && (
+          <p className="text-[11px] text-foreground leading-relaxed whitespace-pre-wrap line-clamp-2 mt-1">
+            {data.ai_prompt}
+          </p>
+        )}
         {data.max_interactions && (
           <p className="text-[10px] text-muted-foreground">
             Máx. {data.max_interactions} interações
