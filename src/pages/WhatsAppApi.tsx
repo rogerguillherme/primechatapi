@@ -2355,9 +2355,9 @@ export default function WhatsAppApi() {
         </div>
 
         {/* Main content */}
-        <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
+        <div className="flex-1 flex flex-col min-h-0">
           {/* Non-chat tabs get padding */}
-          <TabsContent value="config" className="space-y-4 p-6 m-0">
+          <TabsContent value="config" className="space-y-4 p-6 m-0 flex-1 overflow-y-auto">
 
           {/* Existing accounts list */}
           <Card>
@@ -2595,13 +2595,13 @@ export default function WhatsAppApi() {
         </TabsContent>
 
         {/* ── Webhook Tab (Event Webhooks) ── */}
-        <TabsContent value="webhook" className="space-y-4 p-6 max-w-6xl overflow-auto">
+        <TabsContent value="webhook" className="space-y-4 p-6 max-w-6xl overflow-y-auto flex-1 m-0">
           <WebhookEndpoints onCreateFlow={handleCreateFlowFromWebhook} onSelectFlow={handleSelectFlowFromWebhook} />
         </TabsContent>
 
 
         {/* ── Broadcast Tab ── */}
-        <TabsContent value="broadcast" className="space-y-4 p-6 max-w-6xl overflow-auto m-0">
+        <TabsContent value="broadcast" className="space-y-4 p-6 max-w-6xl overflow-y-auto flex-1 m-0">
           <BroadcastTab />
         </TabsContent>
 
@@ -2611,31 +2611,31 @@ export default function WhatsAppApi() {
         </TabsContent>
 
         {/* ── Flows Tab ── */}
-        <TabsContent value="flows" className="space-y-4 p-6 max-w-6xl overflow-auto m-0">
+        <TabsContent value="flows" className="space-y-4 p-6 max-w-6xl overflow-y-auto flex-1 m-0">
           <FlowBuilder key={flowTriggerType || flowEditId || "default"} initialTriggerType={flowTriggerType} initialFlowId={flowEditId} />
         </TabsContent>
 
         {/* ── Analytics Tab ── */}
-        <TabsContent value="analytics" className="space-y-4 p-6 max-w-6xl overflow-auto m-0">
+        <TabsContent value="analytics" className="space-y-4 p-6 max-w-6xl overflow-y-auto flex-1 m-0">
           <CampaignAnalytics />
         </TabsContent>
 
         {/* ── History Tab ── */}
-        <TabsContent value="history" className="space-y-4 p-6 max-w-6xl overflow-auto m-0">
+        <TabsContent value="history" className="space-y-4 p-6 max-w-6xl overflow-y-auto flex-1 m-0">
           <SendingMetrics />
         </TabsContent>
 
         {/* ── AI Assistant Tab ── */}
-        <TabsContent value="ai-assistant" className="space-y-4 p-6 max-w-6xl overflow-auto m-0">
+        <TabsContent value="ai-assistant" className="space-y-4 p-6 max-w-6xl overflow-y-auto flex-1 m-0">
           <AiAssistantSettings />
         </TabsContent>
         {/* ── Voice Studio Tab ── */}
-        <TabsContent value="voice-studio" className="space-y-4 p-6 max-w-6xl overflow-auto m-0">
+        <TabsContent value="voice-studio" className="space-y-4 p-6 max-w-6xl overflow-y-auto flex-1 m-0">
           <VoiceStudio />
         </TabsContent>
 
         {/* ── AI Agent Tab ── */}
-        <TabsContent value="ai-agent" className="space-y-4 p-6 max-w-6xl overflow-auto m-0">
+        <TabsContent value="ai-agent" className="space-y-4 p-6 max-w-6xl overflow-y-auto flex-1 m-0">
           <AiAgentConfig />
         </TabsContent>
         </div>
