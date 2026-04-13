@@ -13,6 +13,7 @@ import {
   MousePointerClick,
   ExternalLink,
   TimerOff,
+  Bot,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -22,7 +23,8 @@ export type InsertableStepType =
   | "condition"
   | "interactive_buttons"
   | "cta_url"
-  | "no_response";
+  | "no_response"
+  | "ai_agent";
 
 type InsertStepOption = {
   type: InsertableStepType;
@@ -41,6 +43,7 @@ const insertStepOptions: InsertStepOption[] = [
   { type: "interactive_buttons", label: "Botões", Icon: MousePointerClick },
   { type: "cta_url", label: "Link", Icon: ExternalLink },
   { type: "no_response", label: "Sem resposta", Icon: TimerOff },
+  { type: "ai_agent", label: "Agente IA", Icon: Bot },
 ];
 
 export function InsertStepEdge(props: EdgeProps) {
