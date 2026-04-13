@@ -71,7 +71,7 @@ const createDefaultNodeData = (type: InsertableStepType): Record<string, unknown
     };
   }
   if (type === "ai_agent") {
-    return { ai_prompt: "", ai_model: "google/gemini-3-flash-preview", max_interactions: 5 };
+    return { agent_id: null, agent_name: "", ai_prompt: "", max_interactions: 5 };
   }
 
   return { timeout_minutes: 10 };

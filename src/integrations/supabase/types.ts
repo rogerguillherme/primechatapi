@@ -50,6 +50,69 @@ export type Database = {
           },
         ]
       }
+      ai_agents: {
+        Row: {
+          active: boolean | null
+          ai_model: string | null
+          created_at: string
+          faq: Json | null
+          guidelines: string | null
+          id: string
+          identity: string | null
+          instructions: string | null
+          knowledge: string | null
+          max_interactions: number | null
+          name: string
+          updated_at: string
+          user_id: string
+          voice: string | null
+          voice_accent: number | null
+          voice_similarity: number | null
+          voice_speed: number | null
+          voice_stability: number | null
+        }
+        Insert: {
+          active?: boolean | null
+          ai_model?: string | null
+          created_at?: string
+          faq?: Json | null
+          guidelines?: string | null
+          id?: string
+          identity?: string | null
+          instructions?: string | null
+          knowledge?: string | null
+          max_interactions?: number | null
+          name: string
+          updated_at?: string
+          user_id: string
+          voice?: string | null
+          voice_accent?: number | null
+          voice_similarity?: number | null
+          voice_speed?: number | null
+          voice_stability?: number | null
+        }
+        Update: {
+          active?: boolean | null
+          ai_model?: string | null
+          created_at?: string
+          faq?: Json | null
+          guidelines?: string | null
+          id?: string
+          identity?: string | null
+          instructions?: string | null
+          knowledge?: string | null
+          max_interactions?: number | null
+          name?: string
+          updated_at?: string
+          user_id?: string
+          voice?: string | null
+          voice_accent?: number | null
+          voice_similarity?: number | null
+          voice_speed?: number | null
+          voice_stability?: number | null
+        }
+        Relationships: []
+      }
       app_settings: {
         Row: {
           key: string
