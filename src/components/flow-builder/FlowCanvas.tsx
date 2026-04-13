@@ -20,11 +20,12 @@ import { ConditionNode } from "./nodes/ConditionNode";
 import { InteractiveButtonsNode } from "./nodes/InteractiveButtonsNode";
 import { CtaUrlNode } from "./nodes/CtaUrlNode";
 import { NoResponseNode } from "./nodes/NoResponseNode";
+import { AiAgentNode } from "./nodes/AiAgentNode";
 import { NodeEditPanel } from "./NodeEditPanel";
 import { InsertStepEdge, type InsertableStepType } from "./InsertStepEdge";
 import { Button } from "@/components/ui/button";
 import {
-  MessageSquare, Clock, GitBranch, MousePointerClick, ExternalLink, Braces, TimerOff,
+  MessageSquare, Clock, GitBranch, MousePointerClick, ExternalLink, Braces, TimerOff, Bot,
 } from "lucide-react";
 
 const nodeTypes: NodeTypes = {
@@ -35,6 +36,7 @@ const nodeTypes: NodeTypes = {
   interactive_buttons: InteractiveButtonsNode,
   cta_url: CtaUrlNode,
   no_response: NoResponseNode,
+  ai_agent: AiAgentNode,
 };
 
 const edgeTypes: EdgeTypes = {
@@ -67,6 +69,9 @@ const createDefaultNodeData = (type: InsertableStepType): Record<string, unknown
       custom_message: "",
       buttons: [{ id: crypto.randomUUID(), title: "Acessar site", url: "" }],
     };
+  }
+  if (type === "ai_agent") {
+    return { ai_prompt: "", ai_model: "google/gemini-3-flash-preview", max_interactions: 5 };
   }
 
   return { timeout_minutes: 10 };
@@ -298,6 +303,9 @@ export function FlowCanvas({
         </Button>
         <Button variant="outline" size="sm" onClick={() => addNode("no_response")} className="gap-1.5 text-xs h-8">
           <TimerOff size={12} /> Sem Resposta
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => addNode("ai_agent")} className="gap-1.5 text-xs h-8">
+          <Bot size={12} /> Agente IA
         </Button>
         <Button variant="outline" size="sm" onClick={() => {/* TODO: open variables panel */}} className="gap-1.5 text-xs h-8">
           <Braces size={12} /> Variáveis
