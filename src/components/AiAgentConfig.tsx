@@ -8,9 +8,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Bot, User, FileText, HelpCircle, FolderOpen, Save, Volume2, ArrowLeft, Plus, Trash2, Upload } from "lucide-react";
+import { Bot, User, FileText, HelpCircle, FolderOpen, Save, Volume2, Plus, Trash2, Upload, ArrowLeft, ChevronRight, Play, Pause } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 const voiceOptions = [
   { id: "samuel", name: "Samuel" },
@@ -23,76 +25,188 @@ const voiceOptions = [
   { id: "bia", name: "Bia" },
 ];
 
-const AI_KEYS = [
-  "ai_auto_reply_enabled",
-  "ai_company_name",
-  "ai_company_description",
-  "ai_products_services",
-  "ai_custom_instructions",
-  "ai_agent_identity",
-  "ai_agent_guidelines",
-  "ai_agent_voice",
-  "ai_agent_knowledge",
-  "ai_agent_faq",
-] as const;
+interface AiAgent {
+  id: string;
+  name: string;
+  identity: string;
+  guidelines: string;
+  instructions: string;
+  knowledge: string;
+  faq: { question: string; answer: string }[];
+  voice: string;
+  voice_stability: number;
+  voice_similarity: number;
+  voice_accent: number;
+  voice_speed: number;
+  ai_model: string;
+  max_interactions: number;
+  active: boolean;
+  created_at: string;
+}
 
-export function AiAgentConfig() {
-  const [identity, setIdentity] = useState("");
-  const [guidelines, setGuidelines] = useState("");
-  const [instructions, setInstructions] = useState("");
-  const [knowledge, setKnowledge] = useState("");
-  const [selectedVoice, setSelectedVoice] = useState("samuel");
-  const [stability, setStability] = useState([0.5]);
-  const [similarity, setSimilarity] = useState([0.7]);
-  const [accent, setAccent] = useState([0.5]);
-  const [speed, setSpeed] = useState([1.0]);
-  const [faqItems, setFaqItems] = useState<{ question: string; answer: string }[]>([]);
+/* ── Agent List View ── */
+function AgentListView({ onEdit }: { onEdit: (agent: AiAgent | null) => void }) {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  const { data: agents, isLoading } = useQuery({
+    queryKey: ["ai-agents"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ai_agents")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data || []) as AiAgent[];
+    },
+    enabled: !!user,
+  });
+
+  const toggleActive = useMutation({
+    mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
+      const { error } = await supabase.from("ai_agents").update({ active }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["ai-agents"] }),
+  });
+
+  const deleteAgent = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("ai_agents").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ai-agents"] });
+      toast.success("Agente removido.");
+    },
+  });
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-display font-bold text-foreground flex items-center gap-2">
+            <Bot className="text-primary" size={24} />
+            Agentes IA
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">Crie e gerencie seus agentes de atendimento</p>
+        </div>
+        <Button size="sm" onClick={() => onEdit(null)}>
+          <Plus size={14} /> Novo Agente
+        </Button>
+      </div>
+
+      <Card>
+        <CardContent className="p-0">
+          {isLoading ? (
+            <p className="text-sm text-muted-foreground text-center py-8">Carregando...</p>
+          ) : !agents?.length ? (
+            <div className="text-center py-12 space-y-3">
+              <Bot size={40} className="mx-auto text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Nenhum agente criado ainda.</p>
+              <Button variant="outline" size="sm" onClick={() => onEdit(null)}>
+                Criar primeiro agente
+              </Button>
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {agents.map((agent) => (
+                <div key={agent.id} className="flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors">
+                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Bot size={16} className="text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium truncate">{agent.name}</p>
+                      <Badge variant={agent.active ? "default" : "secondary"} className="text-[10px]">
+                        {agent.active ? "Ativo" : "Inativo"}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate mt-0.5">
+                      {agent.identity || "Sem identidade definida"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost" size="icon" className="h-8 w-8"
+                      onClick={() => toggleActive.mutate({ id: agent.id, active: !agent.active })}
+                    >
+                      {agent.active ? <Pause size={14} /> : <Play size={14} />}
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(agent)}>
+                      <ChevronRight size={14} />
+                    </Button>
+                    <Button
+                      variant="ghost" size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      onClick={() => { if (confirm("Remover agente?")) deleteAgent.mutate(agent.id); }}
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+/* ── Agent Editor View ── */
+function AgentEditorView({ agent, onBack }: { agent: AiAgent | null; onBack: () => void }) {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  const [name, setName] = useState(agent?.name || "");
+  const [identity, setIdentity] = useState(agent?.identity || "");
+  const [guidelines, setGuidelines] = useState(agent?.guidelines || "");
+  const [instructions, setInstructions] = useState(agent?.instructions || "");
+  const [knowledge, setKnowledge] = useState(agent?.knowledge || "");
+  const [selectedVoice, setSelectedVoice] = useState(agent?.voice || "samuel");
+  const [stability, setStability] = useState([agent?.voice_stability ?? 0.5]);
+  const [similarity, setSimilarity] = useState([agent?.voice_similarity ?? 0.7]);
+  const [accent, setAccent] = useState([agent?.voice_accent ?? 0.5]);
+  const [speed, setSpeed] = useState([agent?.voice_speed ?? 1.0]);
+  const [faqItems, setFaqItems] = useState<{ question: string; answer: string }[]>(
+    Array.isArray(agent?.faq) ? agent.faq : []
+  );
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    loadSettings();
-  }, []);
-
-  async function loadSettings() {
-    const { data } = await supabase
-      .from("app_settings")
-      .select("key, value")
-      .in("key", [...AI_KEYS]);
-
-    const map: Record<string, string> = {};
-    for (const row of data || []) map[row.key] = row.value;
-
-    setIdentity(map.ai_agent_identity || "");
-    setGuidelines(map.ai_agent_guidelines || map.ai_company_description || "");
-    setInstructions(map.ai_custom_instructions || "");
-    setKnowledge(map.ai_agent_knowledge || "");
-    setSelectedVoice(map.ai_agent_voice || "samuel");
-
-    try {
-      const faq = JSON.parse(map.ai_agent_faq || "[]");
-      setFaqItems(faq);
-    } catch {
-      setFaqItems([]);
-    }
-  }
-
   async function handleSave() {
+    if (!name.trim()) { toast.error("Nome é obrigatório."); return; }
+    if (!user) return;
     setSaving(true);
-    const pairs: Record<string, string> = {
-      ai_agent_identity: identity,
-      ai_agent_guidelines: guidelines,
-      ai_custom_instructions: instructions,
-      ai_agent_knowledge: knowledge,
-      ai_agent_voice: selectedVoice,
-      ai_agent_faq: JSON.stringify(faqItems),
+
+    const payload = {
+      user_id: user.id,
+      name: name.trim(),
+      identity,
+      guidelines,
+      instructions,
+      knowledge,
+      faq: faqItems,
+      voice: selectedVoice,
+      voice_stability: stability[0],
+      voice_similarity: similarity[0],
+      voice_accent: accent[0],
+      voice_speed: speed[0],
+      updated_at: new Date().toISOString(),
     };
 
-    for (const [key, value] of Object.entries(pairs)) {
-      await supabase.from("app_settings").upsert({ key, value }, { onConflict: "key" });
+    let error;
+    if (agent) {
+      ({ error } = await supabase.from("ai_agents").update(payload).eq("id", agent.id));
+    } else {
+      ({ error } = await supabase.from("ai_agents").insert(payload));
     }
 
     setSaving(false);
-    toast.success("Configurações do agente salvas!");
+    if (error) { toast.error(error.message); return; }
+    toast.success(agent ? "Agente atualizado!" : "Agente criado!");
+    queryClient.invalidateQueries({ queryKey: ["ai-agents"] });
+    onBack();
   }
 
   const addFaqItem = () => setFaqItems([...faqItems, { question: "", answer: "" }]);
@@ -105,107 +219,91 @@ export function AiAgentConfig() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-display font-bold text-foreground flex items-center gap-2">
-            <Bot className="text-primary" size={24} />
-            Agente IA
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">Gerencie as configurações do agente</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleSave} disabled={saving} className="gap-2">
-            <Save size={14} />
-            {saving ? "Salvando..." : "Salvar"}
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={onBack}>
+            <ArrowLeft size={18} />
           </Button>
+          <div>
+            <h1 className="text-2xl font-display font-bold text-foreground flex items-center gap-2">
+              <Bot className="text-primary" size={24} />
+              {agent ? "Editar Agente" : "Novo Agente"}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">Configure a personalidade e comportamento</p>
+          </div>
         </div>
+        <Button variant="outline" size="sm" onClick={handleSave} disabled={saving} className="gap-2">
+          <Save size={14} />
+          {saving ? "Salvando..." : "Salvar"}
+        </Button>
+      </div>
+
+      {/* Name field */}
+      <div className="space-y-2">
+        <Label className="text-sm font-semibold">Nome do Agente</Label>
+        <Input
+          placeholder="Ex: Assistente de Vendas, Suporte Técnico..."
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
       </div>
 
       <Tabs defaultValue="personality" className="w-full">
         <TabsList className="bg-muted w-full justify-start">
-          <TabsTrigger value="personality" className="gap-2">
-            <User size={14} /> Personalidade
-          </TabsTrigger>
-          <TabsTrigger value="instructions" className="gap-2">
-            <FileText size={14} /> Instruções
-          </TabsTrigger>
-          <TabsTrigger value="knowledge" className="gap-2">
-            <FolderOpen size={14} /> Base de Informações
-          </TabsTrigger>
-          <TabsTrigger value="faq" className="gap-2">
-            <HelpCircle size={14} /> Perguntas e Respostas
-          </TabsTrigger>
-          <TabsTrigger value="files" className="gap-2">
-            <Upload size={14} /> Arquivos
-          </TabsTrigger>
+          <TabsTrigger value="personality" className="gap-2"><User size={14} /> Personalidade</TabsTrigger>
+          <TabsTrigger value="instructions" className="gap-2"><FileText size={14} /> Instruções</TabsTrigger>
+          <TabsTrigger value="knowledge" className="gap-2"><FolderOpen size={14} /> Base de Informações</TabsTrigger>
+          <TabsTrigger value="faq" className="gap-2"><HelpCircle size={14} /> Perguntas e Respostas</TabsTrigger>
+          <TabsTrigger value="files" className="gap-2"><Upload size={14} /> Arquivos</TabsTrigger>
         </TabsList>
 
-        {/* Personality Tab */}
         <TabsContent value="personality" className="space-y-6 mt-4">
           <div className="space-y-2">
             <Label className="text-base font-semibold">Identidade</Label>
             <Textarea
-              placeholder="Seu nome é Prime, você é a assistente virtual da empresa Prime Chat. Você é simpática, acolhedora e sempre demonstra empatia nas interações."
+              placeholder="Seu nome é Prime, você é a assistente virtual da empresa Prime Chat..."
               value={identity}
               onChange={(e) => setIdentity(e.target.value)}
               className="min-h-[100px]"
             />
           </div>
-
           <div className="space-y-2">
             <Label className="text-base font-semibold">Diretrizes de Comunicação</Label>
             <Textarea
-              placeholder={`Defina como o agente deve se expressar no atendimento (tom de voz, clareza, formalidade, uso de emojis).\n\nExemplo 1: 'Comunique-se de forma clara, objetiva e educada. Use linguagem formal e evite gírias. Não utilize emojis.'\nExemplo 2: 'Use uma linguagem leve, simpática e acolhedora. Seja sempre positivo e demonstre proximidade com o cliente. Utilize emojis apenas para reforçar simpatia, sem exagerar.'`}
+              placeholder="Defina como o agente deve se expressar no atendimento..."
               value={guidelines}
               onChange={(e) => setGuidelines(e.target.value)}
               className="min-h-[140px]"
             />
-            <div className="flex items-center gap-2 text-xs text-muted-foreground justify-end">
-              <button className="font-bold hover:text-foreground">B</button>
-              <button className="italic hover:text-foreground">I</button>
-              <button className="line-through hover:text-foreground">S</button>
-              <button className="hover:text-foreground">+ Adicionar variável</button>
-            </div>
           </div>
-
-          {/* Voice Section */}
           <div className="space-y-4 pt-2">
             <Label className="text-base font-semibold">Voz</Label>
             <div className="flex items-center gap-4">
               <Select value={selectedVoice} onValueChange={setSelectedVoice}>
-                <SelectTrigger className="w-64">
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger className="w-64"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {voiceOptions.map((v) => (
                     <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <Button variant="outline" className="gap-2">
-                <Volume2 size={14} /> Testar Voz
-              </Button>
+              <Button variant="outline" className="gap-2"><Volume2 size={14} /> Testar Voz</Button>
             </div>
-
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              <VoiceSlider label="Estabilidade" range="0.0 - 1.0" description="Controla a consistência da voz entre diferentes gerações" value={stability} onChange={setStability} />
-              <VoiceSlider label="Similaridade" range="0.0 - 1.0" description="Controla o quão similar a voz gerada será à voz original" value={similarity} onChange={setSimilarity} />
-              <VoiceSlider label="Sotaque" range="0.0 - 1.0" description="Controla o estilo e expressividade da voz" value={accent} onChange={setAccent} />
-              <VoiceSlider label="Velocidade" range="0.7 - 1.2" description="Controla a velocidade de fala da voz" value={speed} onChange={setSpeed} min={0.7} max={1.2} />
+              <VoiceSlider label="Estabilidade" range="0.0 - 1.0" description="Controla a consistência da voz" value={stability} onChange={setStability} />
+              <VoiceSlider label="Similaridade" range="0.0 - 1.0" description="Controla a similaridade à voz original" value={similarity} onChange={setSimilarity} />
+              <VoiceSlider label="Sotaque" range="0.0 - 1.0" description="Controla o estilo e expressividade" value={accent} onChange={setAccent} />
+              <VoiceSlider label="Velocidade" range="0.7 - 1.2" description="Controla a velocidade de fala" value={speed} onChange={setSpeed} min={0.7} max={1.2} />
             </div>
           </div>
         </TabsContent>
 
-        {/* Instructions Tab */}
         <TabsContent value="instructions" className="space-y-4 mt-4">
           <div className="space-y-2">
             <Label className="text-base font-semibold">Instruções Personalizadas</Label>
-            <p className="text-sm text-muted-foreground">
-              Defina instruções detalhadas sobre como o agente deve se comportar, responder e interagir com os clientes.
-            </p>
+            <p className="text-sm text-muted-foreground">Defina instruções detalhadas sobre como o agente deve se comportar.</p>
             <Textarea
-              placeholder="Ex: Sempre cumprimente o cliente pelo nome quando disponível. Nunca forneça informações sobre preços sem antes consultar o catálogo atualizado. Se o cliente mencionar um problema, mostre empatia antes de oferecer soluções..."
+              placeholder="Ex: Sempre cumprimente o cliente pelo nome..."
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
               className="min-h-[300px]"
@@ -213,15 +311,12 @@ export function AiAgentConfig() {
           </div>
         </TabsContent>
 
-        {/* Knowledge Base Tab */}
         <TabsContent value="knowledge" className="space-y-4 mt-4">
           <div className="space-y-2">
             <Label className="text-base font-semibold">Base de Informações</Label>
-            <p className="text-sm text-muted-foreground">
-              Adicione informações sobre sua empresa, produtos, serviços e políticas que o agente usará para responder.
-            </p>
+            <p className="text-sm text-muted-foreground">Adicione informações sobre sua empresa, produtos e serviços.</p>
             <Textarea
-              placeholder="Ex: A Prime Chat é uma plataforma de comunicação via WhatsApp. Nossos planos incluem... Horário de atendimento: segunda a sexta, 9h às 18h..."
+              placeholder="Ex: A Prime Chat é uma plataforma de comunicação via WhatsApp..."
               value={knowledge}
               onChange={(e) => setKnowledge(e.target.value)}
               className="min-h-[300px]"
@@ -229,26 +324,20 @@ export function AiAgentConfig() {
           </div>
         </TabsContent>
 
-        {/* FAQ Tab */}
         <TabsContent value="faq" className="space-y-4 mt-4">
           <div className="flex items-center justify-between">
             <div>
               <Label className="text-base font-semibold">Perguntas e Respostas</Label>
-              <p className="text-sm text-muted-foreground">Adicione pares de pergunta e resposta para treinar o agente.</p>
+              <p className="text-sm text-muted-foreground">Adicione pares de pergunta e resposta.</p>
             </div>
-            <Button onClick={addFaqItem} variant="outline" size="sm" className="gap-2">
-              <Plus size={14} /> Adicionar
-            </Button>
+            <Button onClick={addFaqItem} variant="outline" size="sm" className="gap-2"><Plus size={14} /> Adicionar</Button>
           </div>
-
           {faqItems.length === 0 ? (
             <Card>
               <CardContent className="py-8 text-center space-y-3">
                 <HelpCircle size={32} className="mx-auto text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">Nenhuma pergunta cadastrada ainda.</p>
-                <Button onClick={addFaqItem} variant="outline" size="sm">
-                  Adicionar primeira pergunta
-                </Button>
+                <p className="text-sm text-muted-foreground">Nenhuma pergunta cadastrada.</p>
+                <Button onClick={addFaqItem} variant="outline" size="sm">Adicionar primeira pergunta</Button>
               </CardContent>
             </Card>
           ) : (
@@ -264,20 +353,11 @@ export function AiAgentConfig() {
                     </div>
                     <div className="space-y-2">
                       <Label className="text-xs">Pergunta</Label>
-                      <Input
-                        placeholder="Ex: Qual o horário de atendimento?"
-                        value={item.question}
-                        onChange={(e) => updateFaq(i, "question", e.target.value)}
-                      />
+                      <Input placeholder="Ex: Qual o horário de atendimento?" value={item.question} onChange={(e) => updateFaq(i, "question", e.target.value)} />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-xs">Resposta</Label>
-                      <Textarea
-                        placeholder="Ex: Nosso horário de atendimento é de segunda a sexta, das 9h às 18h."
-                        value={item.answer}
-                        onChange={(e) => updateFaq(i, "answer", e.target.value)}
-                        className="min-h-[80px]"
-                      />
+                      <Textarea placeholder="Ex: Nosso horário é de segunda a sexta, das 9h às 18h." value={item.answer} onChange={(e) => updateFaq(i, "answer", e.target.value)} className="min-h-[80px]" />
                     </div>
                   </CardContent>
                 </Card>
@@ -286,13 +366,10 @@ export function AiAgentConfig() {
           )}
         </TabsContent>
 
-        {/* Files Tab */}
         <TabsContent value="files" className="space-y-4 mt-4">
           <div className="space-y-2">
             <Label className="text-base font-semibold">Arquivos</Label>
-            <p className="text-sm text-muted-foreground">
-              Faça upload de documentos (PDF, TXT, DOCX) para enriquecer a base de conhecimento do agente.
-            </p>
+            <p className="text-sm text-muted-foreground">Faça upload de documentos para enriquecer a base de conhecimento.</p>
           </div>
           <Card>
             <CardContent className="py-12 text-center space-y-3">
@@ -310,22 +387,19 @@ export function AiAgentConfig() {
   );
 }
 
-function VoiceSlider({
-  label,
-  range,
-  description,
-  value,
-  onChange,
-  min = 0,
-  max = 1,
-}: {
-  label: string;
-  range: string;
-  description: string;
-  value: number[];
-  onChange: (v: number[]) => void;
-  min?: number;
-  max?: number;
+/* ── Main Component ── */
+export function AiAgentConfig() {
+  const [editing, setEditing] = useState<AiAgent | null | undefined>(undefined);
+
+  if (editing !== undefined) {
+    return <AgentEditorView agent={editing} onBack={() => setEditing(undefined)} />;
+  }
+
+  return <AgentListView onEdit={(agent) => setEditing(agent)} />;
+}
+
+function VoiceSlider({ label, range, description, value, onChange, min = 0, max = 1 }: {
+  label: string; range: string; description: string; value: number[]; onChange: (v: number[]) => void; min?: number; max?: number;
 }) {
   return (
     <div className="space-y-2">
