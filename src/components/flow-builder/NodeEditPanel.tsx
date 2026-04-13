@@ -236,3 +236,62 @@ export function NodeEditPanel({ node, templates, onUpdate, onClose }: NodeEditPa
     </div>
   );
 }
+
+function AiAgentFields({ data, onUpdate }: { data: Record<string, unknown>; onUpdate: (d: Record<string, unknown>) => void }) {
+  const { agents, isLoading } = useAiAgents();
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label className="text-xs">Agente</Label>
+        <Select
+          value={(data.agent_id as string) || ""}
+          onValueChange={(v) => {
+            const selected = agents.find((a) => a.id === v);
+            onUpdate({ agent_id: v, agent_name: selected?.name || "" });
+          }}
+        >
+          <SelectTrigger className="h-8 text-sm">
+            <SelectValue placeholder={isLoading ? "Carregando..." : "Selecione um agente..."} />
+          </SelectTrigger>
+          <SelectContent>
+            {agents.map((a) => (
+              <SelectItem key={a.id} value={a.id}>
+                {a.name} {!a.active && "(inativo)"}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-[11px] text-muted-foreground">
+          Selecione qual agente configurado irá responder neste passo do fluxo.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-xs">Instruções adicionais (opcional)</Label>
+        <textarea
+          value={(data.ai_prompt as string) || ""}
+          onChange={(e) => onUpdate({ ai_prompt: e.target.value })}
+          placeholder="Instruções extras para este passo específico do fluxo..."
+          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm min-h-[80px] resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          rows={3}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-xs">Máximo de interações</Label>
+        <Input
+          type="number"
+          min={1}
+          max={50}
+          value={(data.max_interactions as number) || 5}
+          onChange={(e) => onUpdate({ max_interactions: parseInt(e.target.value) || 5 })}
+          className="h-8 text-sm"
+        />
+        <p className="text-[11px] text-muted-foreground">
+          Após esse número de trocas, o fluxo avança para o próximo passo.
+        </p>
+      </div>
+    </>
+  );
+}
