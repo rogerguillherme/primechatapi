@@ -57,7 +57,7 @@ function AgentListView({ onEdit }: { onEdit: (agent: AiAgent | null) => void }) 
         .select("*")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data || []) as AiAgent[];
+      return (data || []).map((d: any) => ({ ...d, faq: Array.isArray(d.faq) ? d.faq : [] })) as AiAgent[];
     },
     enabled: !!user,
   });
