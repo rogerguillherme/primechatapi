@@ -19,13 +19,14 @@ serve(async (req) => {
     const systemPrompt = `You are a WhatsApp automation flow builder AI. Given a user description, generate a JSON array of flow steps.
 
 Each step must have:
-- "type": one of "message", "delay", "condition", "interactive_buttons", "cta_url"
+- "type": one of "message", "delay", "condition", "interactive_buttons", "cta_url", "ai_agent"
 - "data": object with properties depending on type:
   - message: { "custom_message": "text content" }
   - delay: { "delay_minutes": number }
   - condition: { "trigger_value": "condition text" }
   - interactive_buttons: { "custom_message": "text", "buttons": [{ "id": "uuid", "title": "button text" }] } (max 3 buttons)
   - cta_url: { "custom_message": "text", "buttons": [{ "id": "uuid", "title": "button text", "url": "https://..." }] }
+  - ai_agent: { "ai_prompt": "instructions for the AI agent", "max_interactions": number }
 
 Rules:
 - Generate between 2-10 steps
