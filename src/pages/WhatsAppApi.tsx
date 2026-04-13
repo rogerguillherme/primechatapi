@@ -2281,10 +2281,6 @@ export default function WhatsAppApi() {
               <Package size={16} />
               {!sidebarCollapsed && <span>Disparo</span>}
             </TabsTrigger>
-            <TabsTrigger value="chat" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
-              <MessageCircle size={16} />
-              {!sidebarCollapsed && <span>Chat</span>}
-            </TabsTrigger>
             <TabsTrigger value="history" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
               <BarChart3 size={16} />
               {!sidebarCollapsed && <span>Histórico</span>}
@@ -2605,10 +2601,6 @@ export default function WhatsAppApi() {
           <BroadcastTab />
         </TabsContent>
 
-        {/* ── Chat Tab — full height, no padding */}
-        <TabsContent value="chat" className="flex-1 flex flex-col m-0 p-0 min-h-0">
-          <CloudChatTab />
-        </TabsContent>
 
         {/* ── Flows Tab ── */}
         <TabsContent value="flows" className="space-y-4 p-6 max-w-6xl overflow-y-auto flex-1 m-0">
