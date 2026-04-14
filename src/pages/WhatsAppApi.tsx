@@ -48,6 +48,7 @@ import { AiAssistantSettings } from "@/components/AiAssistantSettings";
 import { VoiceStudio } from "@/components/VoiceStudio";
 import { AiAgentConfig } from "@/components/AiAgentConfig";
 import { FinancialTab } from "@/components/FinancialTab";
+import { CloudChatTab } from "@/components/CloudChatTab";
 
 const isUnauthorizedFunctionError = (error: unknown) =>
   error instanceof Error && error.message.includes("401");
