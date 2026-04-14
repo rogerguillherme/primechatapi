@@ -557,12 +557,15 @@ export type Database = {
       }
       flow_steps: {
         Row: {
+          ai_agent_id: string | null
+          ai_prompt: string | null
           buttons: Json | null
           created_at: string
           custom_message: string | null
           delay_minutes: number | null
           flow_id: string
           id: string
+          max_interactions: number | null
           parent_step_id: string | null
           step_order: number
           step_type: string
@@ -571,12 +574,15 @@ export type Database = {
           trigger_value: string | null
         }
         Insert: {
+          ai_agent_id?: string | null
+          ai_prompt?: string | null
           buttons?: Json | null
           created_at?: string
           custom_message?: string | null
           delay_minutes?: number | null
           flow_id: string
           id?: string
+          max_interactions?: number | null
           parent_step_id?: string | null
           step_order?: number
           step_type?: string
@@ -585,12 +591,15 @@ export type Database = {
           trigger_value?: string | null
         }
         Update: {
+          ai_agent_id?: string | null
+          ai_prompt?: string | null
           buttons?: Json | null
           created_at?: string
           custom_message?: string | null
           delay_minutes?: number | null
           flow_id?: string
           id?: string
+          max_interactions?: number | null
           parent_step_id?: string | null
           step_order?: number
           step_type?: string
@@ -599,6 +608,13 @@ export type Database = {
           trigger_value?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "flow_steps_ai_agent_id_fkey"
+            columns: ["ai_agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "flow_steps_flow_id_fkey"
             columns: ["flow_id"]
