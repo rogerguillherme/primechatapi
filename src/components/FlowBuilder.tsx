@@ -241,6 +241,8 @@ function AiFlowChat({ onGenerate }: { onGenerate: (steps: any[]) => void }) {
           condition: "🔀 Condição",
           interactive_buttons: "🔘 Botões",
           cta_url: "🔗 Link",
+          no_response: "⏱️ Sem Resposta",
+          ai_agent: "🤖 Agente IA",
         };
         return `${i + 1}. ${typeNames[s.type] || s.type}`;
       }).join("\n");
@@ -388,6 +390,9 @@ function FlowEditorView({ flow, onBack, initialTriggerType }: { flow: Flow | nul
             trigger_value: s.trigger_value,
             buttons: Array.isArray(s.buttons) ? s.buttons : [],
             timeout_minutes: s.timeout_minutes || null,
+            agent_id: s.ai_agent_id || null,
+            ai_prompt: s.ai_prompt || "",
+            max_interactions: s.max_interactions || 5,
           },
         };
       });
@@ -642,6 +647,9 @@ function FlowEditorView({ flow, onBack, initialTriggerType }: { flow: Flow | nul
         parent_step_id: e.parentNodeId ? persistedIdByNodeId.get(e.parentNodeId) || null : null,
         buttons: (e.node.type === "interactive_buttons" || e.node.type === "cta_url") ? (e.node.data.buttons as any) || [] : [],
         timeout_minutes: (e.node.data.timeout_minutes as number) || null,
+        ai_agent_id: e.node.type === "ai_agent" ? (e.node.data.agent_id as string) || null : null,
+        ai_prompt: e.node.type === "ai_agent" ? (e.node.data.ai_prompt as string) || null : null,
+        max_interactions: e.node.type === "ai_agent" ? (e.node.data.max_interactions as number) || 5 : null,
       }));
 
       const { error: stepsError } = await supabase
