@@ -1973,6 +1973,11 @@ export default function WhatsAppApi() {
         </TabsContent>
 
         {/* ── Webhook Tab (Event Webhooks) ── */}
+        {/* ── Chat Tab ── */}
+        <TabsContent value="chat" className="flex-1 overflow-hidden m-0 p-0">
+          <CloudChatTab />
+        </TabsContent>
+
         <TabsContent value="webhook" className="space-y-4 p-6 max-w-6xl overflow-y-auto flex-1 m-0">
           <WebhookEndpoints onCreateFlow={handleCreateFlowFromWebhook} onSelectFlow={handleSelectFlowFromWebhook} />
         </TabsContent>
