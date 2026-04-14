@@ -2290,6 +2290,10 @@ export default function WhatsAppApi() {
               <TrendingUp size={16} />
               {!sidebarCollapsed && <span>Analytics</span>}
             </TabsTrigger>
+            <TabsTrigger value="financial" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+              <DollarSign size={16} />
+              {!sidebarCollapsed && <span>Financeiro</span>}
+            </TabsTrigger>
             <TabsTrigger value="flows" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
               <GitBranch size={16} />
               {!sidebarCollapsed && <span>Fluxos</span>}
@@ -2630,6 +2634,11 @@ export default function WhatsAppApi() {
         {/* ── AI Agent Tab ── */}
         <TabsContent value="ai-agent" className="space-y-4 p-6 max-w-6xl overflow-y-auto flex-1 m-0">
           <AiAgentConfig />
+        </TabsContent>
+
+        {/* ── Financial Tab ── */}
+        <TabsContent value="financial" className="space-y-4 p-6 max-w-6xl overflow-y-auto flex-1 m-0">
+          <FinancialTab />
         </TabsContent>
         </div>
       </Tabs>
