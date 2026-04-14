@@ -26,7 +26,7 @@ import {
   Package, MessageCircle, Search, FileText, Check, CheckCheck, Paperclip,
   Truck, Users, ArrowLeft, BarChart3, MoreVertical, Pencil, Trash2, Star,
   KeyRound, ChevronDown, Webhook, LogOut, Plug, Tag, ChevronLeft, ChevronRight,
-  Instagram, GitBranch, TrendingUp, Bot, Volume2, Sparkles,
+  Instagram, GitBranch, TrendingUp, Bot, Volume2, Sparkles, DollarSign,
 } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
@@ -47,6 +47,7 @@ import { ChatLabelsManager, useLabels, LeadLabelSelector } from "@/components/Ch
 import { AiAssistantSettings } from "@/components/AiAssistantSettings";
 import { VoiceStudio } from "@/components/VoiceStudio";
 import { AiAgentConfig } from "@/components/AiAgentConfig";
+import { FinancialTab } from "@/components/FinancialTab";
 
 const isUnauthorizedFunctionError = (error: unknown) =>
   error instanceof Error && error.message.includes("401");
@@ -2289,6 +2290,10 @@ export default function WhatsAppApi() {
               <TrendingUp size={16} />
               {!sidebarCollapsed && <span>Analytics</span>}
             </TabsTrigger>
+            <TabsTrigger value="financial" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+              <DollarSign size={16} />
+              {!sidebarCollapsed && <span>Financeiro</span>}
+            </TabsTrigger>
             <TabsTrigger value="flows" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
               <GitBranch size={16} />
               {!sidebarCollapsed && <span>Fluxos</span>}
@@ -2629,6 +2634,11 @@ export default function WhatsAppApi() {
         {/* ── AI Agent Tab ── */}
         <TabsContent value="ai-agent" className="space-y-4 p-6 max-w-6xl overflow-y-auto flex-1 m-0">
           <AiAgentConfig />
+        </TabsContent>
+
+        {/* ── Financial Tab ── */}
+        <TabsContent value="financial" className="space-y-4 p-6 max-w-6xl overflow-y-auto flex-1 m-0">
+          <FinancialTab />
         </TabsContent>
         </div>
       </Tabs>
