@@ -26,7 +26,7 @@ import {
   Package, MessageCircle, Search, FileText, Check, CheckCheck, Paperclip,
   Truck, Users, ArrowLeft, BarChart3, MoreVertical, Pencil, Trash2, Star,
   KeyRound, ChevronDown, Webhook, LogOut, Plug, Tag, ChevronLeft, ChevronRight,
-  Instagram, GitBranch, TrendingUp, Bot, Volume2, Sparkles,
+  Instagram, GitBranch, TrendingUp, Bot, Volume2, Sparkles, DollarSign,
 } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
@@ -47,6 +47,7 @@ import { ChatLabelsManager, useLabels, LeadLabelSelector } from "@/components/Ch
 import { AiAssistantSettings } from "@/components/AiAssistantSettings";
 import { VoiceStudio } from "@/components/VoiceStudio";
 import { AiAgentConfig } from "@/components/AiAgentConfig";
+import { FinancialTab } from "@/components/FinancialTab";
 
 const isUnauthorizedFunctionError = (error: unknown) =>
   error instanceof Error && error.message.includes("401");
