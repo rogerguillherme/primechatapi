@@ -29,7 +29,6 @@ export default function InstagramDashboard() {
       setActiveTab(tab);
     }
   }, [searchParams]);
-  const navigate = useNavigate();
 
   const { data: isAdmin } = useQuery({
     queryKey: ["user-role", user?.id],
