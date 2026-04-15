@@ -27,11 +27,12 @@ export default function InstagramCallbackPage() {
           if (error) throw error;
           if (data?.error) throw new Error(data.error);
           toast.success(`Instagram conectado! @${data.instagram_username}`);
+          navigate("/instagram?tab=metrics", { replace: true });
         } catch (err: any) {
           toast.error(err.message || "Erro ao conectar Instagram");
+          navigate("/instagram?tab=settings", { replace: true });
         } finally {
           setIsProcessing(false);
-          navigate("/instagram?tab=settings", { replace: true });
         }
       })();
     }

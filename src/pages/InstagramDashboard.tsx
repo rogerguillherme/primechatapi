@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,10 +16,19 @@ import {
 } from "lucide-react";
 
 export default function InstagramDashboard() {
-  const [activeTab, setActiveTab] = useState("chat");
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get("tab") || "chat";
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab && ["chat", "automations", "metrics", "settings"].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   const { data: isAdmin } = useQuery({
     queryKey: ["user-role", user?.id],
