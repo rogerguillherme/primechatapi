@@ -16,9 +16,19 @@ import {
 } from "lucide-react";
 
 export default function InstagramDashboard() {
-  const [activeTab, setActiveTab] = useState("chat");
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get("tab") || "chat";
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab && ["chat", "automations", "metrics", "settings"].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
   const navigate = useNavigate();
 
   const { data: isAdmin } = useQuery({
