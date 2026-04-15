@@ -160,8 +160,18 @@ export default function InstagramDashboard() {
           </div>
         )}
         {activeTab === "metrics" && (
-          <div className="flex-1 overflow-auto p-6 max-w-6xl">
+          <div className="flex-1 overflow-auto">
             <InstagramMetrics />
+          </div>
+        )}
+        {activeTab === "posts" && (
+          <div className="flex-1 overflow-auto">
+            <InstagramPosts />
+          </div>
+        )}
+        {activeTab === "agent" && (
+          <div className="flex-1 overflow-auto">
+            <InstagramAgent />
           </div>
         )}
         {activeTab === "settings" && (
