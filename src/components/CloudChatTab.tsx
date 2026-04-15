@@ -158,22 +158,33 @@ export function CloudChatTab() {
     enabled: !!selectedLeadId,
   });
 
-  // Realtime
+  // Keep a ref so the realtime callback always sees the latest selectedLeadId
+  const selectedLeadIdRef = useRef(selectedLeadId);
+  selectedLeadIdRef.current = selectedLeadId;
+
+  // Realtime – listen to INSERT + UPDATE so status changes (delivered/read) also refresh
   useEffect(() => {
     const channel = supabase
       .channel("cloud-chat-realtime")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["chat-messages", selectedLeadId] });
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_messages" }, () => {
+        const currentLeadId = selectedLeadIdRef.current;
+        if (currentLeadId) {
+          queryClient.invalidateQueries({ queryKey: ["chat-messages", currentLeadId] });
+        }
         queryClient.invalidateQueries({ queryKey: ["chat-latest-messages"] });
         queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
+        queryClient.invalidateQueries({ queryKey: ["chat-lead-accounts"] });
       })
       .subscribe();
     const interval = setInterval(() => {
-      queryClient.invalidateQueries({ queryKey: ["chat-messages", selectedLeadId] });
+      const currentLeadId = selectedLeadIdRef.current;
+      if (currentLeadId) {
+        queryClient.invalidateQueries({ queryKey: ["chat-messages", currentLeadId] });
+      }
       queryClient.invalidateQueries({ queryKey: ["chat-latest-messages"] });
-    }, 5000);
+    }, 8000);
     return () => { supabase.removeChannel(channel); clearInterval(interval); };
-  }, [selectedLeadId, queryClient]);
+  }, [queryClient]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
