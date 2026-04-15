@@ -1,13 +1,17 @@
+import { useAuth } from "@/contexts/AuthContext";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Users, Heart, MessageSquare, Eye, TrendingUp, TrendingDown, Instagram, ImageIcon } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Users, Heart, MessageSquare, Eye, TrendingUp, Instagram, ImageIcon, ExternalLink, Loader2 } from "lucide-react";
 
-function MetricCard({ title, value, change, changeType, icon: Icon }: {
+function MetricCard({ title, value, icon: Icon, loading }: {
   title: string;
   value: string;
-  change?: string;
-  changeType?: "up" | "down";
   icon: any;
+  loading?: boolean;
 }) {
   return (
     <Card>
@@ -15,12 +19,10 @@ function MetricCard({ title, value, change, changeType, icon: Icon }: {
         <div className="flex items-start justify-between">
           <div>
             <p className="text-sm text-muted-foreground">{title}</p>
-            <p className="text-2xl font-bold mt-1">{value}</p>
-            {change && (
-              <div className={`flex items-center gap-1 mt-1 text-xs ${changeType === "up" ? "text-green-600" : "text-red-500"}`}>
-                {changeType === "up" ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                {change}
-              </div>
+            {loading ? (
+              <Skeleton className="h-8 w-20 mt-1" />
+            ) : (
+              <p className="text-2xl font-bold mt-1">{value}</p>
             )}
           </div>
           <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500/10 to-pink-500/10 flex items-center justify-center">
@@ -32,70 +34,168 @@ function MetricCard({ title, value, change, changeType, icon: Icon }: {
   );
 }
 
+function formatNumber(n: number | undefined | null): string {
+  if (n == null) return "—";
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + "K";
+  return n.toLocaleString("pt-BR");
+}
+
 export function InstagramMetrics() {
-  // Placeholder – will fetch real data from Instagram Graph API via edge function
+  const { user } = useAuth();
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["instagram-data", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("instagram-fetch-data");
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    enabled: !!user,
+    staleTime: 60_000,
+    refetchInterval: 5 * 60_000,
+  });
+
+  const profile = data?.profile;
+  const media = data?.media || [];
+  const insights = data?.insights;
+  const loading = isLoading;
+
+  if (error && (error as any)?.message?.includes("Nenhuma conta")) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <Card>
+          <CardContent className="py-16 text-center text-muted-foreground">
+            <Instagram className="h-12 w-12 mx-auto mb-4 opacity-20" />
+            <p className="text-lg font-medium">Conecte sua conta Instagram</p>
+            <p className="text-sm mt-1">Vá para Configuração e conecte sua conta para ver métricas.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-      <div>
-        <h2 className="text-xl font-bold">Métricas do Instagram</h2>
-        <p className="text-sm text-muted-foreground">
-          Acompanhe o desempenho da sua conta Instagram conectada
-        </p>
-      </div>
+      {/* Profile header */}
+      {profile && (
+        <Card className="border-purple-500/20 bg-gradient-to-r from-purple-500/5 via-pink-500/5 to-transparent">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <Avatar className="h-16 w-16">
+                <AvatarImage src={profile.profile_picture_url} />
+                <AvatarFallback className="bg-gradient-to-br from-purple-500 to-pink-500 text-white text-xl">
+                  {profile.username?.[0]?.toUpperCase() || "?"}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-bold">@{profile.username}</h2>
+                  <Badge className="bg-green-500/10 text-green-600 border-green-500/20 text-xs">Conectado</Badge>
+                </div>
+                {profile.name && <p className="text-sm text-muted-foreground">{profile.name}</p>}
+                {profile.biography && <p className="text-xs text-muted-foreground mt-1 max-w-md">{profile.biography}</p>}
+              </div>
+              <a
+                href={`https://instagram.com/${profile.username}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {loading && !profile && (
+        <div className="flex items-center justify-center py-10">
+          <Loader2 className="h-6 w-6 animate-spin text-purple-500" />
+          <span className="ml-2 text-muted-foreground">Carregando dados do Instagram...</span>
+        </div>
+      )}
 
       {/* Summary cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard title="Seguidores" value="—" icon={Users} />
-        <MetricCard title="Engajamento" value="—" icon={Heart} />
-        <MetricCard title="Mensagens (DMs)" value="—" icon={MessageSquare} />
-        <MetricCard title="Impressões" value="—" icon={Eye} />
+        <MetricCard title="Seguidores" value={formatNumber(profile?.followers_count)} icon={Users} loading={loading} />
+        <MetricCard title="Seguindo" value={formatNumber(profile?.follows_count)} icon={Heart} loading={loading} />
+        <MetricCard title="Publicações" value={formatNumber(profile?.media_count)} icon={ImageIcon} loading={loading} />
+        <MetricCard
+          title="Impressões (30d)"
+          value={insights?.impressions != null ? formatNumber(insights.impressions) : "—"}
+          icon={Eye}
+          loading={loading}
+        />
       </div>
 
-      {/* Detailed cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <ImageIcon className="h-4 w-4" /> Posts Recentes
-            </CardTitle>
-            <CardDescription>Desempenho dos últimos posts</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
-              <Instagram className="h-10 w-10 opacity-20 mb-3" />
-              <p className="text-sm">Conecte sua conta para ver os dados</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <TrendingUp className="h-4 w-4" /> Crescimento
-            </CardTitle>
-            <CardDescription>Evolução de seguidores nos últimos 30 dias</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
-              <TrendingUp className="h-10 w-10 opacity-20 mb-3" />
-              <p className="text-sm">Conecte sua conta para ver os dados</p>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <MetricCard
+          title="Alcance (30d)"
+          value={insights?.reach != null ? formatNumber(insights.reach) : "—"}
+          icon={TrendingUp}
+          loading={loading}
+        />
+        <MetricCard
+          title="Visitas ao perfil (30d)"
+          value={insights?.profile_views != null ? formatNumber(insights.profile_views) : "—"}
+          icon={Users}
+          loading={loading}
+        />
       </div>
 
+      {/* Recent media */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
-            <MessageSquare className="h-4 w-4" /> Stories
+            <ImageIcon className="h-4 w-4" /> Posts Recentes
           </CardTitle>
-          <CardDescription>Métricas de stories e respostas</CardDescription>
+          <CardDescription>Desempenho dos últimos posts</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
-            <Instagram className="h-10 w-10 opacity-20 mb-3" />
-            <p className="text-sm">Conecte sua conta para ver os dados</p>
-          </div>
+          {loading ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              {[...Array(8)].map((_, i) => (
+                <Skeleton key={i} className="aspect-square rounded-lg" />
+              ))}
+            </div>
+          ) : media.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+              <Instagram className="h-10 w-10 opacity-20 mb-3" />
+              <p className="text-sm">Nenhum post encontrado</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              {media.map((post: any) => (
+                <a
+                  key={post.id}
+                  href={post.permalink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group relative aspect-square rounded-lg overflow-hidden bg-muted"
+                >
+                  <img
+                    src={post.media_type === "VIDEO" ? post.thumbnail_url : post.media_url}
+                    alt={post.caption?.substring(0, 50) || "Post"}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                    loading="lazy"
+                  />
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 text-white text-sm">
+                    <span className="flex items-center gap-1">
+                      <Heart className="h-4 w-4" /> {post.like_count ?? 0}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <MessageSquare className="h-4 w-4" /> {post.comments_count ?? 0}
+                    </span>
+                  </div>
+                  {post.media_type === "VIDEO" && (
+                    <Badge className="absolute top-2 left-2 text-[10px] bg-black/60 text-white border-0">Vídeo</Badge>
+                  )}
+                </a>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
