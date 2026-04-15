@@ -9,10 +9,12 @@ import { InstagramChat } from "@/components/instagram/InstagramChat";
 import { InstagramAutomations } from "@/components/instagram/InstagramAutomations";
 import { InstagramMetrics } from "@/components/instagram/InstagramMetrics";
 import { InstagramSettings } from "@/components/instagram/InstagramSettings";
+import { InstagramPosts } from "@/components/instagram/InstagramPosts";
+import { InstagramAgent } from "@/components/instagram/InstagramAgent";
 import { cn } from "@/lib/utils";
 import {
   MessageSquare, Zap, BarChart3, Settings, Instagram, MessageCircle,
-  ChevronLeft, ChevronRight, LogOut, Users, Plug,
+  ChevronLeft, ChevronRight, LogOut, Users, Plug, CalendarDays, Bot,
 } from "lucide-react";
 
 export default function InstagramDashboard() {
