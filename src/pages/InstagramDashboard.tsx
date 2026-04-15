@@ -9,10 +9,12 @@ import { InstagramChat } from "@/components/instagram/InstagramChat";
 import { InstagramAutomations } from "@/components/instagram/InstagramAutomations";
 import { InstagramMetrics } from "@/components/instagram/InstagramMetrics";
 import { InstagramSettings } from "@/components/instagram/InstagramSettings";
+import { InstagramPosts } from "@/components/instagram/InstagramPosts";
+import { InstagramAgent } from "@/components/instagram/InstagramAgent";
 import { cn } from "@/lib/utils";
 import {
   MessageSquare, Zap, BarChart3, Settings, Instagram, MessageCircle,
-  ChevronLeft, ChevronRight, LogOut, Users, Plug,
+  ChevronLeft, ChevronRight, LogOut, Users, Plug, CalendarDays, Bot,
 } from "lucide-react";
 
 export default function InstagramDashboard() {
@@ -25,7 +27,7 @@ export default function InstagramDashboard() {
 
   useEffect(() => {
     const tab = searchParams.get("tab");
-    if (tab && ["chat", "automations", "metrics", "settings"].includes(tab)) {
+    if (tab && ["chat", "automations", "metrics", "settings", "posts", "agent"].includes(tab)) {
       setActiveTab(tab);
     }
   }, [searchParams]);
@@ -49,6 +51,8 @@ export default function InstagramDashboard() {
     { id: "chat", icon: MessageSquare, label: "Chat" },
     { id: "automations", icon: Zap, label: "Automações" },
     { id: "metrics", icon: BarChart3, label: "Métricas" },
+    { id: "posts", icon: CalendarDays, label: "Posts" },
+    { id: "agent", icon: Bot, label: "Agente IA" },
     { id: "settings", icon: Settings, label: "Configuração" },
   ];
 
@@ -156,8 +160,18 @@ export default function InstagramDashboard() {
           </div>
         )}
         {activeTab === "metrics" && (
-          <div className="flex-1 overflow-auto p-6 max-w-6xl">
+          <div className="flex-1 overflow-auto">
             <InstagramMetrics />
+          </div>
+        )}
+        {activeTab === "posts" && (
+          <div className="flex-1 overflow-auto">
+            <InstagramPosts />
+          </div>
+        )}
+        {activeTab === "agent" && (
+          <div className="flex-1 overflow-auto">
+            <InstagramAgent />
           </div>
         )}
         {activeTab === "settings" && (

@@ -67,11 +67,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Fetch recent media
+    // Fetch recent media with comments
     let media: any[] = [];
     try {
       const mediaRes = await fetch(
-        `https://graph.facebook.com/v19.0/${igUserId}/media?fields=id,caption,media_type,media_url,thumbnail_url,timestamp,like_count,comments_count,permalink&limit=12&access_token=${accessToken}`
+        `https://graph.facebook.com/v19.0/${igUserId}/media?fields=id,caption,media_type,media_url,thumbnail_url,timestamp,like_count,comments_count,permalink,comments{id,text,username,timestamp,like_count}&limit=20&access_token=${accessToken}`
       );
       const mediaData = await mediaRes.json();
       if (mediaRes.ok && mediaData?.data) {
