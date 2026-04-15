@@ -27,7 +27,7 @@ export default function InstagramDashboard() {
 
   useEffect(() => {
     const tab = searchParams.get("tab");
-    if (tab && ["chat", "automations", "metrics", "settings"].includes(tab)) {
+    if (tab && ["chat", "automations", "metrics", "settings", "posts", "agent"].includes(tab)) {
       setActiveTab(tab);
     }
   }, [searchParams]);
@@ -51,6 +51,8 @@ export default function InstagramDashboard() {
     { id: "chat", icon: MessageSquare, label: "Chat" },
     { id: "automations", icon: Zap, label: "Automações" },
     { id: "metrics", icon: BarChart3, label: "Métricas" },
+    { id: "posts", icon: CalendarDays, label: "Posts" },
+    { id: "agent", icon: Bot, label: "Agente IA" },
     { id: "settings", icon: Settings, label: "Configuração" },
   ];
 
