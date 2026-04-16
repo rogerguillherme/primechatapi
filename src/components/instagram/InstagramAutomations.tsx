@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,12 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Plus, Zap, MessageSquare, Clock, Trash2, Instagram, Send, MessageCircle,
-  ArrowRight, Eye, Pencil, Copy, ToggleLeft, ChevronDown, ChevronUp, Sparkles,
+  Plus, Zap, Clock, Trash2, Instagram, Send, MessageCircle,
+  ArrowRight, Eye, Pencil, Copy, ChevronDown, ChevronUp, Sparkles, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface FlowStep {
   id: string;
@@ -38,12 +39,61 @@ const STEP_CONFIG = {
 };
 
 export function InstagramAutomations() {
+  const { user } = useAuth();
   const [flows, setFlows] = useState<AutomationFlow[]>([]);
   const [editingFlow, setEditingFlow] = useState<AutomationFlow | null>(null);
   const [expandedFlow, setExpandedFlow] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const loadFlows = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const { data: automations, error } = await supabase
+        .from("instagram_automations")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      const flowsWithSteps: AutomationFlow[] = [];
+      for (const auto of automations || []) {
+        const { data: steps } = await supabase
+          .from("instagram_automation_steps")
+          .select("*")
+          .eq("automation_id", auto.id)
+          .order("step_order", { ascending: true });
+
+        flowsWithSteps.push({
+          id: auto.id,
+          name: auto.name,
+          trigger_type: auto.trigger_type as AutomationFlow["trigger_type"],
+          keywords: auto.keywords || [],
+          active: auto.active,
+          created_at: auto.created_at,
+          steps: (steps || []).map((s) => ({
+            id: s.id,
+            type: s.step_type as FlowStep["type"],
+            message: s.message || "",
+            delay_seconds: s.delay_seconds || 5,
+          })),
+        });
+      }
+      setFlows(flowsWithSteps);
+    } catch (e) {
+      console.error("Error loading automations:", e);
+      toast.error("Erro ao carregar automações");
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => { loadFlows(); }, [loadFlows]);
 
   const createNewFlow = () => {
-    const newFlow: AutomationFlow = {
+    setEditingFlow({
       id: crypto.randomUUID(),
       name: "",
       trigger_type: "comment_keyword",
@@ -55,59 +105,110 @@ export function InstagramAutomations() {
       ],
       active: true,
       created_at: new Date().toISOString(),
-    };
-    setEditingFlow(newFlow);
-  };
-
-  const saveFlow = () => {
-    if (!editingFlow) return;
-    if (!editingFlow.name.trim()) {
-      toast.error("Dê um nome ao fluxo");
-      return;
-    }
-    const hasEmptyStep = editingFlow.steps.some(
-      (s) => s.type !== "delay" && !s.message.trim()
-    );
-    if (hasEmptyStep) {
-      toast.error("Preencha todas as mensagens do fluxo");
-      return;
-    }
-
-    setFlows((prev) => {
-      const exists = prev.find((f) => f.id === editingFlow.id);
-      if (exists) return prev.map((f) => (f.id === editingFlow.id ? editingFlow : f));
-      return [...prev, editingFlow];
     });
-    setEditingFlow(null);
-    toast.success("Fluxo salvo com sucesso!");
   };
 
-  const deleteFlow = (id: string) => {
+  const saveFlow = async () => {
+    if (!editingFlow || !user) return;
+    if (!editingFlow.name.trim()) { toast.error("Dê um nome ao fluxo"); return; }
+    const hasEmptyStep = editingFlow.steps.some((s) => s.type !== "delay" && !s.message.trim());
+    if (hasEmptyStep) { toast.error("Preencha todas as mensagens do fluxo"); return; }
+
+    setSaving(true);
+    try {
+      const exists = flows.find((f) => f.id === editingFlow.id);
+
+      if (exists) {
+        await supabase.from("instagram_automations").update({
+          name: editingFlow.name,
+          trigger_type: editingFlow.trigger_type,
+          keywords: editingFlow.keywords,
+          active: editingFlow.active,
+        }).eq("id", editingFlow.id);
+
+        // Delete old steps and re-insert
+        await supabase.from("instagram_automation_steps").delete().eq("automation_id", editingFlow.id);
+      } else {
+        await supabase.from("instagram_automations").insert({
+          id: editingFlow.id,
+          user_id: user.id,
+          name: editingFlow.name,
+          trigger_type: editingFlow.trigger_type,
+          keywords: editingFlow.keywords,
+          active: editingFlow.active,
+        });
+      }
+
+      // Insert steps
+      if (editingFlow.steps.length > 0) {
+        await supabase.from("instagram_automation_steps").insert(
+          editingFlow.steps.map((s, idx) => ({
+            automation_id: editingFlow.id,
+            step_order: idx,
+            step_type: s.type,
+            message: s.message,
+            delay_seconds: s.delay_seconds || 5,
+          }))
+        );
+      }
+
+      setEditingFlow(null);
+      toast.success("Fluxo salvo com sucesso!");
+      await loadFlows();
+    } catch (e) {
+      console.error("Error saving flow:", e);
+      toast.error("Erro ao salvar fluxo");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteFlow = async (id: string) => {
+    await supabase.from("instagram_automations").delete().eq("id", id);
     setFlows((prev) => prev.filter((f) => f.id !== id));
     toast.success("Fluxo removido");
   };
 
-  const duplicateFlow = (flow: AutomationFlow) => {
-    const clone: AutomationFlow = {
-      ...flow,
-      id: crypto.randomUUID(),
+  const duplicateFlow = async (flow: AutomationFlow) => {
+    if (!user) return;
+    const newId = crypto.randomUUID();
+    await supabase.from("instagram_automations").insert({
+      id: newId,
+      user_id: user.id,
       name: `${flow.name} (cópia)`,
-      steps: flow.steps.map((s) => ({ ...s, id: crypto.randomUUID() })),
-      created_at: new Date().toISOString(),
-    };
-    setFlows((prev) => [...prev, clone]);
+      trigger_type: flow.trigger_type,
+      keywords: flow.keywords,
+      active: false,
+    });
+    if (flow.steps.length > 0) {
+      await supabase.from("instagram_automation_steps").insert(
+        flow.steps.map((s, idx) => ({
+          automation_id: newId,
+          step_order: idx,
+          step_type: s.type,
+          message: s.message,
+          delay_seconds: s.delay_seconds || 5,
+        }))
+      );
+    }
     toast.success("Fluxo duplicado");
+    await loadFlows();
+  };
+
+  const toggleFlow = async (id: string, active: boolean) => {
+    await supabase.from("instagram_automations").update({ active }).eq("id", id);
+    setFlows((prev) => prev.map((f) => (f.id === id ? { ...f, active } : f)));
   };
 
   const addStep = (type: FlowStep["type"]) => {
     if (!editingFlow) return;
-    const newStep: FlowStep = {
-      id: crypto.randomUUID(),
-      type,
-      message: "",
-      ...(type === "delay" ? { delay_seconds: 5 } : {}),
-    };
-    setEditingFlow({ ...editingFlow, steps: [...editingFlow.steps, newStep] });
+    setEditingFlow({
+      ...editingFlow,
+      steps: [...editingFlow.steps, {
+        id: crypto.randomUUID(), type, message: "",
+        ...(type === "delay" ? { delay_seconds: 5 } : {}),
+      }],
+    });
   };
 
   const updateStep = (stepId: string, data: Partial<FlowStep>) => {
@@ -120,10 +221,7 @@ export function InstagramAutomations() {
 
   const removeStep = (stepId: string) => {
     if (!editingFlow) return;
-    setEditingFlow({
-      ...editingFlow,
-      steps: editingFlow.steps.filter((s) => s.id !== stepId),
-    });
+    setEditingFlow({ ...editingFlow, steps: editingFlow.steps.filter((s) => s.id !== stepId) });
   };
 
   const moveStep = (stepId: string, direction: "up" | "down") => {
@@ -146,27 +244,20 @@ export function InstagramAutomations() {
           </h2>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => setEditingFlow(null)}>Cancelar</Button>
-            <Button onClick={saveFlow} className="gap-1.5">
-              <Sparkles size={14} /> Salvar Fluxo
+            <Button onClick={saveFlow} disabled={saving} className="gap-1.5">
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Salvar Fluxo
             </Button>
           </div>
         </div>
 
-        {/* Flow name */}
-        <Card>
-          <CardContent className="pt-5 space-y-4">
-            <div className="space-y-2">
-              <Label>Nome do fluxo</Label>
-              <Input
-                placeholder="Ex: Promoção Black Friday"
-                value={editingFlow.name}
-                onChange={(e) => setEditingFlow({ ...editingFlow, name: e.target.value })}
-              />
-            </div>
-          </CardContent>
-        </Card>
+        <Card><CardContent className="pt-5 space-y-4">
+          <div className="space-y-2">
+            <Label>Nome do fluxo</Label>
+            <Input placeholder="Ex: Promoção Black Friday" value={editingFlow.name}
+              onChange={(e) => setEditingFlow({ ...editingFlow, name: e.target.value })} />
+          </div>
+        </CardContent></Card>
 
-        {/* Trigger */}
         <Card className="border-pink-500/20">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
@@ -179,12 +270,8 @@ export function InstagramAutomations() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label>Tipo de gatilho</Label>
-              <Select
-                value={editingFlow.trigger_type}
-                onValueChange={(v: AutomationFlow["trigger_type"]) =>
-                  setEditingFlow({ ...editingFlow, trigger_type: v })
-                }
-              >
+              <Select value={editingFlow.trigger_type}
+                onValueChange={(v: AutomationFlow["trigger_type"]) => setEditingFlow({ ...editingFlow, trigger_type: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="comment_keyword">Comentário com palavra-chave</SelectItem>
@@ -193,20 +280,14 @@ export function InstagramAutomations() {
                 </SelectContent>
               </Select>
             </div>
-
             {editingFlow.trigger_type === "comment_keyword" && (
               <div className="space-y-2">
                 <Label>Palavras-chave (separadas por vírgula)</Label>
-                <Input
-                  placeholder="Ex: preço, quero, link, promoção"
-                  value={editingFlow.keywords.join(", ")}
-                  onChange={(e) =>
-                    setEditingFlow({
-                      ...editingFlow,
-                      keywords: e.target.value.split(",").map((k) => k.trim()).filter(Boolean),
-                    })
-                  }
-                />
+                <Input placeholder="Ex: preço, quero, link, promoção" value={editingFlow.keywords.join(", ")}
+                  onChange={(e) => setEditingFlow({
+                    ...editingFlow,
+                    keywords: e.target.value.split(",").map((k) => k.trim()).filter(Boolean),
+                  })} />
                 <div className="flex flex-wrap gap-1.5 mt-1">
                   {editingFlow.keywords.map((kw, i) => (
                     <Badge key={i} variant="secondary" className="text-xs">{kw}</Badge>
@@ -217,12 +298,8 @@ export function InstagramAutomations() {
           </CardContent>
         </Card>
 
-        {/* Steps */}
         <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-            Etapas do Fluxo
-          </h3>
-
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Etapas do Fluxo</h3>
           {editingFlow.steps.map((step, idx) => {
             const config = STEP_CONFIG[step.type];
             const Icon = config.icon;
@@ -255,33 +332,21 @@ export function InstagramAutomations() {
                         </Button>
                       </div>
                     </div>
-
                     {step.type === "delay" ? (
                       <div className="space-y-2">
                         <Label>Tempo de espera (segundos)</Label>
-                        <Input
-                          type="number"
-                          min={1}
-                          value={step.delay_seconds || 5}
-                          onChange={(e) => updateStep(step.id, { delay_seconds: Number(e.target.value) })}
-                          className="max-w-[140px]"
-                        />
+                        <Input type="number" min={1} value={step.delay_seconds || 5}
+                          onChange={(e) => updateStep(step.id, { delay_seconds: Number(e.target.value) })} className="max-w-[140px]" />
                       </div>
                     ) : (
                       <div className="space-y-2">
-                        <Label>
-                          {step.type === "reply_comment" ? "Resposta ao comentário" : "Mensagem no Direct"}
-                        </Label>
+                        <Label>{step.type === "reply_comment" ? "Resposta ao comentário" : "Mensagem no Direct"}</Label>
                         <Textarea
-                          placeholder={
-                            step.type === "reply_comment"
-                              ? "Ex: Obrigado pelo comentário! 🙌 Te mandei uma mensagem no direct..."
-                              : "Ex: Oi {{nome}}! Vi seu comentário e separei algo especial pra você 🎁"
-                          }
+                          placeholder={step.type === "reply_comment"
+                            ? "Ex: Obrigado pelo comentário! 🙌 Te mandei uma mensagem no direct..."
+                            : "Ex: Oi {{nome}}! Vi seu comentário e separei algo especial pra você 🎁"}
                           value={step.message}
-                          onChange={(e) => updateStep(step.id, { message: e.target.value })}
-                          rows={3}
-                        />
+                          onChange={(e) => updateStep(step.id, { message: e.target.value })} rows={3} />
                         <p className="text-[11px] text-muted-foreground">
                           Variáveis: {"{{nome}}"} (nome do usuário), {"{{comentario}}"} (texto do comentário)
                         </p>
@@ -294,7 +359,6 @@ export function InstagramAutomations() {
           })}
         </div>
 
-        {/* Add step buttons */}
         <div className="flex items-center gap-2 pt-2">
           <span className="text-xs text-muted-foreground">Adicionar etapa:</span>
           <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => addStep("reply_comment")}>
@@ -312,14 +376,20 @@ export function InstagramAutomations() {
   }
 
   // --- LIST VIEW ---
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold">Fluxos do Instagram</h2>
-          <p className="text-sm text-muted-foreground">
-            Crie fluxos automáticos: comentário → resposta → DM
-          </p>
+          <p className="text-sm text-muted-foreground">Crie fluxos automáticos: comentário → resposta → DM</p>
         </div>
         <Button onClick={createNewFlow} className="gap-2 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600">
           <Plus className="h-4 w-4" /> Novo Fluxo
@@ -357,39 +427,21 @@ export function InstagramAutomations() {
                         <Badge variant="outline" className="text-[10px]">
                           {flow.trigger_type === "comment_keyword"
                             ? `Palavra-chave: ${flow.keywords.join(", ")}`
-                            : flow.trigger_type === "any_comment"
-                            ? "Qualquer comentário"
-                            : "Menção no Story"}
+                            : flow.trigger_type === "any_comment" ? "Qualquer comentário" : "Menção no Story"}
                         </Badge>
-                        <Badge variant="secondary" className="text-[10px]">
-                          {flow.steps.length} etapas
-                        </Badge>
+                        <Badge variant="secondary" className="text-[10px]">{flow.steps.length} etapas</Badge>
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <Switch
-                      checked={flow.active}
-                      onCheckedChange={(checked) =>
-                        setFlows((prev) => prev.map((f) => (f.id === flow.id ? { ...f, active: checked } : f)))
-                      }
-                    />
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setExpandedFlow(expandedFlow === flow.id ? null : flow.id)} title="Ver etapas">
-                      <Eye size={14} />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditingFlow({ ...flow })} title="Editar">
-                      <Pencil size={14} />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => duplicateFlow(flow)} title="Duplicar">
-                      <Copy size={14} />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteFlow(flow.id)} title="Excluir">
-                      <Trash2 size={14} />
-                    </Button>
+                    <Switch checked={flow.active} onCheckedChange={(checked) => toggleFlow(flow.id, checked)} />
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setExpandedFlow(expandedFlow === flow.id ? null : flow.id)}><Eye size={14} /></Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditingFlow({ ...flow })}><Pencil size={14} /></Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => duplicateFlow(flow)}><Copy size={14} /></Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteFlow(flow.id)}><Trash2 size={14} /></Button>
                   </div>
                 </div>
 
-                {/* Expanded steps preview */}
                 {expandedFlow === flow.id && (
                   <div className="mt-4 pt-4 border-t space-y-2">
                     {flow.steps.map((step, idx) => {
@@ -401,9 +453,7 @@ export function InstagramAutomations() {
                             <div className={`w-7 h-7 rounded-md ${config.bg} flex items-center justify-center`}>
                               <Icon size={13} className={config.color} />
                             </div>
-                            {idx < flow.steps.length - 1 && (
-                              <div className="w-px h-4 bg-border mt-1" />
-                            )}
+                            {idx < flow.steps.length - 1 && <div className="w-px h-4 bg-border mt-1" />}
                           </div>
                           <div className="text-sm">
                             <span className="font-medium">{config.label}</span>
