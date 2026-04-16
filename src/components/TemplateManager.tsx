@@ -11,7 +11,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, FileText, Save, RefreshCw, ChevronDown } from "lucide-react";
+import { Plus, Pencil, Trash2, FileText, Save, RefreshCw, ChevronDown, Send, CheckCircle2, Clock, XCircle } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 import { useUserTemplates } from "@/hooks/use-user-templates";
@@ -65,6 +65,15 @@ export function TemplateManager() {
     },
   });
 
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: ["user-templates"] });
+    queryClient.invalidateQueries({ queryKey: ["managed-templates"] });
+    queryClient.invalidateQueries({ queryKey: ["account-templates"] });
+    queryClient.invalidateQueries({ queryKey: ["chat-templates"] });
+    queryClient.invalidateQueries({ queryKey: ["broadcast-templates"] });
+    queryClient.invalidateQueries({ queryKey: ["flow-templates"] });
+  };
+
   const syncMutation = useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase.functions.invoke("whatsapp-sync-templates", {
@@ -73,21 +82,52 @@ export function TemplateManager() {
       if (error) throw new Error(error.message || "Erro ao sincronizar");
       return data;
     },
-    onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ["managed-templates"] });
-      queryClient.invalidateQueries({ queryKey: ["account-templates"] });
-      queryClient.invalidateQueries({ queryKey: ["chat-templates"] });
-      queryClient.invalidateQueries({ queryKey: ["broadcast-templates"] });
+    onSuccess: async (data: any) => {
+      // Force immediate refetch instead of just invalidating
+      await queryClient.refetchQueries({ queryKey: ["user-templates"] });
+      await queryClient.refetchQueries({ queryKey: ["account-templates"] });
+      invalidateAll();
       const results = data?.results || [];
       const totalSynced = results.reduce((sum: number, r: any) => sum + (r.synced || 0), 0);
       const errors = results.filter((r: any) => r.error);
       if (errors.length > 0) {
         toast.warning(`Sincronizado ${totalSynced} templates. ${errors.length} conta(s) com erro.`);
       } else {
-        toast.success(`${totalSynced} templates sincronizados com sucesso!`);
+        toast.success(`${totalSynced} templates sincronizados em tempo real!`);
       }
     },
     onError: (err: any) => toast.error(`Erro ao sincronizar: ${err.message}`),
+  });
+
+  const submitToMetaMutation = useMutation({
+    mutationFn: async (template: Template) => {
+      const linkedAccountIds = (accountTemplates || [])
+        .filter((at) => at.template_id === template.id)
+        .map((at) => at.account_id);
+      const accountId = linkedAccountIds[0] || accounts[0]?.id;
+      if (!accountId) throw new Error("Vincule uma conta WhatsApp ao template antes de enviar.");
+
+      const { data, error } = await supabase.functions.invoke("whatsapp-create-template", {
+        body: {
+          template_id: template.id,
+          account_id: accountId,
+          name: template.template_name || template.name,
+          language: template.template_language || "pt_BR",
+          category: (template.category || "marketing").toUpperCase(),
+          content: template.content,
+        },
+      });
+      if (error) throw new Error(error.message || "Erro ao enviar para Meta");
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: async (data: any) => {
+      await queryClient.refetchQueries({ queryKey: ["user-templates"] });
+      toast.success(`Template enviado para Meta! Status: ${data.status}`);
+      // Auto-sync after 3s to fetch latest status
+      setTimeout(() => syncMutation.mutate(), 3000);
+    },
+    onError: (err: any) => toast.error(`Erro Meta: ${err.message}`),
   });
 
   const saveMutation = useMutation({
@@ -120,12 +160,8 @@ export function TemplateManager() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["managed-templates"] });
-      queryClient.invalidateQueries({ queryKey: ["account-templates"] });
-      queryClient.invalidateQueries({ queryKey: ["chat-templates"] });
-      queryClient.invalidateQueries({ queryKey: ["broadcast-templates"] });
-      queryClient.invalidateQueries({ queryKey: ["flow-templates"] });
-      toast.success(editingId ? "Template atualizado!" : "Template criado!");
+      invalidateAll();
+      toast.success(editingId ? "Template atualizado!" : "Template criado localmente! Clique em 'Enviar p/ Meta' para aprovação.");
       closeDialog();
     },
     onError: (err: any) => toast.error(err.message),
@@ -137,9 +173,7 @@ export function TemplateManager() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["managed-templates"] });
-      queryClient.invalidateQueries({ queryKey: ["account-templates"] });
-      queryClient.invalidateQueries({ queryKey: ["chat-templates"] });
+      invalidateAll();
       toast.success("Template removido.");
     },
     onError: (err: any) => toast.error(err.message),
@@ -182,7 +216,18 @@ export function TemplateManager() {
   const getStatusBadge = (status: string | null | undefined) => {
     const s = status || "unknown";
     const config = metaStatusConfig[s] || metaStatusConfig.unknown;
-    return <Badge variant={config.variant} className="text-[10px]">{config.label}</Badge>;
+    const Icon = s === "APPROVED" ? CheckCircle2 : s === "PENDING" ? Clock : s === "REJECTED" ? XCircle : null;
+    return (
+      <Badge variant={config.variant} className="text-[10px] gap-1">
+        {Icon && <Icon size={10} />}
+        {config.label}
+      </Badge>
+    );
+  };
+
+  const canSubmitToMeta = (t: Template) => {
+    const status = t.meta_status || "unknown";
+    return status === "unknown" || status === "REJECTED";
   };
 
   return (
@@ -251,6 +296,19 @@ export function TemplateManager() {
                         <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{t.content}</p>
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
+                        {canSubmitToMeta(t) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 gap-1"
+                            onClick={() => submitToMetaMutation.mutate(t)}
+                            disabled={submitToMetaMutation.isPending}
+                            title="Enviar para aprovação da Meta"
+                          >
+                            <Send size={12} />
+                            <span className="text-xs">Enviar p/ Meta</span>
+                          </Button>
+                        )}
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(t)}>
                           <Pencil size={13} />
                         </Button>
