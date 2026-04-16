@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -48,6 +49,7 @@ const metaStatusConfig: Record<string, { label: string; variant: "default" | "se
 
 export function TemplateManager() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const { accounts } = useWhatsAppAccounts();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -132,6 +134,7 @@ export function TemplateManager() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      if (!user) throw new Error("Usuário não autenticado.");
       if (!form.name.trim() || !form.content.trim()) throw new Error("Nome e conteúdo são obrigatórios.");
       const payload = {
         name: form.name.trim(),
@@ -140,6 +143,7 @@ export function TemplateManager() {
         template_language: form.template_language.trim() || "pt_BR",
         category: form.category.trim() || "geral",
         template_params: form.template_params.length > 0 ? form.template_params : [],
+        user_id: user.id,
       };
       let templateId = editingId;
       if (editingId) {
