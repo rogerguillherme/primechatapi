@@ -296,6 +296,19 @@ export function TemplateManager() {
                         <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{t.content}</p>
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
+                        {canSubmitToMeta(t) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 gap-1"
+                            onClick={() => submitToMetaMutation.mutate(t)}
+                            disabled={submitToMetaMutation.isPending}
+                            title="Enviar para aprovação da Meta"
+                          >
+                            <Send size={12} />
+                            <span className="text-xs">Enviar p/ Meta</span>
+                          </Button>
+                        )}
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(t)}>
                           <Pencil size={13} />
                         </Button>
