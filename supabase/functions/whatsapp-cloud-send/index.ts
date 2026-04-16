@@ -42,6 +42,55 @@ async function getAccountCredentials(supabase: any, accountId?: string) {
   throw new Error("No WhatsApp account configured");
 }
 
+async function getTemplateRecord(supabase: any, templateName: string, accountId?: string) {
+  const { data: templates, error } = await supabase
+    .from("chat_templates")
+    .select("id, template_name, template_language, template_params, content, meta_status, updated_at")
+    .eq("template_name", templateName)
+    .order("updated_at", { ascending: false });
+
+  if (error) {
+    throw new Error(`Failed to fetch template metadata: ${error.message}`);
+  }
+
+  if (!templates || templates.length === 0) {
+    return { template: null, hasExplicitLinks: false };
+  }
+
+  const templateIds = templates.map((template: any) => template.id);
+  const { data: links, error: linkError } = await supabase
+    .from("account_templates")
+    .select("account_id, template_id")
+    .in("template_id", templateIds);
+
+  if (linkError) {
+    throw new Error(`Failed to fetch template links: ${linkError.message}`);
+  }
+
+  const templateLinks = links || [];
+  const globalTemplate = templates.find(
+    (template: any) => !templateLinks.some((link: any) => link.template_id === template.id),
+  );
+
+  if (accountId) {
+    const linkedTemplate = templates.find((template: any) =>
+      templateLinks.some((link: any) => link.template_id === template.id && link.account_id === accountId),
+    );
+
+    if (linkedTemplate) {
+      return { template: linkedTemplate, hasExplicitLinks: true };
+    }
+
+    if (globalTemplate) {
+      return { template: globalTemplate, hasExplicitLinks: false };
+    }
+
+    return { template: null, hasExplicitLinks: templateLinks.length > 0 };
+  }
+
+  return { template: globalTemplate || templates[0], hasExplicitLinks: templateLinks.length > 0 };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -67,27 +116,40 @@ Deno.serve(async (req) => {
     const apiUrl = `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`;
 
     let body: any;
+    let templateRecord: any = null;
 
     if (template_name) {
-      // If no template_params provided, try to fetch from DB
+      const templateLookup = await getTemplateRecord(supabase, template_name, account_id);
+      templateRecord = templateLookup.template;
+
+      if (!templateRecord) {
+        const errorMessage = account_id && templateLookup.hasExplicitLinks
+          ? `Template "${template_name}" não está vinculado à conta selecionada.`
+          : `Template "${template_name}" não foi encontrado para envio.`;
+
+        return new Response(
+          JSON.stringify({ error: errorMessage }),
+          { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      if (templateRecord.meta_status && templateRecord.meta_status !== "APPROVED" && templateRecord.meta_status !== "unknown") {
+        return new Response(
+          JSON.stringify({ error: `Template "${template_name}" ainda não está aprovado (${templateRecord.meta_status}). Aguarde a aprovação para enviar.` }),
+          { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
       let finalParams = template_params;
-      let resolvedLanguage = template_language;
+      let resolvedLanguage = template_language || templateRecord.template_language;
       if (!finalParams || !Array.isArray(finalParams) || finalParams.length === 0) {
-        const { data: tmpl } = await supabase
-          .from("chat_templates")
-          .select("template_params, template_language")
-          .eq("template_name", template_name)
-          .maybeSingle();
-        if (tmpl?.template_language && !resolvedLanguage) {
-          resolvedLanguage = tmpl.template_language;
-        }
-        if (tmpl?.template_params && Array.isArray(tmpl.template_params) && tmpl.template_params.length > 0) {
+        if (templateRecord.template_params && Array.isArray(templateRecord.template_params) && templateRecord.template_params.length > 0) {
           // Resolve placeholders with lead info
           const { data: leadData } = lead_id
             ? await supabase.from("leads").select("name").eq("id", lead_id).maybeSingle()
             : { data: null };
           const leadName = leadData?.name || "";
-          finalParams = (tmpl.template_params as any[]).map((p: any) => {
+          finalParams = (templateRecord.template_params as any[]).map((p: any) => {
             const text = typeof p === "string" ? p : p?.text || "";
             return {
               type: "text",
@@ -211,13 +273,7 @@ Deno.serve(async (req) => {
       const activityAt = new Date().toISOString();
       let contentText = message || "";
       if (template_name) {
-        // Try to get the real template content from DB
-        const { data: tmplRecord } = await supabase
-          .from("chat_templates")
-          .select("content")
-          .eq("template_name", template_name)
-          .maybeSingle();
-        contentText = tmplRecord?.content || `📋 Template: ${template_name}`;
+        contentText = templateRecord?.content || `📋 Template: ${template_name}`;
       } else if (interactive_buttons) {
         contentText = `🔘 ${message || "Mensagem com botões"}`;
       } else if (cta_url) {
