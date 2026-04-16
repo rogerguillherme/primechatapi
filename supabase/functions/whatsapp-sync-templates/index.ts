@@ -116,10 +116,11 @@ Deno.serve(async (req) => {
             text: `{{${i + 1}}}`,
           }));
 
-          // Upsert template by template_name + language
+          // Upsert template by template_name + language scoped to the authenticated user
           const { data: existing } = await supabase
             .from("chat_templates")
             .select("id")
+            .eq("user_id", user.id)
             .eq("template_name", mt.name)
             .eq("template_language", mt.language)
             .maybeSingle();
@@ -134,8 +135,9 @@ Deno.serve(async (req) => {
             await supabase
               .from("chat_templates")
               .update({
+                user_id: user.id,
                 meta_status: mt.status,
-                content: bodyText || existing.id ? undefined : ".",
+                content: bodyText || undefined,
                 category: categoryMap[mt.category] || "geral",
               })
               .eq("id", existing.id);
@@ -172,15 +174,16 @@ Deno.serve(async (req) => {
             // Create new template
             const { data: newTmpl, error: insertErr } = await supabase
               .from("chat_templates")
-              .insert({
-                name: mt.name,
-                content: bodyText || ".",
-                template_name: mt.name,
-                template_language: mt.language,
-                template_params: defaultParams,
-                category: categoryMap[mt.category] || "geral",
-                meta_status: mt.status,
-              })
+                .insert({
+                  name: mt.name,
+                  content: bodyText || ".",
+                  template_name: mt.name,
+                  template_language: mt.language,
+                  template_params: defaultParams,
+                  category: categoryMap[mt.category] || "geral",
+                  meta_status: mt.status,
+                  user_id: user.id,
+                })
               .select("id")
               .single();
 
