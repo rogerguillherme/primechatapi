@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,163 +7,417 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Zap, MessageSquare, Clock, Trash2, Instagram } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Plus, Zap, MessageSquare, Clock, Trash2, Instagram, Send, MessageCircle,
+  ArrowRight, Eye, Pencil, Copy, ToggleLeft, ChevronDown, ChevronUp, Sparkles,
+} from "lucide-react";
 import { toast } from "sonner";
 
-interface Automation {
+interface FlowStep {
   id: string;
-  name: string;
-  trigger: string;
-  response: string;
-  active: boolean;
-  delay_seconds: number;
+  type: "reply_comment" | "send_dm" | "delay";
+  message: string;
+  delay_seconds?: number;
 }
 
-export function InstagramAutomations() {
-  const [automations, setAutomations] = useState<Automation[]>([]);
-  const [showForm, setShowForm] = useState(false);
-  const [name, setName] = useState("");
-  const [trigger, setTrigger] = useState("keyword");
-  const [keyword, setKeyword] = useState("");
-  const [response, setResponse] = useState("");
-  const [delay, setDelay] = useState(0);
+interface AutomationFlow {
+  id: string;
+  name: string;
+  trigger_type: "comment_keyword" | "any_comment" | "story_mention";
+  keywords: string[];
+  steps: FlowStep[];
+  active: boolean;
+  created_at: string;
+}
 
-  const handleCreate = () => {
-    if (!name || !response) {
-      toast.error("Preencha todos os campos obrigatórios");
-      return;
-    }
-    const newAutomation: Automation = {
+const STEP_CONFIG = {
+  reply_comment: { icon: MessageCircle, label: "Responder Comentário", color: "text-green-500", bg: "bg-green-500/10" },
+  send_dm: { icon: Send, label: "Enviar Direct", color: "text-blue-500", bg: "bg-blue-500/10" },
+  delay: { icon: Clock, label: "Aguardar", color: "text-yellow-500", bg: "bg-yellow-500/10" },
+};
+
+export function InstagramAutomations() {
+  const [flows, setFlows] = useState<AutomationFlow[]>([]);
+  const [editingFlow, setEditingFlow] = useState<AutomationFlow | null>(null);
+  const [expandedFlow, setExpandedFlow] = useState<string | null>(null);
+
+  const createNewFlow = () => {
+    const newFlow: AutomationFlow = {
       id: crypto.randomUUID(),
-      name,
-      trigger: trigger === "keyword" ? `Palavra-chave: ${keyword}` : trigger === "story_reply" ? "Resposta ao Story" : "Nova mensagem",
-      response,
+      name: "",
+      trigger_type: "comment_keyword",
+      keywords: [],
+      steps: [
+        { id: crypto.randomUUID(), type: "reply_comment", message: "" },
+        { id: crypto.randomUUID(), type: "delay", message: "", delay_seconds: 5 },
+        { id: crypto.randomUUID(), type: "send_dm", message: "" },
+      ],
       active: true,
-      delay_seconds: delay,
+      created_at: new Date().toISOString(),
     };
-    setAutomations([...automations, newAutomation]);
-    setShowForm(false);
-    setName("");
-    setKeyword("");
-    setResponse("");
-    setDelay(0);
-    toast.success("Automação criada!");
+    setEditingFlow(newFlow);
   };
 
+  const saveFlow = () => {
+    if (!editingFlow) return;
+    if (!editingFlow.name.trim()) {
+      toast.error("Dê um nome ao fluxo");
+      return;
+    }
+    const hasEmptyStep = editingFlow.steps.some(
+      (s) => s.type !== "delay" && !s.message.trim()
+    );
+    if (hasEmptyStep) {
+      toast.error("Preencha todas as mensagens do fluxo");
+      return;
+    }
+
+    setFlows((prev) => {
+      const exists = prev.find((f) => f.id === editingFlow.id);
+      if (exists) return prev.map((f) => (f.id === editingFlow.id ? editingFlow : f));
+      return [...prev, editingFlow];
+    });
+    setEditingFlow(null);
+    toast.success("Fluxo salvo com sucesso!");
+  };
+
+  const deleteFlow = (id: string) => {
+    setFlows((prev) => prev.filter((f) => f.id !== id));
+    toast.success("Fluxo removido");
+  };
+
+  const duplicateFlow = (flow: AutomationFlow) => {
+    const clone: AutomationFlow = {
+      ...flow,
+      id: crypto.randomUUID(),
+      name: `${flow.name} (cópia)`,
+      steps: flow.steps.map((s) => ({ ...s, id: crypto.randomUUID() })),
+      created_at: new Date().toISOString(),
+    };
+    setFlows((prev) => [...prev, clone]);
+    toast.success("Fluxo duplicado");
+  };
+
+  const addStep = (type: FlowStep["type"]) => {
+    if (!editingFlow) return;
+    const newStep: FlowStep = {
+      id: crypto.randomUUID(),
+      type,
+      message: "",
+      ...(type === "delay" ? { delay_seconds: 5 } : {}),
+    };
+    setEditingFlow({ ...editingFlow, steps: [...editingFlow.steps, newStep] });
+  };
+
+  const updateStep = (stepId: string, data: Partial<FlowStep>) => {
+    if (!editingFlow) return;
+    setEditingFlow({
+      ...editingFlow,
+      steps: editingFlow.steps.map((s) => (s.id === stepId ? { ...s, ...data } : s)),
+    });
+  };
+
+  const removeStep = (stepId: string) => {
+    if (!editingFlow) return;
+    setEditingFlow({
+      ...editingFlow,
+      steps: editingFlow.steps.filter((s) => s.id !== stepId),
+    });
+  };
+
+  const moveStep = (stepId: string, direction: "up" | "down") => {
+    if (!editingFlow) return;
+    const idx = editingFlow.steps.findIndex((s) => s.id === stepId);
+    if ((direction === "up" && idx === 0) || (direction === "down" && idx === editingFlow.steps.length - 1)) return;
+    const newSteps = [...editingFlow.steps];
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    [newSteps[idx], newSteps[swapIdx]] = [newSteps[swapIdx], newSteps[idx]];
+    setEditingFlow({ ...editingFlow, steps: newSteps });
+  };
+
+  // --- EDITOR VIEW ---
+  if (editingFlow) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-bold">
+            {flows.find((f) => f.id === editingFlow.id) ? "Editar Fluxo" : "Novo Fluxo"}
+          </h2>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setEditingFlow(null)}>Cancelar</Button>
+            <Button onClick={saveFlow} className="gap-1.5">
+              <Sparkles size={14} /> Salvar Fluxo
+            </Button>
+          </div>
+        </div>
+
+        {/* Flow name */}
+        <Card>
+          <CardContent className="pt-5 space-y-4">
+            <div className="space-y-2">
+              <Label>Nome do fluxo</Label>
+              <Input
+                placeholder="Ex: Promoção Black Friday"
+                value={editingFlow.name}
+                onChange={(e) => setEditingFlow({ ...editingFlow, name: e.target.value })}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Trigger */}
+        <Card className="border-pink-500/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-pink-500/10 flex items-center justify-center">
+                <Instagram size={16} className="text-pink-500" />
+              </div>
+              Gatilho — Quando acontecer...
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Tipo de gatilho</Label>
+              <Select
+                value={editingFlow.trigger_type}
+                onValueChange={(v: AutomationFlow["trigger_type"]) =>
+                  setEditingFlow({ ...editingFlow, trigger_type: v })
+                }
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="comment_keyword">Comentário com palavra-chave</SelectItem>
+                  <SelectItem value="any_comment">Qualquer comentário</SelectItem>
+                  <SelectItem value="story_mention">Menção no Story</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {editingFlow.trigger_type === "comment_keyword" && (
+              <div className="space-y-2">
+                <Label>Palavras-chave (separadas por vírgula)</Label>
+                <Input
+                  placeholder="Ex: preço, quero, link, promoção"
+                  value={editingFlow.keywords.join(", ")}
+                  onChange={(e) =>
+                    setEditingFlow({
+                      ...editingFlow,
+                      keywords: e.target.value.split(",").map((k) => k.trim()).filter(Boolean),
+                    })
+                  }
+                />
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {editingFlow.keywords.map((kw, i) => (
+                    <Badge key={i} variant="secondary" className="text-xs">{kw}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Steps */}
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+            Etapas do Fluxo
+          </h3>
+
+          {editingFlow.steps.map((step, idx) => {
+            const config = STEP_CONFIG[step.type];
+            const Icon = config.icon;
+            return (
+              <div key={step.id}>
+                {idx > 0 && (
+                  <div className="flex justify-center py-1">
+                    <ArrowRight size={16} className="text-muted-foreground/40 rotate-90" />
+                  </div>
+                )}
+                <Card className="border-l-4" style={{ borderLeftColor: step.type === "reply_comment" ? "#22c55e" : step.type === "send_dm" ? "#3b82f6" : "#eab308" }}>
+                  <CardContent className="pt-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-8 h-8 rounded-lg ${config.bg} flex items-center justify-center`}>
+                          <Icon size={16} className={config.color} />
+                        </div>
+                        <span className="text-sm font-medium">{config.label}</span>
+                        <Badge variant="outline" className="text-[10px]">Etapa {idx + 1}</Badge>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => moveStep(step.id, "up")} disabled={idx === 0}>
+                          <ChevronUp size={14} />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => moveStep(step.id, "down")} disabled={idx === editingFlow.steps.length - 1}>
+                          <ChevronDown size={14} />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeStep(step.id)}>
+                          <Trash2 size={14} />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {step.type === "delay" ? (
+                      <div className="space-y-2">
+                        <Label>Tempo de espera (segundos)</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={step.delay_seconds || 5}
+                          onChange={(e) => updateStep(step.id, { delay_seconds: Number(e.target.value) })}
+                          className="max-w-[140px]"
+                        />
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Label>
+                          {step.type === "reply_comment" ? "Resposta ao comentário" : "Mensagem no Direct"}
+                        </Label>
+                        <Textarea
+                          placeholder={
+                            step.type === "reply_comment"
+                              ? "Ex: Obrigado pelo comentário! 🙌 Te mandei uma mensagem no direct..."
+                              : "Ex: Oi {{nome}}! Vi seu comentário e separei algo especial pra você 🎁"
+                          }
+                          value={step.message}
+                          onChange={(e) => updateStep(step.id, { message: e.target.value })}
+                          rows={3}
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                          Variáveis: {"{{nome}}"} (nome do usuário), {"{{comentario}}"} (texto do comentário)
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Add step buttons */}
+        <div className="flex items-center gap-2 pt-2">
+          <span className="text-xs text-muted-foreground">Adicionar etapa:</span>
+          <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => addStep("reply_comment")}>
+            <MessageCircle size={12} /> Responder Comentário
+          </Button>
+          <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => addStep("delay")}>
+            <Clock size={12} /> Delay
+          </Button>
+          <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => addStep("send_dm")}>
+            <Send size={12} /> Enviar DM
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // --- LIST VIEW ---
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold">Automações do Instagram</h2>
+          <h2 className="text-xl font-bold">Fluxos do Instagram</h2>
           <p className="text-sm text-muted-foreground">
-            Configure respostas automáticas para DMs, menções e stories
+            Crie fluxos automáticos: comentário → resposta → DM
           </p>
         </div>
-        <Button onClick={() => setShowForm(!showForm)} className="gap-2">
-          <Plus className="h-4 w-4" /> Nova Automação
+        <Button onClick={createNewFlow} className="gap-2 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600">
+          <Plus className="h-4 w-4" /> Novo Fluxo
         </Button>
       </div>
 
-      {showForm && (
-        <Card className="border-primary/20">
-          <CardHeader>
-            <CardTitle className="text-base">Nova Automação</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Nome da automação</Label>
-                <Input placeholder="Ex: Resposta boas-vindas" value={name} onChange={(e) => setName(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label>Tipo de gatilho</Label>
-                <Select value={trigger} onValueChange={setTrigger}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="keyword">Palavra-chave</SelectItem>
-                    <SelectItem value="story_reply">Resposta ao Story</SelectItem>
-                    <SelectItem value="new_dm">Qualquer nova DM</SelectItem>
-                    <SelectItem value="mention">Menção</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {trigger === "keyword" && (
-              <div className="space-y-2">
-                <Label>Palavra-chave</Label>
-                <Input placeholder="Ex: preço, promoção, link" value={keyword} onChange={(e) => setKeyword(e.target.value)} />
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label>Mensagem de resposta</Label>
-              <Textarea placeholder="Digite a resposta automática..." value={response} onChange={(e) => setResponse(e.target.value)} rows={3} />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Atraso (segundos)</Label>
-              <Input type="number" min={0} value={delay} onChange={(e) => setDelay(Number(e.target.value))} className="max-w-[120px]" />
-            </div>
-
-            <div className="flex gap-2">
-              <Button onClick={handleCreate}>Criar Automação</Button>
-              <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {automations.length === 0 && !showForm ? (
+      {flows.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-16">
-            <Zap className="h-12 w-12 text-muted-foreground/30 mb-4" />
-            <p className="text-lg font-medium text-muted-foreground">Nenhuma automação configurada</p>
-            <p className="text-sm text-muted-foreground mt-1">Crie automações para responder DMs automaticamente</p>
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-pink-500/10 to-purple-500/10 flex items-center justify-center mb-4">
+              <Zap className="h-8 w-8 text-pink-500/40" />
+            </div>
+            <p className="text-lg font-medium text-muted-foreground">Nenhum fluxo criado</p>
+            <p className="text-sm text-muted-foreground mt-1 text-center max-w-sm">
+              Crie um fluxo para responder comentários automaticamente e enviar mensagens no Direct
+            </p>
+            <Button onClick={createNewFlow} variant="outline" className="mt-4 gap-2">
+              <Plus size={14} /> Criar primeiro fluxo
+            </Button>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-3">
-          {automations.map((auto) => (
-            <Card key={auto.id}>
+          {flows.map((flow) => (
+            <Card key={flow.id} className="hover:shadow-md transition-shadow">
               <CardContent className="py-4">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500/10 to-pink-500/10 flex items-center justify-center">
-                      <Instagram className="h-5 w-5 text-purple-500" />
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-pink-500/10 to-purple-500/10 flex items-center justify-center shrink-0">
+                      <Instagram className="h-5 w-5 text-pink-500" />
                     </div>
-                    <div>
-                      <p className="font-medium">{auto.name}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <Badge variant="outline" className="text-xs">{auto.trigger}</Badge>
-                        {auto.delay_seconds > 0 && (
-                          <Badge variant="outline" className="text-xs gap-1">
-                            <Clock className="h-3 w-3" /> {auto.delay_seconds}s
-                          </Badge>
-                        )}
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{flow.name}</p>
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        <Badge variant="outline" className="text-[10px]">
+                          {flow.trigger_type === "comment_keyword"
+                            ? `Palavra-chave: ${flow.keywords.join(", ")}`
+                            : flow.trigger_type === "any_comment"
+                            ? "Qualquer comentário"
+                            : "Menção no Story"}
+                        </Badge>
+                        <Badge variant="secondary" className="text-[10px]">
+                          {flow.steps.length} etapas
+                        </Badge>
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 shrink-0">
                     <Switch
-                      checked={auto.active}
+                      checked={flow.active}
                       onCheckedChange={(checked) =>
-                        setAutomations(automations.map((a) => (a.id === auto.id ? { ...a, active: checked } : a)))
+                        setFlows((prev) => prev.map((f) => (f.id === flow.id ? { ...f, active: checked } : f)))
                       }
                     />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setAutomations(automations.filter((a) => a.id !== auto.id))}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setExpandedFlow(expandedFlow === flow.id ? null : flow.id)} title="Ver etapas">
+                      <Eye size={14} />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditingFlow({ ...flow })} title="Editar">
+                      <Pencil size={14} />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => duplicateFlow(flow)} title="Duplicar">
+                      <Copy size={14} />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteFlow(flow.id)} title="Excluir">
+                      <Trash2 size={14} />
                     </Button>
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground mt-2 pl-[52px]">
-                  <MessageSquare className="h-3 w-3 inline mr-1" />
-                  {auto.response}
-                </p>
+
+                {/* Expanded steps preview */}
+                {expandedFlow === flow.id && (
+                  <div className="mt-4 pt-4 border-t space-y-2">
+                    {flow.steps.map((step, idx) => {
+                      const config = STEP_CONFIG[step.type];
+                      const Icon = config.icon;
+                      return (
+                        <div key={step.id} className="flex items-start gap-3">
+                          <div className="flex flex-col items-center">
+                            <div className={`w-7 h-7 rounded-md ${config.bg} flex items-center justify-center`}>
+                              <Icon size={13} className={config.color} />
+                            </div>
+                            {idx < flow.steps.length - 1 && (
+                              <div className="w-px h-4 bg-border mt-1" />
+                            )}
+                          </div>
+                          <div className="text-sm">
+                            <span className="font-medium">{config.label}</span>
+                            {step.type === "delay" ? (
+                              <span className="text-muted-foreground ml-1">— {step.delay_seconds}s</span>
+                            ) : (
+                              <p className="text-muted-foreground text-xs mt-0.5 line-clamp-2">{step.message}</p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}
