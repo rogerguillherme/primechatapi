@@ -73,6 +73,26 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
 
   const { templates } = useUserTemplates(open);
 
+  const { data: accountTemplates = [] } = useQuery({
+    queryKey: ["account-templates"],
+    queryFn: async () => {
+      const { data } = await supabase.from("account_templates").select("*");
+      return (data || []) as { id: string; account_id: string; template_id: string }[];
+    },
+    enabled: open,
+  });
+
+  const availableTemplates = useMemo(() => {
+    return (templates || []).filter((template: any) => {
+      if (template.meta_status !== "APPROVED") return false;
+
+      const linkedAccounts = accountTemplates.filter((link) => link.template_id === template.id);
+      if (!selectedAccountId || linkedAccounts.length === 0) return true;
+
+      return linkedAccounts.some((link) => link.account_id === selectedAccountId);
+    });
+  }, [templates, accountTemplates, selectedAccountId]);
+
   useEffect(() => {
     if (!open || !lead) return;
     const channel = supabase
@@ -322,7 +342,7 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
             onChange={handleFileSelect}
           />
           <div className="flex items-end gap-1.5">
-            {templates && templates.length > 0 && (
+             {templates && templates.length > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 mb-[2px]">
@@ -331,7 +351,11 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-72 max-h-64 overflow-y-auto">
                   <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">Templates</div>
-                  {templates.map((t: any) => (
+                   {availableTemplates.length === 0 ? (
+                     <div className="px-2 py-3 text-xs text-muted-foreground">
+                       Nenhum template aprovado para esta conta.
+                     </div>
+                   ) : availableTemplates.map((t: any) => (
                     <DropdownMenuItem 
                       key={t.id} 
                       onClick={() => {
@@ -358,7 +382,7 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
                       <span className="font-medium text-sm">{t.name}</span>
                       <span className="text-xs text-muted-foreground line-clamp-2">{t.content}</span>
                     </DropdownMenuItem>
-                  ))}
+                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}

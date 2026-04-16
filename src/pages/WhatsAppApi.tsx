@@ -387,6 +387,29 @@ function BroadcastTab() {
 
   const { templates } = useUserTemplates();
 
+  const { data: accountTemplates = [] } = useQuery({
+    queryKey: ["account-templates"],
+    queryFn: async () => {
+      const { data } = await supabase.from("account_templates").select("*");
+      return (data || []) as { id: string; account_id: string; template_id: string }[];
+    },
+  });
+
+  const selectedAccountIdsArray = useMemo(() => Array.from(selectedAccountIds), [selectedAccountIds]);
+
+  const availableTemplates = useMemo(() => {
+    return (templates || []).filter((template: any) => {
+      if (template.meta_status !== "APPROVED") return false;
+
+      const linkedAccounts = accountTemplates.filter((link) => link.template_id === template.id);
+      if (selectedAccountIdsArray.length === 0 || linkedAccounts.length === 0) return true;
+
+      return selectedAccountIdsArray.every((accountId) =>
+        linkedAccounts.some((link) => link.account_id === accountId)
+      );
+    });
+  }, [templates, accountTemplates, selectedAccountIdsArray]);
+
   const { data: flows } = useQuery({
     queryKey: ["broadcast-flows"],
     queryFn: async () => {
@@ -518,8 +541,14 @@ function BroadcastTab() {
     e.target.value = "";
   };
 
-  const selectedTemplate = templates?.find((t: any) => t.id === selectedTemplateId);
+  const selectedTemplate = availableTemplates.find((t: any) => t.id === selectedTemplateId);
   const selectedFlow = flows?.find((f: any) => f.id === selectedFlowId);
+
+  useEffect(() => {
+    if (selectedTemplateId && !availableTemplates.some((template: any) => template.id === selectedTemplateId)) {
+      setSelectedTemplateId(null);
+    }
+  }, [availableTemplates, selectedTemplateId]);
 
   const resolveParams = (rawParams: any[], nome: string, codigo: string) => {
     return (rawParams as any[]).map((p: any) => {
@@ -540,7 +569,7 @@ function BroadcastTab() {
       return;
     }
     if (sendType === "template" && !selectedTemplate) {
-      toast.error("Selecione um template.");
+      toast.error("Selecione um template aprovado para as contas escolhidas.");
       return;
     }
     if (sendType === "flow" && !selectedFlow) {
@@ -1156,12 +1185,17 @@ function BroadcastTab() {
                     className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <option value="">Selecione um template...</option>
-                    {templates?.map((t: any) => (
+                    {availableTemplates.map((t: any) => (
                       <option key={t.id} value={t.id}>
                         {t.name} {t.template_name ? `(API: ${t.template_name})` : ""}
                       </option>
                     ))}
                   </select>
+                  {availableTemplates.length === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Nenhum template aprovado está disponível para as contas selecionadas.
+                    </p>
+                  )}
                 </div>
                 {selectedTemplate && (
                   <div className="rounded-lg border bg-muted/30 p-3 space-y-1">
