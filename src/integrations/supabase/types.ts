@@ -671,6 +671,77 @@ export type Database = {
         }
         Relationships: []
       }
+      instagram_automation_steps: {
+        Row: {
+          automation_id: string
+          created_at: string
+          delay_seconds: number | null
+          id: string
+          message: string | null
+          step_order: number
+          step_type: string
+        }
+        Insert: {
+          automation_id: string
+          created_at?: string
+          delay_seconds?: number | null
+          id?: string
+          message?: string | null
+          step_order?: number
+          step_type?: string
+        }
+        Update: {
+          automation_id?: string
+          created_at?: string
+          delay_seconds?: number | null
+          id?: string
+          message?: string | null
+          step_order?: number
+          step_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "instagram_automation_steps_automation_id_fkey"
+            columns: ["automation_id"]
+            isOneToOne: false
+            referencedRelation: "instagram_automations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      instagram_automations: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          keywords: string[]
+          name: string
+          trigger_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          keywords?: string[]
+          name: string
+          trigger_type?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          keywords?: string[]
+          name?: string
+          trigger_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       instagram_connections: {
         Row: {
           access_token: string
