@@ -124,7 +124,7 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
   const sendMutation = useMutation({
     mutationFn: async ({ text, mediaUrl, mediaType, templateName, templateLanguage, templateParams }: { text?: string; mediaUrl?: string; mediaType?: string; templateName?: string; templateLanguage?: string; templateParams?: any[] }) => {
       if (!lead) throw new Error("No lead");
-      const { data, error } = await supabase.functions.invoke("zapi-send-message", {
+      const { data, error } = await supabase.functions.invoke("whatsapp-cloud-send", {
         body: {
           phone: lead.phone,
           message: text || "",

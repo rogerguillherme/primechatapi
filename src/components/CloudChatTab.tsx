@@ -200,7 +200,7 @@ export function CloudChatTab() {
   const sendMutation = useMutation({
     mutationFn: async ({ text, mediaUrl, mediaType }: { text?: string; mediaUrl?: string; mediaType?: string }) => {
       if (!selectedLead) throw new Error("No lead selected");
-      const { data, error } = await supabase.functions.invoke("zapi-send-message", {
+      const { data, error } = await supabase.functions.invoke("whatsapp-cloud-send", {
         body: { phone: selectedLead.phone, message: text || "", lead_id: selectedLead.id, media_url: mediaUrl, media_type: mediaType, account_id: selectedAccountId },
       });
       if (error) throw error;
