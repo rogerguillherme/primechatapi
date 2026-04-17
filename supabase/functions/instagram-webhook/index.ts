@@ -50,20 +50,22 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        const resolvedConn = await enrichConnectionForMessaging(conn);
+
         // Load AI Agent (if active) once per entry
-        const agent = await getActiveAgent(adminClient, conn.user_id);
+        const agent = await getActiveAgent(adminClient, resolvedConn.user_id);
 
         // Comments via changes[].field=comments
         for (const change of entry.changes || []) {
           if (change.field === "comments") {
-            await handleComment(adminClient, conn, change.value, agent);
+            await handleComment(adminClient, resolvedConn, change.value, agent);
           }
         }
 
         // Direct messages via messaging[]
         for (const msg of entry.messaging || []) {
-          if (msg.message?.text && msg.sender?.id !== conn.instagram_user_id) {
-            await handleDM(adminClient, conn, msg, agent);
+          if (msg.message?.text && msg.sender?.id !== resolvedConn.instagram_user_id) {
+            await handleDM(adminClient, resolvedConn, msg, agent);
           }
         }
       }
@@ -92,6 +94,30 @@ async function getAutomations(adminClient: any, userId: string, triggerTypes: st
     .eq("active", true)
     .in("trigger_type", triggerTypes);
   return data || [];
+}
+
+async function enrichConnectionForMessaging(conn: any) {
+  if (!conn?.page_id || !conn?.access_token) return conn;
+
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/v19.0/${conn.page_id}?fields=access_token&access_token=${conn.access_token}`
+    );
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.error("Failed to resolve page access token:", data);
+      return conn;
+    }
+
+    return {
+      ...conn,
+      access_token: data.access_token || conn.access_token,
+    };
+  } catch (error) {
+    console.error("Failed to enrich Instagram connection:", error);
+    return conn;
+  }
 }
 
 async function runSteps(steps: any[], conn: any, ctx: { username: string; text: string; commentId?: string; senderId?: string }) {
