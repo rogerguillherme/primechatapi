@@ -94,11 +94,13 @@ Deno.serve(async (req) => {
       .eq("instagram_user_id", igAccount.id)
       .maybeSingle();
 
+    const storedAccessToken = pageAccessToken || accessToken;
+
     if (existing) {
       await adminClient
         .from("instagram_connections")
         .update({
-          access_token: accessToken,
+          access_token: storedAccessToken,
           instagram_username: igAccount.username,
           page_id: pageInfo.id,
           page_name: pageInfo.name,
@@ -112,7 +114,7 @@ Deno.serve(async (req) => {
         instagram_username: igAccount.username,
         page_id: pageInfo.id,
         page_name: pageInfo.name,
-        access_token: accessToken,
+        access_token: storedAccessToken,
         status: "connected",
       });
     }
