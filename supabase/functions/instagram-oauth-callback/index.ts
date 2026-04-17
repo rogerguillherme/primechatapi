@@ -86,6 +86,14 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Get page-level access token (required for webhook subscription and messaging)
+    const pageTokenRes = await fetch(
+      `https://graph.facebook.com/v19.0/${pageInfo.id}?fields=access_token&access_token=${accessToken}`
+    );
+    const pageTokenData = await pageTokenRes.json();
+    const pageAccessToken = pageTokenData.access_token || accessToken;
+    const storedAccessToken = pageAccessToken || accessToken;
+
     // Save connection
     const { data: existing } = await adminClient
       .from("instagram_connections")
@@ -98,7 +106,7 @@ Deno.serve(async (req) => {
       await adminClient
         .from("instagram_connections")
         .update({
-          access_token: accessToken,
+          access_token: storedAccessToken,
           instagram_username: igAccount.username,
           page_id: pageInfo.id,
           page_name: pageInfo.name,
@@ -112,17 +120,10 @@ Deno.serve(async (req) => {
         instagram_username: igAccount.username,
         page_id: pageInfo.id,
         page_name: pageInfo.name,
-        access_token: accessToken,
+        access_token: storedAccessToken,
         status: "connected",
       });
     }
-
-    // Get page-level access token (required for webhook subscription)
-    const pageTokenRes = await fetch(
-      `https://graph.facebook.com/v19.0/${pageInfo.id}?fields=access_token&access_token=${accessToken}`
-    );
-    const pageTokenData = await pageTokenRes.json();
-    const pageAccessToken = pageTokenData.access_token || accessToken;
 
     // Subscribe page to webhook for comments + messages
     try {
