@@ -125,16 +125,42 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Subscribe page to webhook for comments + messages
+    // Subscribe page to webhook for Instagram DMs
     try {
-      const subRes = await fetch(
-        `https://graph.facebook.com/v19.0/${pageInfo.id}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,comments,feed&access_token=${pageAccessToken}`,
-        { method: "POST" }
+      const pageSubRes = await fetch(
+        `https://graph.facebook.com/v19.0/${pageInfo.id}/subscribed_apps`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            subscribed_fields: "messages,messaging_postbacks",
+            access_token: pageAccessToken,
+          }),
+        }
       );
-      const subData = await subRes.json();
-      console.log("Webhook subscription:", subData);
+      const pageSubData = await pageSubRes.json();
+      console.log("Page webhook subscription:", pageSubData);
     } catch (e) {
-      console.error("Webhook subscribe error:", e);
+      console.error("Page webhook subscribe error:", e);
+    }
+
+    // Subscribe Instagram account to comment events
+    try {
+      const igSubRes = await fetch(
+        `https://graph.facebook.com/v19.0/${igAccount.id}/subscribed_apps`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            subscribed_fields: "comments",
+            access_token: pageAccessToken,
+          }),
+        }
+      );
+      const igSubData = await igSubRes.json();
+      console.log("Instagram webhook subscription:", igSubData);
+    } catch (e) {
+      console.error("Instagram webhook subscribe error:", e);
     }
 
     return new Response(
