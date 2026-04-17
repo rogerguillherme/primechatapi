@@ -117,6 +117,25 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Get page-level access token (required for webhook subscription)
+    const pageTokenRes = await fetch(
+      `https://graph.facebook.com/v19.0/${pageInfo.id}?fields=access_token&access_token=${accessToken}`
+    );
+    const pageTokenData = await pageTokenRes.json();
+    const pageAccessToken = pageTokenData.access_token || accessToken;
+
+    // Subscribe page to webhook for comments + messages
+    try {
+      const subRes = await fetch(
+        `https://graph.facebook.com/v19.0/${pageInfo.id}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,comments,feed&access_token=${pageAccessToken}`,
+        { method: "POST" }
+      );
+      const subData = await subRes.json();
+      console.log("Webhook subscription:", subData);
+    } catch (e) {
+      console.error("Webhook subscribe error:", e);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
