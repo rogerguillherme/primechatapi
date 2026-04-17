@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,9 +11,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import {
   Bot, MessageSquare, AtSign, Settings, Sparkles, Save, Loader2,
-  Shield, Zap, Brain, Plus, Trash2, MessageCircle, Heart,
+  Shield, Brain, Plus, Trash2, MessageCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface FaqItem {
   id: string;
@@ -21,31 +23,96 @@ interface FaqItem {
   answer: string;
 }
 
+const AGENT_NAME_KEY = "Agente Instagram";
+
 export function InstagramAgent() {
+  const { user } = useAuth();
+  const [agentId, setAgentId] = useState<string | null>(null);
   const [agentActive, setAgentActive] = useState(false);
   const [replyComments, setReplyComments] = useState(true);
   const [replyDMs, setReplyDMs] = useState(true);
-  const [autoLike, setAutoLike] = useState(false);
   const [agentName, setAgentName] = useState("Assistente Instagram");
   const [personality, setPersonality] = useState("Você é um assistente simpático e profissional. Responda de forma amigável, use emojis com moderação. Sempre direcione para o link na bio quando perguntarem sobre produtos.");
   const [instructions, setInstructions] = useState("- Nunca mencione concorrentes\n- Responda em português\n- Máximo de 3 parágrafos\n- Se não souber, direcione para o DM");
   const [aiModel, setAiModel] = useState("google/gemini-3-flash-preview");
-  const [maxDaily, setMaxDaily] = useState("100");
+  const [maxDaily, setMaxDaily] = useState(100);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const [faqs, setFaqs] = useState<FaqItem[]>([
-    { id: "1", question: "Qual o preço?", answer: "Confira nossos preços no link da bio! Temos promoções especiais 🔥" },
-    { id: "2", question: "Como comprar?", answer: "É só clicar no link da bio e seguir as instruções. Qualquer dúvida, chama no DM!" },
-  ]);
+  const [faqs, setFaqs] = useState<FaqItem[]>([]);
   const [newQ, setNewQ] = useState("");
   const [newA, setNewA] = useState("");
 
-  const handleSave = () => {
+  // Load agent
+  useEffect(() => {
+    const load = async () => {
+      if (!user) return;
+      setLoading(true);
+      const { data } = await supabase
+        .from("ai_agents")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("name", AGENT_NAME_KEY)
+        .maybeSingle();
+
+      if (data) {
+        setAgentId(data.id);
+        setAgentActive(!!data.active);
+        setAgentName(data.identity || "Assistente Instagram");
+        setPersonality(data.guidelines || "");
+        setInstructions(data.instructions || "");
+        setAiModel(data.ai_model || "google/gemini-3-flash-preview");
+        setMaxDaily(data.max_interactions || 100);
+        const faqArr = Array.isArray(data.faq) ? (data.faq as any[]) : [];
+        setFaqs(faqArr.map((f: any) => ({
+          id: f.id || crypto.randomUUID(),
+          question: f.question || "",
+          answer: f.answer || "",
+        })));
+        // Channels stored in knowledge as JSON
+        try {
+          const chans = data.knowledge ? JSON.parse(data.knowledge) : {};
+          if (typeof chans.replyComments === "boolean") setReplyComments(chans.replyComments);
+          if (typeof chans.replyDMs === "boolean") setReplyDMs(chans.replyDMs);
+        } catch { /* noop */ }
+      }
+      setLoading(false);
+    };
+    load();
+  }, [user]);
+
+  const handleSave = async () => {
+    if (!user) return;
     setSaving(true);
-    setTimeout(() => {
-      setSaving(false);
+    try {
+      const payload = {
+        user_id: user.id,
+        name: AGENT_NAME_KEY,
+        identity: agentName,
+        guidelines: personality,
+        instructions,
+        ai_model: aiModel,
+        max_interactions: maxDaily,
+        active: agentActive,
+        faq: faqs as any,
+        knowledge: JSON.stringify({ replyComments, replyDMs }),
+      };
+
+      if (agentId) {
+        const { error } = await supabase.from("ai_agents").update(payload).eq("id", agentId);
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase.from("ai_agents").insert(payload).select("id").single();
+        if (error) throw error;
+        setAgentId(data.id);
+      }
       toast.success("Agente salvo com sucesso!");
-    }, 1000);
+    } catch (e: any) {
+      console.error(e);
+      toast.error(`Erro ao salvar: ${e.message}`);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const addFaq = () => {
@@ -61,6 +128,14 @@ export function InstagramAgent() {
   const removeFaq = (id: string) => {
     setFaqs(prev => prev.filter(f => f.id !== id));
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
@@ -90,7 +165,6 @@ export function InstagramAgent() {
           <TabsTrigger value="settings" className="gap-1.5 text-xs"><Settings className="h-3.5 w-3.5" /> Config</TabsTrigger>
         </TabsList>
 
-        {/* Personality */}
         <TabsContent value="personality" className="space-y-4">
           <Card>
             <CardHeader>
@@ -128,7 +202,6 @@ export function InstagramAgent() {
           </Card>
         </TabsContent>
 
-        {/* Rules */}
         <TabsContent value="rules" className="space-y-4">
           <Card>
             <CardHeader>
@@ -164,19 +237,11 @@ export function InstagramAgent() {
                   </div>
                   <Switch checked={replyDMs} onCheckedChange={setReplyDMs} />
                 </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Heart className="h-4 w-4 text-muted-foreground" />
-                    <Label className="text-sm">Curtir comentários automaticamente</Label>
-                  </div>
-                  <Switch checked={autoLike} onCheckedChange={setAutoLike} />
-                </div>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* FAQ */}
         <TabsContent value="faq" className="space-y-4">
           <Card>
             <CardHeader>
@@ -184,6 +249,9 @@ export function InstagramAgent() {
               <CardDescription>O agente prioriza estas respostas quando a pergunta é semelhante</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {faqs.length === 0 && (
+                <p className="text-xs text-muted-foreground text-center py-4">Nenhuma FAQ cadastrada</p>
+              )}
               {faqs.map((faq) => (
                 <div key={faq.id} className="rounded-lg border p-3 space-y-1.5">
                   <div className="flex items-start justify-between">
@@ -209,7 +277,6 @@ export function InstagramAgent() {
           </Card>
         </TabsContent>
 
-        {/* Settings */}
         <TabsContent value="settings" className="space-y-4">
           <Card>
             <CardHeader>
@@ -218,7 +285,7 @@ export function InstagramAgent() {
             <CardContent className="space-y-4">
               <div>
                 <Label className="text-xs font-medium">Limite diário de respostas</Label>
-                <Input type="number" value={maxDaily} onChange={(e) => setMaxDaily(e.target.value)} className="mt-1.5 max-w-xs" />
+                <Input type="number" value={maxDaily} onChange={(e) => setMaxDaily(Number(e.target.value))} className="mt-1.5 max-w-xs" />
                 <p className="text-[10px] text-muted-foreground mt-1">Máximo de respostas automáticas por dia (0 = ilimitado)</p>
               </div>
             </CardContent>
@@ -226,7 +293,6 @@ export function InstagramAgent() {
         </TabsContent>
       </Tabs>
 
-      {/* Save button */}
       <div className="flex justify-end">
         <Button onClick={handleSave} disabled={saving} className="gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700">
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
@@ -234,7 +300,6 @@ export function InstagramAgent() {
         </Button>
       </div>
 
-      {/* Info */}
       <Card className="border-dashed">
         <CardContent className="py-4">
           <p className="text-xs text-muted-foreground text-center">
