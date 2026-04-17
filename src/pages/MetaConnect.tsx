@@ -199,6 +199,20 @@ export default function MetaConnect() {
         console.warn("Erro no registro automático:", regErr);
       }
 
+      // Subscribe app to WABA so we receive delivery/read/failed webhooks.
+      // Without this, status stays "sent" forever.
+      try {
+        const { data: subData } = await supabase.functions.invoke("whatsapp-subscribe-webhook", {
+          body: {},
+        });
+        const failed = (subData?.results || []).filter((r: any) => !r.ok);
+        if (failed.length > 0) {
+          toast.warning("Webhook não foi ativado automaticamente. Acesse WhatsApp Manager → Account tools → Webhooks e clique em Subscribe.");
+        }
+      } catch (subErr) {
+        console.warn("Auto subscribe webhook failed:", subErr);
+      }
+
       try {
         await supabase.functions.invoke("whatsapp-sync-templates", { body: {} });
         queryClient.invalidateQueries({ queryKey: ["user-templates"] });

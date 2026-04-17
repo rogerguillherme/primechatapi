@@ -1574,6 +1574,24 @@ export default function WhatsAppApi() {
         toast.success("Conta adicionada!");
       }
       queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
+
+      // Auto-subscribe webhook (delivered/read/failed updates)
+      if (payload.business_account_id) {
+        try {
+          const { data: subData } = await supabase.functions.invoke("whatsapp-subscribe-webhook", {
+            body: {},
+          });
+          const failed = (subData?.results || []).filter((r: any) => !r.ok);
+          if (failed.length > 0) {
+            toast.warning("Webhook não foi ativado. Verifique no WhatsApp Manager → Webhooks e clique em Subscribe.");
+          } else {
+            toast.success("Webhook ativado! Status delivered/read funcionarão automaticamente.");
+          }
+        } catch (subErr) {
+          console.warn("Subscribe webhook failed:", subErr);
+        }
+      }
+
       resetForm();
     } catch (err: any) {
       toast.error(`Erro: ${err.message}`);
@@ -1923,7 +1941,30 @@ export default function WhatsAppApi() {
                                     <Star size={14} /> Definir como padrão
                                   </DropdownMenuItem>
                                 )}
+                                <DropdownMenuItem
+                                  onClick={async () => {
+                                    const t = toast.loading("Ativando webhook na Meta...");
+                                    try {
+                                      const { data } = await supabase.functions.invoke(
+                                        "whatsapp-subscribe-webhook",
+                                        { body: { account_id: account.id } },
+                                      );
+                                      const r = data?.results?.[0];
+                                      if (r?.ok) {
+                                        toast.success("Webhook ativado! Status delivered/read funcionarão.", { id: t });
+                                      } else {
+                                        toast.error(`Falha: ${r?.error || "erro desconhecido"}`, { id: t });
+                                      }
+                                    } catch (e: any) {
+                                      toast.error(e.message, { id: t });
+                                    }
+                                  }}
+                                  className="gap-2"
+                                >
+                                  <Plug size={14} /> Reativar Webhook
+                                </DropdownMenuItem>
                                 <DropdownMenuSeparator />
+
                                 <DropdownMenuItem onClick={() => handleDeleteAccount(account.id)} className="gap-2 text-destructive focus:text-destructive">
                                   <Trash2 size={14} /> Excluir conta
                                 </DropdownMenuItem>
