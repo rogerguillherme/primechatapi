@@ -44,7 +44,6 @@ Deno.serve(async (req) => {
     const media = (instagramData.media || []).slice(0, 12);
     const insights = instagramData.insights || {};
 
-    // Build a summary for the AI
     const mediaSummary = media.map((p: any, i: number) => {
       const type = p.media_type || "IMAGE";
       const likes = p.like_count ?? 0;
@@ -54,36 +53,71 @@ Deno.serve(async (req) => {
       return `${i + 1}. [${type}] ${date} — ❤️${likes} 💬${comments} — "${caption}"`;
     }).join("\n");
 
-    const prompt = `Analise os dados deste perfil de Instagram e forneça insights estratégicos em português brasileiro.
+    const totalLikes = media.reduce((s: number, p: any) => s + (p.like_count ?? 0), 0);
+    const totalComments = media.reduce((s: number, p: any) => s + (p.comments_count ?? 0), 0);
+    const followers = profile.followers_count || 0;
+    const avgEng = media.length && followers
+      ? (((totalLikes + totalComments) / media.length / followers) * 100).toFixed(2)
+      : "0";
+    const followRatio = profile.follows_count
+      ? (followers / profile.follows_count).toFixed(2)
+      : "?";
 
-## Dados do Perfil
-- Username: @${profile.username || "?"}
-- Nome: ${profile.name || "—"}
-- Bio: ${profile.biography || "—"}
-- Seguidores: ${profile.followers_count ?? "?"}
-- Seguindo: ${profile.follows_count ?? "?"}
-- Total de posts: ${profile.media_count ?? "?"}
+    const sortedMedia = [...media].sort((a: any, b: any) =>
+      ((b.like_count || 0) + (b.comments_count || 0)) - ((a.like_count || 0) + (a.comments_count || 0))
+    );
+    const topPosts = sortedMedia.slice(0, 3).map((p: any, i: number) => {
+      const eng = followers ? (((p.like_count || 0) + (p.comments_count || 0)) / followers * 100).toFixed(2) : "0";
+      return `Top ${i + 1}: [${p.media_type}] ❤️${p.like_count || 0} 💬${p.comments_count || 0} (${eng}%) — "${(p.caption || "").substring(0, 100)}"`;
+    }).join("\n");
 
-## Insights (últimos 30 dias)
-- Impressões: ${insights.impressions ?? "indisponível"}
-- Alcance: ${insights.reach ?? "indisponível"}
-- Visitas ao perfil: ${insights.profile_views ?? "indisponível"}
+    const prompt = `Você é a **Prime IA**, consultora sênior de marketing digital especializada em Instagram. Faça uma análise profunda, crítica e acionável deste perfil.
 
-## Últimos Posts
-${mediaSummary || "Sem dados de posts"}
+## 📊 PERFIL
+- @${profile.username || "?"} ${profile.name ? `(${profile.name})` : ""}
+- Bio: ${profile.biography || "(sem bio)"}
+- Seguidores: ${followers.toLocaleString("pt-BR")}
+- Seguindo: ${(profile.follows_count || 0).toLocaleString("pt-BR")}
+- Posts totais: ${profile.media_count ?? "?"}
+- Razão Seguidores/Seguindo: ${followRatio}
+
+## 📈 PERFORMANCE (últimos ${media.length} posts)
+- Engajamento médio: ${avgEng}%
+- Total de curtidas: ${totalLikes.toLocaleString("pt-BR")}
+- Total de comentários: ${totalComments.toLocaleString("pt-BR")}
+- Impressões 30d: ${insights.impressions ?? "indisponível"}
+- Alcance 30d: ${insights.reach ?? "indisponível"}
+- Visitas ao perfil 30d: ${insights.profile_views ?? "indisponível"}
+
+## 🏆 TOP POSTS
+${topPosts || "Sem dados suficientes"}
+
+## 📝 ÚLTIMOS POSTS
+${mediaSummary || "Sem posts"}
 
 ---
 
-Forneça uma análise completa incluindo:
+Entregue uma análise estruturada **em português brasileiro**, formatada em markdown, com EXATAMENTE estas seções:
 
-1. **Tipo de Perfil**: Classifique (ex: pessoal, marca, influenciador, negócio local) e explique por quê
-2. **Melhores Posts**: Identifique os top 3 posts com maior engajamento e explique o que funcionou
-3. **Padrões de Engajamento**: Taxa de engajamento, horários/formatos que performam melhor
-4. **Análise de Conteúdo**: Tipos de conteúdo mais eficazes (foto vs vídeo, temas recorrentes)
-5. **Pontos de Melhoria**: O que pode ser otimizado para crescer
-6. **Recomendações Estratégicas**: 3-5 ações concretas para melhorar resultados
+## 🎯 Diagnóstico do Perfil
+Em 1 parágrafo direto: que tipo de perfil é (pessoal, marca, criador, negócio local), nicho aparente, maturidade da conta e nota geral de 0 a 10 com justificativa.
 
-Seja direto, use dados concretos dos números fornecidos, e formate com markdown.`;
+## 🏆 O que está funcionando
+3 a 5 pontos fortes específicos baseados nos dados reais (ex: "carrosséis com 4.2% de engajamento"). Use números do perfil.
+
+## ⚠️ Problemas críticos
+3 a 5 fraquezas concretas que estão limitando o crescimento. Seja direto e franco.
+
+## 💡 Estratégia de Conteúdo (próximos 30 dias)
+Plano prático com **pilares de conteúdo** (3 temas), **frequência ideal**, **formatos prioritários** (com base na performance real) e **horários sugeridos**.
+
+## 🚀 5 Ações Imediatas
+Lista numerada com ações executáveis HOJE — cada uma com objetivo claro e métrica esperada.
+
+## 📌 Otimização da Bio
+Sugira uma nova bio (máx 150 caracteres) e CTA para link.
+
+Seja específico, use números do perfil, sem clichês. Tom de consultoria premium.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -92,11 +126,11 @@ Seja direto, use dados concretos dos números fornecidos, e formate com markdown
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "google/gemini-2.5-pro",
         messages: [
           {
             role: "system",
-            content: "Você é um especialista em marketing digital e Instagram. Analise dados de perfis e forneça insights acionáveis. Seja específico, use os números fornecidos, e dê recomendações práticas. Responda sempre em português brasileiro. Use markdown para formatar.",
+            content: "Você é a Prime IA, consultora sênior de marketing digital com 10+ anos de experiência especializada em Instagram. Tom profissional, direto, baseado em dados. Nunca invente números — use apenas os fornecidos. Sempre em português brasileiro, formatado em markdown elegante.",
           },
           { role: "user", content: prompt },
         ],
