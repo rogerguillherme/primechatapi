@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import {
   Search, Send, MessageSquare, FileText, Check, CheckCheck,
   MoreVertical, ArrowLeft, Paperclip, Clock, MessageCircleReply,
-  ShoppingBag, RotateCcw, Tag, X,
+  ShoppingBag, RotateCcw, Tag, X, AlertCircle,
 } from "lucide-react";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
