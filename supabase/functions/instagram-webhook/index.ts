@@ -113,13 +113,14 @@ async function runSteps(steps: any[], conn: any, ctx: { username: string; text: 
   }
 }
 
-async function handleComment(adminClient: any, conn: any, commentData: any) {
+async function handleComment(adminClient: any, conn: any, commentData: any, agent: any) {
   const { id: commentId, text, from } = commentData;
   if (!text || !from) return;
   const username = from.username || from.name || "amigo(a)";
   const lower = text.toLowerCase().trim();
   console.log(`Comment from @${username}: "${text}"`);
 
+  let matched = false;
   const automations = await getAutomations(adminClient, conn.user_id, ["any_comment", "comment_keyword"]);
   for (const automation of automations) {
     let trigger = false;
@@ -129,20 +130,32 @@ async function handleComment(adminClient: any, conn: any, commentData: any) {
       trigger = kws.some((kw) => lower.includes(kw.toLowerCase().trim()));
     }
     if (!trigger) continue;
+    matched = true;
     console.log(`Automation "${automation.name}" triggered`);
     await runSteps(automation.instagram_automation_steps, conn, {
       username, text, commentId, senderId: from.id,
     });
   }
+
+  if (!matched && agent && agentChannelEnabled(agent, "replyComments")) {
+    if (await canRespond(adminClient, agent)) {
+      const reply = await generateAgentReply(agent, text, username, "comment");
+      if (reply) {
+        await replyToComment(conn.access_token, commentId, reply);
+        await trackInteraction(adminClient, agent);
+      }
+    }
+  }
 }
 
-async function handleDM(adminClient: any, conn: any, msg: any) {
+async function handleDM(adminClient: any, conn: any, msg: any, agent: any) {
   const text = msg.message?.text || "";
   const senderId = msg.sender?.id;
   if (!text || !senderId) return;
   const lower = text.toLowerCase().trim();
   console.log(`DM from ${senderId}: "${text}"`);
 
+  let matched = false;
   const automations = await getAutomations(adminClient, conn.user_id, ["any_dm", "dm_keyword"]);
   for (const automation of automations) {
     let trigger = false;
@@ -152,9 +165,126 @@ async function handleDM(adminClient: any, conn: any, msg: any) {
       trigger = kws.some((kw) => lower.includes(kw.toLowerCase().trim()));
     }
     if (!trigger) continue;
+    matched = true;
     await runSteps(automation.instagram_automation_steps, conn, {
       username: "amigo(a)", text, senderId,
     });
+  }
+
+  if (!matched && agent && agentChannelEnabled(agent, "replyDMs")) {
+    if (await canRespond(adminClient, agent)) {
+      const reply = await generateAgentReply(agent, text, "amigo(a)", "dm");
+      if (reply) {
+        await sendInstagramDM(conn.access_token, conn.instagram_user_id, senderId, reply);
+        await trackInteraction(adminClient, agent);
+      }
+    }
+  }
+}
+
+// ============= AI Agent helpers =============
+
+async function getActiveAgent(adminClient: any, userId: string) {
+  const { data } = await adminClient
+    .from("ai_agents")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("name", "Agente Instagram")
+    .eq("active", true)
+    .maybeSingle();
+  return data;
+}
+
+function agentChannelEnabled(agent: any, key: "replyComments" | "replyDMs"): boolean {
+  try {
+    const cfg = agent.knowledge ? JSON.parse(agent.knowledge) : {};
+    return cfg[key] !== false;
+  } catch {
+    return true;
+  }
+}
+
+async function canRespond(adminClient: any, agent: any): Promise<boolean> {
+  const limit = agent.max_interactions || 0;
+  if (limit <= 0) return true;
+  const since = new Date();
+  since.setHours(0, 0, 0, 0);
+  const { count } = await adminClient
+    .from("audit_logs")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", agent.user_id)
+    .eq("action", "ig_agent_reply")
+    .gte("created_at", since.toISOString());
+  if ((count || 0) >= limit) {
+    console.log(`IG agent daily limit reached: ${count}/${limit}`);
+    return false;
+  }
+  return true;
+}
+
+async function trackInteraction(adminClient: any, agent: any) {
+  try {
+    await adminClient.from("audit_logs").insert({
+      user_id: agent.user_id,
+      action: "ig_agent_reply",
+      table_name: "ai_agents",
+      record_id: agent.id,
+    });
+  } catch (e) {
+    console.error("track error:", e);
+  }
+}
+
+async function generateAgentReply(agent: any, userText: string, username: string, channel: "comment" | "dm"): Promise<string | null> {
+  const apiKey = Deno.env.get("LOVABLE_API_KEY");
+  if (!apiKey) {
+    console.error("LOVABLE_API_KEY missing");
+    return null;
+  }
+
+  const persona = agent.guidelines || "Você é um assistente simpático e profissional.";
+  const rules = agent.instructions || "";
+  const faqArr = Array.isArray(agent.faq) ? agent.faq : [];
+  const faqText = faqArr.length
+    ? "\n\nFAQ (priorize estas respostas quando aplicável):\n" +
+      faqArr.map((f: any, i: number) => `${i + 1}. P: ${f.question}\n   R: ${f.answer}`).join("\n")
+    : "";
+
+  const channelHint = channel === "comment"
+    ? "Responda como resposta a comentário público no Instagram. MÁXIMO 2 frases curtas, tom acolhedor."
+    : "Responda como mensagem direta (DM) no Instagram. MÁXIMO 3 frases, tom próximo e prestativo.";
+
+  const system = `${persona}\n\nRegras obrigatórias:\n${rules}\n\n${channelHint}${faqText}\n\nNUNCA mencione que é uma IA. Use o nome ${username} se fizer sentido.`;
+
+  const model = agent.ai_model || "google/gemini-2.5-flash";
+
+  try {
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: userText },
+        ],
+      }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error(`AI reply failed [${res.status}]:`, errText);
+      return null;
+    }
+    const data = await res.json();
+    const content = data?.choices?.[0]?.message?.content?.trim();
+    return content || null;
+  } catch (e) {
+    console.error("AI reply error:", e);
+    return null;
   }
 }
 
