@@ -50,17 +50,20 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // Load AI Agent (if active) once per entry
+        const agent = await getActiveAgent(adminClient, conn.user_id);
+
         // Comments via changes[].field=comments
         for (const change of entry.changes || []) {
           if (change.field === "comments") {
-            await handleComment(adminClient, conn, change.value);
+            await handleComment(adminClient, conn, change.value, agent);
           }
         }
 
         // Direct messages via messaging[]
         for (const msg of entry.messaging || []) {
           if (msg.message?.text && msg.sender?.id !== conn.instagram_user_id) {
-            await handleDM(adminClient, conn, msg);
+            await handleDM(adminClient, conn, msg, agent);
           }
         }
       }
