@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
         // Find connection for this page/IG account
         const { data: conn } = await adminClient
           .from("instagram_connections")
-          .select("user_id, access_token, instagram_user_id, page_id")
+          .select("user_id, access_token, instagram_user_id, page_id, instagram_username")
           .eq("status", "connected")
           .or(`page_id.eq.${entryId},instagram_user_id.eq.${entryId}`)
           .maybeSingle();
@@ -108,7 +108,11 @@ async function runSteps(steps: any[], conn: any, ctx: { username: string; text: 
     } else if (step.step_type === "reply_comment" && ctx.commentId) {
       await replyToComment(conn.access_token, ctx.commentId, message);
     } else if (step.step_type === "send_dm" && ctx.senderId) {
-      await sendInstagramDM(conn.access_token, conn.instagram_user_id, ctx.senderId, message);
+      if (ctx.commentId) {
+        await sendPrivateReplyToComment(conn.access_token, ctx.commentId, message);
+      } else {
+        await sendInstagramDM(conn.access_token, conn.page_id, ctx.senderId, message);
+      }
     }
   }
 }
@@ -175,7 +179,7 @@ async function handleDM(adminClient: any, conn: any, msg: any, agent: any) {
     if (await canRespond(adminClient, agent)) {
       const reply = await generateAgentReply(agent, text, "amigo(a)", "dm");
       if (reply) {
-        await sendInstagramDM(conn.access_token, conn.instagram_user_id, senderId, reply);
+        await sendInstagramDM(conn.access_token, conn.page_id, senderId, reply);
         await trackInteraction(adminClient, agent);
       }
     }
@@ -303,14 +307,38 @@ async function replyToComment(accessToken: string, commentId: string, message: s
   }
 }
 
-async function sendInstagramDM(accessToken: string, igUserId: string, recipientId: string, message: string) {
+async function sendPrivateReplyToComment(accessToken: string, commentId: string, message: string) {
   try {
-    const res = await fetch(`https://graph.facebook.com/v19.0/${igUserId}/messages`, {
+    const res = await fetch(`https://graph.facebook.com/v19.0/${commentId}/private_replies`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message,
+        access_token: accessToken,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) console.error("Private reply failed:", data);
+    else console.log("Private reply OK:", data);
+  } catch (e) {
+    console.error("Private reply error:", e);
+  }
+}
+
+async function sendInstagramDM(accessToken: string, pageId: string, recipientId: string, message: string) {
+  if (!pageId) {
+    console.error("DM failed: missing page_id on instagram connection");
+    return;
+  }
+
+  try {
+    const res = await fetch(`https://graph.facebook.com/v19.0/${pageId}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         recipient: { id: recipientId },
         message: { text: message },
+        messaging_type: "RESPONSE",
         access_token: accessToken,
       }),
     });
