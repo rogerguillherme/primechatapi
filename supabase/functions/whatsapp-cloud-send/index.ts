@@ -173,13 +173,13 @@ Deno.serve(async (req) => {
         },
       };
       if (finalParams && Array.isArray(finalParams) && finalParams.length > 0) {
-        // Filter out empty/placeholder params and resolve unresolved placeholders
+        const fallbackName = leadFirstName || "amigo(a)";
         const mappedParams = finalParams
-          .map((p: any) => typeof p === "string" ? { type: "text", text: p || "-" } : { type: "text", text: p.text || "-" })
+          .map((p: any) => typeof p === "string" ? { type: "text", text: p || fallbackName } : { type: "text", text: p.text || fallbackName })
           .map((p: any) => ({
             ...p,
-            // Replace unresolved {{N}} placeholders with a dash to avoid Meta rejection
-            text: p.text.replace(/\{\{\d+\}\}/g, "-").trim() || "-",
+            // Replace unresolved {{N}} placeholders with the lead's first name
+            text: p.text.replace(/\{\{\d+\}\}/g, fallbackName).trim() || fallbackName,
           }))
           .filter((p: any) => p.text && p.text.trim() !== "");
         if (mappedParams.length > 0) {
