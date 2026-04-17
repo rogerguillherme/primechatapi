@@ -1574,6 +1574,24 @@ export default function WhatsAppApi() {
         toast.success("Conta adicionada!");
       }
       queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
+
+      // Auto-subscribe webhook (delivered/read/failed updates)
+      if (payload.business_account_id) {
+        try {
+          const { data: subData } = await supabase.functions.invoke("whatsapp-subscribe-webhook", {
+            body: {},
+          });
+          const failed = (subData?.results || []).filter((r: any) => !r.ok);
+          if (failed.length > 0) {
+            toast.warning("Webhook não foi ativado. Verifique no WhatsApp Manager → Webhooks e clique em Subscribe.");
+          } else {
+            toast.success("Webhook ativado! Status delivered/read funcionarão automaticamente.");
+          }
+        } catch (subErr) {
+          console.warn("Subscribe webhook failed:", subErr);
+        }
+      }
+
       resetForm();
     } catch (err: any) {
       toast.error(`Erro: ${err.message}`);
