@@ -140,22 +140,24 @@ Deno.serve(async (req) => {
         );
       }
 
+      // Pre-fetch lead for placeholder resolution (used in two places below)
+      const { data: leadData } = lead_id
+        ? await supabase.from("leads").select("name").eq("id", lead_id).maybeSingle()
+        : { data: null };
+      const leadFirstName = (leadData?.name || "").split(" ")[0] || "";
+
       let finalParams = template_params;
       let resolvedLanguage = template_language || templateRecord.template_language;
       if (!finalParams || !Array.isArray(finalParams) || finalParams.length === 0) {
         if (templateRecord.template_params && Array.isArray(templateRecord.template_params) && templateRecord.template_params.length > 0) {
-          // Resolve placeholders with lead info
-          const { data: leadData } = lead_id
-            ? await supabase.from("leads").select("name").eq("id", lead_id).maybeSingle()
-            : { data: null };
-          const leadName = leadData?.name || "";
           finalParams = (templateRecord.template_params as any[]).map((p: any) => {
             const text = typeof p === "string" ? p : p?.text || "";
             return {
               type: "text",
               text: text
-                .replace(/\{nome\}/g, leadName.split(" ")[0] || "-")
-                .replace(/\{codigo\}/g, "-") || "-",
+                .replace(/\{nome\}/gi, leadFirstName || "amigo(a)")
+                .replace(/\{\{1\}\}/g, leadFirstName || "amigo(a)")
+                .replace(/\{codigo\}/gi, "-") || (leadFirstName || "amigo(a)"),
             };
           });
         }
