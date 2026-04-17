@@ -140,22 +140,24 @@ Deno.serve(async (req) => {
         );
       }
 
+      // Pre-fetch lead for placeholder resolution (used in two places below)
+      const { data: leadData } = lead_id
+        ? await supabase.from("leads").select("name").eq("id", lead_id).maybeSingle()
+        : { data: null };
+      const leadFirstName = (leadData?.name || "").split(" ")[0] || "";
+
       let finalParams = template_params;
       let resolvedLanguage = template_language || templateRecord.template_language;
       if (!finalParams || !Array.isArray(finalParams) || finalParams.length === 0) {
         if (templateRecord.template_params && Array.isArray(templateRecord.template_params) && templateRecord.template_params.length > 0) {
-          // Resolve placeholders with lead info
-          const { data: leadData } = lead_id
-            ? await supabase.from("leads").select("name").eq("id", lead_id).maybeSingle()
-            : { data: null };
-          const leadName = leadData?.name || "";
           finalParams = (templateRecord.template_params as any[]).map((p: any) => {
             const text = typeof p === "string" ? p : p?.text || "";
             return {
               type: "text",
               text: text
-                .replace(/\{nome\}/g, leadName.split(" ")[0] || "-")
-                .replace(/\{codigo\}/g, "-") || "-",
+                .replace(/\{nome\}/gi, leadFirstName || "amigo(a)")
+                .replace(/\{\{1\}\}/g, leadFirstName || "amigo(a)")
+                .replace(/\{codigo\}/gi, "-") || (leadFirstName || "amigo(a)"),
             };
           });
         }
@@ -171,13 +173,13 @@ Deno.serve(async (req) => {
         },
       };
       if (finalParams && Array.isArray(finalParams) && finalParams.length > 0) {
-        // Filter out empty/placeholder params and resolve unresolved placeholders
+        const fallbackName = leadFirstName || "amigo(a)";
         const mappedParams = finalParams
-          .map((p: any) => typeof p === "string" ? { type: "text", text: p || "-" } : { type: "text", text: p.text || "-" })
+          .map((p: any) => typeof p === "string" ? { type: "text", text: p || fallbackName } : { type: "text", text: p.text || fallbackName })
           .map((p: any) => ({
             ...p,
-            // Replace unresolved {{N}} placeholders with a dash to avoid Meta rejection
-            text: p.text.replace(/\{\{\d+\}\}/g, "-").trim() || "-",
+            // Replace unresolved {{N}} placeholders with the lead's first name
+            text: p.text.replace(/\{\{\d+\}\}/g, fallbackName).trim() || fallbackName,
           }))
           .filter((p: any) => p.text && p.text.trim() !== "");
         if (mappedParams.length > 0) {
@@ -238,31 +240,58 @@ Deno.serve(async (req) => {
     if (!waRes.ok) {
       const errorCode = waData?.error?.code;
       const errorSubcode = waData?.error?.error_subcode;
+      const metaMsg = waData?.error?.message || "";
 
       const isTemplateNotFound = errorCode === 132001;
       const isParamsMismatch = errorCode === 132000;
       const isGenericUserError = errorCode === 135000;
       const isAuthError = errorCode === 190;
+      const isOutsideWindow = errorCode === 131047 || errorCode === 131051;
+      const isInvalidPhone = errorCode === 131026 || errorCode === 131000;
+      const isRateLimit = errorCode === 130429 || errorCode === 80007;
 
-      let errorMsg: string;
+      // Friendly Portuguese error messages
+      let friendlyMsg: string;
       if (isTemplateNotFound) {
-        errorMsg = `Template "${template_name || ''}" não encontrado na Meta com idioma "${body?.template?.language?.code || ''}". Verifique o nome e idioma no Facebook Business Manager.`;
+        friendlyMsg = `O template "${template_name || ''}" não foi encontrado na Meta com o idioma "${body?.template?.language?.code || ''}". Verifique o nome e idioma do template.`;
       } else if (isParamsMismatch) {
-        errorMsg = `Template "${template_name || ''}" requer parâmetros que não foram enviados. Configure os parâmetros do template no sistema (ex: {{1}}).`;
+        friendlyMsg = `O template "${template_name || ''}" exige variáveis que não foram preenchidas (ex: {{1}}). Edite o template e configure os parâmetros.`;
       } else if (isGenericUserError) {
-        errorMsg = `Erro genérico da Meta ao enviar template "${template_name || ''}". Possíveis causas: template não aprovado, idioma "${body?.template?.language?.code || ''}" incorreto, quantidade de parâmetros não bate com o template, ou janela de 24h expirada. Verifique no WhatsApp Manager.`;
+        friendlyMsg = `A Meta recusou o envio do template "${template_name || ''}". Causas comuns: template ainda não aprovado, idioma errado, conta sem Verificação de Negócio, ou número bloqueado para receber.`;
       } else if (isAuthError) {
-        const loggedOutHint = errorSubcode === 467 ? " Sessão inválida (usuário desconectado)." : "";
-        errorMsg = `Token de acesso da conta WhatsApp inválido ou expirado.${loggedOutHint} Gere um novo token permanente no Meta Business Manager e atualize a conta.`;
+        const loggedOutHint = errorSubcode === 467 ? " A sessão da Meta expirou." : "";
+        friendlyMsg = `O token da conta WhatsApp expirou.${loggedOutHint} Reconecte a conta na tela de configurações.`;
+      } else if (isOutsideWindow) {
+        friendlyMsg = `Esse contato está fora da janela de 24h e só pode receber templates aprovados (não mensagens livres).`;
+      } else if (isInvalidPhone) {
+        friendlyMsg = `O número de telefone "${cleanPhone}" não é um WhatsApp válido ou não existe.`;
+      } else if (isRateLimit) {
+        friendlyMsg = `Limite de envios da Meta atingido. Aguarde alguns minutos e tente novamente.`;
       } else {
-        errorMsg = `WhatsApp API error [${waRes.status}]: ${waText}`;
+        friendlyMsg = `Falha no envio: ${metaMsg || `erro HTTP ${waRes.status}`}.`;
       }
 
-      const isKnownError = isTemplateNotFound || isParamsMismatch || isGenericUserError || isAuthError;
+      // Persist failure in chat_messages so it appears in the conversation thread
+      if (lead_id) {
+        const failContent = template_name
+          ? `📋 Template "${template_name}" — ❌ ${friendlyMsg}`
+          : `❌ ${friendlyMsg}`;
+        await supabase.from("chat_messages").insert({
+          lead_id,
+          direction: "outbound",
+          content: failContent,
+          media_type: media_type || null,
+          media_url: media_url || null,
+          status: "failed",
+          account_id: account_id || null,
+        });
+      }
+
+      const isKnownError = isTemplateNotFound || isParamsMismatch || isGenericUserError || isAuthError || isOutsideWindow || isInvalidPhone || isRateLimit;
       const statusCode = isKnownError || waRes.status < 500 ? 422 : 502;
 
       return new Response(
-        JSON.stringify({ error: errorMsg, wa_error: waData?.error }),
+        JSON.stringify({ error: friendlyMsg, wa_error: waData?.error }),
         { status: statusCode, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

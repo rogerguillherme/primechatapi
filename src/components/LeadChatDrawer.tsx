@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Send, FileText, Smile, Check, CheckCheck, Paperclip } from "lucide-react";
+import { Send, FileText, Smile, Check, CheckCheck, Paperclip, AlertCircle } from "lucide-react";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -320,7 +320,11 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
                         )}
                         <span className={cn("absolute bottom-[4px] right-[6px] flex items-center gap-[2px]", isOutbound ? "text-[#667781]" : "text-muted-foreground")}>
                           <span className="text-[11px] leading-none">{format(new Date(msg.created_at), "HH:mm")}</span>
-                          {isOutbound && <CheckCheck size={13} className={msg.status === "read" ? "text-sky-400" : "opacity-60"} />}
+                          {isOutbound && (
+                            msg.status === "failed"
+                              ? <AlertCircle size={13} className="text-destructive" aria-label="Falha no envio" />
+                              : <CheckCheck size={13} className={msg.status === "read" ? "text-sky-400" : "opacity-60"} />
+                          )}
                         </span>
                       </div>
                     </div>

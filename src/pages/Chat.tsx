@@ -15,7 +15,7 @@ import {
 import {
   Search, Send, MessageSquare, FileText, User, Smile, Check, CheckCheck,
   MoreVertical, Phone, Video, ArrowLeft, Image, Paperclip, Mic,
-  ShoppingBag, Clock, MessageCircleReply, RotateCcw,
+  ShoppingBag, Clock, MessageCircleReply, RotateCcw, AlertCircle,
 } from "lucide-react";
 import { format, isToday, isYesterday, isSameDay, addDays, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -59,6 +59,7 @@ function formatDateSeparator(date: Date) {
 }
 
 function StatusIcon({ status }: { status: string }) {
+  if (status === "failed") return <AlertCircle size={14} className="text-destructive" aria-label="Falha no envio" />;
   if (status === "read") return <CheckCheck size={14} className="text-sky-400" />;
   if (status === "delivered") return <CheckCheck size={14} className="opacity-60" />;
   return <Check size={14} className="opacity-60" />;
