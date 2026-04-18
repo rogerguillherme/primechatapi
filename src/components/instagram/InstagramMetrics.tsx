@@ -240,9 +240,6 @@ export function InstagramMetrics() {
   const { user } = useAuth();
   const [selectedPost, setSelectedPost] = useState<any>(null);
 
-  const errorMessage = error instanceof Error ? error.message : "";
-  const missingPermissions = /pages_read_engagement|pages_manage_metadata|pages_read_user_content|pages_messaging|permission\(s\) must be granted/i.test(errorMessage);
-
   const { data, isLoading, error } = useQuery({
     queryKey: ["instagram-data", user?.id],
     queryFn: async () => {
@@ -255,6 +252,9 @@ export function InstagramMetrics() {
     staleTime: 60_000,
     refetchInterval: 5 * 60_000,
   });
+
+  const errorMessage = error instanceof Error ? error.message : "";
+  const missingPermissions = /pages_read_engagement|pages_manage_metadata|pages_read_user_content|pages_messaging|permission\(s\) must be granted/i.test(errorMessage);
 
   const profile = data?.profile;
   const media = (data?.media || []) as any[];
