@@ -393,6 +393,8 @@ function FlowEditorView({ flow, onBack, initialTriggerType }: { flow: Flow | nul
             agent_id: s.ai_agent_id || null,
             ai_prompt: s.ai_prompt || "",
             max_interactions: s.max_interactions || 5,
+            // For blacklist: reason is stored in custom_message
+            ...(s.step_type === "blacklist" ? { reason: s.custom_message || "opt-out via fluxo" } : {}),
           },
         };
       });
@@ -641,7 +643,9 @@ function FlowEditorView({ flow, onBack, initialTriggerType }: { flow: Flow | nul
         step_order: e.order,
         step_type: e.node.type || "message",
         template_id: (e.node.data.template_id as string) || null,
-        custom_message: (e.node.data.custom_message as string) || null,
+        custom_message: e.node.type === "blacklist"
+          ? ((e.node.data.reason as string) || "opt-out via fluxo")
+          : ((e.node.data.custom_message as string) || null),
         delay_minutes: (e.node.data.delay_minutes as number) || 0,
         trigger_value: e.triggerValue,
         parent_step_id: e.parentNodeId ? persistedIdByNodeId.get(e.parentNodeId) || null : null,
