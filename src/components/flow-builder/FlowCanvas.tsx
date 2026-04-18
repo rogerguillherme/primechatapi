@@ -21,11 +21,12 @@ import { InteractiveButtonsNode } from "./nodes/InteractiveButtonsNode";
 import { CtaUrlNode } from "./nodes/CtaUrlNode";
 import { NoResponseNode } from "./nodes/NoResponseNode";
 import { AiAgentNode } from "./nodes/AiAgentNode";
+import { BlacklistNode } from "./nodes/BlacklistNode";
 import { NodeEditPanel } from "./NodeEditPanel";
 import { InsertStepEdge, type InsertableStepType } from "./InsertStepEdge";
 import { Button } from "@/components/ui/button";
 import {
-  MessageSquare, Clock, GitBranch, MousePointerClick, ExternalLink, Braces, TimerOff, Bot,
+  MessageSquare, Clock, GitBranch, MousePointerClick, ExternalLink, Braces, TimerOff, Bot, Ban,
 } from "lucide-react";
 
 const nodeTypes: NodeTypes = {
@@ -37,6 +38,7 @@ const nodeTypes: NodeTypes = {
   cta_url: CtaUrlNode,
   no_response: NoResponseNode,
   ai_agent: AiAgentNode,
+  blacklist: BlacklistNode,
 };
 
 const edgeTypes: EdgeTypes = {
@@ -72,6 +74,9 @@ const createDefaultNodeData = (type: InsertableStepType): Record<string, unknown
   }
   if (type === "ai_agent") {
     return { agent_id: null, agent_name: "", ai_prompt: "", max_interactions: 5 };
+  }
+  if (type === "blacklist") {
+    return { reason: "opt-out via fluxo" };
   }
 
   return { timeout_minutes: 10 };
@@ -306,6 +311,9 @@ export function FlowCanvas({
         </Button>
         <Button variant="outline" size="sm" onClick={() => addNode("ai_agent")} className="gap-1.5 text-xs h-8">
           <Bot size={12} /> Agente IA
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => addNode("blacklist")} className="gap-1.5 text-xs h-8 text-destructive hover:text-destructive">
+          <Ban size={12} /> Blacklist
         </Button>
         <Button variant="outline" size="sm" onClick={() => {/* TODO: open variables panel */}} className="gap-1.5 text-xs h-8">
           <Braces size={12} /> Variáveis
