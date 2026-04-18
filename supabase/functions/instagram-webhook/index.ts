@@ -13,7 +13,10 @@ Deno.serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const verifyToken = Deno.env.get("WHATSAPP_VERIFY_TOKEN") || "instagram_verify_token";
+  const verifyToken =
+    Deno.env.get("INSTAGRAM_VERIFY_TOKEN") ||
+    Deno.env.get("WHATSAPP_VERIFY_TOKEN") ||
+    "primechat_ig_2024";
 
   if (req.method === "GET") {
     const url = new URL(req.url);
