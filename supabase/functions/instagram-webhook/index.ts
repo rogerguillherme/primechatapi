@@ -185,6 +185,9 @@ async function handleDM(adminClient: any, conn: any, msg: any, agent: any) {
   const lower = text.toLowerCase().trim();
   console.log(`DM from ${senderId}: "${text}"`);
 
+  // Persist inbound message
+  await persistInboundDM(adminClient, conn, senderId, msg.message?.mid || null, text);
+
   let matched = false;
   const automations = await getAutomations(adminClient, conn.user_id, ["any_dm", "dm_keyword"]);
   for (const automation of automations) {
