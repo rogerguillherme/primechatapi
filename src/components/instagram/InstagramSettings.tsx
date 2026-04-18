@@ -149,7 +149,8 @@ export function InstagramSettings() {
             <p>• Conta Instagram deve ser <strong>Business</strong> ou <strong>Creator</strong></p>
             <p>• A conta deve estar vinculada a uma <strong>Página do Facebook</strong></p>
             <p>• Você deve ter permissão de <strong>administrador</strong> na página</p>
-            <p>• O app Meta deve ter os escopos: <code className="text-xs bg-muted px-1 py-0.5 rounded">instagram_basic</code>, <code className="text-xs bg-muted px-1 py-0.5 rounded">instagram_manage_messages</code>, <code className="text-xs bg-muted px-1 py-0.5 rounded">pages_show_list</code></p>
+            <p>• O app Meta deve ter os escopos: <code className="text-xs bg-muted px-1 py-0.5 rounded">instagram_basic</code>, <code className="text-xs bg-muted px-1 py-0.5 rounded">instagram_manage_messages</code>, <code className="text-xs bg-muted px-1 py-0.5 rounded">instagram_manage_comments</code>, <code className="text-xs bg-muted px-1 py-0.5 rounded">pages_show_list</code>, <code className="text-xs bg-muted px-1 py-0.5 rounded">pages_read_engagement</code>, <code className="text-xs bg-muted px-1 py-0.5 rounded">pages_manage_metadata</code>, <code className="text-xs bg-muted px-1 py-0.5 rounded">pages_read_user_content</code> e <code className="text-xs bg-muted px-1 py-0.5 rounded">pages_messaging</code></p>
+            <p>• Se você adicionou permissões novas no app da Meta, <strong>desconecte e conecte novamente</strong> a conta para renovar o token</p>
           </div>
         </CardContent>
       </Card>

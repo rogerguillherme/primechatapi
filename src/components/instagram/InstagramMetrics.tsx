@@ -3,6 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,7 @@ import {
   Users, Heart, MessageSquare, Eye, TrendingUp, Instagram,
   ImageIcon, ExternalLink, Loader2, Sparkles, RefreshCw,
   Target, Zap, Play, Image as ImageLucide,
-  Clock, CalendarDays, Share2, ChevronRight, Crown,
+  Clock, CalendarDays, Share2, ChevronRight, Crown, AlertTriangle,
 } from "lucide-react";
 
 import { ProfileScore } from "./premium/ProfileScore";
@@ -252,6 +253,9 @@ export function InstagramMetrics() {
     refetchInterval: 5 * 60_000,
   });
 
+  const errorMessage = error instanceof Error ? error.message : "";
+  const missingPermissions = /pages_read_engagement|pages_manage_metadata|pages_read_user_content|pages_messaging|permission\(s\) must be granted/i.test(errorMessage);
+
   const profile = data?.profile;
   const media = (data?.media || []) as any[];
   const insights = data?.insights;
@@ -291,6 +295,31 @@ export function InstagramMetrics() {
             <Instagram className="h-12 w-12 mx-auto mb-4 opacity-20" />
             <p className="text-lg font-medium">Conecte sua conta Instagram</p>
             <p className="text-sm mt-1">Vá para Configuração e conecte sua conta para ver métricas.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (missingPermissions) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <Card>
+          <CardContent className="py-8">
+            <Alert className="border-warning/30 bg-warning/10 text-foreground [&>svg]:text-warning">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Permissões do Facebook/Instagram incompletas</AlertTitle>
+              <AlertDescription>
+                A conta conectada não autorizou as permissões necessárias para ler perfil, comentários e DMs.
+                Vá em <strong>Configuração</strong>, desconecte e conecte novamente a conta para renovar o token com os novos escopos.
+                Se continuar falhando, no app da Meta/Facebook libere/solicite: <strong>pages_show_list</strong>, <strong>pages_read_engagement</strong>, <strong>pages_manage_metadata</strong>, <strong>pages_read_user_content</strong>, <strong>pages_messaging</strong>, <strong>instagram_basic</strong>, <strong>instagram_manage_messages</strong> e <strong>instagram_manage_comments</strong>.
+              </AlertDescription>
+            </Alert>
+
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Button onClick={() => (window.location.href = "/instagram?tab=settings")}>Ir para Configuração</Button>
+              <Button variant="outline" onClick={() => window.location.reload()}>Tentar novamente</Button>
+            </div>
           </CardContent>
         </Card>
       </div>

@@ -48,7 +48,17 @@ Deno.serve(async (req) => {
     oauthUrl.searchParams.set("redirect_uri", redirect_uri);
     oauthUrl.searchParams.set(
       "scope",
-      "instagram_basic,instagram_manage_messages,instagram_manage_comments,instagram_manage_insights,pages_show_list,pages_read_engagement"
+      [
+        "instagram_basic",
+        "instagram_manage_messages",
+        "instagram_manage_comments",
+        "instagram_manage_insights",
+        "pages_show_list",
+        "pages_read_engagement",
+        "pages_manage_metadata",
+        "pages_read_user_content",
+        "pages_messaging",
+      ].join(",")
     );
     oauthUrl.searchParams.set("response_type", "code");
 
