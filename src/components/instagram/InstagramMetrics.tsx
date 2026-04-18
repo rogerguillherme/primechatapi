@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUserPlan } from "@/hooks/use-user-plan";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -238,7 +239,9 @@ function AiDiagnosis({ data }: { data: any }) {
 // ─── Main Component ───
 export function InstagramMetrics() {
   const { user } = useAuth();
+  const { hasAccess } = useUserPlan();
   const [selectedPost, setSelectedPost] = useState<any>(null);
+  const canAccessPro = hasAccess("pro");
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["instagram-data", user?.id],
@@ -283,6 +286,7 @@ export function InstagramMetrics() {
   }), [avgEngNumber, followers, profile, insights, hasReels]);
 
   const handleUpgrade = () => {
+    if (canAccessPro) return;
     // TODO: redirect to checkout / pricing page
     window.alert("Em breve: checkout do plano Pro 🚀");
   };
@@ -352,9 +356,11 @@ export function InstagramMetrics() {
             <a href={`https://instagram.com/${profile.username}`} target="_blank" rel="noopener noreferrer">
               <Button variant="outline" size="sm" className="gap-1.5"><ExternalLink className="h-3.5 w-3.5" /> Ver perfil</Button>
             </a>
-            <Button size="sm" onClick={handleUpgrade} className="gap-1.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:opacity-90 shadow-md">
-              <Crown className="h-3.5 w-3.5" /> Upgrade Pro
-            </Button>
+            {!canAccessPro && (
+              <Button size="sm" onClick={handleUpgrade} className="gap-1.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:opacity-90 shadow-md">
+                <Crown className="h-3.5 w-3.5" /> Upgrade Pro
+              </Button>
+            )}
           </div>
         </div>
       ) : loading ? (
@@ -385,7 +391,7 @@ export function InstagramMetrics() {
         <div className="lg:col-span-2">
           <AiDiagnosis data={data} />
         </div>
-        <Opportunities opportunities={opportunities} onUpgrade={handleUpgrade} />
+        <Opportunities opportunities={opportunities} onUpgrade={handleUpgrade} lockedPremium={!canAccessPro} />
       </div>
 
       {/* ─── Funnel + Calendar ─── */}
@@ -397,7 +403,7 @@ export function InstagramMetrics() {
           dms={0}
           conversions={0}
         />
-        <PostingCalendar isPremium={false} onUpgrade={handleUpgrade} />
+        <PostingCalendar isPremium={canAccessPro} onUpgrade={handleUpgrade} />
       </div>
 
       {/* ─── Best post showcase ─── */}
@@ -487,7 +493,7 @@ export function InstagramMetrics() {
       </Card>
 
       {/* ─── Premium upgrade CTA ─── */}
-      <PremiumCTA onUpgrade={handleUpgrade} />
+      {!canAccessPro && <PremiumCTA onUpgrade={handleUpgrade} />}
 
       <PostDetailModal post={selectedPost} open={!!selectedPost} onClose={() => setSelectedPost(null)} followers={followers} />
     </div>
