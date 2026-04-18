@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
         // Find connection for this page/IG account
         const { data: conn } = await adminClient
           .from("instagram_connections")
-          .select("user_id, access_token, instagram_user_id, page_id, instagram_username")
+          .select("id, user_id, access_token, instagram_user_id, page_id, instagram_username")
           .eq("status", "connected")
           .or(`page_id.eq.${entryId},instagram_user_id.eq.${entryId}`)
           .maybeSingle();
