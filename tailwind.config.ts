@@ -64,6 +64,21 @@ export default {
           foreground: "hsl(var(--whatsapp-foreground))",
           dark: "hsl(var(--whatsapp-dark))",
         },
+        revenue: {
+          DEFAULT: "hsl(var(--revenue))",
+          soft: "hsl(var(--revenue-soft))",
+          foreground: "hsl(var(--revenue-foreground))",
+        },
+        ai: {
+          DEFAULT: "hsl(var(--ai-accent))",
+          soft: "hsl(var(--ai-accent-soft))",
+          foreground: "hsl(var(--ai-accent-foreground))",
+        },
+        hot: "hsl(var(--hot))",
+        warm: "hsl(var(--warm))",
+        cold: "hsl(var(--cold))",
+        "surface-elevated": "hsl(var(--surface-elevated))",
+        "surface-subtle": "hsl(var(--surface-subtle))",
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",

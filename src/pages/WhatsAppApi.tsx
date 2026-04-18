@@ -49,6 +49,8 @@ import { VoiceStudio } from "@/components/VoiceStudio";
 import { AiAgentConfig } from "@/components/AiAgentConfig";
 import { FinancialTab } from "@/components/FinancialTab";
 import { CloudChatTab } from "@/components/CloudChatTab";
+import { DashboardHome } from "@/pages/DashboardHome";
+import { Home } from "lucide-react";
 
 const isUnauthorizedFunctionError = (error: unknown) =>
   error instanceof Error && error.message.includes("401");
@@ -1390,7 +1392,7 @@ export default function WhatsAppApi() {
   const [isDefault, setIsDefault] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [activeMainTab, setActiveMainTab] = useState("chat");
+  const [activeMainTab, setActiveMainTab] = useState("home");
   const [flowTriggerType, setFlowTriggerType] = useState<string | undefined>(undefined);
   const [flowEditId, setFlowEditId] = useState<string | undefined>(undefined);
 
@@ -1699,45 +1701,61 @@ export default function WhatsAppApi() {
             </div>
           </div>
           <TabsList className="flex flex-col items-stretch bg-transparent h-auto p-2 gap-0.5">
+            <TabsTrigger value="home" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+              <Home size={16} />
+              {!sidebarCollapsed && <span>Início</span>}
+            </TabsTrigger>
             <TabsTrigger value="chat" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
               <MessageCircle size={16} />
-              {!sidebarCollapsed && <span>Chat</span>}
-            </TabsTrigger>
-            <TabsTrigger value="webhook" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
-              <Webhook size={16} />
-              {!sidebarCollapsed && <span>Webhooks</span>}
+              {!sidebarCollapsed && <span>Conversas</span>}
             </TabsTrigger>
             <TabsTrigger value="broadcast" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
-              <Package size={16} />
-              {!sidebarCollapsed && <span>Disparo</span>}
+              <Send size={16} />
+              {!sidebarCollapsed && <span>Campanhas</span>}
             </TabsTrigger>
             <TabsTrigger value="history" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
               <BarChart3 size={16} />
               {!sidebarCollapsed && <span>Histórico</span>}
             </TabsTrigger>
+            {!sidebarCollapsed && (
+              <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 px-3 pt-3 pb-1 font-semibold">Automação</p>
+            )}
+            {sidebarCollapsed && <div className="h-px bg-sidebar-border/40 mx-2 my-2" />}
+            <TabsTrigger value="flows" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+              <GitBranch size={16} />
+              {!sidebarCollapsed && <span>Fluxos</span>}
+            </TabsTrigger>
+            <TabsTrigger value="ai-agent" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+              <Bot size={16} />
+              {!sidebarCollapsed && <span className="flex items-center gap-1.5">Agente IA <span className="text-[9px] px-1 py-0.5 rounded bg-ai/20 text-ai font-bold">PRO</span></span>}
+            </TabsTrigger>
+            <TabsTrigger value="ai-assistant" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+              <Sparkles size={16} />
+              {!sidebarCollapsed && <span>Assistente IA</span>}
+            </TabsTrigger>
+            <TabsTrigger value="voice-studio" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+              <Volume2 size={16} />
+              {!sidebarCollapsed && <span className="flex items-center gap-1.5">Vozes IA <span className="text-[9px] px-1 py-0.5 rounded bg-ai/20 text-ai font-bold">SCALE</span></span>}
+            </TabsTrigger>
+            {!sidebarCollapsed && (
+              <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 px-3 pt-3 pb-1 font-semibold">Análise</p>
+            )}
+            {sidebarCollapsed && <div className="h-px bg-sidebar-border/40 mx-2 my-2" />}
             <TabsTrigger value="analytics" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
               <TrendingUp size={16} />
-              {!sidebarCollapsed && <span>Analytics</span>}
+              {!sidebarCollapsed && <span>Performance</span>}
             </TabsTrigger>
             <TabsTrigger value="financial" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
               <DollarSign size={16} />
               {!sidebarCollapsed && <span>Financeiro</span>}
             </TabsTrigger>
-            <TabsTrigger value="flows" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
-              <GitBranch size={16} />
-              {!sidebarCollapsed && <span>Fluxos</span>}
-            </TabsTrigger>
-            <TabsTrigger value="voice-studio" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
-              <Volume2 size={16} />
-              {!sidebarCollapsed && <span>Voice Studio</span>}
-            </TabsTrigger>
-            <TabsTrigger value="ai-agent" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
-              <Bot size={16} />
-              {!sidebarCollapsed && <span>Agente IA</span>}
-            </TabsTrigger>
-            <TabsTrigger value="ai-assistant" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
-              <Sparkles size={16} />
-              {!sidebarCollapsed && <span>Assistente IA</span>}
+            {!sidebarCollapsed && (
+              <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 px-3 pt-3 pb-1 font-semibold">Sistema</p>
+            )}
+            {sidebarCollapsed && <div className="h-px bg-sidebar-border/40 mx-2 my-2" />}
+            <TabsTrigger value="webhook" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+              <Webhook size={16} />
+              {!sidebarCollapsed && <span>Integrações</span>}
             </TabsTrigger>
             <TabsTrigger value="config" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
               <Key size={16} />
