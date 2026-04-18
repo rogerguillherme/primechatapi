@@ -80,10 +80,7 @@ export function InstagramChat() {
     },
   });
 
-  // Sync from Graph on mount
-  useEffect(() => {
-    callApi("sync").catch(() => { /* silent */ });
-  }, []);
+  // Initial sync moved below to capture capability warnings
 
   // Realtime updates for conversations
   useEffect(() => {
@@ -219,12 +216,19 @@ export function InstagramChat() {
             </div>
           )}
           {!convQuery.isLoading && filtered.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground px-4 text-center">
+            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground px-4 text-center">
               <Instagram className="h-10 w-10 mb-3 opacity-40" />
               <p className="text-sm font-medium">Nenhuma conversa</p>
               <p className="text-xs mt-1">
                 Quando alguém te enviar uma DM no Instagram, ela aparecerá aqui automaticamente
               </p>
+              {syncWarning && (
+                <div className="mt-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-left">
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400 leading-relaxed">
+                    ⚠️ {syncWarning}
+                  </p>
+                </div>
+              )}
             </div>
           )}
           {filtered.map((c) => (
