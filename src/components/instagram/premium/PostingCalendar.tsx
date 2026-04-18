@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { Clock, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -40,8 +41,8 @@ export function PostingCalendar({ hourlyDistribution = {}, isPremium = false, on
           <div key={h} className="text-[10px] text-muted-foreground text-center font-medium">{h}h</div>
         ))}
         {DAYS.map((day, dIdx) => (
-          <>
-            <div key={day} className="text-[10px] text-muted-foreground font-medium flex items-center">{day}</div>
+          <Fragment key={day}>
+            <div className="text-[10px] text-muted-foreground font-medium flex items-center">{day}</div>
             {HOURS.map((h) => {
               const v = getValue(dIdx, h);
               const intensity = Math.min(100, v) / 100;
@@ -56,7 +57,7 @@ export function PostingCalendar({ hourlyDistribution = {}, isPremium = false, on
                 />
               );
             })}
-          </>
+          </Fragment>
         ))}
       </div>
 
