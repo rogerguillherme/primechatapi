@@ -53,6 +53,22 @@
     --whatsapp: 142 70% 45%;
     --whatsapp-foreground: 0 0% 100%;
     --whatsapp-dark: 152 44% 22%;
+
+    /* ── Premium tokens (Prime Chat 2.0) ── */
+    --revenue: 152 65% 38%;
+    --revenue-soft: 152 65% 95%;
+    --revenue-foreground: 0 0% 100%;
+
+    --ai-accent: 262 75% 60%;
+    --ai-accent-soft: 262 75% 96%;
+    --ai-accent-foreground: 0 0% 100%;
+
+    --hot: 0 78% 56%;
+    --warm: 35 92% 55%;
+    --cold: 210 80% 56%;
+
+    --surface-elevated: 0 0% 100%;
+    --surface-subtle: 150 12% 97%;
   }
 
   .dark {
