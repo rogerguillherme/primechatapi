@@ -149,14 +149,29 @@ export function InstagramChat() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const [syncWarning, setSyncWarning] = useState<string | null>(null);
+
   const syncMutation = useMutation({
     mutationFn: () => callApi("sync"),
     onSuccess: (d: any) => {
-      toast.success(`${d?.upserted ?? 0} conversas sincronizadas`);
-      qc.invalidateQueries({ queryKey: ["ig-conversations"] });
+      if (d?.ok === false && d?.capability_missing) {
+        setSyncWarning(d.message);
+        toast.warning("Permissão do Meta App pendente", { description: d.message, duration: 8000 });
+      } else {
+        setSyncWarning(null);
+        toast.success(`${d?.upserted ?? 0} conversas sincronizadas`);
+        qc.invalidateQueries({ queryKey: ["ig-conversations"] });
+      }
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  // Capture sync warning from initial mount sync
+  useEffect(() => {
+    callApi("sync").then((d: any) => {
+      if (d?.ok === false && d?.capability_missing) setSyncWarning(d.message);
+    }).catch(() => {});
+  }, []);
 
   const filtered = (convQuery.data || []).filter((c) => {
     if (!search.trim()) return true;
