@@ -28,32 +28,18 @@ export function InstagramSettings() {
   const queryClient = useQueryClient();
   const [isConnecting, setIsConnecting] = useState(false);
 
-  const { data: isAdmin } = useQuery({
-    queryKey: ["user-role", user?.id],
-    queryFn: async () => {
-      if (!user) return false;
-      const { data } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id)
-        .eq("role", "admin")
-        .maybeSingle();
-      return !!data;
-    },
-    enabled: !!user,
-  });
-
   const { data: connections, isLoading } = useQuery({
-    queryKey: ["instagram-connections"],
+    queryKey: ["instagram-connections", user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("instagram_connections" as any)
         .select("*")
+        .eq("user_id", user!.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data || []) as unknown as InstagramConnection[];
     },
-    enabled: !!user && isAdmin === true,
+    enabled: !!user,
   });
 
   const activeConnection = connections?.find((c) => c.status === "connected");
@@ -85,18 +71,6 @@ export function InstagramSettings() {
       queryClient.invalidateQueries({ queryKey: ["instagram-connections"] });
     }
   };
-
-  if (!isAdmin) {
-    return (
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <Card>
-          <CardContent className="py-10 text-center text-muted-foreground">
-            Apenas administradores podem configurar a conexão do Instagram.
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
