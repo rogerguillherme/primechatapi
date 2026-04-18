@@ -13,9 +13,10 @@ interface Opportunity {
 interface OpportunitiesProps {
   opportunities: Opportunity[];
   onUpgrade?: () => void;
+  lockedPremium?: boolean;
 }
 
-export function Opportunities({ opportunities, onUpgrade }: OpportunitiesProps) {
+export function Opportunities({ opportunities, onUpgrade, lockedPremium = true }: OpportunitiesProps) {
   if (opportunities.length === 0) {
     return (
       <div className="rounded-2xl border border-border bg-card p-6 text-center">
@@ -54,7 +55,7 @@ export function Opportunities({ opportunities, onUpgrade }: OpportunitiesProps) 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <h4 className="text-sm font-semibold text-foreground">{op.title}</h4>
-                  {op.premium && (
+                  {op.premium && lockedPremium && (
                     <span className="inline-flex items-center gap-1 rounded-md bg-gradient-to-r from-purple-500/20 to-pink-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-purple-300">
                       <Lock className="h-2.5 w-2.5" /> Pro
                     </span>
@@ -62,7 +63,7 @@ export function Opportunities({ opportunities, onUpgrade }: OpportunitiesProps) 
                 </div>
                 <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">{op.description}</p>
                 <button
-                  onClick={op.premium ? onUpgrade : undefined}
+                  onClick={op.premium && lockedPremium ? onUpgrade : undefined}
                   className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-purple-400 hover:text-purple-300 transition-colors"
                 >
                   {op.action} <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
