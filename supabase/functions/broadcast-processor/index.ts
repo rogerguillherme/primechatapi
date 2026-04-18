@@ -225,10 +225,30 @@ Deno.serve(async (req) => {
     }
 
     // Fetch leads with last_inbound_at for 24h window check
-    const { data: batchLeads } = await supabase
+    const { data: rawBatchLeads } = await supabase
       .from("leads")
       .select("id, name, phone, last_inbound_at")
       .in("id", batchLeadIds);
+
+    // ── BLACKLIST FILTER ──
+    let batchLeads = rawBatchLeads || [];
+    let blacklistedSkipped = 0;
+    if (batchLeads.length > 0) {
+      const phonesToCheck = batchLeads.map((l) => (l.phone || "").replace(/\D/g, ""));
+      const { data: blacklisted } = await supabase
+        .from("lead_blacklist")
+        .select("phone")
+        .eq("user_id", job.user_id)
+        .in("phone", phonesToCheck);
+
+      const blacklistSet = new Set((blacklisted || []).map((b: any) => b.phone));
+      const before = batchLeads.length;
+      batchLeads = batchLeads.filter((l) => !blacklistSet.has((l.phone || "").replace(/\D/g, "")));
+      blacklistedSkipped = before - batchLeads.length;
+      if (blacklistedSkipped > 0) {
+        console.log(`Skipped ${blacklistedSkipped} blacklisted leads in job ${jobId}`);
+      }
+    }
 
     if (!batchLeads || batchLeads.length === 0) {
       const newCursor = cursor + batchSize;
@@ -238,7 +258,7 @@ Deno.serve(async (req) => {
         .update({ last_cursor: newCursor, status: isComplete ? "completed" : "processing", updated_at: new Date().toISOString() })
         .eq("id", jobId);
       if (!isComplete) await chainNextBatch(supabaseUrl, jobId);
-      return new Response(JSON.stringify({ message: "Batch skipped" }), {
+      return new Response(JSON.stringify({ message: "Batch skipped", blacklistedSkipped }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
