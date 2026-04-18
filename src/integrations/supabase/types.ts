@@ -781,6 +781,101 @@ export type Database = {
         }
         Relationships: []
       }
+      instagram_conversations: {
+        Row: {
+          connection_id: string
+          created_at: string
+          id: string
+          ig_user_id: string
+          last_message_at: string | null
+          last_message_text: string | null
+          participant_avatar_url: string | null
+          participant_id: string
+          participant_name: string | null
+          participant_username: string | null
+          unread_count: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          connection_id: string
+          created_at?: string
+          id?: string
+          ig_user_id: string
+          last_message_at?: string | null
+          last_message_text?: string | null
+          participant_avatar_url?: string | null
+          participant_id: string
+          participant_name?: string | null
+          participant_username?: string | null
+          unread_count?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          connection_id?: string
+          created_at?: string
+          id?: string
+          ig_user_id?: string
+          last_message_at?: string | null
+          last_message_text?: string | null
+          participant_avatar_url?: string | null
+          participant_id?: string
+          participant_name?: string | null
+          participant_username?: string | null
+          unread_count?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      instagram_messages: {
+        Row: {
+          conversation_id: string
+          created_at: string
+          direction: string
+          id: string
+          ig_message_id: string | null
+          media_type: string | null
+          media_url: string | null
+          status: string
+          text: string | null
+          user_id: string
+        }
+        Insert: {
+          conversation_id: string
+          created_at?: string
+          direction: string
+          id?: string
+          ig_message_id?: string | null
+          media_type?: string | null
+          media_url?: string | null
+          status?: string
+          text?: string | null
+          user_id: string
+        }
+        Update: {
+          conversation_id?: string
+          created_at?: string
+          direction?: string
+          id?: string
+          ig_message_id?: string | null
+          media_type?: string | null
+          media_url?: string | null
+          status?: string
+          text?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "instagram_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "instagram_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       items: {
         Row: {
           created_at: string

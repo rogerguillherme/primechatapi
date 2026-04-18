@@ -185,6 +185,9 @@ async function handleDM(adminClient: any, conn: any, msg: any, agent: any) {
   const lower = text.toLowerCase().trim();
   console.log(`DM from ${senderId}: "${text}"`);
 
+  // Persist inbound message
+  await persistInboundDM(adminClient, conn, senderId, msg.message?.mid || null, text);
+
   let matched = false;
   const automations = await getAutomations(adminClient, conn.user_id, ["any_dm", "dm_keyword"]);
   for (const automation of automations) {
@@ -209,6 +212,79 @@ async function handleDM(adminClient: any, conn: any, msg: any, agent: any) {
         await trackInteraction(adminClient, agent);
       }
     }
+  }
+}
+
+// ============= Persistence helpers =============
+
+async function persistInboundDM(adminClient: any, conn: any, senderId: string, igMessageId: string | null, text: string) {
+  try {
+    let username: string | null = null;
+    let avatar: string | null = null;
+    try {
+      const pr = await fetch(
+        `https://graph.facebook.com/v19.0/${senderId}?fields=name,username,profile_pic&access_token=${conn.access_token}`
+      );
+      const pd = await pr.json();
+      if (pr.ok) {
+        username = pd.username || pd.name || null;
+        avatar = pd.profile_pic || null;
+      }
+    } catch { /* ignore */ }
+
+    let convId: string | null = null;
+    const { data: existing } = await adminClient
+      .from("instagram_conversations")
+      .select("id, unread_count")
+      .eq("ig_user_id", conn.instagram_user_id)
+      .eq("participant_id", senderId)
+      .maybeSingle();
+
+    if (existing) {
+      convId = existing.id;
+      await adminClient
+        .from("instagram_conversations")
+        .update({
+          last_message_text: text,
+          last_message_at: new Date().toISOString(),
+          unread_count: (existing.unread_count || 0) + 1,
+          participant_username: username || undefined,
+          participant_avatar_url: avatar || undefined,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existing.id);
+    } else {
+      const { data: created } = await adminClient
+        .from("instagram_conversations")
+        .insert({
+          user_id: conn.user_id,
+          connection_id: conn.id,
+          ig_user_id: conn.instagram_user_id,
+          participant_id: senderId,
+          participant_username: username,
+          participant_name: username,
+          participant_avatar_url: avatar,
+          last_message_text: text,
+          last_message_at: new Date().toISOString(),
+          unread_count: 1,
+        })
+        .select("id")
+        .single();
+      convId = created?.id || null;
+    }
+
+    if (convId) {
+      await adminClient.from("instagram_messages").insert({
+        conversation_id: convId,
+        user_id: conn.user_id,
+        ig_message_id: igMessageId,
+        direction: "inbound",
+        text,
+        status: "received",
+      });
+    }
+  } catch (e) {
+    console.error("persistInboundDM error:", e);
   }
 }
 
