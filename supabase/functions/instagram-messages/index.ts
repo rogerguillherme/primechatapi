@@ -124,7 +124,16 @@ async function syncConversations(admin: any, conn: any, accessToken: string) {
   const data = await r.json();
   if (!r.ok) {
     console.error("syncConversations error:", data);
-    return { error: "Falha ao listar conversas", details: data };
+    const code = data?.error?.code;
+    const isCapability = code === 3 || code === 10 || code === 200;
+    return {
+      ok: false,
+      capability_missing: isCapability,
+      message: isCapability
+        ? "Seu app Meta ainda não tem a permissão 'instagram_manage_messages' aprovada. Conversas antigas não podem ser listadas, mas novas DMs aparecerão automaticamente quando alguém te enviar uma mensagem."
+        : (data?.error?.message || "Falha ao listar conversas"),
+      details: data,
+    };
   }
 
   const threads = data.data || [];
