@@ -802,6 +802,36 @@ export type Database = {
         }
         Relationships: []
       }
+      lead_blacklist: {
+        Row: {
+          created_at: string
+          flow_id: string | null
+          id: string
+          lead_id: string
+          phone: string
+          reason: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          flow_id?: string | null
+          id?: string
+          lead_id: string
+          phone: string
+          reason?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          flow_id?: string | null
+          id?: string
+          lead_id?: string
+          phone?: string
+          reason?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       lead_labels: {
         Row: {
           created_at: string

@@ -26,6 +26,7 @@ export function NodeEditPanel({ node, templates, onUpdate, onClose }: NodeEditPa
     cta_url: "Botão com Link",
     no_response: "Sem Resposta",
     ai_agent: "Agente IA",
+    blacklist: "Blacklist",
   };
 
   return (
@@ -231,6 +232,31 @@ export function NodeEditPanel({ node, templates, onUpdate, onClose }: NodeEditPa
 
         {type === "ai_agent" && (
           <AiAgentFields data={data} onUpdate={onUpdate} />
+        )}
+
+        {type === "blacklist" && (
+          <div className="space-y-3">
+            <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3">
+              <p className="text-xs text-foreground font-medium mb-1">⚠️ Bloqueio definitivo</p>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Quando o lead chegar a este passo, ele será adicionado à sua blacklist e
+                automaticamente excluído de todos os disparos futuros.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs">Motivo (opcional)</Label>
+              <Input
+                value={(data.reason as string) || ""}
+                onChange={(e) => onUpdate({ reason: e.target.value })}
+                placeholder="Ex: Pediu cancelamento"
+                className="h-8 text-sm"
+                maxLength={120}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Conecte este passo após um botão "Cancelar", "Sair", "Bloquear", etc.
+              </p>
+            </div>
+          </div>
         )}
       </div>
     </div>

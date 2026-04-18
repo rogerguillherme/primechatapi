@@ -88,6 +88,33 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // BLACKLIST: add lead to blacklist and continue
+        if (currentStep.step_type === "blacklist") {
+          const { data: flowRow } = await supabase
+            .from("flows")
+            .select("user_id")
+            .eq("id", exec.flow_id)
+            .maybeSingle();
+
+          if (flowRow?.user_id) {
+            await supabase.from("lead_blacklist").upsert(
+              {
+                user_id: flowRow.user_id,
+                lead_id: lead.id,
+                phone: (lead.phone || "").replace(/\D/g, ""),
+                reason: currentStep.custom_message || "opt-out via fluxo",
+                flow_id: exec.flow_id,
+              },
+              { onConflict: "user_id,phone", ignoreDuplicates: true }
+            );
+            console.log("Lead added to blacklist:", lead.id, "via flow:", exec.flow_id);
+          }
+
+          await advanceToNextStep(exec, currentStep, lead, supabase, supabaseUrl, supabaseKey, accountId);
+          processed++;
+          continue;
+        }
+
         if (
           currentStep.step_type === "message" ||
           currentStep.step_type === "interactive_buttons" ||
@@ -406,7 +433,8 @@ async function advanceToNextStep(
   } else if (
     nextStep.step_type === "message" ||
     nextStep.step_type === "interactive_buttons" ||
-    nextStep.step_type === "cta_url"
+    nextStep.step_type === "cta_url" ||
+    nextStep.step_type === "blacklist"
   ) {
     await supabase.from("flow_executions").update({
       current_step_id: nextStep.id,
