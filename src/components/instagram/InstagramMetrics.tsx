@@ -310,9 +310,9 @@ export function InstagramMetrics() {
               <AlertTriangle className="h-4 w-4" />
               <AlertTitle>Permissões do Facebook/Instagram incompletas</AlertTitle>
               <AlertDescription>
-                A conta conectada não autorizou as permissões necessárias para ler perfil, comentários e DMs.
-                Vá em <strong>Configuração</strong>, desconecte e conecte novamente a conta para renovar o token com os novos escopos.
-                Se continuar falhando, no app da Meta/Facebook libere/solicite: <strong>pages_show_list</strong>, <strong>pages_read_engagement</strong>, <strong>pages_manage_metadata</strong>, <strong>pages_read_user_content</strong>, <strong>pages_messaging</strong>, <strong>instagram_basic</strong>, <strong>instagram_manage_messages</strong> e <strong>instagram_manage_comments</strong>.
+                A conta conectada não trouxe as permissões mínimas para leitura do perfil do Instagram.
+                Vá em <strong>Configuração</strong>, reconecte a conta e confirme se o app da Meta está com <strong>Facebook Login</strong> e <strong>Instagram Graph API</strong> configurados corretamente.
+                O login agora usa apenas os escopos compatíveis: <strong>instagram_basic</strong>, <strong>instagram_manage_messages</strong>, <strong>instagram_manage_comments</strong>, <strong>instagram_manage_insights</strong>, <strong>pages_show_list</strong> e <strong>pages_read_engagement</strong>.
               </AlertDescription>
             </Alert>
 
