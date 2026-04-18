@@ -11,6 +11,7 @@ import { InstagramMetrics } from "@/components/instagram/InstagramMetrics";
 import { InstagramSettings } from "@/components/instagram/InstagramSettings";
 import { InstagramPosts } from "@/components/instagram/InstagramPosts";
 import { InstagramAgent } from "@/components/instagram/InstagramAgent";
+import { InstagramComments } from "@/components/instagram/InstagramComments";
 import { cn } from "@/lib/utils";
 import {
   MessageSquare, Zap, BarChart3, Settings, Instagram, MessageCircle,
@@ -27,7 +28,7 @@ export default function InstagramDashboard() {
 
   useEffect(() => {
     const tab = searchParams.get("tab");
-    if (tab && ["chat", "automations", "metrics", "settings", "posts", "agent"].includes(tab)) {
+    if (tab && ["chat", "comments", "automations", "metrics", "settings", "posts", "agent"].includes(tab)) {
       setActiveTab(tab);
     }
   }, [searchParams]);
@@ -49,6 +50,7 @@ export default function InstagramDashboard() {
 
   const navItems = [
     { id: "chat", icon: MessageSquare, label: "Chat" },
+    { id: "comments", icon: MessageCircle, label: "Comentários" },
     { id: "automations", icon: Zap, label: "Automações" },
     { id: "metrics", icon: BarChart3, label: "Métricas" },
     { id: "posts", icon: CalendarDays, label: "Posts" },
@@ -154,6 +156,11 @@ export default function InstagramDashboard() {
       {/* Main content */}
       <div className="flex-1 overflow-hidden flex flex-col min-h-0">
         {activeTab === "chat" && <InstagramChat />}
+        {activeTab === "comments" && (
+          <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+            <InstagramComments />
+          </div>
+        )}
         {activeTab === "automations" && (
           <div className="flex-1 overflow-auto p-6 max-w-6xl">
             <InstagramAutomations />
