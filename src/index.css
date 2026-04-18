@@ -104,6 +104,22 @@
     --whatsapp: 142 70% 45%;
     --whatsapp-foreground: 0 0% 100%;
     --whatsapp-dark: 152 44% 15%;
+
+    /* ── Premium tokens (dark) ── */
+    --revenue: 152 65% 50%;
+    --revenue-soft: 152 40% 14%;
+    --revenue-foreground: 0 0% 100%;
+
+    --ai-accent: 262 75% 68%;
+    --ai-accent-soft: 262 40% 16%;
+    --ai-accent-foreground: 0 0% 100%;
+
+    --hot: 0 78% 62%;
+    --warm: 35 92% 60%;
+    --cold: 210 80% 62%;
+
+    --surface-elevated: 160 14% 11%;
+    --surface-subtle: 160 14% 7%;
   }
 }
 
@@ -132,6 +148,19 @@
   .gradient-instagram {
     background: linear-gradient(135deg, hsl(280 60% 15%), hsl(330 70% 25%), hsl(15 80% 30%));
   }
+  /* ── Premium gradients ── */
+  .gradient-revenue {
+    background: linear-gradient(135deg, hsl(var(--revenue)), hsl(142 70% 50%));
+  }
+  .gradient-revenue-soft {
+    background: linear-gradient(135deg, hsl(var(--revenue) / 0.08), hsl(142 70% 45% / 0.04));
+  }
+  .gradient-ai {
+    background: linear-gradient(135deg, hsl(var(--ai-accent)), hsl(280 75% 65%));
+  }
+  .gradient-ai-soft {
+    background: linear-gradient(135deg, hsl(var(--ai-accent) / 0.08), hsl(280 75% 60% / 0.04));
+  }
   .shadow-card {
     box-shadow: 0 1px 3px 0 hsl(0 0% 0% / 0.04), 0 1px 2px -1px hsl(0 0% 0% / 0.04);
   }
@@ -141,7 +170,31 @@
   .shadow-elevated {
     box-shadow: 0 8px 30px -4px hsl(0 0% 0% / 0.1), 0 4px 10px -2px hsl(0 0% 0% / 0.06);
   }
+  /* Stripe-like multi-layer shadow */
+  .shadow-stripe {
+    box-shadow:
+      0 0 0 1px hsl(160 12% 89% / 0.5),
+      0 1px 2px 0 hsl(0 0% 0% / 0.03),
+      0 4px 12px -2px hsl(0 0% 0% / 0.05),
+      0 12px 24px -8px hsl(0 0% 0% / 0.04);
+  }
+  .dark .shadow-stripe {
+    box-shadow:
+      0 0 0 1px hsl(160 12% 18% / 0.6),
+      0 1px 2px 0 hsl(0 0% 0% / 0.4),
+      0 8px 24px -8px hsl(0 0% 0% / 0.5);
+  }
+  .shadow-stripe-hover {
+    box-shadow:
+      0 0 0 1px hsl(152 58% 38% / 0.2),
+      0 4px 12px -2px hsl(0 0% 0% / 0.08),
+      0 16px 32px -12px hsl(152 58% 38% / 0.15);
+  }
   .glass-card {
     @apply bg-card/80 backdrop-blur-sm border border-border/60;
+  }
+  /* Number tabular for KPIs */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
   }
 }
