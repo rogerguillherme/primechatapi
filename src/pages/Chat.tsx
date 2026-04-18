@@ -206,10 +206,20 @@ export default function Chat() {
       .channel("chat-realtime")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "chat_messages" },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ["chat-messages", selectedLeadId] });
+        { event: "*", schema: "public", table: "chat_messages" },
+        (payload) => {
+          const row: any = payload.new ?? payload.old;
+          if (row?.lead_id === selectedLeadId) {
+            queryClient.invalidateQueries({ queryKey: ["chat-messages", selectedLeadId] });
+          }
           queryClient.invalidateQueries({ queryKey: ["chat-latest-messages"] });
+          queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "leads" },
+        () => {
           queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
         }
       )
