@@ -38,18 +38,25 @@ Deno.serve(async (req) => {
       const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
       for (const entry of body.entry || []) {
-        const entryId = String(entry.id);
+        const entryId = String(entry.id || "");
+        const candidateIds = new Set<string>([
+          entryId,
+          String(entry?.messaging?.[0]?.recipient?.id || ""),
+          String(entry?.changes?.[0]?.value?.page_id || ""),
+          String(entry?.changes?.[0]?.value?.recipient?.id || ""),
+        ]);
 
         // Find connection for this page/IG account
-        const { data: conn } = await adminClient
+        const { data: connections } = await adminClient
           .from("instagram_connections")
           .select("id, user_id, access_token, instagram_user_id, page_id, instagram_username")
           .eq("status", "connected")
-          .or(`page_id.eq.${entryId},instagram_user_id.eq.${entryId}`)
-          .maybeSingle();
+          .in("page_id", Array.from(candidateIds).filter(Boolean));
+
+        const conn = connections?.[0] || null;
 
         if (!conn) {
-          console.log(`No connection for entry.id=${entryId}`);
+          console.log(`No connection for Instagram webhook candidates=${Array.from(candidateIds).filter(Boolean).join(",")}`);
           continue;
         }
 
@@ -62,6 +69,9 @@ Deno.serve(async (req) => {
         for (const change of entry.changes || []) {
           if (change.field === "comments") {
             await handleComment(adminClient, resolvedConn, change.value, agent);
+          }
+          if (change.field === "messages" && change.value?.message?.text && change.value?.sender?.id !== resolvedConn.instagram_user_id) {
+            await handleDM(adminClient, resolvedConn, change.value, agent);
           }
         }
 
