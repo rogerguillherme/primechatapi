@@ -882,18 +882,21 @@ export type Database = {
           id: string
           name: string
           type: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
           id?: string
           name: string
           type: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string
           id?: string
           name?: string
           type?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -1159,18 +1162,21 @@ export type Database = {
           item_id: string
           order_id: string
           quantity: number
+          user_id: string | null
         }
         Insert: {
           id?: string
           item_id: string
           order_id: string
           quantity?: number
+          user_id?: string | null
         }
         Update: {
           id?: string
           item_id?: string
           order_id?: string
           quantity?: number
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -1200,6 +1206,7 @@ export type Database = {
           product_id: string | null
           status: string
           updated_at: string
+          user_id: string | null
           webhook_payload: Json | null
         }
         Insert: {
@@ -1212,6 +1219,7 @@ export type Database = {
           product_id?: string | null
           status?: string
           updated_at?: string
+          user_id?: string | null
           webhook_payload?: Json | null
         }
         Update: {
@@ -1224,6 +1232,7 @@ export type Database = {
           product_id?: string | null
           status?: string
           updated_at?: string
+          user_id?: string | null
           webhook_payload?: Json | null
         }
         Relationships: [
@@ -1249,18 +1258,21 @@ export type Database = {
           item_id: string
           product_id: string
           quantity: number
+          user_id: string | null
         }
         Insert: {
           id?: string
           item_id: string
           product_id: string
           quantity?: number
+          user_id?: string | null
         }
         Update: {
           id?: string
           item_id?: string
           product_id?: string
           quantity?: number
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -1287,6 +1299,7 @@ export type Database = {
           id: string
           price: number | null
           sku: string | null
+          user_id: string | null
         }
         Insert: {
           active?: boolean
@@ -1295,6 +1308,7 @@ export type Database = {
           id?: string
           price?: number | null
           sku?: string | null
+          user_id?: string | null
         }
         Update: {
           active?: boolean
@@ -1303,6 +1317,7 @@ export type Database = {
           id?: string
           price?: number | null
           sku?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }

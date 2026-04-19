@@ -20,19 +20,10 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { data: defaultAccount } = await supabase
-      .from("whatsapp_accounts")
-      .select("id")
-      .eq("is_default", true)
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    const accountId = defaultAccount?.id || null;
-    console.log("Using account_id:", accountId);
-
     const BATCH_LIMIT = 10;
     const now = new Date().toISOString();
+
+    // Early-return: only query account if there's actual work to do
     const { data: readyExecutions } = await supabase
       .from("flow_executions")
       .select("*, current_step:flow_steps!current_step_id(*)")
@@ -47,6 +38,17 @@ Deno.serve(async (req) => {
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Only fetch default account when there's work
+    const { data: defaultAccount } = await supabase
+      .from("whatsapp_accounts")
+      .select("id")
+      .eq("is_default", true)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const accountId = defaultAccount?.id || null;
 
     let processed = 0;
 
