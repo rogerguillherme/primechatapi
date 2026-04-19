@@ -89,9 +89,19 @@ export function WhatsAppLimits() {
               </div>
 
               {acc.error ? (
-                <div className="flex items-center gap-1.5 text-xs text-destructive">
+                <div className="flex items-center gap-1.5 text-xs text-destructive bg-destructive/10 px-2 py-1.5 rounded-md">
                   <AlertTriangle size={12} />
-                  <span>Erro ao consultar: {acc.error}</span>
+                  <span className="flex-1">
+                    {acc.error.includes("session is invalid") || acc.error.includes("access token")
+                      ? "Token expirado — reconecte essa conta no Meta"
+                      : `Erro: ${acc.error}`}
+                  </span>
+                  <a
+                    href="/whatsapp-api"
+                    className="underline font-medium hover:text-destructive/80"
+                  >
+                    Reconectar
+                  </a>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-2">
