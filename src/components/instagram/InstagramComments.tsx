@@ -79,6 +79,20 @@ export function InstagramComments() {
     refetchInterval: 60_000,
   });
 
+  const connectionQuery = useQuery({
+    queryKey: ["ig-connection-username"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("instagram_connections")
+        .select("instagram_username")
+        .eq("status", "connected")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return (data?.instagram_username || "").toLowerCase();
+    },
+  });
+
   const commentsQuery = useQuery({
     queryKey: ["ig-comments", selectedMedia?.id],
     queryFn: () =>
@@ -88,6 +102,27 @@ export function InstagramComments() {
     enabled: !!selectedMedia,
     refetchInterval: 30_000,
   });
+
+  const ownUsername = connectionQuery.data || "";
+  const isReplied = (c: CommentItem) => {
+    const replies = Array.isArray(c.replies) ? c.replies : c.replies?.data || [];
+    return replies.some((r) => (r.username || "").toLowerCase() === ownUsername);
+  };
+  const isLiked = (c: CommentItem) => (c.like_count || 0) > 0;
+
+  const filteredComments = (commentsQuery.data || []).filter((c) => {
+    if (filter === "unreplied") return !isReplied(c);
+    if (filter === "unliked") return !isLiked(c);
+    if (filter === "pending") return !isReplied(c) && !isLiked(c);
+    return true;
+  });
+
+  const counts = {
+    all: commentsQuery.data?.length || 0,
+    unreplied: (commentsQuery.data || []).filter((c) => !isReplied(c)).length,
+    unliked: (commentsQuery.data || []).filter((c) => !isLiked(c)).length,
+    pending: (commentsQuery.data || []).filter((c) => !isReplied(c) && !isLiked(c)).length,
+  };
 
   const replyMutation = useMutation({
     mutationFn: (vars: { comment_id: string; message: string }) =>
