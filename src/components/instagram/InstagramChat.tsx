@@ -151,23 +151,32 @@ export function InstagramChat() {
   const syncMutation = useMutation({
     mutationFn: () => callApi("sync"),
     onSuccess: (d: any) => {
-      if (d?.ok === false && d?.capability_missing) {
-        setSyncWarning(d.message);
-        toast.warning("Permissão do Meta App pendente", { description: d.message, duration: 8000 });
+      if (d?.ok === false) {
+        setSyncWarning(d.message || "Falha ao sincronizar");
+        if (d?.token_invalid || d?.disconnected) {
+          toast.error("Conta desconectada", { description: d.message, duration: 10000 });
+        } else {
+          toast.warning("Permissão do Meta App pendente", { description: d.message, duration: 8000 });
+        }
       } else {
         setSyncWarning(null);
         toast.success(`${d?.upserted ?? 0} conversas sincronizadas`);
         qc.invalidateQueries({ queryKey: ["ig-conversations"] });
       }
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      setSyncWarning(e.message);
+      toast.error(e.message);
+    },
   });
 
   // Capture sync warning from initial mount sync
   useEffect(() => {
-    callApi("sync").then((d: any) => {
-      if (d?.ok === false && d?.capability_missing) setSyncWarning(d.message);
-    }).catch(() => {});
+    callApi("sync")
+      .then((d: any) => {
+        if (d?.ok === false) setSyncWarning(d.message);
+      })
+      .catch((e: Error) => setSyncWarning(e.message));
   }, []);
 
   const filtered = (convQuery.data || []).filter((c) => {

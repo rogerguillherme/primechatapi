@@ -21,15 +21,26 @@ Deno.serve(async (req) => {
     const { data: { user }, error: userErr } = await admin.auth.getUser(token);
     if (userErr || !user) return json({ error: "Unauthorized" }, 401);
 
+    // Pega QUALQUER conexão do usuário (mesmo desconectada) para informar status real
     const { data: connection } = await admin
       .from("instagram_connections")
       .select("*")
       .eq("user_id", user.id)
-      .eq("status", "connected")
-      .order("created_at", { ascending: false })
+      .order("status", { ascending: true }) // 'connected' antes de 'disconnected' alfabeticamente
+      .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    if (!connection) return json({ error: "Nenhuma conta Instagram conectada" }, 404);
+    if (!connection) {
+      return json({ error: "Nenhuma conta Instagram vinculada. Conecte sua conta na aba Configurações." }, 404);
+    }
+    if (connection.status !== "connected") {
+      return json({
+        ok: false,
+        capability_missing: true,
+        disconnected: true,
+        message: `A conta @${connection.instagram_username} foi desconectada. Reconecte-a em Configurações para voltar a receber DMs.`,
+      });
+    }
 
     const pageAccessToken = await resolvePageAccessToken(connection);
 
@@ -123,14 +134,28 @@ async function syncConversations(admin: any, conn: any, accessToken: string) {
   );
   const data = await r.json();
   if (!r.ok) {
-    console.error("syncConversations error:", data);
+    console.error("syncConversations error:", JSON.stringify(data));
     const code = data?.error?.code;
-    const isCapability = code === 3 || code === 10 || code === 200;
+    const subcode = data?.error?.error_subcode;
+    const isTokenInvalid = code === 190 || subcode === 463 || subcode === 467;
+    const isCapability = code === 3 || code === 10 || code === 200 || code === 100;
+
+    // Se token inválido, marca conexão como disconnected
+    if (isTokenInvalid) {
+      await admin
+        .from("instagram_connections")
+        .update({ status: "disconnected", updated_at: new Date().toISOString() })
+        .eq("id", conn.id);
+    }
+
     return {
       ok: false,
       capability_missing: isCapability,
-      message: isCapability
-        ? "Seu app Meta ainda não tem a permissão 'instagram_manage_messages' aprovada. Conversas antigas não podem ser listadas, mas novas DMs aparecerão automaticamente quando alguém te enviar uma mensagem."
+      token_invalid: isTokenInvalid,
+      message: isTokenInvalid
+        ? `Token do Instagram expirou ou foi revogado. Reconecte @${conn.instagram_username} em Configurações.`
+        : isCapability
+        ? "Permissão 'instagram_manage_messages' pendente no Meta App. DMs novas continuam chegando via webhook, mas conversas antigas não podem ser listadas até a aprovação."
         : (data?.error?.message || "Falha ao listar conversas"),
       details: data,
     };
