@@ -10,9 +10,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
   MessageCircle, Heart, Trash2, Send, EyeOff, Eye, Image as ImageIcon,
-  RefreshCw, ExternalLink, Loader2,
+  RefreshCw, ExternalLink, Loader2, Filter,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+type CommentFilter = "all" | "unreplied" | "unliked" | "pending";
 
 interface MediaItem {
   id: string;
