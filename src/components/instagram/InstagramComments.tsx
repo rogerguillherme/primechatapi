@@ -364,6 +364,7 @@ function StatChip({ icon, label, value }: { icon: React.ReactNode; label: string
 
 interface CommentRowProps {
   comment: CommentItem;
+  isOwnReplied?: boolean;
   replyTo: string | null;
   replyText: string;
   onReplyOpen: (id: string) => void;
@@ -376,7 +377,7 @@ interface CommentRowProps {
 }
 
 function CommentRow({
-  comment, replyTo, replyText, onReplyOpen, onReplyChange,
+  comment, isOwnReplied, replyTo, replyText, onReplyOpen, onReplyChange,
   onReplySubmit, onCancelReply, onHide, onDelete, isReplying,
 }: CommentRowProps) {
   const replies = Array.isArray(comment.replies)
