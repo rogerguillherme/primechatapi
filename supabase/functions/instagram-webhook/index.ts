@@ -46,12 +46,13 @@ Deno.serve(async (req) => {
           String(entry?.changes?.[0]?.value?.recipient?.id || ""),
         ]);
 
-        // Find connection for this page/IG account
+        // Find connection: comments come with entry.id = instagram_user_id, DMs come with page_id
+        const ids = Array.from(candidateIds).filter(Boolean);
         const { data: connections } = await adminClient
           .from("instagram_connections")
           .select("id, user_id, access_token, instagram_user_id, page_id, instagram_username")
           .eq("status", "connected")
-          .in("page_id", Array.from(candidateIds).filter(Boolean));
+          .or(`page_id.in.(${ids.join(",")}),instagram_user_id.in.(${ids.join(",")})`);
 
         const conn = connections?.[0] || null;
 
@@ -136,7 +137,12 @@ async function enrichConnectionForMessaging(conn: any) {
 async function runSteps(steps: any[], conn: any, ctx: { username: string; text: string; commentId?: string; senderId?: string }) {
   const sorted = (steps || []).sort((a: any, b: any) => a.step_order - b.step_order);
   for (const step of sorted) {
-    const message = (step.message || "")
+    // Suporte a múltiplas variantes separadas por "|||" — escolhe uma aleatória
+    // para evitar bloqueio Meta de "comentário duplicado"
+    const rawMessage = step.message || "";
+    const variants = rawMessage.split("|||").map((s: string) => s.trim()).filter(Boolean);
+    const picked = variants.length > 0 ? variants[Math.floor(Math.random() * variants.length)] : "";
+    const message = picked
       .replace(/\{\{nome\}\}/gi, ctx.username)
       .replace(/\{nome\}/gi, ctx.username)
       .replace(/\{\{comentario\}\}/gi, ctx.text)
