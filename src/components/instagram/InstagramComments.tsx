@@ -405,6 +405,11 @@ function CommentRow({
                   <Heart size={10} /> {comment.like_count}
                 </Badge>
               )}
+              {isOwnReplied && (
+                <Badge className="h-5 text-[10px] gap-1 bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 hover:bg-emerald-500/15">
+                  ✓ Respondido
+                </Badge>
+              )}
             </div>
             <p className="text-sm mt-1 break-words whitespace-pre-wrap">{comment.text}</p>
             <div className="flex items-center gap-1 mt-2">
