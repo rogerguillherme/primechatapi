@@ -46,12 +46,13 @@ Deno.serve(async (req) => {
           String(entry?.changes?.[0]?.value?.recipient?.id || ""),
         ]);
 
-        // Find connection for this page/IG account
+        // Find connection: comments come with entry.id = instagram_user_id, DMs come with page_id
+        const ids = Array.from(candidateIds).filter(Boolean);
         const { data: connections } = await adminClient
           .from("instagram_connections")
           .select("id, user_id, access_token, instagram_user_id, page_id, instagram_username")
           .eq("status", "connected")
-          .in("page_id", Array.from(candidateIds).filter(Boolean));
+          .or(`page_id.in.(${ids.join(",")}),instagram_user_id.in.(${ids.join(",")})`);
 
         const conn = connections?.[0] || null;
 
