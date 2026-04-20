@@ -282,6 +282,25 @@ export function InstagramComments() {
                 )}
               </div>
 
+              <div className="px-5 py-2 border-b border-border/50">
+                <Tabs value={filter} onValueChange={(v) => setFilter(v as CommentFilter)}>
+                  <TabsList className="h-8">
+                    <TabsTrigger value="all" className="text-xs gap-1">
+                      Todos <Badge variant="secondary" className="h-4 px-1 text-[10px]">{counts.all}</Badge>
+                    </TabsTrigger>
+                    <TabsTrigger value="unreplied" className="text-xs gap-1">
+                      Sem resposta <Badge variant="secondary" className="h-4 px-1 text-[10px]">{counts.unreplied}</Badge>
+                    </TabsTrigger>
+                    <TabsTrigger value="unliked" className="text-xs gap-1">
+                      Sem curtida <Badge variant="secondary" className="h-4 px-1 text-[10px]">{counts.unliked}</Badge>
+                    </TabsTrigger>
+                    <TabsTrigger value="pending" className="text-xs gap-1">
+                      <Filter size={10} /> Pendentes <Badge variant="secondary" className="h-4 px-1 text-[10px]">{counts.pending}</Badge>
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+
               <ScrollArea className="flex-1">
                 <div className="p-5 space-y-3">
                   {commentsQuery.isLoading && (
@@ -290,10 +309,11 @@ export function InstagramComments() {
                       <Skeleton className="h-16 w-full" />
                     </>
                   )}
-                  {commentsQuery.data?.map((c) => (
+                  {filteredComments.map((c) => (
                     <CommentRow
                       key={c.id}
                       comment={c}
+                      isOwnReplied={isReplied(c)}
                       replyTo={replyTo}
                       replyText={replyText}
                       onReplyOpen={(id) => {
@@ -315,9 +335,11 @@ export function InstagramComments() {
                       isReplying={replyMutation.isPending}
                     />
                   ))}
-                  {commentsQuery.data?.length === 0 && (
+                  {!commentsQuery.isLoading && filteredComments.length === 0 && (
                     <p className="text-sm text-muted-foreground text-center py-12">
-                      Nenhum comentário neste post
+                      {commentsQuery.data?.length === 0
+                        ? "Nenhum comentário neste post"
+                        : "Nenhum comentário neste filtro"}
                     </p>
                   )}
                 </div>
