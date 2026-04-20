@@ -340,16 +340,27 @@ export function InstagramAutomations() {
                       </div>
                     ) : (
                       <div className="space-y-2">
-                        <Label>{step.type === "reply_comment" ? "Resposta ao comentário" : "Mensagem no Direct"}</Label>
+                        <Label>{step.type === "reply_comment" ? "Resposta(s) ao comentário" : "Mensagem(ns) no Direct"}</Label>
                         <Textarea
                           placeholder={step.type === "reply_comment"
-                            ? "Ex: Obrigado pelo comentário! 🙌 Te mandei uma mensagem no direct..."
-                            : "Ex: Oi {{nome}}! Vi seu comentário e separei algo especial pra você 🎁"}
+                            ? "Ex: Obrigado pelo comentário! 🙌\n\n💡 Para várias respostas (escolha aleatória), separe com |||\nEx: Obrigado! ||| Adorei seu comentário ❤️ ||| Que legal! 🚀"
+                            : "Ex: Oi {{nome}}! Vi seu comentário 🎁\n\n💡 Para várias mensagens, separe com |||"}
                           value={step.message}
-                          onChange={(e) => updateStep(step.id, { message: e.target.value })} rows={3} />
-                        <p className="text-[11px] text-muted-foreground">
-                          Variáveis: {"{{nome}}"} (nome do usuário), {"{{comentario}}"} (texto do comentário)
-                        </p>
+                          onChange={(e) => updateStep(step.id, { message: e.target.value })} rows={5} />
+                        <div className="flex items-center justify-between">
+                          <p className="text-[11px] text-muted-foreground">
+                            Variáveis: {"{{nome}}"} · {"{{comentario}}"} · Separe respostas com <code className="text-pink-500 font-mono">|||</code>
+                          </p>
+                          <Button type="button" variant="ghost" size="sm" className="h-6 text-[11px] gap-1"
+                            onClick={() => updateStep(step.id, { message: (step.message || "") + (step.message ? " ||| " : "") })}>
+                            <Plus size={10} /> variante
+                          </Button>
+                        </div>
+                        {step.message && step.message.includes("|||") && (
+                          <div className="text-[11px] text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 rounded px-2 py-1">
+                            ✨ {step.message.split("|||").filter((s) => s.trim()).length} variantes detectadas — uma será escolhida aleatoriamente
+                          </div>
+                        )}
                       </div>
                     )}
                   </CardContent>
