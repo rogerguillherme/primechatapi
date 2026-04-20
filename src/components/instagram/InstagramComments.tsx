@@ -71,6 +71,7 @@ export function InstagramComments() {
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
+  const [filter, setFilter] = useState<CommentFilter>("all");
 
   const mediaQuery = useQuery({
     queryKey: ["ig-comments-media"],
