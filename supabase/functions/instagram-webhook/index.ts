@@ -137,7 +137,12 @@ async function enrichConnectionForMessaging(conn: any) {
 async function runSteps(steps: any[], conn: any, ctx: { username: string; text: string; commentId?: string; senderId?: string }) {
   const sorted = (steps || []).sort((a: any, b: any) => a.step_order - b.step_order);
   for (const step of sorted) {
-    const message = (step.message || "")
+    // Suporte a múltiplas variantes separadas por "|||" — escolhe uma aleatória
+    // para evitar bloqueio Meta de "comentário duplicado"
+    const rawMessage = step.message || "";
+    const variants = rawMessage.split("|||").map((s: string) => s.trim()).filter(Boolean);
+    const picked = variants.length > 0 ? variants[Math.floor(Math.random() * variants.length)] : "";
+    const message = picked
       .replace(/\{\{nome\}\}/gi, ctx.username)
       .replace(/\{nome\}/gi, ctx.username)
       .replace(/\{\{comentario\}\}/gi, ctx.text)
