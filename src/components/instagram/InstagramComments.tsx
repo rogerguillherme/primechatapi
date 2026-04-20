@@ -10,9 +10,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
   MessageCircle, Heart, Trash2, Send, EyeOff, Eye, Image as ImageIcon,
-  RefreshCw, ExternalLink, Loader2,
+  RefreshCw, ExternalLink, Loader2, Filter,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+type CommentFilter = "all" | "unreplied" | "unliked" | "pending";
 
 interface MediaItem {
   id: string;
@@ -68,11 +71,26 @@ export function InstagramComments() {
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
+  const [filter, setFilter] = useState<CommentFilter>("all");
 
   const mediaQuery = useQuery({
     queryKey: ["ig-comments-media"],
     queryFn: () => callApi("list").then((d) => d.media as MediaItem[]),
     refetchInterval: 60_000,
+  });
+
+  const connectionQuery = useQuery({
+    queryKey: ["ig-connection-username"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("instagram_connections")
+        .select("instagram_username")
+        .eq("status", "connected")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return (data?.instagram_username || "").toLowerCase();
+    },
   });
 
   const commentsQuery = useQuery({
@@ -84,6 +102,27 @@ export function InstagramComments() {
     enabled: !!selectedMedia,
     refetchInterval: 30_000,
   });
+
+  const ownUsername = connectionQuery.data || "";
+  const isReplied = (c: CommentItem) => {
+    const replies = Array.isArray(c.replies) ? c.replies : c.replies?.data || [];
+    return replies.some((r) => (r.username || "").toLowerCase() === ownUsername);
+  };
+  const isLiked = (c: CommentItem) => (c.like_count || 0) > 0;
+
+  const filteredComments = (commentsQuery.data || []).filter((c) => {
+    if (filter === "unreplied") return !isReplied(c);
+    if (filter === "unliked") return !isLiked(c);
+    if (filter === "pending") return !isReplied(c) && !isLiked(c);
+    return true;
+  });
+
+  const counts = {
+    all: commentsQuery.data?.length || 0,
+    unreplied: (commentsQuery.data || []).filter((c) => !isReplied(c)).length,
+    unliked: (commentsQuery.data || []).filter((c) => !isLiked(c)).length,
+    pending: (commentsQuery.data || []).filter((c) => !isReplied(c) && !isLiked(c)).length,
+  };
 
   const replyMutation = useMutation({
     mutationFn: (vars: { comment_id: string; message: string }) =>
@@ -243,6 +282,25 @@ export function InstagramComments() {
                 )}
               </div>
 
+              <div className="px-5 py-2 border-b border-border/50">
+                <Tabs value={filter} onValueChange={(v) => setFilter(v as CommentFilter)}>
+                  <TabsList className="h-8">
+                    <TabsTrigger value="all" className="text-xs gap-1">
+                      Todos <Badge variant="secondary" className="h-4 px-1 text-[10px]">{counts.all}</Badge>
+                    </TabsTrigger>
+                    <TabsTrigger value="unreplied" className="text-xs gap-1">
+                      Sem resposta <Badge variant="secondary" className="h-4 px-1 text-[10px]">{counts.unreplied}</Badge>
+                    </TabsTrigger>
+                    <TabsTrigger value="unliked" className="text-xs gap-1">
+                      Sem curtida <Badge variant="secondary" className="h-4 px-1 text-[10px]">{counts.unliked}</Badge>
+                    </TabsTrigger>
+                    <TabsTrigger value="pending" className="text-xs gap-1">
+                      <Filter size={10} /> Pendentes <Badge variant="secondary" className="h-4 px-1 text-[10px]">{counts.pending}</Badge>
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+
               <ScrollArea className="flex-1">
                 <div className="p-5 space-y-3">
                   {commentsQuery.isLoading && (
@@ -251,10 +309,11 @@ export function InstagramComments() {
                       <Skeleton className="h-16 w-full" />
                     </>
                   )}
-                  {commentsQuery.data?.map((c) => (
+                  {filteredComments.map((c) => (
                     <CommentRow
                       key={c.id}
                       comment={c}
+                      isOwnReplied={isReplied(c)}
                       replyTo={replyTo}
                       replyText={replyText}
                       onReplyOpen={(id) => {
@@ -276,9 +335,11 @@ export function InstagramComments() {
                       isReplying={replyMutation.isPending}
                     />
                   ))}
-                  {commentsQuery.data?.length === 0 && (
+                  {!commentsQuery.isLoading && filteredComments.length === 0 && (
                     <p className="text-sm text-muted-foreground text-center py-12">
-                      Nenhum comentário neste post
+                      {commentsQuery.data?.length === 0
+                        ? "Nenhum comentário neste post"
+                        : "Nenhum comentário neste filtro"}
                     </p>
                   )}
                 </div>
@@ -303,6 +364,7 @@ function StatChip({ icon, label, value }: { icon: React.ReactNode; label: string
 
 interface CommentRowProps {
   comment: CommentItem;
+  isOwnReplied?: boolean;
   replyTo: string | null;
   replyText: string;
   onReplyOpen: (id: string) => void;
@@ -315,7 +377,7 @@ interface CommentRowProps {
 }
 
 function CommentRow({
-  comment, replyTo, replyText, onReplyOpen, onReplyChange,
+  comment, isOwnReplied, replyTo, replyText, onReplyOpen, onReplyChange,
   onReplySubmit, onCancelReply, onHide, onDelete, isReplying,
 }: CommentRowProps) {
   const replies = Array.isArray(comment.replies)
@@ -341,6 +403,11 @@ function CommentRow({
               {(comment.like_count || 0) > 0 && (
                 <Badge variant="secondary" className="h-5 text-[10px] gap-1">
                   <Heart size={10} /> {comment.like_count}
+                </Badge>
+              )}
+              {isOwnReplied && (
+                <Badge className="h-5 text-[10px] gap-1 bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 hover:bg-emerald-500/15">
+                  ✓ Respondido
                 </Badge>
               )}
             </div>
