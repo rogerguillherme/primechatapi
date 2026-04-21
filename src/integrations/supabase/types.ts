@@ -674,27 +674,39 @@ export type Database = {
       instagram_automation_steps: {
         Row: {
           automation_id: string
+          buttons: Json
           created_at: string
           delay_seconds: number | null
+          dm_type: string
           id: string
+          link_title: string | null
+          link_url: string | null
           message: string | null
           step_order: number
           step_type: string
         }
         Insert: {
           automation_id: string
+          buttons?: Json
           created_at?: string
           delay_seconds?: number | null
+          dm_type?: string
           id?: string
+          link_title?: string | null
+          link_url?: string | null
           message?: string | null
           step_order?: number
           step_type?: string
         }
         Update: {
           automation_id?: string
+          buttons?: Json
           created_at?: string
           delay_seconds?: number | null
+          dm_type?: string
           id?: string
+          link_title?: string | null
+          link_url?: string | null
           message?: string | null
           step_order?: number
           step_type?: string

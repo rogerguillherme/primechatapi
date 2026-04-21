@@ -1,0 +1,6 @@
+
+ALTER TABLE public.instagram_automation_steps
+  ADD COLUMN IF NOT EXISTS dm_type TEXT NOT NULL DEFAULT 'text',
+  ADD COLUMN IF NOT EXISTS buttons JSONB NOT NULL DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS link_url TEXT,
+  ADD COLUMN IF NOT EXISTS link_title TEXT;
