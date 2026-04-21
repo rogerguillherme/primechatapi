@@ -72,11 +72,6 @@ export function InstagramComments() {
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
   const [filter, setFilter] = useState<CommentFilter>("all");
-  const [autoScan, setAutoScan] = useState(false);
-  const [autoScanInterval, setAutoScanInterval] = useState<number>(60); // segundos
-  const [lastScan, setLastScan] = useState<{ at: Date; matched: number; scanned: number } | null>(null);
-  const [scanning, setScanning] = useState(false);
-  const scanTimerRef = useRef<number | null>(null);
 
   const mediaQuery = useQuery({
     queryKey: ["ig-comments-media"],
