@@ -136,13 +136,66 @@ async function runSteps(
       const r = await replyToComment(conn.access_token, ctx.commentId, message);
       results.push({ type: "reply_comment", ok: r.ok, message, response: r.data });
     } else if (step.step_type === "send_dm") {
-      // Sempre tenta private_replies primeiro (gera DM derivada do comentário, dentro da janela permitida da Meta)
-      if (ctx.commentId) {
-        const r = await sendPrivateReply(conn.access_token, ctx.commentId, message);
-        results.push({ type: "send_dm_private_reply", ok: r.ok, message, response: r.data });
-      } else if (ctx.senderId) {
-        const r = await sendInstagramDM(conn.access_token, ctx.senderId, message);
-        results.push({ type: "send_dm", ok: r.ok, message, response: r.data });
+      const dmType = step.dm_type || "text";
+      const buttons: any[] = Array.isArray(step.buttons) ? step.buttons : [];
+      const useMessenger = (dmType === "buttons" || dmType === "link") && ctx.senderId;
+
+      if (useMessenger) {
+        let payload: any;
+        if (dmType === "link") {
+          const url = step.link_url || "";
+          const title = (step.link_title || "Acessar").slice(0, 20);
+          payload = {
+            recipient: { id: ctx.senderId },
+            message: {
+              attachment: {
+                type: "template",
+                payload: {
+                  template_type: "button",
+                  text: message || title,
+                  buttons: [{ type: "web_url", url, title }],
+                },
+              },
+            },
+          };
+        } else {
+          const btns = buttons.slice(0, 3).map((b: any) => ({
+            type: "postback",
+            title: String(b.title || "Opção").slice(0, 20),
+            payload: `BTN_${b.id || Math.random().toString(36).slice(2, 8)}`,
+          }));
+          payload = {
+            recipient: { id: ctx.senderId },
+            message: {
+              attachment: {
+                type: "template",
+                payload: { template_type: "button", text: message || "Escolha:", buttons: btns },
+              },
+            },
+          };
+        }
+        try {
+          const res = await fetch(`${GRAPH}/me/messages?access_token=${conn.access_token}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          results.push({ type: `send_dm_${dmType}`, ok: res.ok, response: data });
+        } catch (e) {
+          results.push({ type: `send_dm_${dmType}`, ok: false, response: { error: (e as Error).message } });
+        }
+      } else {
+        const finalMessage = dmType === "link" && step.link_url
+          ? `${message}\n\n👉 ${step.link_url}`
+          : message;
+        if (ctx.commentId) {
+          const r = await sendPrivateReply(conn.access_token, ctx.commentId, finalMessage);
+          results.push({ type: "send_dm_private_reply", ok: r.ok, message: finalMessage, response: r.data });
+        } else if (ctx.senderId) {
+          const r = await sendInstagramDM(conn.access_token, ctx.senderId, finalMessage);
+          results.push({ type: "send_dm", ok: r.ok, message: finalMessage, response: r.data });
+        }
       }
     }
   }
