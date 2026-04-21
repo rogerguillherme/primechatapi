@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,20 +7,34 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Plus, Zap, Clock, Trash2, Instagram, Send, MessageCircle,
   ArrowRight, Eye, Pencil, Copy, ChevronDown, ChevronUp, Sparkles, Loader2,
+  Bot, Link2, MousePointerClick, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { AutomationTemplatesModal, type AutomationTemplate } from "./AutomationTemplatesModal";
 
+type DmType = "text" | "buttons" | "link";
+
+interface ButtonItem {
+  id: string;
+  title: string;
+}
+
 interface FlowStep {
   id: string;
   type: "reply_comment" | "send_dm" | "delay";
   message: string;
   delay_seconds?: number;
+  // Apenas para send_dm:
+  dm_type?: DmType;
+  buttons?: ButtonItem[];
+  link_url?: string;
+  link_title?: string;
 }
 
 interface AutomationFlow {
@@ -48,6 +62,54 @@ export function InstagramAutomations() {
   const [saving, setSaving] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
 
+  // Auto-scan (movido da aba Comentários)
+  const [autoScan, setAutoScan] = useState(false);
+  const [autoScanInterval, setAutoScanInterval] = useState<number>(60);
+  const [scanning, setScanning] = useState(false);
+  const [lastScan, setLastScan] = useState<{ at: Date; matched: number; scanned: number } | null>(null);
+  const scanTimerRef = useRef<number | null>(null);
+
+  const runAutoScan = useCallback(async () => {
+    if (scanning) return;
+    setScanning(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("instagram-auto-reply-comments", {
+        body: { max_posts: 10, max_comments_per_post: 25 },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setLastScan({ at: new Date(), matched: data?.matched ?? 0, scanned: data?.scanned ?? 0 });
+      if ((data?.matched ?? 0) > 0) {
+        toast.success(`Auto-resposta: ${data.matched} comentário(s) respondido(s)`);
+      } else {
+        toast.message("Auto-scan concluído", { description: `${data?.scanned ?? 0} comentários verificados, nenhum novo correspondeu` });
+      }
+    } catch (e) {
+      toast.error((e as Error).message || "Falha no auto-scan");
+    } finally {
+      setScanning(false);
+    }
+  }, [scanning]);
+
+  useEffect(() => {
+    if (!autoScan) {
+      if (scanTimerRef.current) {
+        window.clearInterval(scanTimerRef.current);
+        scanTimerRef.current = null;
+      }
+      return;
+    }
+    runAutoScan();
+    scanTimerRef.current = window.setInterval(runAutoScan, autoScanInterval * 1000);
+    return () => {
+      if (scanTimerRef.current) {
+        window.clearInterval(scanTimerRef.current);
+        scanTimerRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoScan, autoScanInterval]);
+
   const createFromTemplate = (template: AutomationTemplate) => {
     setEditingFlow({
       id: crypto.randomUUID(),
@@ -61,6 +123,8 @@ export function InstagramAutomations() {
         type: s.type,
         message: s.message,
         delay_seconds: s.delay_seconds || 5,
+        dm_type: s.type === "send_dm" ? "text" : undefined,
+        buttons: [],
       })),
     });
     toast.success(`Modelo "${template.title}" carregado — ajuste e salve!`);
@@ -93,11 +157,15 @@ export function InstagramAutomations() {
           keywords: auto.keywords || [],
           active: auto.active,
           created_at: auto.created_at,
-          steps: (steps || []).map((s) => ({
+          steps: (steps || []).map((s: any) => ({
             id: s.id,
             type: s.step_type as FlowStep["type"],
             message: s.message || "",
             delay_seconds: s.delay_seconds || 5,
+            dm_type: (s.dm_type as DmType) || "text",
+            buttons: Array.isArray(s.buttons) ? s.buttons : [],
+            link_url: s.link_url || "",
+            link_title: s.link_title || "",
           })),
         });
       }
@@ -121,7 +189,7 @@ export function InstagramAutomations() {
       steps: [
         { id: crypto.randomUUID(), type: "reply_comment", message: "" },
         { id: crypto.randomUUID(), type: "delay", message: "", delay_seconds: 5 },
-        { id: crypto.randomUUID(), type: "send_dm", message: "" },
+        { id: crypto.randomUUID(), type: "send_dm", message: "", dm_type: "text", buttons: [] },
       ],
       active: true,
       created_at: new Date().toISOString(),
@@ -131,8 +199,17 @@ export function InstagramAutomations() {
   const saveFlow = async () => {
     if (!editingFlow || !user) return;
     if (!editingFlow.name.trim()) { toast.error("Dê um nome ao fluxo"); return; }
-    const hasEmptyStep = editingFlow.steps.some((s) => s.type !== "delay" && !s.message.trim());
-    if (hasEmptyStep) { toast.error("Preencha todas as mensagens do fluxo"); return; }
+    const hasEmptyStep = editingFlow.steps.some((s) => {
+      if (s.type === "delay") return false;
+      if (s.type === "send_dm" && s.dm_type === "link") {
+        return !s.message.trim() || !s.link_url?.trim();
+      }
+      if (s.type === "send_dm" && s.dm_type === "buttons") {
+        return !s.message.trim() || !(s.buttons && s.buttons.length > 0 && s.buttons.every((b) => b.title.trim()));
+      }
+      return !s.message.trim();
+    });
+    if (hasEmptyStep) { toast.error("Preencha todas as mensagens, botões e links do fluxo"); return; }
 
     setSaving(true);
     try {
@@ -145,8 +222,6 @@ export function InstagramAutomations() {
           keywords: editingFlow.keywords,
           active: editingFlow.active,
         }).eq("id", editingFlow.id);
-
-        // Delete old steps and re-insert
         await supabase.from("instagram_automation_steps").delete().eq("automation_id", editingFlow.id);
       } else {
         await supabase.from("instagram_automations").insert({
@@ -159,7 +234,6 @@ export function InstagramAutomations() {
         });
       }
 
-      // Insert steps
       if (editingFlow.steps.length > 0) {
         await supabase.from("instagram_automation_steps").insert(
           editingFlow.steps.map((s, idx) => ({
@@ -168,6 +242,10 @@ export function InstagramAutomations() {
             step_type: s.type,
             message: s.message,
             delay_seconds: s.delay_seconds || 5,
+            dm_type: s.type === "send_dm" ? (s.dm_type || "text") : "text",
+            buttons: s.type === "send_dm" && s.dm_type === "buttons" ? (s.buttons || []) : [],
+            link_url: s.type === "send_dm" && s.dm_type === "link" ? (s.link_url || null) : null,
+            link_title: s.type === "send_dm" && s.dm_type === "link" ? (s.link_title || null) : null,
           }))
         );
       }
@@ -208,6 +286,10 @@ export function InstagramAutomations() {
           step_type: s.type,
           message: s.message,
           delay_seconds: s.delay_seconds || 5,
+          dm_type: s.type === "send_dm" ? (s.dm_type || "text") : "text",
+          buttons: s.type === "send_dm" && s.dm_type === "buttons" ? (s.buttons || []) : [],
+          link_url: s.type === "send_dm" && s.dm_type === "link" ? (s.link_url || null) : null,
+          link_title: s.type === "send_dm" && s.dm_type === "link" ? (s.link_title || null) : null,
         }))
       );
     }
@@ -227,6 +309,7 @@ export function InstagramAutomations() {
       steps: [...editingFlow.steps, {
         id: crypto.randomUUID(), type, message: "",
         ...(type === "delay" ? { delay_seconds: 5 } : {}),
+        ...(type === "send_dm" ? { dm_type: "text", buttons: [] } : {}),
       }],
     });
   };
@@ -352,36 +435,17 @@ export function InstagramAutomations() {
                         </Button>
                       </div>
                     </div>
+
                     {step.type === "delay" ? (
                       <div className="space-y-2">
                         <Label>Tempo de espera (segundos)</Label>
                         <Input type="number" min={1} value={step.delay_seconds || 5}
                           onChange={(e) => updateStep(step.id, { delay_seconds: Number(e.target.value) })} className="max-w-[140px]" />
                       </div>
+                    ) : step.type === "reply_comment" ? (
+                      <ReplyEditor step={step} onUpdate={(d) => updateStep(step.id, d)} />
                     ) : (
-                      <div className="space-y-2">
-                        <Label>{step.type === "reply_comment" ? "Resposta(s) ao comentário" : "Mensagem(ns) no Direct"}</Label>
-                        <Textarea
-                          placeholder={step.type === "reply_comment"
-                            ? "Ex: Obrigado pelo comentário! 🙌\n\n💡 Para várias respostas (escolha aleatória), separe com |||\nEx: Obrigado! ||| Adorei seu comentário ❤️ ||| Que legal! 🚀"
-                            : "Ex: Oi {{nome}}! Vi seu comentário 🎁\n\n💡 Para várias mensagens, separe com |||"}
-                          value={step.message}
-                          onChange={(e) => updateStep(step.id, { message: e.target.value })} rows={5} />
-                        <div className="flex items-center justify-between">
-                          <p className="text-[11px] text-muted-foreground">
-                            Variáveis: {"{{nome}}"} · {"{{comentario}}"} · Separe respostas com <code className="text-pink-500 font-mono">|||</code>
-                          </p>
-                          <Button type="button" variant="ghost" size="sm" className="h-6 text-[11px] gap-1"
-                            onClick={() => updateStep(step.id, { message: (step.message || "") + (step.message ? " ||| " : "") })}>
-                            <Plus size={10} /> variante
-                          </Button>
-                        </div>
-                        {step.message && step.message.includes("|||") && (
-                          <div className="text-[11px] text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 rounded px-2 py-1">
-                            ✨ {step.message.split("|||").filter((s) => s.trim()).length} variantes detectadas — uma será escolhida aleatoriamente
-                          </div>
-                        )}
-                      </div>
+                      <DmEditor step={step} onUpdate={(d) => updateStep(step.id, d)} />
                     )}
                   </CardContent>
                 </Card>
@@ -390,7 +454,7 @@ export function InstagramAutomations() {
           })}
         </div>
 
-        <div className="flex items-center gap-2 pt-2">
+        <div className="flex items-center gap-2 pt-2 flex-wrap">
           <span className="text-xs text-muted-foreground">Adicionar etapa:</span>
           <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => addStep("reply_comment")}>
             <MessageCircle size={12} /> Responder Comentário
@@ -431,6 +495,61 @@ export function InstagramAutomations() {
           </Button>
         </div>
       </div>
+
+      {/* Auto-resposta de comentários sem resposta */}
+      <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-purple-500/5">
+        <CardContent className="pt-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Bot size={18} className="text-primary" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="auto-scan" className="text-sm font-semibold cursor-pointer">
+                    Auto-resposta periódica
+                  </Label>
+                  {autoScan && (
+                    <Badge variant="secondary" className="gap-1 h-5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      Ativo
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Verifica comentários sem resposta e dispara automações ativas automaticamente
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 flex-wrap">
+              <Switch id="auto-scan" checked={autoScan} onCheckedChange={setAutoScan} />
+              <Select value={String(autoScanInterval)} onValueChange={(v) => setAutoScanInterval(Number(v))}>
+                <SelectTrigger className="h-8 w-32 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="30">A cada 30s</SelectItem>
+                  <SelectItem value="60">A cada 1min</SelectItem>
+                  <SelectItem value="120">A cada 2min</SelectItem>
+                  <SelectItem value="300">A cada 5min</SelectItem>
+                  <SelectItem value="600">A cada 10min</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button variant="outline" size="sm" onClick={runAutoScan} disabled={scanning} className="gap-1.5 h-8">
+                {scanning ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
+                Verificar agora
+              </Button>
+            </div>
+          </div>
+          {lastScan && (
+            <p className="text-[11px] text-muted-foreground mt-3 pt-3 border-t">
+              Última verificação às {lastScan.at.toLocaleTimeString("pt-BR")} —{" "}
+              <span className="font-medium">{lastScan.scanned}</span> comentários verificados ·{" "}
+              <span className="font-medium text-emerald-600">{lastScan.matched}</span> respondidos
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       <AutomationTemplatesModal
         open={templatesOpen}
@@ -498,8 +617,13 @@ export function InstagramAutomations() {
                             </div>
                             {idx < flow.steps.length - 1 && <div className="w-px h-4 bg-border mt-1" />}
                           </div>
-                          <div className="text-sm">
+                          <div className="text-sm flex-1 min-w-0">
                             <span className="font-medium">{config.label}</span>
+                            {step.type === "send_dm" && step.dm_type && step.dm_type !== "text" && (
+                              <Badge variant="outline" className="ml-2 text-[10px] gap-1">
+                                {step.dm_type === "buttons" ? <><MousePointerClick size={9} /> Botões</> : <><Link2 size={9} /> Link</>}
+                              </Badge>
+                            )}
                             {step.type === "delay" ? (
                               <span className="text-muted-foreground ml-1">— {step.delay_seconds}s</span>
                             ) : (
@@ -517,5 +641,162 @@ export function InstagramAutomations() {
         </div>
       )}
     </div>
+  );
+}
+
+// ============= Sub-editors =============
+
+function ReplyEditor({ step, onUpdate }: { step: FlowStep; onUpdate: (d: Partial<FlowStep>) => void }) {
+  return (
+    <div className="space-y-2">
+      <Label>Resposta(s) ao comentário</Label>
+      <Textarea
+        placeholder="Ex: Obrigado pelo comentário! 🙌&#10;&#10;💡 Para várias respostas (escolha aleatória), separe com |||&#10;Ex: Obrigado! ||| Adorei seu comentário ❤️ ||| Que legal! 🚀"
+        value={step.message}
+        onChange={(e) => onUpdate({ message: e.target.value })}
+        rows={4}
+      />
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] text-muted-foreground">
+          Variáveis: {"{{nome}}"} · {"{{comentario}}"} · Separe respostas com <code className="text-pink-500 font-mono">|||</code>
+        </p>
+        <Button type="button" variant="ghost" size="sm" className="h-6 text-[11px] gap-1"
+          onClick={() => onUpdate({ message: (step.message || "") + (step.message ? " ||| " : "") })}>
+          <Plus size={10} /> variante
+        </Button>
+      </div>
+      {step.message && step.message.includes("|||") && (
+        <div className="text-[11px] text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 rounded px-2 py-1">
+          ✨ {step.message.split("|||").filter((s) => s.trim()).length} variantes detectadas
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DmEditor({ step, onUpdate }: { step: FlowStep; onUpdate: (d: Partial<FlowStep>) => void }) {
+  const dmType: DmType = step.dm_type || "text";
+  const buttons: ButtonItem[] = step.buttons || [];
+
+  const updateButton = (id: string, title: string) => {
+    onUpdate({ buttons: buttons.map((b) => (b.id === id ? { ...b, title } : b)) });
+  };
+  const addButton = () => {
+    if (buttons.length >= 3) {
+      toast.warning("Instagram permite no máximo 3 botões");
+      return;
+    }
+    onUpdate({ buttons: [...buttons, { id: crypto.randomUUID(), title: "" }] });
+  };
+  const removeButton = (id: string) => {
+    onUpdate({ buttons: buttons.filter((b) => b.id !== id) });
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-2">
+        <Label className="text-xs">Tipo de mensagem no Direct</Label>
+        <RadioGroup
+          value={dmType}
+          onValueChange={(v) => onUpdate({ dm_type: v as DmType })}
+          className="grid grid-cols-3 gap-2"
+        >
+          <DmTypeOption value="text" label="Texto simples" icon={MessageCircle} active={dmType === "text"} />
+          <DmTypeOption value="buttons" label="Com botões" icon={MousePointerClick} active={dmType === "buttons"} />
+          <DmTypeOption value="link" label="Com link (CTA)" icon={Link2} active={dmType === "link"} />
+        </RadioGroup>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Mensagem no Direct</Label>
+        <Textarea
+          placeholder="Ex: Oi {{nome}}! Vi seu comentário 🎁&#10;&#10;💡 Para várias mensagens (escolha aleatória), separe com |||"
+          value={step.message}
+          onChange={(e) => onUpdate({ message: e.target.value })}
+          rows={4}
+        />
+        <p className="text-[11px] text-muted-foreground">
+          Variáveis: {"{{nome}}"} · {"{{comentario}}"} · Separe variantes com <code className="text-pink-500 font-mono">|||</code>
+        </p>
+      </div>
+
+      {dmType === "buttons" && (
+        <div className="space-y-2 p-3 rounded-lg border border-blue-500/20 bg-blue-500/5">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs flex items-center gap-1.5">
+              <MousePointerClick size={12} className="text-blue-500" />
+              Botões ({buttons.length}/3)
+            </Label>
+            <Button type="button" variant="ghost" size="sm" className="h-6 text-[11px] gap-1" onClick={addButton} disabled={buttons.length >= 3}>
+              <Plus size={10} /> Adicionar botão
+            </Button>
+          </div>
+          {buttons.length === 0 && (
+            <p className="text-[11px] text-muted-foreground italic">Nenhum botão. Clique em "Adicionar botão".</p>
+          )}
+          {buttons.map((b, i) => (
+            <div key={b.id} className="flex items-center gap-2">
+              <Badge variant="outline" className="text-[10px] shrink-0">#{i + 1}</Badge>
+              <Input
+                placeholder="Título do botão (máx 20 caracteres)"
+                value={b.title}
+                onChange={(e) => updateButton(b.id, e.target.value.slice(0, 20))}
+                maxLength={20}
+                className="h-8 text-xs"
+              />
+              <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive shrink-0" onClick={() => removeButton(b.id)}>
+                <X size={12} />
+              </Button>
+            </div>
+          ))}
+          <p className="text-[10px] text-muted-foreground">
+            ℹ️ Botões só funcionam quando o usuário envia DM ou responde a um story. Em respostas a comentários (private_replies), o Instagram envia apenas o texto.
+          </p>
+        </div>
+      )}
+
+      {dmType === "link" && (
+        <div className="space-y-2 p-3 rounded-lg border border-rose-500/20 bg-rose-500/5">
+          <Label className="text-xs flex items-center gap-1.5">
+            <Link2 size={12} className="text-rose-500" />
+            Botão CTA com link
+          </Label>
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_2fr] gap-2">
+            <Input
+              placeholder="Texto do botão"
+              value={step.link_title || ""}
+              onChange={(e) => onUpdate({ link_title: e.target.value.slice(0, 20) })}
+              maxLength={20}
+              className="h-8 text-xs"
+            />
+            <Input
+              placeholder="https://exemplo.com"
+              value={step.link_url || ""}
+              onChange={(e) => onUpdate({ link_url: e.target.value })}
+              type="url"
+              className="h-8 text-xs"
+            />
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            ℹ️ Em respostas a comentários, o link é enviado anexado ao texto da mensagem (private_replies não suporta botões).
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DmTypeOption({ value, label, icon: Icon, active }: { value: string; label: string; icon: any; active: boolean }) {
+  return (
+    <Label
+      htmlFor={`dm-${value}`}
+      className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-all ${
+        active ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
+      }`}
+    >
+      <RadioGroupItem value={value} id={`dm-${value}`} className="shrink-0" />
+      <Icon size={14} className={active ? "text-primary" : "text-muted-foreground"} />
+      <span className="text-xs font-medium">{label}</span>
+    </Label>
   );
 }
