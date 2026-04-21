@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Search, Zap, Sparkles, Plus, MessageCircle, Send, Clock, Bot, Link2, ShoppingBag, TrendingUp, Heart, Users, Megaphone } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface AutomationTemplate {
@@ -13,7 +14,7 @@ export interface AutomationTemplate {
   description: string;
   badge?: "POPULAR" | "PRO" | "NOVO";
   type: "Quick Automation" | "Flow Builder";
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: LucideIcon;
   category: "leads" | "trafego" | "engajamento" | "seguidores";
   trigger: "comment_keyword" | "any_comment" | "story_mention";
   triggerLabel: string; // "Comentário na publicação", "DM", "Resposta ao story"
