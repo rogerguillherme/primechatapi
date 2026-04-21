@@ -337,16 +337,7 @@ export function InstagramComments() {
                       onDelete={() => {
                         if (confirm("Excluir este comentário?")) deleteMutation.mutate(c.id);
                       }}
-                      onTriggerAutomation={() =>
-                        triggerAutomationMutation.mutate({
-                          comment_id: c.id,
-                          text: c.text,
-                          commenter_username: c.username,
-                          commenter_id: c.user?.id,
-                        })
-                      }
                       isReplying={replyMutation.isPending}
-                      isTriggering={triggerAutomationMutation.isPending && triggerAutomationMutation.variables?.comment_id === c.id}
                     />
                   ))}
                   {!commentsQuery.isLoading && filteredComments.length === 0 && (
