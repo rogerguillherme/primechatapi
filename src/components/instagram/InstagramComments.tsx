@@ -195,6 +195,48 @@ export function InstagramComments() {
   });
 
 
+  const runAutoScan = async () => {
+    if (scanning) return;
+    setScanning(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("instagram-auto-reply-comments", {
+        body: { max_posts: 10, max_comments_per_post: 25 },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setLastScan({ at: new Date(), matched: data?.matched ?? 0, scanned: data?.scanned ?? 0 });
+      if ((data?.matched ?? 0) > 0) {
+        toast.success(`Auto-resposta: ${data.matched} comentário(s) respondido(s)`);
+        qc.invalidateQueries({ queryKey: ["ig-comments-media"] });
+        if (selectedMedia) qc.invalidateQueries({ queryKey: ["ig-comments", selectedMedia.id] });
+      }
+    } catch (e) {
+      toast.error((e as Error).message || "Falha no auto-scan");
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!autoScan) {
+      if (scanTimerRef.current) {
+        window.clearInterval(scanTimerRef.current);
+        scanTimerRef.current = null;
+      }
+      return;
+    }
+    // dispara imediatamente ao ligar
+    runAutoScan();
+    scanTimerRef.current = window.setInterval(runAutoScan, autoScanInterval * 1000);
+    return () => {
+      if (scanTimerRef.current) {
+        window.clearInterval(scanTimerRef.current);
+        scanTimerRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoScan, autoScanInterval]);
+
   const totalComments = mediaQuery.data?.reduce((s, m) => s + (m.comments_count || 0), 0) || 0;
   const totalLikes = mediaQuery.data?.reduce((s, m) => s + (m.like_count || 0), 0) || 0;
 
