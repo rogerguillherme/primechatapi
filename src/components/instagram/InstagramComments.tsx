@@ -419,7 +419,7 @@ interface CommentRowProps {
 
 function CommentRow({
   comment, isOwnReplied, replyTo, replyText, onReplyOpen, onReplyChange,
-  onReplySubmit, onCancelReply, onHide, onDelete, isReplying,
+  onReplySubmit, onCancelReply, onHide, onDelete, onTriggerAutomation, isReplying, isTriggering,
 }: CommentRowProps) {
   const replies = Array.isArray(comment.replies)
     ? comment.replies
@@ -456,6 +456,17 @@ function CommentRow({
             <div className="flex items-center gap-1 mt-2">
               <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => onReplyOpen(comment.id)}>
                 <MessageCircle size={12} /> Responder
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs gap-1 text-purple-600 hover:text-purple-700 hover:bg-purple-500/10"
+                onClick={onTriggerAutomation}
+                disabled={isTriggering}
+                title="Executar automações ativas para este comentário (resposta + DM)"
+              >
+                {isTriggering ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
+                Disparar automação
               </Button>
               <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => onHide(true)}>
                 <EyeOff size={12} /> Ocultar
