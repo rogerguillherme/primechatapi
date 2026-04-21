@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
   MessageCircle, Heart, Trash2, Send, EyeOff, Eye, Image as ImageIcon,
-  RefreshCw, ExternalLink, Loader2, Filter,
+  RefreshCw, ExternalLink, Loader2, Filter, Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -156,6 +156,36 @@ export function InstagramComments() {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const triggerAutomationMutation = useMutation({
+    mutationFn: async (vars: { comment_id: string; text: string; commenter_username?: string; commenter_id?: string }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Não autenticado");
+      const { data, error } = await supabase.functions.invoke("instagram-trigger-automation", {
+        body: vars,
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: (data) => {
+      if (!data?.matched) {
+        toast.warning(data?.message || "Nenhuma automação correspondeu");
+        return;
+      }
+      const stepsTotal = (data.log || []).reduce((sum: number, l: any) => sum + (l.steps?.length || 0), 0);
+      const stepsOk = (data.log || []).reduce((sum: number, l: any) => sum + (l.steps?.filter((s: any) => s.ok).length || 0), 0);
+      if (stepsOk === stepsTotal) {
+        toast.success(`Automação executada (${stepsOk}/${stepsTotal} passos OK)`);
+      } else {
+        toast.warning(`Automação parcial (${stepsOk}/${stepsTotal} passos OK) — veja o console`);
+        console.warn("Automation log:", data.log);
+      }
+      qc.invalidateQueries({ queryKey: ["ig-comments", selectedMedia?.id] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
 
   const totalComments = mediaQuery.data?.reduce((s, m) => s + (m.comments_count || 0), 0) || 0;
   const totalLikes = mediaQuery.data?.reduce((s, m) => s + (m.like_count || 0), 0) || 0;
@@ -332,7 +362,16 @@ export function InstagramComments() {
                       onDelete={() => {
                         if (confirm("Excluir este comentário?")) deleteMutation.mutate(c.id);
                       }}
+                      onTriggerAutomation={() =>
+                        triggerAutomationMutation.mutate({
+                          comment_id: c.id,
+                          text: c.text,
+                          commenter_username: c.username,
+                          commenter_id: c.user?.id,
+                        })
+                      }
                       isReplying={replyMutation.isPending}
+                      isTriggering={triggerAutomationMutation.isPending && triggerAutomationMutation.variables?.comment_id === c.id}
                     />
                   ))}
                   {!commentsQuery.isLoading && filteredComments.length === 0 && (
@@ -373,12 +412,14 @@ interface CommentRowProps {
   onCancelReply: () => void;
   onHide: (hide: boolean) => void;
   onDelete: () => void;
+  onTriggerAutomation: () => void;
   isReplying: boolean;
+  isTriggering: boolean;
 }
 
 function CommentRow({
   comment, isOwnReplied, replyTo, replyText, onReplyOpen, onReplyChange,
-  onReplySubmit, onCancelReply, onHide, onDelete, isReplying,
+  onReplySubmit, onCancelReply, onHide, onDelete, onTriggerAutomation, isReplying, isTriggering,
 }: CommentRowProps) {
   const replies = Array.isArray(comment.replies)
     ? comment.replies
@@ -415,6 +456,17 @@ function CommentRow({
             <div className="flex items-center gap-1 mt-2">
               <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => onReplyOpen(comment.id)}>
                 <MessageCircle size={12} /> Responder
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs gap-1 text-purple-600 hover:text-purple-700 hover:bg-purple-500/10"
+                onClick={onTriggerAutomation}
+                disabled={isTriggering}
+                title="Executar automações ativas para este comentário (resposta + DM)"
+              >
+                {isTriggering ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
+                Disparar automação
               </Button>
               <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => onHide(true)}>
                 <EyeOff size={12} /> Ocultar
