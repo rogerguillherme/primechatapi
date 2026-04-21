@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Instagram, Plug, Unplug, Loader2, CheckCircle2, ExternalLink, Webhook } from "lucide-react";
 import { toast } from "sonner";
+import { InstagramDiagnostics } from "./InstagramDiagnostics";
 
 const REDIRECT_URI = "https://primechatapi.lovable.app/auth/instagram/callback";
 
