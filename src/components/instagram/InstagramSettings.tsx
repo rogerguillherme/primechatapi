@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Instagram, Plug, Unplug, Loader2, CheckCircle2, ExternalLink } from "lucide-react";
+import { Instagram, Plug, Unplug, Loader2, CheckCircle2, ExternalLink, Webhook } from "lucide-react";
 import { toast } from "sonner";
 
 const REDIRECT_URI = "https://primechatapi.lovable.app/auth/instagram/callback";
