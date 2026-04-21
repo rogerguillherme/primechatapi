@@ -46,6 +46,25 @@ export function InstagramAutomations() {
   const [expandedFlow, setExpandedFlow] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+
+  const createFromTemplate = (template: AutomationTemplate) => {
+    setEditingFlow({
+      id: crypto.randomUUID(),
+      name: template.flow.name,
+      trigger_type: template.trigger,
+      keywords: template.keywords || [],
+      active: true,
+      created_at: new Date().toISOString(),
+      steps: template.flow.steps.map((s) => ({
+        id: crypto.randomUUID(),
+        type: s.type,
+        message: s.message,
+        delay_seconds: s.delay_seconds || 5,
+      })),
+    });
+    toast.success(`Modelo "${template.title}" carregado — ajuste e salve!`);
+  };
 
   const loadFlows = useCallback(async () => {
     if (!user) return;
