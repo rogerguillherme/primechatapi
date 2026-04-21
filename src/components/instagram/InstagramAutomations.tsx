@@ -422,10 +422,22 @@ export function InstagramAutomations() {
           <h2 className="text-xl font-bold">Fluxos do Instagram</h2>
           <p className="text-sm text-muted-foreground">Crie fluxos automáticos: comentário → resposta → DM</p>
         </div>
-        <Button onClick={createNewFlow} className="gap-2 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600">
-          <Plus className="h-4 w-4" /> Novo Fluxo
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={createNewFlow} className="gap-2">
+            <Plus className="h-4 w-4" /> Do Zero
+          </Button>
+          <Button onClick={() => setTemplatesOpen(true)} className="gap-2 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600">
+            <Sparkles className="h-4 w-4" /> Usar modelo
+          </Button>
+        </div>
       </div>
+
+      <AutomationTemplatesModal
+        open={templatesOpen}
+        onOpenChange={setTemplatesOpen}
+        onSelect={createFromTemplate}
+        onStartBlank={createNewFlow}
+      />
 
       {flows.length === 0 ? (
         <Card className="border-dashed">
