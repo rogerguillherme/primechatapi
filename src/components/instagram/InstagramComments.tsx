@@ -378,14 +378,12 @@ interface CommentRowProps {
   onCancelReply: () => void;
   onHide: (hide: boolean) => void;
   onDelete: () => void;
-  onTriggerAutomation: () => void;
   isReplying: boolean;
-  isTriggering: boolean;
 }
 
 function CommentRow({
   comment, isOwnReplied, replyTo, replyText, onReplyOpen, onReplyChange,
-  onReplySubmit, onCancelReply, onHide, onDelete, onTriggerAutomation, isReplying, isTriggering,
+  onReplySubmit, onCancelReply, onHide, onDelete, isReplying,
 }: CommentRowProps) {
   const replies = Array.isArray(comment.replies)
     ? comment.replies
