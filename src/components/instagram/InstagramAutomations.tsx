@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { AutomationTemplatesModal, type AutomationTemplate } from "./AutomationTemplatesModal";
 
 interface FlowStep {
   id: string;
@@ -45,6 +46,25 @@ export function InstagramAutomations() {
   const [expandedFlow, setExpandedFlow] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+
+  const createFromTemplate = (template: AutomationTemplate) => {
+    setEditingFlow({
+      id: crypto.randomUUID(),
+      name: template.flow.name,
+      trigger_type: template.trigger,
+      keywords: template.keywords || [],
+      active: true,
+      created_at: new Date().toISOString(),
+      steps: template.flow.steps.map((s) => ({
+        id: crypto.randomUUID(),
+        type: s.type,
+        message: s.message,
+        delay_seconds: s.delay_seconds || 5,
+      })),
+    });
+    toast.success(`Modelo "${template.title}" carregado — ajuste e salve!`);
+  };
 
   const loadFlows = useCallback(async () => {
     if (!user) return;
@@ -402,10 +422,22 @@ export function InstagramAutomations() {
           <h2 className="text-xl font-bold">Fluxos do Instagram</h2>
           <p className="text-sm text-muted-foreground">Crie fluxos automáticos: comentário → resposta → DM</p>
         </div>
-        <Button onClick={createNewFlow} className="gap-2 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600">
-          <Plus className="h-4 w-4" /> Novo Fluxo
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={createNewFlow} className="gap-2">
+            <Plus className="h-4 w-4" /> Do Zero
+          </Button>
+          <Button onClick={() => setTemplatesOpen(true)} className="gap-2 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600">
+            <Sparkles className="h-4 w-4" /> Usar modelo
+          </Button>
+        </div>
       </div>
+
+      <AutomationTemplatesModal
+        open={templatesOpen}
+        onOpenChange={setTemplatesOpen}
+        onSelect={createFromTemplate}
+        onStartBlank={createNewFlow}
+      />
 
       {flows.length === 0 ? (
         <Card className="border-dashed">
@@ -417,8 +449,8 @@ export function InstagramAutomations() {
             <p className="text-sm text-muted-foreground mt-1 text-center max-w-sm">
               Crie um fluxo para responder comentários automaticamente e enviar mensagens no Direct
             </p>
-            <Button onClick={createNewFlow} variant="outline" className="mt-4 gap-2">
-              <Plus size={14} /> Criar primeiro fluxo
+            <Button onClick={() => setTemplatesOpen(true)} variant="outline" className="mt-4 gap-2">
+              <Sparkles size={14} /> Escolher um modelo
             </Button>
           </CardContent>
         </Card>
