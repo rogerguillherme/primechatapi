@@ -27,6 +27,27 @@ export function InstagramSettings() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isSubscribing, setIsSubscribing] = useState(false);
+
+  const handleSubscribeWebhook = async () => {
+    setIsSubscribing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("instagram-subscribe-webhook");
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      const ok = (data?.results || []).every((r: any) => r.page_subscribe?.ok && r.ig_subscribe?.ok);
+      if (ok) {
+        toast.success("Webhooks de comentários e DMs ativados!");
+      } else {
+        console.warn("Subscription partial:", data);
+        toast.warning("Subscrição parcial — verifique permissões do app Meta");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao ativar webhooks");
+    } finally {
+      setIsSubscribing(false);
+    }
+  };
 
   const { data: connections, isLoading } = useQuery({
     queryKey: ["instagram-connections", user?.id],
