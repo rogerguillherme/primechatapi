@@ -59,6 +59,12 @@ Deno.serve(async (req) => {
       ].join(",")
     );
     oauthUrl.searchParams.set("response_type", "code");
+    // Força a Meta a sempre mostrar a tela de seleção de conta/permissões,
+    // permitindo conectar contas Instagram diferentes em logins diferentes do app
+    // mesmo quando o usuário já tem uma sessão ativa no Facebook.
+    oauthUrl.searchParams.set("auth_type", "reauthenticate");
+    // Inclui o user_id como state para validação extra (opcional)
+    oauthUrl.searchParams.set("state", user.id);
 
     return new Response(
       JSON.stringify({ oauth_url: oauthUrl.toString() }),
