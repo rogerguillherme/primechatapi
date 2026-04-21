@@ -449,8 +449,8 @@ export function InstagramAutomations() {
             <p className="text-sm text-muted-foreground mt-1 text-center max-w-sm">
               Crie um fluxo para responder comentários automaticamente e enviar mensagens no Direct
             </p>
-            <Button onClick={createNewFlow} variant="outline" className="mt-4 gap-2">
-              <Plus size={14} /> Criar primeiro fluxo
+            <Button onClick={() => setTemplatesOpen(true)} variant="outline" className="mt-4 gap-2">
+              <Sparkles size={14} /> Escolher um modelo
             </Button>
           </CardContent>
         </Card>
