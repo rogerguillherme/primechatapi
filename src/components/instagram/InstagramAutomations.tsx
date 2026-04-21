@@ -243,7 +243,7 @@ export function InstagramAutomations() {
             message: s.message,
             delay_seconds: s.delay_seconds || 5,
             dm_type: s.type === "send_dm" ? (s.dm_type || "text") : "text",
-            buttons: s.type === "send_dm" && s.dm_type === "buttons" ? (s.buttons || []) : [],
+            buttons: (s.type === "send_dm" && s.dm_type === "buttons" ? (s.buttons || []) : []) as any,
             link_url: s.type === "send_dm" && s.dm_type === "link" ? (s.link_url || null) : null,
             link_title: s.type === "send_dm" && s.dm_type === "link" ? (s.link_title || null) : null,
           }))
@@ -287,7 +287,7 @@ export function InstagramAutomations() {
           message: s.message,
           delay_seconds: s.delay_seconds || 5,
           dm_type: s.type === "send_dm" ? (s.dm_type || "text") : "text",
-          buttons: s.type === "send_dm" && s.dm_type === "buttons" ? (s.buttons || []) : [],
+          buttons: (s.type === "send_dm" && s.dm_type === "buttons" ? (s.buttons || []) : []) as any,
           link_url: s.type === "send_dm" && s.dm_type === "link" ? (s.link_url || null) : null,
           link_title: s.type === "send_dm" && s.dm_type === "link" ? (s.link_title || null) : null,
         }))
