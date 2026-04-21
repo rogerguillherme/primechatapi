@@ -173,10 +173,17 @@ async function handleComment(adminClient: any, conn: any, commentData: any, agen
   if (!text || !from) return;
   const username = from.username || from.name || "amigo(a)";
   const lower = text.toLowerCase().trim();
-  console.log(`Comment from @${username}: "${text}"`);
+  console.log(`Comment from @${username}: "${text}" (commentId=${commentId})`);
+
+  // Avoid replying to our own comments (loop)
+  if (conn.instagram_username && username.toLowerCase() === conn.instagram_username.toLowerCase()) {
+    console.log("Skipping own comment to avoid loop");
+    return;
+  }
 
   let matched = false;
   const automations = await getAutomations(adminClient, conn.user_id, ["any_comment", "comment_keyword"]);
+  console.log(`Loaded ${automations.length} comment automations for user ${conn.user_id}`);
   for (const automation of automations) {
     let trigger = false;
     if (automation.trigger_type === "any_comment") trigger = true;
@@ -184,9 +191,12 @@ async function handleComment(adminClient: any, conn: any, commentData: any, agen
       const kws: string[] = automation.keywords || [];
       trigger = kws.some((kw) => lower.includes(kw.toLowerCase().trim()));
     }
-    if (!trigger) continue;
+    if (!trigger) {
+      console.log(`Automation "${automation.name}" did NOT match (trigger=${automation.trigger_type}, kws=${(automation.keywords || []).join(",")})`);
+      continue;
+    }
     matched = true;
-    console.log(`Automation "${automation.name}" triggered`);
+    console.log(`✓ Automation "${automation.name}" triggered — running ${(automation.instagram_automation_steps || []).length} steps`);
     await runSteps(automation.instagram_automation_steps, conn, {
       username, text, commentId, senderId: from.id,
     });
