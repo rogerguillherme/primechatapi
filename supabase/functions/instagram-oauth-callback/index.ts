@@ -6,6 +6,8 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const GRAPH = "https://graph.facebook.com/v19.0";
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -17,166 +19,182 @@ Deno.serve(async (req) => {
     const metaAppId = Deno.env.get("META_APP_ID")!;
     const metaAppSecret = Deno.env.get("META_APP_SECRET")!;
 
-    // Auth
     const authHeader = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
     if (!authHeader.toLowerCase().startsWith("bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json({ error: "Unauthorized" }, 401);
     }
     const token = authHeader.replace(/^Bearer\s+/i, "").trim();
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
     const { data: { user }, error: userError } = await adminClient.auth.getUser(token);
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (userError || !user) return json({ error: "Unauthorized" }, 401);
+
+    const payload = await req.json();
+    const { code, redirect_uri, selected_ig_user_id } = payload;
+
+    // ============================================================
+    // FASE 2: Usuário já escolheu a conta — finaliza com user_token salvo temporariamente
+    // ============================================================
+    if (selected_ig_user_id && payload.user_access_token) {
+      return await finalizeConnection(adminClient, user.id, payload.user_access_token, selected_ig_user_id);
     }
 
-    const { code, redirect_uri } = await req.json();
+    // ============================================================
+    // FASE 1: Trocar code por token e listar contas disponíveis
+    // ============================================================
     if (!code || !redirect_uri) {
-      return new Response(JSON.stringify({ error: "code and redirect_uri are required" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json({ error: "code e redirect_uri são obrigatórios" }, 400);
     }
 
-    // Exchange code for token
-    const tokenUrl = `https://graph.facebook.com/v19.0/oauth/access_token?client_id=${metaAppId}&redirect_uri=${encodeURIComponent(redirect_uri)}&client_secret=${metaAppSecret}&code=${encodeURIComponent(code)}`;
+    const tokenUrl = `${GRAPH}/oauth/access_token?client_id=${metaAppId}&redirect_uri=${encodeURIComponent(redirect_uri)}&client_secret=${metaAppSecret}&code=${encodeURIComponent(code)}`;
     const tokenRes = await fetch(tokenUrl);
     const tokenData = await tokenRes.json();
 
     if (!tokenRes.ok || !tokenData.access_token) {
       console.error("Token exchange failed:", tokenData);
-      return new Response(JSON.stringify({ error: "Falha ao obter token", details: tokenData }), {
-        status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json({ error: "Falha ao obter token", details: tokenData }, 422);
     }
 
-    const accessToken = tokenData.access_token;
+    const userAccessToken = tokenData.access_token;
 
-    // Get pages the user administers
+    // Buscar todas páginas + contas IG
     const pagesRes = await fetch(
-      `https://graph.facebook.com/v19.0/me/accounts?fields=id,name,instagram_business_account{id,username,profile_picture_url,followers_count}&access_token=${accessToken}`
+      `${GRAPH}/me/accounts?fields=id,name,instagram_business_account{id,username,profile_picture_url,followers_count}&access_token=${userAccessToken}`
     );
     const pagesData = await pagesRes.json();
 
     if (!pagesData?.data?.length) {
-      return new Response(JSON.stringify({ error: "Nenhuma página do Facebook encontrada. Vincule sua conta Instagram a uma Página." }), {
-        status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json({ error: "Nenhuma página do Facebook encontrada. Vincule sua conta Instagram a uma Página." }, 422);
     }
 
-    // Find first page with IG business account
-    let igAccount: any = null;
-    let pageInfo: any = null;
+    // Listar TODAS as contas IG disponíveis
+    const igAccounts: Array<{
+      ig_user_id: string;
+      ig_username: string;
+      ig_avatar?: string;
+      ig_followers?: number;
+      page_id: string;
+      page_name: string;
+    }> = [];
 
     for (const page of pagesData.data) {
       if (page.instagram_business_account) {
-        igAccount = page.instagram_business_account;
-        pageInfo = page;
-        break;
+        igAccounts.push({
+          ig_user_id: page.instagram_business_account.id,
+          ig_username: page.instagram_business_account.username || "",
+          ig_avatar: page.instagram_business_account.profile_picture_url,
+          ig_followers: page.instagram_business_account.followers_count,
+          page_id: page.id,
+          page_name: page.name,
+        });
       }
     }
 
-    if (!igAccount) {
-      return new Response(JSON.stringify({
+    if (!igAccounts.length) {
+      return json({
         error: "Nenhuma conta Instagram Business vinculada encontrada. Verifique se sua conta IG é Business/Creator e está vinculada a uma Página.",
-      }), {
-        status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      }, 422);
     }
 
-    // Get page-level access token (required for webhook subscription and messaging)
-    const pageTokenRes = await fetch(
-      `https://graph.facebook.com/v19.0/${pageInfo.id}?fields=access_token&access_token=${accessToken}`
-    );
-    const pageTokenData = await pageTokenRes.json();
-    const pageAccessToken = pageTokenData.access_token || accessToken;
-    const storedAccessToken = pageAccessToken || accessToken;
-
-    // Save connection
-    const { data: existing } = await adminClient
-      .from("instagram_connections")
-      .select("id")
-      .eq("user_id", user.id)
-      .eq("instagram_user_id", igAccount.id)
-      .maybeSingle();
-
-    if (existing) {
-      await adminClient
-        .from("instagram_connections")
-        .update({
-          access_token: storedAccessToken,
-          instagram_username: igAccount.username,
-          page_id: pageInfo.id,
-          page_name: pageInfo.name,
-          status: "connected",
-        })
-        .eq("id", existing.id);
-    } else {
-      await adminClient.from("instagram_connections").insert({
-        user_id: user.id,
-        instagram_user_id: igAccount.id,
-        instagram_username: igAccount.username,
-        page_id: pageInfo.id,
-        page_name: pageInfo.name,
-        access_token: storedAccessToken,
-        status: "connected",
-      });
+    // Se só houver 1 conta, conecta direto (UX igual ao antigo)
+    if (igAccounts.length === 1) {
+      return await finalizeConnection(adminClient, user.id, userAccessToken, igAccounts[0].ig_user_id);
     }
 
-    // Subscribe page to webhook for Instagram DMs
-    try {
-      const pageSubRes = await fetch(
-        `https://graph.facebook.com/v19.0/${pageInfo.id}/subscribed_apps`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            subscribed_fields: "messages,messaging_postbacks",
-            access_token: pageAccessToken,
-          }),
-        }
-      );
-      const pageSubData = await pageSubRes.json();
-      console.log("Page webhook subscription:", pageSubData);
-    } catch (e) {
-      console.error("Page webhook subscribe error:", e);
-    }
-
-    // Subscribe Instagram account to comment events
-    try {
-      const igSubRes = await fetch(
-        `https://graph.facebook.com/v19.0/${igAccount.id}/subscribed_apps`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            subscribed_fields: "comments",
-            access_token: pageAccessToken,
-          }),
-        }
-      );
-      const igSubData = await igSubRes.json();
-      console.log("Instagram webhook subscription:", igSubData);
-    } catch (e) {
-      console.error("Instagram webhook subscribe error:", e);
-    }
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        instagram_username: igAccount.username,
-        instagram_user_id: igAccount.id,
-        page_name: pageInfo.name,
-      }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    // Múltiplas contas — devolve lista para o front escolher
+    return json({
+      multiple: true,
+      user_access_token: userAccessToken,
+      accounts: igAccounts,
+    });
   } catch (error) {
     console.error("Instagram OAuth callback error:", error);
-    return new Response(
-      JSON.stringify({ error: (error as Error).message || "Erro interno" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return json({ error: (error as Error).message || "Erro interno" }, 500);
   }
 });
+
+async function finalizeConnection(adminClient: any, userId: string, userAccessToken: string, selectedIgUserId: string) {
+  // Re-buscar páginas com este token e localizar a conta selecionada
+  const pagesRes = await fetch(
+    `${GRAPH}/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,profile_picture_url,followers_count}&access_token=${userAccessToken}`
+  );
+  const pagesData = await pagesRes.json();
+
+  let igAccount: any = null;
+  let pageInfo: any = null;
+  for (const page of pagesData?.data || []) {
+    if (page.instagram_business_account?.id === selectedIgUserId) {
+      igAccount = page.instagram_business_account;
+      pageInfo = page;
+      break;
+    }
+  }
+
+  if (!igAccount || !pageInfo) {
+    return json({ error: "Conta Instagram selecionada não encontrada na sessão" }, 422);
+  }
+
+  // Page access token (necessário para webhooks e DM)
+  let pageAccessToken = pageInfo.access_token;
+  if (!pageAccessToken) {
+    const pageTokenRes = await fetch(
+      `${GRAPH}/${pageInfo.id}?fields=access_token&access_token=${userAccessToken}`
+    );
+    const pageTokenData = await pageTokenRes.json();
+    pageAccessToken = pageTokenData.access_token || userAccessToken;
+  }
+
+  // Marcar conexões anteriores deste user para a MESMA conta IG como substituídas
+  // (evita duplicatas connected/disconnected antigas)
+  await adminClient
+    .from("instagram_connections")
+    .delete()
+    .eq("user_id", userId)
+    .eq("instagram_user_id", igAccount.id);
+
+  // Inserir nova conexão limpa
+  await adminClient.from("instagram_connections").insert({
+    user_id: userId,
+    instagram_user_id: igAccount.id,
+    instagram_username: igAccount.username,
+    page_id: pageInfo.id,
+    page_name: pageInfo.name,
+    access_token: pageAccessToken,
+    status: "connected",
+  });
+
+  // Subscribe webhooks (page-level + IG-level)
+  try {
+    await fetch(`${GRAPH}/${pageInfo.id}/subscribed_apps`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        subscribed_fields: "messages,messaging_postbacks",
+        access_token: pageAccessToken,
+      }),
+    });
+    await fetch(`${GRAPH}/${igAccount.id}/subscribed_apps`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        subscribed_fields: "comments",
+        access_token: pageAccessToken,
+      }),
+    });
+  } catch (e) {
+    console.error("Webhook subscription error:", e);
+  }
+
+  return json({
+    success: true,
+    instagram_username: igAccount.username,
+    instagram_user_id: igAccount.id,
+    page_name: pageInfo.name,
+  });
+}
+
+function json(payload: unknown, status = 200) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
