@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Instagram, Plug, Unplug, Loader2, CheckCircle2, ExternalLink } from "lucide-react";
+import { Instagram, Plug, Unplug, Loader2, CheckCircle2, ExternalLink, Webhook } from "lucide-react";
 import { toast } from "sonner";
 
 const REDIRECT_URI = "https://primechatapi.lovable.app/auth/instagram/callback";
@@ -27,6 +27,27 @@ export function InstagramSettings() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isSubscribing, setIsSubscribing] = useState(false);
+
+  const handleSubscribeWebhook = async () => {
+    setIsSubscribing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("instagram-subscribe-webhook");
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      const ok = (data?.results || []).every((r: any) => r.page_subscribe?.ok && r.ig_subscribe?.ok);
+      if (ok) {
+        toast.success("Webhooks de comentários e DMs ativados!");
+      } else {
+        console.warn("Subscription partial:", data);
+        toast.warning("Subscrição parcial — verifique permissões do app Meta");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao ativar webhooks");
+    } finally {
+      setIsSubscribing(false);
+    }
+  };
 
   const { data: connections, isLoading } = useQuery({
     queryKey: ["instagram-connections", user?.id],
@@ -103,6 +124,10 @@ export function InstagramSettings() {
                   <Badge className="bg-green-500/10 text-green-600 border-green-500/20">
                     <CheckCircle2 className="h-3 w-3 mr-1" /> Conectado
                   </Badge>
+                  <Button variant="outline" size="sm" onClick={handleSubscribeWebhook} disabled={isSubscribing}>
+                    {isSubscribing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Webhook className="h-4 w-4 mr-1" />}
+                    Ativar Webhooks
+                  </Button>
                   <Button variant="destructive" size="sm" onClick={() => handleDisconnect(activeConnection.id)}>
                     <Unplug className="h-4 w-4 mr-1" /> Desconectar
                   </Button>
