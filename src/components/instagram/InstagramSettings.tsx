@@ -124,6 +124,10 @@ export function InstagramSettings() {
                   <Badge className="bg-green-500/10 text-green-600 border-green-500/20">
                     <CheckCircle2 className="h-3 w-3 mr-1" /> Conectado
                   </Badge>
+                  <Button variant="outline" size="sm" onClick={handleSubscribeWebhook} disabled={isSubscribing}>
+                    {isSubscribing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Webhook className="h-4 w-4 mr-1" />}
+                    Ativar Webhooks
+                  </Button>
                   <Button variant="destructive" size="sm" onClick={() => handleDisconnect(activeConnection.id)}>
                     <Unplug className="h-4 w-4 mr-1" /> Desconectar
                   </Button>
