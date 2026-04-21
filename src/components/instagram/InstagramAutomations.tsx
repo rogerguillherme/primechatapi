@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { AutomationTemplatesModal, type AutomationTemplate } from "./AutomationTemplatesModal";
 
 interface FlowStep {
   id: string;
