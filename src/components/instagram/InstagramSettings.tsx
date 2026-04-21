@@ -166,6 +166,8 @@ export function InstagramSettings() {
         </CardContent>
       </Card>
 
+      {activeConnection && <InstagramDiagnostics />}
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Requisitos para conexão</CardTitle>
