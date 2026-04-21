@@ -47,19 +47,25 @@ Deno.serve(async (req) => {
         ]);
 
         // Find connection: comments come with entry.id = instagram_user_id, DMs come with page_id
+        // IMPORTANT: do NOT filter by status='connected' — Meta keeps delivering webhooks even
+        // when our DB flag is stale; missing these means lost automations.
         const ids = Array.from(candidateIds).filter(Boolean);
+        console.log(`IG webhook entry.id=${entryId} candidates=${ids.join(",")}`);
+
         const { data: connections } = await adminClient
           .from("instagram_connections")
-          .select("id, user_id, access_token, instagram_user_id, page_id, instagram_username")
-          .eq("status", "connected")
-          .or(`page_id.in.(${ids.join(",")}),instagram_user_id.in.(${ids.join(",")})`);
+          .select("id, user_id, access_token, instagram_user_id, page_id, instagram_username, status")
+          .or(`page_id.in.(${ids.join(",")}),instagram_user_id.in.(${ids.join(",")})`)
+          .order("status", { ascending: true }) // 'connected' before 'disconnected'
+          .order("updated_at", { ascending: false });
 
         const conn = connections?.[0] || null;
 
         if (!conn) {
-          console.log(`No connection for Instagram webhook candidates=${Array.from(candidateIds).filter(Boolean).join(",")}`);
+          console.log(`No connection found for IG webhook. candidates=${ids.join(",")} — check if account was ever linked.`);
           continue;
         }
+        console.log(`Matched connection @${conn.instagram_username} (status=${conn.status})`);
 
         const resolvedConn = await enrichConnectionForMessaging(conn);
 
