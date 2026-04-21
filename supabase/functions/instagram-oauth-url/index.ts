@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
         "instagram_manage_insights",
         "pages_show_list",
         "pages_read_engagement",
-        "pages_manage_metadata",
+        "business_management",
       ].join(",")
     );
     oauthUrl.searchParams.set("response_type", "code");
