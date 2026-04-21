@@ -22,12 +22,10 @@ Deno.serve(async (req) => {
     const { data: { user }, error: userErr } = await admin.auth.getUser(token);
     if (userErr || !user) return json({ error: "Unauthorized" }, 401);
 
-    // Body opcional: { max_posts?: number, max_comments_per_post?: number }
     const body = await req.json().catch(() => ({}));
     const MAX_POSTS = Math.min(Math.max(body.max_posts ?? 10, 1), 25);
     const MAX_COMMENTS = Math.min(Math.max(body.max_comments_per_post ?? 25, 1), 50);
 
-    // Get connection
     const { data: connection } = await admin
       .from("instagram_connections")
       .select("*")
@@ -39,7 +37,6 @@ Deno.serve(async (req) => {
 
     if (!connection) return json({ error: "Nenhuma conta Instagram conectada" }, 404);
 
-    // Resolve page token
     let pageToken = connection.access_token;
     if (connection.page_id) {
       try {
@@ -51,7 +48,6 @@ Deno.serve(async (req) => {
     const conn = { ...connection, access_token: pageToken };
     const ownUsername = (connection.instagram_username || "").toLowerCase();
 
-    // Load active comment automations
     const { data: automations } = await admin
       .from("instagram_automations")
       .select("*, instagram_automation_steps(*)")
@@ -63,7 +59,6 @@ Deno.serve(async (req) => {
       return json({ ok: true, message: "Nenhuma automação ativa", processed: 0 });
     }
 
-    // Fetch recent posts
     const mediaUrl = `${GRAPH}/${connection.instagram_user_id}/media?fields=id,caption,timestamp&limit=${MAX_POSTS}&access_token=${pageToken}`;
     const mr = await fetch(mediaUrl);
     const md = await mr.json();
@@ -76,7 +71,6 @@ Deno.serve(async (req) => {
     const results: any[] = [];
 
     for (const media of mediaList) {
-      // Get comments + replies
       const cUrl = `${GRAPH}/${media.id}/comments?fields=id,text,username,timestamp,user{id,username},replies{id,username,text}&limit=${MAX_COMMENTS}&access_token=${pageToken}`;
       const cr = await fetch(cUrl);
       const cd = await cr.json();
@@ -85,14 +79,12 @@ Deno.serve(async (req) => {
 
       for (const c of comments) {
         totalScanned++;
-        // Pula se já tivermos respondido (qualquer reply do próprio usuário)
         const replies = c.replies?.data || [];
         const alreadyReplied = replies.some((r: any) => (r.username || "").toLowerCase() === ownUsername);
         if (alreadyReplied) {
           totalSkippedAlreadyReplied++;
           continue;
         }
-        // Não responder a si mesmo
         if ((c.username || "").toLowerCase() === ownUsername) continue;
 
         const text = (c.text || "").trim();
@@ -123,7 +115,7 @@ Deno.serve(async (req) => {
             automation: automation.name,
             steps: stepsResult,
           });
-          break; // Uma automação por comentário
+          break;
         }
         if (matched) totalMatched++;
       }
@@ -143,6 +135,94 @@ Deno.serve(async (req) => {
   }
 });
 
+function renderMessage(raw: string, ctx: { username: string; text: string }) {
+  const variants = (raw || "").split("|||").map((s) => s.trim()).filter(Boolean);
+  const picked = variants.length > 0 ? variants[Math.floor(Math.random() * variants.length)] : "";
+  return picked
+    .replace(/\{\{nome\}\}/gi, ctx.username)
+    .replace(/\{nome\}/gi, ctx.username)
+    .replace(/\{\{comentario\}\}/gi, ctx.text)
+    .replace(/\{comentario\}/gi, ctx.text);
+}
+
+async function sendDM(conn: any, ctx: any, step: any, message: string) {
+  const dmType = step.dm_type || "text";
+  const buttons: any[] = Array.isArray(step.buttons) ? step.buttons : [];
+
+  // Para botões/link, precisa enviar via /me/messages com payload de attachment "template button"
+  // private_replies só aceita texto, então usamos /me/messages quando temos senderId
+  const useMessenger = (dmType === "buttons" || dmType === "link") && ctx.senderId;
+
+  if (useMessenger) {
+    let payload: any;
+    if (dmType === "link") {
+      const url = step.link_url || "";
+      const title = step.link_title || "Acessar";
+      payload = {
+        recipient: { id: ctx.senderId },
+        message: {
+          attachment: {
+            type: "template",
+            payload: {
+              template_type: "button",
+              text: message || title,
+              buttons: [{ type: "web_url", url, title: title.slice(0, 20) }],
+            },
+          },
+        },
+      };
+    } else {
+      const btns = buttons.slice(0, 3).map((b: any) => ({
+        type: "postback",
+        title: String(b.title || "Opção").slice(0, 20),
+        payload: `BTN_${b.id || Math.random().toString(36).slice(2, 8)}`,
+      }));
+      payload = {
+        recipient: { id: ctx.senderId },
+        message: {
+          attachment: {
+            type: "template",
+            payload: { template_type: "button", text: message || "Escolha:", buttons: btns },
+          },
+        },
+      };
+    }
+    const r = await fetch(`${GRAPH}/me/messages?access_token=${conn.access_token}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const d = await r.json();
+    return { type: `send_dm_${dmType}`, ok: r.ok, response: d };
+  }
+
+  // Texto puro: tenta private_replies se vier de comentário, senão /me/messages
+  const finalMessage = dmType === "link" && step.link_url
+    ? `${message}\n\n👉 ${step.link_url}`
+    : message;
+
+  if (ctx.commentId) {
+    const r = await fetch(`${GRAPH}/${ctx.commentId}/private_replies`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: finalMessage, access_token: conn.access_token }),
+    });
+    const d = await r.json();
+    return { type: "send_dm_private_reply", ok: r.ok, message: finalMessage, response: d };
+  }
+
+  if (ctx.senderId) {
+    const r = await fetch(`${GRAPH}/me/messages?access_token=${conn.access_token}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recipient: { id: ctx.senderId }, message: { text: finalMessage } }),
+    });
+    const d = await r.json();
+    return { type: "send_dm", ok: r.ok, message: finalMessage, response: d };
+  }
+  return { type: "send_dm", ok: false, error: "no commentId or senderId" };
+}
+
 async function runSteps(
   steps: any[],
   conn: any,
@@ -152,14 +232,7 @@ async function runSteps(
   const results: any[] = [];
 
   for (const step of sorted) {
-    const rawMessage = step.message || "";
-    const variants = rawMessage.split("|||").map((s: string) => s.trim()).filter(Boolean);
-    const picked = variants.length > 0 ? variants[Math.floor(Math.random() * variants.length)] : "";
-    const message = picked
-      .replace(/\{\{nome\}\}/gi, ctx.username)
-      .replace(/\{nome\}/gi, ctx.username)
-      .replace(/\{\{comentario\}\}/gi, ctx.text)
-      .replace(/\{comentario\}/gi, ctx.text);
+    const message = renderMessage(step.message || "", ctx);
 
     if (step.step_type === "delay") {
       const sec = step.delay_seconds || 5;
@@ -174,23 +247,8 @@ async function runSteps(
       const d = await r.json();
       results.push({ type: "reply_comment", ok: r.ok, message, response: d });
     } else if (step.step_type === "send_dm") {
-      if (ctx.commentId) {
-        const r = await fetch(`${GRAPH}/${ctx.commentId}/private_replies`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message, access_token: conn.access_token }),
-        });
-        const d = await r.json();
-        results.push({ type: "send_dm_private_reply", ok: r.ok, message, response: d });
-      } else if (ctx.senderId) {
-        const r = await fetch(`${GRAPH}/me/messages?access_token=${conn.access_token}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ recipient: { id: ctx.senderId }, message: { text: message } }),
-        });
-        const d = await r.json();
-        results.push({ type: "send_dm", ok: r.ok, message, response: d });
-      }
+      const r = await sendDM(conn, ctx, step, message);
+      results.push(r);
     }
   }
   return results;
