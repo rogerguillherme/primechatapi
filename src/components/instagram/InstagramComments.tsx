@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -7,10 +7,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
   MessageCircle, Heart, Trash2, Send, EyeOff, Eye, Image as ImageIcon,
-  RefreshCw, ExternalLink, Loader2, Filter, Zap,
+  RefreshCw, ExternalLink, Loader2, Filter, Zap, Bot,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -72,6 +75,11 @@ export function InstagramComments() {
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
   const [filter, setFilter] = useState<CommentFilter>("all");
+  const [autoScan, setAutoScan] = useState(false);
+  const [autoScanInterval, setAutoScanInterval] = useState<number>(60); // segundos
+  const [lastScan, setLastScan] = useState<{ at: Date; matched: number; scanned: number } | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const scanTimerRef = useRef<number | null>(null);
 
   const mediaQuery = useQuery({
     queryKey: ["ig-comments-media"],
@@ -187,6 +195,48 @@ export function InstagramComments() {
   });
 
 
+  const runAutoScan = async () => {
+    if (scanning) return;
+    setScanning(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("instagram-auto-reply-comments", {
+        body: { max_posts: 10, max_comments_per_post: 25 },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setLastScan({ at: new Date(), matched: data?.matched ?? 0, scanned: data?.scanned ?? 0 });
+      if ((data?.matched ?? 0) > 0) {
+        toast.success(`Auto-resposta: ${data.matched} comentário(s) respondido(s)`);
+        qc.invalidateQueries({ queryKey: ["ig-comments-media"] });
+        if (selectedMedia) qc.invalidateQueries({ queryKey: ["ig-comments", selectedMedia.id] });
+      }
+    } catch (e) {
+      toast.error((e as Error).message || "Falha no auto-scan");
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!autoScan) {
+      if (scanTimerRef.current) {
+        window.clearInterval(scanTimerRef.current);
+        scanTimerRef.current = null;
+      }
+      return;
+    }
+    // dispara imediatamente ao ligar
+    runAutoScan();
+    scanTimerRef.current = window.setInterval(runAutoScan, autoScanInterval * 1000);
+    return () => {
+      if (scanTimerRef.current) {
+        window.clearInterval(scanTimerRef.current);
+        scanTimerRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoScan, autoScanInterval]);
+
   const totalComments = mediaQuery.data?.reduce((s, m) => s + (m.comments_count || 0), 0) || 0;
   const totalLikes = mediaQuery.data?.reduce((s, m) => s + (m.like_count || 0), 0) || 0;
 
@@ -201,17 +251,66 @@ export function InstagramComments() {
               Responda, oculte e modere comentários dos seus posts
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              qc.invalidateQueries({ queryKey: ["ig-comments-media"] });
-              if (selectedMedia) qc.invalidateQueries({ queryKey: ["ig-comments", selectedMedia.id] });
-            }}
-            className="gap-2"
-          >
-            <RefreshCw size={14} /> Atualizar
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={runAutoScan}
+              disabled={scanning}
+              className="gap-2"
+            >
+              {scanning ? <Loader2 size={14} className="animate-spin" /> : <Bot size={14} />}
+              Verificar agora
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                qc.invalidateQueries({ queryKey: ["ig-comments-media"] });
+                if (selectedMedia) qc.invalidateQueries({ queryKey: ["ig-comments", selectedMedia.id] });
+              }}
+              className="gap-2"
+            >
+              <RefreshCw size={14} /> Atualizar
+            </Button>
+          </div>
+        </div>
+
+        {/* Auto-scan controls */}
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3 p-3 rounded-lg border border-border/50 bg-muted/30">
+          <div className="flex items-center gap-3">
+            <Switch id="auto-scan" checked={autoScan} onCheckedChange={setAutoScan} />
+            <Label htmlFor="auto-scan" className="text-sm font-medium cursor-pointer flex items-center gap-2">
+              <Bot size={14} className="text-primary" />
+              Auto-resposta de comentários sem resposta
+            </Label>
+            {autoScan && (
+              <Badge variant="secondary" className="gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Ativo
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-muted-foreground">Verificar a cada:</span>
+            <Select value={String(autoScanInterval)} onValueChange={(v) => setAutoScanInterval(Number(v))}>
+              <SelectTrigger className="h-8 w-32 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="30">30 segundos</SelectItem>
+                <SelectItem value="60">1 minuto</SelectItem>
+                <SelectItem value="120">2 minutos</SelectItem>
+                <SelectItem value="300">5 minutos</SelectItem>
+                <SelectItem value="600">10 minutos</SelectItem>
+              </SelectContent>
+            </Select>
+            {lastScan && (
+              <span className="text-xs text-muted-foreground">
+                Último: {lastScan.at.toLocaleTimeString("pt-BR")} · {lastScan.scanned} verificados · {lastScan.matched} respondidos
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex gap-3">
           <StatChip icon={<ImageIcon size={14} />} label="Posts" value={mediaQuery.data?.length ?? 0} />
