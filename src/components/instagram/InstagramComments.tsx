@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
   MessageCircle, Heart, Trash2, Send, EyeOff, Eye, Image as ImageIcon,
-  RefreshCw, ExternalLink, Loader2, Filter,
+  RefreshCw, ExternalLink, Loader2, Filter, Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -156,6 +156,36 @@ export function InstagramComments() {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const triggerAutomationMutation = useMutation({
+    mutationFn: async (vars: { comment_id: string; text: string; commenter_username?: string; commenter_id?: string }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Não autenticado");
+      const { data, error } = await supabase.functions.invoke("instagram-trigger-automation", {
+        body: vars,
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: (data) => {
+      if (!data?.matched) {
+        toast.warning(data?.message || "Nenhuma automação correspondeu");
+        return;
+      }
+      const stepsTotal = (data.log || []).reduce((sum: number, l: any) => sum + (l.steps?.length || 0), 0);
+      const stepsOk = (data.log || []).reduce((sum: number, l: any) => sum + (l.steps?.filter((s: any) => s.ok).length || 0), 0);
+      if (stepsOk === stepsTotal) {
+        toast.success(`Automação executada (${stepsOk}/${stepsTotal} passos OK)`);
+      } else {
+        toast.warning(`Automação parcial (${stepsOk}/${stepsTotal} passos OK) — veja o console`);
+        console.warn("Automation log:", data.log);
+      }
+      qc.invalidateQueries({ queryKey: ["ig-comments", selectedMedia?.id] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
 
   const totalComments = mediaQuery.data?.reduce((s, m) => s + (m.comments_count || 0), 0) || 0;
   const totalLikes = mediaQuery.data?.reduce((s, m) => s + (m.like_count || 0), 0) || 0;
