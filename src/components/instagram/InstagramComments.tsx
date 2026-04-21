@@ -251,17 +251,66 @@ export function InstagramComments() {
               Responda, oculte e modere comentários dos seus posts
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              qc.invalidateQueries({ queryKey: ["ig-comments-media"] });
-              if (selectedMedia) qc.invalidateQueries({ queryKey: ["ig-comments", selectedMedia.id] });
-            }}
-            className="gap-2"
-          >
-            <RefreshCw size={14} /> Atualizar
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={runAutoScan}
+              disabled={scanning}
+              className="gap-2"
+            >
+              {scanning ? <Loader2 size={14} className="animate-spin" /> : <Bot size={14} />}
+              Verificar agora
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                qc.invalidateQueries({ queryKey: ["ig-comments-media"] });
+                if (selectedMedia) qc.invalidateQueries({ queryKey: ["ig-comments", selectedMedia.id] });
+              }}
+              className="gap-2"
+            >
+              <RefreshCw size={14} /> Atualizar
+            </Button>
+          </div>
+        </div>
+
+        {/* Auto-scan controls */}
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3 p-3 rounded-lg border border-border/50 bg-muted/30">
+          <div className="flex items-center gap-3">
+            <Switch id="auto-scan" checked={autoScan} onCheckedChange={setAutoScan} />
+            <Label htmlFor="auto-scan" className="text-sm font-medium cursor-pointer flex items-center gap-2">
+              <Bot size={14} className="text-primary" />
+              Auto-resposta de comentários sem resposta
+            </Label>
+            {autoScan && (
+              <Badge variant="secondary" className="gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Ativo
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-muted-foreground">Verificar a cada:</span>
+            <Select value={String(autoScanInterval)} onValueChange={(v) => setAutoScanInterval(Number(v))}>
+              <SelectTrigger className="h-8 w-32 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="30">30 segundos</SelectItem>
+                <SelectItem value="60">1 minuto</SelectItem>
+                <SelectItem value="120">2 minutos</SelectItem>
+                <SelectItem value="300">5 minutos</SelectItem>
+                <SelectItem value="600">10 minutos</SelectItem>
+              </SelectContent>
+            </Select>
+            {lastScan && (
+              <span className="text-xs text-muted-foreground">
+                Último: {lastScan.at.toLocaleTimeString("pt-BR")} · {lastScan.scanned} verificados · {lastScan.matched} respondidos
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex gap-3">
           <StatChip icon={<ImageIcon size={14} />} label="Posts" value={mediaQuery.data?.length ?? 0} />
