@@ -550,7 +550,24 @@ Deno.serve(async (req) => {
       }
 
           if (matchedStep) {
-            await processFlowStep(matchedStep, exec, lead, supabase);
+            if (matchedStep.step_type === "condition") {
+              const { data: condChildren } = await supabase
+                .from("flow_steps")
+                .select("*")
+                .eq("flow_id", exec.flow_id)
+                .eq("parent_step_id", matchedStep.id)
+                .order("step_order")
+                .limit(1);
+
+              if (condChildren && condChildren.length > 0) {
+                await processFlowStep(condChildren[0], exec, lead, supabase);
+              } else {
+                console.log("Condition matched but has no child step:", matchedStep.id, "exec:", exec.id);
+                await supabase.from("flow_executions").update({ status: "completed" }).eq("id", exec.id);
+              }
+            } else {
+              await processFlowStep(matchedStep, exec, lead, supabase);
+            }
           } else {
             console.log("No matching branch for button payload:", buttonPayload, "exec:", exec.id);
             await supabase.from("flow_executions").update({ status: "completed" }).eq("id", exec.id);
