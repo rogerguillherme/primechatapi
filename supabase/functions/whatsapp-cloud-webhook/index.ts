@@ -199,7 +199,10 @@ Deno.serve(async (req) => {
             }
 
             if (eventsToInsert.length > 0) {
-              await sb.from("campaign_events").insert(eventsToInsert).catch(() => {});
+              const { error: campaignEventError } = await sb.from("campaign_events").insert(eventsToInsert);
+              if (campaignEventError) {
+                console.error("Failed to persist campaign events:", campaignEventError);
+              }
             }
           }
         }
@@ -582,8 +585,9 @@ Deno.serve(async (req) => {
     );
   } catch (error) {
     console.error("WhatsApp Cloud webhook error:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
