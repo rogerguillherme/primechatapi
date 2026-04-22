@@ -147,7 +147,14 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { phoneNumberId: PHONE_NUMBER_ID, accessToken: ACCESS_TOKEN } = await getAccountCredentials(supabase, account_id);
+    const {
+      accountId: resolvedAccountId,
+      phoneNumberId: PHONE_NUMBER_ID,
+      accessToken: ACCESS_TOKEN,
+      businessAccountId,
+    } = await getAccountCredentials(supabase, account_id);
+
+    await ensureWebhookSubscription(ACCESS_TOKEN, businessAccountId);
 
     const cleanPhone = phone.replace(/\D/g, "");
     const apiUrl = `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`;
@@ -320,7 +327,7 @@ Deno.serve(async (req) => {
           media_type: media_type || null,
           media_url: media_url || null,
           status: "failed",
-          account_id: account_id || null,
+          account_id: account_id || resolvedAccountId || null,
         });
       }
 
@@ -352,7 +359,7 @@ Deno.serve(async (req) => {
         lead_id, direction: "outbound", content: contentText,
         media_type: media_type || null, media_url: media_url || null,
         zapi_message_id: waMessageId, status: "sent",
-        account_id: account_id || null,
+        account_id: account_id || resolvedAccountId || null,
       });
 
       const { error: leadUpdateError } = await supabase
