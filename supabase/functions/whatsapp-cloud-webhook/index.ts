@@ -34,6 +34,49 @@ function normalizeTriggerValue(value: string | null | undefined): string {
   return (value || "").trim().toLowerCase();
 }
 
+async function resolveMatchedFlowStep(
+  supabase: any,
+  flowId: string,
+  currentStepId: string | null,
+  candidateTriggers: string[],
+) {
+  if (!currentStepId || candidateTriggers.length === 0) {
+    return null;
+  }
+
+  const { data: currentStep } = await supabase
+    .from("flow_steps")
+    .select("id, step_type, parent_step_id")
+    .eq("id", currentStepId)
+    .maybeSingle();
+
+  if (!currentStep) {
+    return null;
+  }
+
+  let branchSteps: any[] = [];
+
+  if (currentStep.step_type === "condition" && currentStep.parent_step_id) {
+    const { data } = await supabase
+      .from("flow_steps")
+      .select("*")
+      .eq("flow_id", flowId)
+      .eq("parent_step_id", currentStep.parent_step_id);
+
+    branchSteps = data || [];
+  } else {
+    const { data } = await supabase
+      .from("flow_steps")
+      .select("*")
+      .eq("flow_id", flowId)
+      .eq("parent_step_id", currentStepId);
+
+    branchSteps = data || [];
+  }
+
+  return branchSteps.find((step: any) => candidateTriggers.includes(normalizeTriggerValue(step.trigger_value))) || null;
+}
+
 Deno.serve(async (req) => {
   // CORS preflight
   if (req.method === "OPTIONS") {
@@ -490,8 +533,8 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Check for flow executions waiting for button reply
-      if (buttonPayload && lead) {
+      // Check for flow executions waiting for user reply
+      if ((buttonPayload || text) && lead) {
         const { data: executions } = await supabase
           .from("flow_executions")
           .select("id, current_step_id, flow_id, metadata")
@@ -506,21 +549,12 @@ Deno.serve(async (req) => {
             normalizeTriggerValue(text),
           ].filter(Boolean)));
 
-          // BRANCHING: look for child steps matching trigger_value via parent_step_id
-          let matchedStep: any = null;
-
-          if (currentStepId) {
-            // Find child step whose trigger_value matches the button id or title
-            const { data: childSteps } = await supabase
-              .from("flow_steps")
-              .select("*")
-              .eq("flow_id", exec.flow_id)
-              .eq("parent_step_id", currentStepId);
-
-            if (childSteps && childSteps.length > 0) {
-              matchedStep = childSteps.find((s: any) => candidateTriggers.includes(normalizeTriggerValue(s.trigger_value))) || null;
-            }
-          }
+          let matchedStep: any = await resolveMatchedFlowStep(
+            supabase,
+            exec.flow_id,
+            currentStepId,
+            candidateTriggers,
+          );
 
           // Fallback: old linear approach (condition node by trigger_value)
           if (!matchedStep) {
@@ -582,7 +616,10 @@ Deno.serve(async (req) => {
             }
           } else {
             console.log("No matching branch for button payload:", buttonPayload, "exec:", exec.id);
-            await supabase.from("flow_executions").update({ status: "completed" }).eq("id", exec.id);
+            await supabase.from("flow_executions").update({
+              status: "waiting_reply",
+              updated_at: new Date().toISOString(),
+            }).eq("id", exec.id);
           }
         }
       }
