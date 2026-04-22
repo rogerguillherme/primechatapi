@@ -19,10 +19,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import { AutomationTemplatesModal, type AutomationTemplate } from "./AutomationTemplatesModal";
 
 type DmType = "text" | "buttons" | "link";
+type ButtonAction = "url" | "reply";
 
 interface ButtonItem {
   id: string;
   title: string;
+  action?: ButtonAction;       // "url" abre link · "reply" envia DM automática
+  url?: string;                 // usado quando action="url"
+  reply_message?: string;       // usado quando action="reply"
 }
 
 interface FlowStep {
