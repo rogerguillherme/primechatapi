@@ -144,7 +144,6 @@ async function runSteps(steps: any[], conn: any, ctx: { username: string; text: 
   const sorted = (steps || []).sort((a: any, b: any) => a.step_order - b.step_order);
   for (const step of sorted) {
     // Suporte a múltiplas variantes separadas por "|||" — escolhe uma aleatória
-    // para evitar bloqueio Meta de "comentário duplicado"
     const rawMessage = step.message || "";
     const variants = rawMessage.split("|||").map((s: string) => s.trim()).filter(Boolean);
     const picked = variants.length > 0 ? variants[Math.floor(Math.random() * variants.length)] : "";
@@ -158,13 +157,93 @@ async function runSteps(steps: any[], conn: any, ctx: { username: string; text: 
       await new Promise((r) => setTimeout(r, (step.delay_seconds || 5) * 1000));
     } else if (step.step_type === "reply_comment" && ctx.commentId) {
       await replyToComment(conn.access_token, ctx.commentId, message);
-    } else if (step.step_type === "send_dm" && ctx.senderId) {
-      if (ctx.commentId) {
-        await sendPrivateReplyToComment(conn.access_token, ctx.commentId, message);
-      } else {
-        await sendInstagramDM(conn.access_token, conn.page_id, ctx.senderId, message);
-      }
+    } else if (step.step_type === "send_dm") {
+      await sendRichDM(conn, ctx, step, message);
     }
+  }
+}
+
+// Envio de DM com suporte a botões (URL/postback) e link
+async function sendRichDM(conn: any, ctx: { commentId?: string; senderId?: string }, step: any, message: string) {
+  const dmType = step.dm_type || "text";
+  const buttons: any[] = Array.isArray(step.buttons) ? step.buttons : [];
+  const useTemplate = (dmType === "buttons" || dmType === "link") && ctx.senderId && conn.page_id;
+
+  if (useTemplate) {
+    let payload: any;
+    if (dmType === "link") {
+      const url = step.link_url || "";
+      const title = (step.link_title || "Acessar").slice(0, 20);
+      payload = {
+        recipient: { id: ctx.senderId },
+        message: {
+          attachment: {
+            type: "template",
+            payload: {
+              template_type: "button",
+              text: message || title,
+              buttons: [{ type: "web_url", url, title }],
+            },
+          },
+        },
+        messaging_type: "RESPONSE",
+        access_token: conn.access_token,
+      };
+    } else {
+      const btns = buttons.slice(0, 3).map((b: any) => {
+        const action = b.action || "url";
+        if (action === "url" && b.url) {
+          return { type: "web_url", url: b.url, title: String(b.title || "Acessar").slice(0, 20) };
+        }
+        return {
+          type: "postback",
+          title: String(b.title || "Opção").slice(0, 20),
+          payload: `BTN|${step.id}|${b.id || Math.random().toString(36).slice(2, 8)}`,
+        };
+      });
+      payload = {
+        recipient: { id: ctx.senderId },
+        message: {
+          attachment: {
+            type: "template",
+            payload: { template_type: "button", text: message || "Escolha:", buttons: btns },
+          },
+        },
+        messaging_type: "RESPONSE",
+        access_token: conn.access_token,
+      };
+    }
+    try {
+      const res = await fetch(`https://graph.facebook.com/v19.0/${conn.page_id}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) console.error("Rich DM failed:", data);
+      else console.log(`Rich DM (${dmType}) OK:`, data);
+      return;
+    } catch (e) {
+      console.error("Rich DM error:", e);
+      return;
+    }
+  }
+
+  // Fallback texto: anexa URLs ao texto se houver
+  let finalMessage = message;
+  if (dmType === "link" && step.link_url) {
+    finalMessage = `${message}\n\n👉 ${step.link_url}`;
+  } else if (dmType === "buttons" && buttons.length > 0) {
+    const urlBtns = buttons.filter((b: any) => (b.action || "url") === "url" && b.url);
+    if (urlBtns.length > 0) {
+      finalMessage = `${message}\n\n${urlBtns.map((b: any) => `👉 ${b.title}: ${b.url}`).join("\n")}`;
+    }
+  }
+
+  if (ctx.commentId) {
+    await sendPrivateReplyToComment(conn.access_token, ctx.commentId, finalMessage);
+  } else if (ctx.senderId) {
+    await sendInstagramDM(conn.access_token, conn.page_id, ctx.senderId, finalMessage);
   }
 }
 
