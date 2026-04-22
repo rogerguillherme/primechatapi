@@ -378,7 +378,9 @@ async function advanceToNextStep(
     if (childSteps.length === 1) {
       nextStep = childSteps[0];
     } else {
-      if (currentStep.step_type === "interactive_buttons") {
+      const hasConditionalBranches = childSteps.some((step: any) => step.step_type === "condition");
+
+      if (currentStep.step_type === "interactive_buttons" || hasConditionalBranches) {
         await supabase.from("flow_executions").update({
           current_step_id: currentStep.id,
           status: "waiting_reply",
