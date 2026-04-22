@@ -209,11 +209,19 @@ export function InstagramAutomations() {
         return !s.message.trim() || !s.link_url?.trim();
       }
       if (s.type === "send_dm" && s.dm_type === "buttons") {
-        return !s.message.trim() || !(s.buttons && s.buttons.length > 0 && s.buttons.every((b) => b.title.trim()));
+        if (!s.message.trim()) return true;
+        if (!s.buttons || s.buttons.length === 0) return true;
+        return s.buttons.some((b) => {
+          if (!b.title.trim()) return true;
+          const action = b.action || "url";
+          if (action === "url") return !b.url?.trim();
+          if (action === "reply") return !b.reply_message?.trim();
+          return false;
+        });
       }
       return !s.message.trim();
     });
-    if (hasEmptyStep) { toast.error("Preencha todas as mensagens, botões e links do fluxo"); return; }
+    if (hasEmptyStep) { toast.error("Preencha todas as mensagens, títulos, URLs ou respostas dos botões"); return; }
 
     setSaving(true);
     try {
