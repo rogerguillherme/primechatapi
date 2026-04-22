@@ -10,29 +10,50 @@ async function getAccountCredentials(supabase: any, accountId?: string) {
   if (accountId) {
     const { data, error } = await supabase
       .from("whatsapp_accounts")
-      .select("phone_number_id, access_token")
+      .select("id, phone_number_id, access_token, business_account_id")
       .eq("id", accountId)
       .maybeSingle();
     if (error) throw new Error(`Failed to fetch account: ${error.message}`);
-    if (data) return { phoneNumberId: data.phone_number_id, accessToken: data.access_token };
+    if (data) {
+      return {
+        accountId: data.id,
+        phoneNumberId: data.phone_number_id,
+        accessToken: data.access_token,
+        businessAccountId: data.business_account_id,
+      };
+    }
   }
 
   // Fallback: try default account from DB
   const { data: defaultAcc } = await supabase
     .from("whatsapp_accounts")
-    .select("phone_number_id, access_token")
+    .select("id, phone_number_id, access_token, business_account_id")
     .eq("is_default", true)
     .maybeSingle();
-  if (defaultAcc) return { phoneNumberId: defaultAcc.phone_number_id, accessToken: defaultAcc.access_token };
+  if (defaultAcc) {
+    return {
+      accountId: defaultAcc.id,
+      phoneNumberId: defaultAcc.phone_number_id,
+      accessToken: defaultAcc.access_token,
+      businessAccountId: defaultAcc.business_account_id,
+    };
+  }
 
   // Fallback: try first account
   const { data: firstAcc } = await supabase
     .from("whatsapp_accounts")
-    .select("phone_number_id, access_token")
+    .select("id, phone_number_id, access_token, business_account_id")
     .order("created_at")
     .limit(1)
     .maybeSingle();
-  if (firstAcc) return { phoneNumberId: firstAcc.phone_number_id, accessToken: firstAcc.access_token };
+  if (firstAcc) {
+    return {
+      accountId: firstAcc.id,
+      phoneNumberId: firstAcc.phone_number_id,
+      accessToken: firstAcc.access_token,
+      businessAccountId: firstAcc.business_account_id,
+    };
+  }
 
   // Final fallback: env vars
   const phoneNumberId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID");
@@ -40,6 +61,22 @@ async function getAccountCredentials(supabase: any, accountId?: string) {
   if (phoneNumberId && accessToken) return { phoneNumberId, accessToken };
 
   throw new Error("No WhatsApp account configured");
+}
+
+async function ensureWebhookSubscription(accessToken: string, businessAccountId?: string | null) {
+  if (!businessAccountId || !accessToken) return;
+
+  try {
+    const subRes = await fetch(`https://graph.facebook.com/v21.0/${businessAccountId}/subscribed_apps`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    const subText = await subRes.text();
+    console.log("WABA subscription check:", subRes.status, subText);
+  } catch (error) {
+    console.error("Failed to ensure WABA subscription:", error);
+  }
 }
 
 async function getTemplateRecord(supabase: any, templateName: string, accountId?: string) {
@@ -110,7 +147,14 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { phoneNumberId: PHONE_NUMBER_ID, accessToken: ACCESS_TOKEN } = await getAccountCredentials(supabase, account_id);
+    const {
+      accountId: resolvedAccountId,
+      phoneNumberId: PHONE_NUMBER_ID,
+      accessToken: ACCESS_TOKEN,
+      businessAccountId,
+    } = await getAccountCredentials(supabase, account_id);
+
+    await ensureWebhookSubscription(ACCESS_TOKEN, businessAccountId);
 
     const cleanPhone = phone.replace(/\D/g, "");
     const apiUrl = `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`;
@@ -283,7 +327,7 @@ Deno.serve(async (req) => {
           media_type: media_type || null,
           media_url: media_url || null,
           status: "failed",
-          account_id: account_id || null,
+          account_id: account_id || resolvedAccountId || null,
         });
       }
 
@@ -315,7 +359,7 @@ Deno.serve(async (req) => {
         lead_id, direction: "outbound", content: contentText,
         media_type: media_type || null, media_url: media_url || null,
         zapi_message_id: waMessageId, status: "sent",
-        account_id: account_id || null,
+        account_id: account_id || resolvedAccountId || null,
       });
 
       const { error: leadUpdateError } = await supabase
@@ -334,8 +378,9 @@ Deno.serve(async (req) => {
     );
   } catch (error) {
     console.error("Error sending WhatsApp message:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
