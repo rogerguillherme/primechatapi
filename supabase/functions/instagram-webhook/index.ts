@@ -334,7 +334,78 @@ async function handleDM(adminClient: any, conn: any, msg: any, agent: any) {
   }
 }
 
-// ============= Persistence helpers =============
+async function handlePostback(adminClient: any, conn: any, msg: any) {
+  const senderId = msg.sender?.id;
+  const payload: string = msg.postback?.payload || "";
+  const title: string = msg.postback?.title || "";
+  if (!senderId || !payload) return;
+
+  console.log(`Postback from ${senderId}: payload="${payload}" title="${title}"`);
+
+  // Espera-se formato: BTN|<stepId>|<buttonId>
+  const parts = payload.split("|");
+  if (parts[0] !== "BTN" || parts.length < 3) {
+    console.log("Postback ignored — not a button payload");
+    return;
+  }
+  const stepId = parts[1];
+  const buttonId = parts[2];
+
+  // Persistir o clique como mensagem inbound (mostra "Clicou: <título>" no chat)
+  await persistInboundDM(adminClient, conn, senderId, msg.postback?.mid || null, `🔘 Clicou: ${title || buttonId}`);
+
+  // Busca o step e o botão configurado
+  const { data: step } = await adminClient
+    .from("instagram_automation_steps")
+    .select("id, automation_id, buttons, dm_type")
+    .eq("id", stepId)
+    .maybeSingle();
+
+  if (!step) {
+    console.log(`Postback step ${stepId} not found`);
+    return;
+  }
+
+  const buttons: any[] = Array.isArray(step.buttons) ? step.buttons : [];
+  const btn = buttons.find((b: any) => b.id === buttonId);
+  if (!btn) {
+    console.log(`Button ${buttonId} not found in step ${stepId}`);
+    return;
+  }
+
+  const action = btn.action || "url";
+  if (action === "url") {
+    // Botão de URL: nada a fazer no webhook (Meta abriu o link no app do lead)
+    console.log(`Button ${buttonId} is URL — no server action`);
+    return;
+  }
+
+  // action === "reply" — buscar username do remetente para variáveis
+  let username = "amigo(a)";
+  try {
+    const pr = await fetch(
+      `https://graph.facebook.com/v19.0/${senderId}?fields=name,username&access_token=${conn.access_token}`
+    );
+    const pd = await pr.json();
+    if (pr.ok) username = pd.username || pd.name || username;
+  } catch { /* ignore */ }
+
+  const raw = btn.reply_message || "";
+  const variants = raw.split("|||").map((s: string) => s.trim()).filter(Boolean);
+  const picked = variants.length > 0 ? variants[Math.floor(Math.random() * variants.length)] : "";
+  const reply = picked
+    .replace(/\{\{nome\}\}/gi, username)
+    .replace(/\{nome\}/gi, username);
+
+  if (!reply) {
+    console.log(`Button ${buttonId} has empty reply_message`);
+    return;
+  }
+
+  console.log(`Sending reply for button "${btn.title}" → "${reply.substring(0, 80)}"`);
+  await sendInstagramDM(conn.access_token, conn.page_id, senderId, reply);
+}
+
 
 async function persistInboundDM(adminClient: any, conn: any, senderId: string, igMessageId: string | null, text: string) {
   try {
