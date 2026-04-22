@@ -159,11 +159,22 @@ async function runSteps(
             },
           };
         } else {
-          const btns = buttons.slice(0, 3).map((b: any) => ({
-            type: "postback",
-            title: String(b.title || "Opção").slice(0, 20),
-            payload: `BTN_${b.id || Math.random().toString(36).slice(2, 8)}`,
-          }));
+          // buttons mistos: cada botão pode ser URL (web_url) ou Resposta (postback)
+          const btns = buttons.slice(0, 3).map((b: any) => {
+            const action = b.action || "url";
+            if (action === "url" && b.url) {
+              return {
+                type: "web_url",
+                url: b.url,
+                title: String(b.title || "Acessar").slice(0, 20),
+              };
+            }
+            return {
+              type: "postback",
+              title: String(b.title || "Opção").slice(0, 20),
+              payload: `BTN|${step.id}|${b.id || Math.random().toString(36).slice(2, 8)}`,
+            };
+          });
           payload = {
             recipient: { id: ctx.senderId },
             message: {
@@ -186,9 +197,15 @@ async function runSteps(
           results.push({ type: `send_dm_${dmType}`, ok: false, response: { error: (e as Error).message } });
         }
       } else {
-        const finalMessage = dmType === "link" && step.link_url
-          ? `${message}\n\n👉 ${step.link_url}`
-          : message;
+        let finalMessage = message;
+        if (dmType === "link" && step.link_url) {
+          finalMessage = `${message}\n\n👉 ${step.link_url}`;
+        } else if (dmType === "buttons" && buttons.length > 0) {
+          const urlBtns = buttons.filter((b: any) => (b.action || "url") === "url" && b.url);
+          if (urlBtns.length > 0) {
+            finalMessage = `${message}\n\n${urlBtns.map((b: any) => `👉 ${b.title}: ${b.url}`).join("\n")}`;
+          }
+        }
         if (ctx.commentId) {
           const r = await sendPrivateReply(conn.access_token, ctx.commentId, finalMessage);
           results.push({ type: "send_dm_private_reply", ok: r.ok, message: finalMessage, response: r.data });

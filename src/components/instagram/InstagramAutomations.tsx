@@ -19,10 +19,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import { AutomationTemplatesModal, type AutomationTemplate } from "./AutomationTemplatesModal";
 
 type DmType = "text" | "buttons" | "link";
+type ButtonAction = "url" | "reply";
 
 interface ButtonItem {
   id: string;
   title: string;
+  action?: ButtonAction;       // "url" abre link · "reply" envia DM automática
+  url?: string;                 // usado quando action="url"
+  reply_message?: string;       // usado quando action="reply"
 }
 
 interface FlowStep {
@@ -205,11 +209,19 @@ export function InstagramAutomations() {
         return !s.message.trim() || !s.link_url?.trim();
       }
       if (s.type === "send_dm" && s.dm_type === "buttons") {
-        return !s.message.trim() || !(s.buttons && s.buttons.length > 0 && s.buttons.every((b) => b.title.trim()));
+        if (!s.message.trim()) return true;
+        if (!s.buttons || s.buttons.length === 0) return true;
+        return s.buttons.some((b) => {
+          if (!b.title.trim()) return true;
+          const action = b.action || "url";
+          if (action === "url") return !b.url?.trim();
+          if (action === "reply") return !b.reply_message?.trim();
+          return false;
+        });
       }
       return !s.message.trim();
     });
-    if (hasEmptyStep) { toast.error("Preencha todas as mensagens, botões e links do fluxo"); return; }
+    if (hasEmptyStep) { toast.error("Preencha todas as mensagens, títulos, URLs ou respostas dos botões"); return; }
 
     setSaving(true);
     try {
@@ -678,15 +690,20 @@ function DmEditor({ step, onUpdate }: { step: FlowStep; onUpdate: (d: Partial<Fl
   const dmType: DmType = step.dm_type || "text";
   const buttons: ButtonItem[] = step.buttons || [];
 
-  const updateButton = (id: string, title: string) => {
-    onUpdate({ buttons: buttons.map((b) => (b.id === id ? { ...b, title } : b)) });
+  const updateButton = (id: string, patch: Partial<ButtonItem>) => {
+    onUpdate({ buttons: buttons.map((b) => (b.id === id ? { ...b, ...patch } : b)) });
   };
   const addButton = () => {
     if (buttons.length >= 3) {
       toast.warning("Instagram permite no máximo 3 botões");
       return;
     }
-    onUpdate({ buttons: [...buttons, { id: crypto.randomUUID(), title: "" }] });
+    onUpdate({
+      buttons: [
+        ...buttons,
+        { id: crypto.randomUUID(), title: "", action: "url", url: "", reply_message: "" },
+      ],
+    });
   };
   const removeButton = (id: string) => {
     onUpdate({ buttons: buttons.filter((b) => b.id !== id) });
@@ -721,36 +738,83 @@ function DmEditor({ step, onUpdate }: { step: FlowStep; onUpdate: (d: Partial<Fl
       </div>
 
       {dmType === "buttons" && (
-        <div className="space-y-2 p-3 rounded-lg border border-blue-500/20 bg-blue-500/5">
+        <div className="space-y-3 p-3 rounded-lg border border-blue-500/20 bg-blue-500/5">
           <div className="flex items-center justify-between">
             <Label className="text-xs flex items-center gap-1.5">
               <MousePointerClick size={12} className="text-blue-500" />
-              Botões ({buttons.length}/3)
+              Botões ({buttons.length}/3) — escolha o que cada um faz
             </Label>
             <Button type="button" variant="ghost" size="sm" className="h-6 text-[11px] gap-1" onClick={addButton} disabled={buttons.length >= 3}>
               <Plus size={10} /> Adicionar botão
             </Button>
           </div>
+
           {buttons.length === 0 && (
             <p className="text-[11px] text-muted-foreground italic">Nenhum botão. Clique em "Adicionar botão".</p>
           )}
-          {buttons.map((b, i) => (
-            <div key={b.id} className="flex items-center gap-2">
-              <Badge variant="outline" className="text-[10px] shrink-0">#{i + 1}</Badge>
-              <Input
-                placeholder="Título do botão (máx 20 caracteres)"
-                value={b.title}
-                onChange={(e) => updateButton(b.id, e.target.value.slice(0, 20))}
-                maxLength={20}
-                className="h-8 text-xs"
-              />
-              <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive shrink-0" onClick={() => removeButton(b.id)}>
-                <X size={12} />
-              </Button>
-            </div>
-          ))}
+
+          {buttons.map((b, i) => {
+            const action: ButtonAction = b.action || "url";
+            return (
+              <div key={b.id} className="space-y-2 p-2 rounded-md bg-background/60 border border-border/60">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-[10px] shrink-0">#{i + 1}</Badge>
+                  <Input
+                    placeholder="Título do botão (máx 20 caracteres)"
+                    value={b.title}
+                    onChange={(e) => updateButton(b.id, { title: e.target.value.slice(0, 20) })}
+                    maxLength={20}
+                    className="h-8 text-xs"
+                  />
+                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive shrink-0" onClick={() => removeButton(b.id)}>
+                    <X size={12} />
+                  </Button>
+                </div>
+
+                <RadioGroup
+                  value={action}
+                  onValueChange={(v) => updateButton(b.id, { action: v as ButtonAction })}
+                  className="grid grid-cols-2 gap-1.5"
+                >
+                  <Label
+                    htmlFor={`btn-${b.id}-url`}
+                    className={`flex items-center gap-1.5 text-[11px] px-2 py-1.5 rounded border cursor-pointer ${action === "url" ? "border-primary bg-primary/5" : "border-border"}`}
+                  >
+                    <RadioGroupItem value="url" id={`btn-${b.id}-url`} className="h-3 w-3" />
+                    <Link2 size={10} /> Abrir link (URL)
+                  </Label>
+                  <Label
+                    htmlFor={`btn-${b.id}-reply`}
+                    className={`flex items-center gap-1.5 text-[11px] px-2 py-1.5 rounded border cursor-pointer ${action === "reply" ? "border-primary bg-primary/5" : "border-border"}`}
+                  >
+                    <RadioGroupItem value="reply" id={`btn-${b.id}-reply`} className="h-3 w-3" />
+                    <MessageCircle size={10} /> Responder no DM
+                  </Label>
+                </RadioGroup>
+
+                {action === "url" ? (
+                  <Input
+                    placeholder="https://exemplo.com/oferta"
+                    value={b.url || ""}
+                    onChange={(e) => updateButton(b.id, { url: e.target.value })}
+                    type="url"
+                    className="h-8 text-xs"
+                  />
+                ) : (
+                  <Textarea
+                    placeholder={`Ex: Show, ${"{{nome}}"}! Aqui está o material 🎁\n\nhttps://meusite.com`}
+                    value={b.reply_message || ""}
+                    onChange={(e) => updateButton(b.id, { reply_message: e.target.value })}
+                    rows={2}
+                    className="text-xs"
+                  />
+                )}
+              </div>
+            );
+          })}
+
           <p className="text-[10px] text-muted-foreground">
-            ℹ️ Botões só funcionam quando o usuário envia DM ou responde a um story. Em respostas a comentários (private_replies), o Instagram envia apenas o texto.
+            ℹ️ Botões só funcionam quando enviamos a DM via /messages (não em <code>private_replies</code> a comentários, que só aceita texto).
           </p>
         </div>
       )}
