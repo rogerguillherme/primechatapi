@@ -589,11 +589,21 @@ Deno.serve(async (req) => {
                   .gt("step_order", conditionStep.step_order)
                   .order("step_order")
                   .limit(1);
+
                 if (followingSteps && followingSteps.length > 0) {
                   matchedStep = followingSteps[0];
                 }
-      }
-      }
+              }
+            }
+          }
+
+          console.log("Flow reply resolution:", JSON.stringify({
+            executionId: exec.id,
+            currentStepId,
+            candidateTriggers,
+            matchedStepId: matchedStep?.id || null,
+            matchedStepType: matchedStep?.step_type || null,
+          }));
 
           if (matchedStep) {
             if (matchedStep.step_type === "condition") {
@@ -609,7 +619,10 @@ Deno.serve(async (req) => {
                 await processFlowStep(condChildren[0], exec, lead, supabase);
               } else {
                 console.log("Condition matched but has no child step:", matchedStep.id, "exec:", exec.id);
-                await supabase.from("flow_executions").update({ status: "completed" }).eq("id", exec.id);
+                await supabase.from("flow_executions").update({
+                  status: "completed",
+                  updated_at: new Date().toISOString(),
+                }).eq("id", exec.id);
               }
             } else {
               await processFlowStep(matchedStep, exec, lead, supabase);
@@ -622,7 +635,6 @@ Deno.serve(async (req) => {
             }).eq("id", exec.id);
           }
         }
-      }
       }
     }
     return new Response(
