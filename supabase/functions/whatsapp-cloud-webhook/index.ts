@@ -30,6 +30,10 @@ function brazilianPhoneVariants(phone: string): string[] {
   return variants;
 }
 
+function normalizeTriggerValue(value: string | null | undefined): string {
+  return (value || "").trim().toLowerCase();
+}
+
 Deno.serve(async (req) => {
   // CORS preflight
   if (req.method === "OPTIONS") {
@@ -335,6 +339,7 @@ Deno.serve(async (req) => {
       if (msg.type === "button") {
         text = msg.button?.text || "";
         buttonPayload = msg.button?.payload || msg.button?.text || "";
+        buttonTitle = msg.button?.text || null;
         console.log("Quick reply received:", buttonPayload);
       }
 
@@ -495,6 +500,11 @@ Deno.serve(async (req) => {
 
         for (const exec of executions || []) {
           const currentStepId = exec.current_step_id;
+          const candidateTriggers = Array.from(new Set([
+            normalizeTriggerValue(buttonPayload),
+            normalizeTriggerValue(buttonTitle),
+            normalizeTriggerValue(text),
+          ].filter(Boolean)));
 
           // BRANCHING: look for child steps matching trigger_value via parent_step_id
           let matchedStep: any = null;
@@ -508,10 +518,7 @@ Deno.serve(async (req) => {
               .eq("parent_step_id", currentStepId);
 
             if (childSteps && childSteps.length > 0) {
-              // Try matching by button id first, then by title
-              matchedStep = childSteps.find((s: any) => s.trigger_value === buttonPayload)
-                || (buttonTitle ? childSteps.find((s: any) => s.trigger_value === buttonTitle) : null)
-                || null;
+              matchedStep = childSteps.find((s: any) => candidateTriggers.includes(normalizeTriggerValue(s.trigger_value))) || null;
             }
           }
 
@@ -521,11 +528,13 @@ Deno.serve(async (req) => {
               .from("flow_steps")
               .select("*")
               .eq("flow_id", exec.flow_id)
-              .eq("step_type", "condition")
-              .eq("trigger_value", buttonPayload);
+              .eq("step_type", "condition");
 
-            if (conditionSteps && conditionSteps.length > 0) {
-              const conditionStep = conditionSteps[0];
+            const conditionStep = (conditionSteps || []).find((s: any) =>
+              candidateTriggers.includes(normalizeTriggerValue(s.trigger_value))
+            );
+
+            if (conditionStep) {
               // Find child of this condition step
               const { data: condChildren } = await supabase
                 .from("flow_steps")
@@ -778,8 +787,9 @@ async function advanceExecution(execution: any, currentStep: any, lead: any, sup
       await processFlowStep(childSteps[0], execution, lead, supabase);
       return;
     }
-    // Multiple children = branching (interactive_buttons sends all then waits)
-    if (currentStep.step_type === "interactive_buttons") {
+    const hasConditionalBranches = childSteps.some((step: any) => step.step_type === "condition");
+    // Multiple children with conditions = wait for reply on the parent step
+    if (currentStep.step_type === "interactive_buttons" || hasConditionalBranches) {
       await supabase.from("flow_executions").update({
         current_step_id: currentStep.id,
         status: "waiting_reply",
