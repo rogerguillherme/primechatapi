@@ -82,8 +82,13 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Direct messages via messaging[]
+        // Direct messages via messaging[] (inclui postbacks de botões)
         for (const msg of entry.messaging || []) {
+          // Postback: clique em botão (action="reply")
+          if (msg.postback?.payload && msg.sender?.id !== resolvedConn.instagram_user_id) {
+            await handlePostback(adminClient, resolvedConn, msg);
+            continue;
+          }
           if (msg.message?.text && msg.sender?.id !== resolvedConn.instagram_user_id) {
             await handleDM(adminClient, resolvedConn, msg, agent);
           }
