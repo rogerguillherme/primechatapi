@@ -130,8 +130,10 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Handle status updates
-    if (value.statuses) {
+    const hasStatuses = Array.isArray(value.statuses) && value.statuses.length > 0;
+
+    // Handle status updates without skipping message processing when Meta sends both in the same payload
+    if (hasStatuses) {
       console.log("Status update received:", JSON.stringify(value.statuses));
       
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -254,11 +256,6 @@ Deno.serve(async (req) => {
           }
         }
       }
-      
-      return new Response(
-        JSON.stringify({ ok: true, type: "status_update" }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -297,7 +294,7 @@ Deno.serve(async (req) => {
     const messages = value.messages;
     if (!messages || messages.length === 0) {
       return new Response(
-        JSON.stringify({ ok: true, skipped: "no messages" }),
+        JSON.stringify({ ok: true, type: hasStatuses ? "status_update" : "no_messages" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
