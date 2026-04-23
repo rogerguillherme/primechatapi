@@ -118,16 +118,37 @@ Deno.serve(async (req) => {
     const payload = await req.json();
     console.log("WhatsApp Cloud webhook received:", JSON.stringify(payload));
 
-    // Meta sends a wrapper object
-    const entry = payload.entry?.[0];
-    const changes = entry?.changes?.[0];
-    const value = changes?.value;
+    const changeValues = (payload.entry || [])
+      .flatMap((entry: any) => entry?.changes || [])
+      .map((change: any) => change?.value)
+      .filter(Boolean);
+
+    const value = changeValues.length <= 1
+      ? changeValues[0]
+      : {
+          ...changeValues[0],
+          metadata:
+            changeValues.find((item: any) => item?.messages?.length && item?.metadata)?.metadata ||
+            changeValues.find((item: any) => item?.metadata)?.metadata ||
+            null,
+          contacts: changeValues.flatMap((item: any) => item?.contacts || []),
+          messages: changeValues.flatMap((item: any) => item?.messages || []),
+          statuses: changeValues.flatMap((item: any) => item?.statuses || []),
+        };
 
     if (!value) {
       return new Response(
         JSON.stringify({ ok: true, skipped: "no value" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    if (changeValues.length > 1) {
+      console.log("Merged webhook changes:", JSON.stringify({
+        changeCount: changeValues.length,
+        messageCount: value.messages?.length || 0,
+        statusCount: value.statuses?.length || 0,
+      }));
     }
 
     const hasStatuses = Array.isArray(value.statuses) && value.statuses.length > 0;
