@@ -73,9 +73,22 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const executionAccountId = typeof exec.metadata?.account_id === "string" && exec.metadata.account_id
+        let executionAccountId = typeof exec.metadata?.account_id === "string" && exec.metadata.account_id
           ? exec.metadata.account_id
           : null;
+
+        if (!executionAccountId) {
+          const { data: recentLeadMessage } = await supabase
+            .from("chat_messages")
+            .select("account_id")
+            .eq("lead_id", lead.id)
+            .not("account_id", "is", null)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          executionAccountId = recentLeadMessage?.account_id || null;
+        }
 
         if (currentStep.step_type === "no_response" || exec.status === "waiting_no_response") {
           await advanceToNextStep(exec, currentStep, lead, supabase, supabaseUrl, supabaseKey, executionAccountId);
