@@ -640,13 +640,14 @@ function BroadcastTab() {
         .eq("lead_id", leadId)
         .in("status", ["running", "waiting_delay", "waiting_reply", "waiting_no_response"]);
 
+      const flowAccountId = selectedAccountIds.size > 0 ? Array.from(selectedAccountIds)[0] : (defaultAccount?.id || null);
       const { error: insertExecutionError } = await supabase.from("flow_executions").insert({
         flow_id: flowId,
         lead_id: leadId,
         current_step_id: firstStep.id,
         status: firstStepStatus,
         next_action_at: firstStepNextActionAt,
-        metadata: { codigo: codigo || "" },
+        metadata: { codigo: codigo || "", account_id: flowAccountId },
       });
       if (insertExecutionError) throw new Error(`Erro ao iniciar execução do fluxo: ${insertExecutionError.message}`);
     };
