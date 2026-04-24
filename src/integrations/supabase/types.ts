@@ -643,6 +643,7 @@ export type Database = {
           active: boolean
           created_at: string
           description: string | null
+          flow_kind: string
           id: string
           name: string
           trigger_type: string | null
@@ -653,6 +654,7 @@ export type Database = {
           active?: boolean
           created_at?: string
           description?: string | null
+          flow_kind?: string
           id?: string
           name: string
           trigger_type?: string | null
@@ -663,6 +665,7 @@ export type Database = {
           active?: boolean
           created_at?: string
           description?: string | null
+          flow_kind?: string
           id?: string
           name?: string
           trigger_type?: string | null
