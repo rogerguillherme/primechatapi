@@ -710,6 +710,7 @@ function BroadcastTab() {
       let insertedCount = 0;
       let insertErrors = 0;
 
+      const flowAccountIdBulk = selectedAccountIds.size > 0 ? Array.from(selectedAccountIds)[0] : (defaultAccount?.id || null);
       for (let i = 0; i < leadIds.length; i += INSERT_BATCH) {
         const batch = leadIds.slice(i, i + INSERT_BATCH);
         const rows = batch.map((leadId) => ({
@@ -718,7 +719,7 @@ function BroadcastTab() {
           current_step_id: firstStep!.id,
           status: firstStepStatus,
           next_action_at: firstStepNextActionAt,
-          metadata: { codigo: codigoMap?.[leadId] || "" },
+          metadata: { codigo: codigoMap?.[leadId] || "", account_id: flowAccountIdBulk },
         }));
 
         const { error: batchError } = await supabase.from("flow_executions").insert(rows);
