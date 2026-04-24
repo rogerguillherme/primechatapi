@@ -1396,7 +1396,7 @@ export default function WhatsAppApi() {
   const [editingAccount, setEditingAccount] = useState<any | null>(null);
   const [isAddingAccount, setIsAddingAccount] = useState(false);
   const [accountName, setAccountName] = useState("");
-  const [provider, setProvider] = useState<"meta_cloud" | "d360" | "360messenger">("meta_cloud");
+  const [provider, setProvider] = useState<"meta_cloud" | "d360" | "evolution">("meta_cloud");
   const [phoneNumberId, setPhoneNumberId] = useState("");
   const [accessToken, setAccessToken] = useState("");
   const [businessAccountId, setBusinessAccountId] = useState("");
@@ -1549,7 +1549,7 @@ export default function WhatsAppApi() {
   const startEditing = (account: any) => {
     setEditingAccount(account);
     setAccountName(account.name);
-    setProvider((account.provider as "meta_cloud" | "d360" | "360messenger") || "meta_cloud");
+    setProvider((account.provider as "meta_cloud" | "d360" | "evolution") || "meta_cloud");
     setPhoneNumberId(account.phone_number_id);
     setAccessToken(account.access_token);
     setBusinessAccountId(account.business_account_id || "");
@@ -1573,16 +1573,29 @@ export default function WhatsAppApi() {
         return;
       }
     }
-    if ((provider === "d360" || provider === "360messenger") && !apiKey.trim()) {
-      toast.error(provider === "360messenger" ? "Informe a API Key do 360Messenger." : "Informe a D360-API-KEY do 360dialog.");
+    if (provider === "d360" && !apiKey.trim()) {
+      toast.error("Informe a D360-API-KEY do 360dialog.");
       return;
+    }
+    if (provider === "evolution") {
+      if (!businessAccountId.trim()) {
+        toast.error("Informe a URL do servidor Evolution (ex: https://evolution.seudominio.com).");
+        return;
+      }
+      if (!phoneNumberId.trim()) {
+        toast.error("Informe o nome da Instance da Evolution.");
+        return;
+      }
+      if (!apiKey.trim()) {
+        toast.error("Informe a API Key da Evolution (apikey global ou da instance).");
+        return;
+      }
     }
     setIsSaving(true);
     try {
-      // 360dialog/360messenger não usam phone_number_id (a API Key já identifica o número),
-      // mas a coluna no banco é NOT NULL — então geramos um identificador sintético.
-      const isApiKeyProvider = provider === "d360" || provider === "360messenger";
-      const syntheticPrefix = provider === "360messenger" ? "360m" : "d360";
+      // d360/evolution não usam phone_number_id real (instance), mas a coluna no banco é NOT NULL
+      const isApiKeyProvider = provider === "d360" || provider === "evolution";
+      const syntheticPrefix = provider === "evolution" ? "evo" : "d360";
       const effectivePhoneNumberId = isApiKeyProvider
         ? (phoneNumberId.trim() || (editingAccount?.phone_number_id) || `${syntheticPrefix}_${crypto.randomUUID().slice(0, 12)}`)
         : phoneNumberId.trim();
@@ -1591,7 +1604,10 @@ export default function WhatsAppApi() {
         name: accountName.trim(),
         provider,
         phone_number_id: effectivePhoneNumberId,
-        business_account_id: provider === "meta_cloud" ? (businessAccountId.trim() || null) : null,
+        business_account_id:
+          provider === "meta_cloud" ? (businessAccountId.trim() || null)
+          : provider === "evolution" ? businessAccountId.trim().replace(/\/+$/, "")
+          : null,
         access_token: provider === "meta_cloud" ? accessToken.trim() : (apiKey.trim() || provider),
         api_key: isApiKeyProvider ? apiKey.trim() : null,
         is_default: isDefault || (accounts?.length === 0),
@@ -1879,8 +1895,8 @@ export default function WhatsAppApi() {
                     <DropdownMenuItem onClick={() => { resetForm(); setProvider("d360"); setIsAddingAccount(true); }} className="gap-2">
                       <MessageCircle size={14} /> 360dialog
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => { resetForm(); setProvider("360messenger"); setIsAddingAccount(true); }} className="gap-2">
-                      <MessageCircle size={14} /> 360Messenger
+                    <DropdownMenuItem onClick={() => { resetForm(); setProvider("evolution"); setIsAddingAccount(true); }} className="gap-2">
+                      <MessageCircle size={14} /> Evolution API
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -1938,8 +1954,8 @@ export default function WhatsAppApi() {
                               )}
                               {account.provider === "d360" ? (
                                 <Badge variant="secondary" className="text-[10px] px-1.5 py-0">360dialog</Badge>
-                              ) : account.provider === "360messenger" ? (
-                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">360Messenger</Badge>
+                              ) : account.provider === "evolution" ? (
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Evolution API</Badge>
                               ) : (
                                 <Badge variant="outline" className="text-[10px] px-1.5 py-0">Meta Cloud</Badge>
                               )}
@@ -2084,13 +2100,13 @@ export default function WhatsAppApi() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setProvider("360messenger")}
+                      onClick={() => setProvider("evolution")}
                       className={`text-left rounded-lg border p-3 transition-colors ${
-                        provider === "360messenger" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
+                        provider === "evolution" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
                       }`}
                     >
-                      <p className="text-sm font-medium">360Messenger</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">API simples via APIKEY</p>
+                      <p className="text-sm font-medium">Evolution API</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Self-hosted (Hetzner) — texto, mídia, botões e listas</p>
                     </button>
                   </div>
                 </div>
@@ -2130,14 +2146,38 @@ export default function WhatsAppApi() {
                   </div>
                 )}
 
-                {provider === "360messenger" && (
-                  <div className="space-y-2">
-                    <Label htmlFor="apiKey">APIKEY do 360Messenger</Label>
-                    <Input id="apiKey" type="password" placeholder="Sua APIKEY do 360Messenger..." value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
-                    <p className="text-xs text-muted-foreground">
-                      Encontre em <span className="font-mono">Product Details → APIKEY</span> no painel 360Messenger. Envia mensagens de texto via <span className="font-mono">api.360messenger.com/v2/sendMessage</span>.
-                    </p>
-                  </div>
+                {provider === "evolution" && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="evoServer">URL do servidor Evolution</Label>
+                      <Input
+                        id="evoServer"
+                        placeholder="https://evolution.seudominio.com"
+                        value={businessAccountId}
+                        onChange={(e) => setBusinessAccountId(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Endereço da sua instância self-hosted (sem barra final). Ex: <span className="font-mono">https://evolution.app.com.br</span>
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="phoneNumberId">Instance Name</Label>
+                      <Input
+                        id="phoneNumberId"
+                        placeholder="ex: suporte-gabriel"
+                        value={phoneNumberId}
+                        onChange={(e) => setPhoneNumberId(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">Nome da instance criado no Evolution Manager.</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="apiKey">API Key (apikey)</Label>
+                      <Input id="apiKey" type="password" placeholder="apikey global ou específica da instance" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
+                      <p className="text-xs text-muted-foreground">
+                        Use a <span className="font-mono">AUTHENTICATION_API_KEY</span> global ou a <span className="font-mono">apikey</span> da instance. Enviada como header <span className="font-mono">apikey</span>.
+                      </p>
+                    </div>
+                  </>
                 )}
 
                 <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
@@ -2145,31 +2185,35 @@ export default function WhatsAppApi() {
                   <p className="text-xs text-muted-foreground">
                     {provider === "d360"
                       ? "Cole esta URL no campo 'Webhook URL' do Hub do 360dialog (WhatsApp Accounts → seu número → Webhook). Não é necessário Verify Token."
-                      : provider === "360messenger"
-                      ? "O 360Messenger não exige webhook para envio. Mensagens recebidas precisam ser configuradas no painel deles, se disponível."
+                      : provider === "evolution"
+                      ? "Configure no Evolution Manager: Instance → Webhook → cole a URL abaixo e ative os eventos MESSAGES_UPSERT e MESSAGES_UPDATE."
                       : "Configure este webhook no App do Facebook para receber mensagens."}
                   </p>
-                  {provider !== "360messenger" && (
-                    <div className="space-y-2">
-                      <Label>URL do Webhook (Callback URL)</Label>
-                      <div className="flex gap-2">
-                        <Input
-                          value={provider === "d360"
+                  <div className="space-y-2">
+                    <Label>URL do Webhook (Callback URL)</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={
+                          provider === "d360"
                             ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/d360-webhook`
-                            : webhookUrl}
-                          readOnly
-                          className="font-mono text-xs"
-                        />
-                        <Button variant="outline" size="icon" onClick={() => {
-                          const url = provider === "d360"
-                            ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/d360-webhook`
-                            : webhookUrl;
-                          navigator.clipboard.writeText(url);
-                          toast.success("URL copiada!");
-                        }}><Copy size={16} /></Button>
-                      </div>
+                            : provider === "evolution"
+                            ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/evolution-webhook${editingAccount?.id ? `?account_id=${editingAccount.id}` : ""}`
+                            : webhookUrl
+                        }
+                        readOnly
+                        className="font-mono text-xs"
+                      />
+                      <Button variant="outline" size="icon" onClick={() => {
+                        const url = provider === "d360"
+                          ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/d360-webhook`
+                          : provider === "evolution"
+                          ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/evolution-webhook${editingAccount?.id ? `?account_id=${editingAccount.id}` : ""}`
+                          : webhookUrl;
+                        navigator.clipboard.writeText(url);
+                        toast.success("URL copiada!");
+                      }}><Copy size={16} /></Button>
                     </div>
-                  )}
+                  </div>
                   {provider === "meta_cloud" && (
                   <div className="space-y-2">
                     <Label htmlFor="verifyToken">Verify Token</Label>
