@@ -142,6 +142,21 @@ export default function Chat() {
     enabled: !!selectedLeadId,
   });
 
+  // Auto-select the most relevant account for the current lead
+  useEffect(() => {
+    if (selectedAccountId || !selectedLeadId) return;
+
+    const lastLeadAccountId = messages?.slice().reverse().find((msg) => msg.account_id)?.account_id;
+    if (lastLeadAccountId) {
+      setSelectedAccountId(lastLeadAccountId);
+      return;
+    }
+
+    if (defaultAccount) {
+      setSelectedAccountId(defaultAccount.id);
+    }
+  }, [defaultAccount, selectedAccountId, selectedLeadId, messages]);
+
   // Fetch templates scoped to user's accounts
   const { templates } = useUserTemplates();
 
