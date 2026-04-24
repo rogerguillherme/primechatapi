@@ -1761,14 +1761,18 @@ export default function WhatsAppApi() {
       setQrConnState(state);
       if (state === "open") {
         stopQrPolling();
+        reopenedForRef.current.delete(accountId);
         toast.success("WhatsApp conectado com sucesso! 🎉");
         queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
         setTimeout(() => setQrDialogOpen(false), 1500);
+      } else if (state === "close" || state === "disconnected") {
+        // QR expirou ou caiu — força refresh do QR
+        fetchQrForAccount(accountId);
       }
     } catch (e) {
       console.warn("Status poll failed:", e);
     }
-  }, [stopQrPolling, queryClient]);
+  }, [stopQrPolling, queryClient, fetchQrForAccount]);
 
   const startQrPolling = useCallback((accountId: string) => {
     stopQrPolling();
@@ -1776,7 +1780,7 @@ export default function WhatsAppApi() {
     qrRefreshRef.current = window.setInterval(() => fetchQrForAccount(accountId), 30000) as any;
   }, [pollQrStatus, fetchQrForAccount, stopQrPolling]);
 
-  const openQrDialogForExisting = (account: any) => {
+  const openQrDialogForExisting = useCallback((account: any) => {
     setQrMode("existing");
     setQrAccountId(account.id);
     setQrImage(null);
@@ -1786,7 +1790,7 @@ export default function WhatsAppApi() {
     setQrLoading(true);
     fetchQrForAccount(account.id).finally(() => setQrLoading(false));
     startQrPolling(account.id);
-  };
+  }, [fetchQrForAccount, startQrPolling]);
 
   const openQrDialogForNew = () => {
     setQrMode("new");
