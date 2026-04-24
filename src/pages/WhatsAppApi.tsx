@@ -1710,7 +1710,138 @@ export default function WhatsAppApi() {
     }
   };
 
-  
+  /* ── QR Code (Evolution) state ── */
+  const [qrDialogOpen, setQrDialogOpen] = useState(false);
+  const [qrMode, setQrMode] = useState<"new" | "existing">("new");
+  const [qrAccountId, setQrAccountId] = useState<string | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrImage, setQrImage] = useState<string | null>(null);
+  const [qrPairingCode, setQrPairingCode] = useState<string | null>(null);
+  const [qrConnState, setQrConnState] = useState<string>("connecting");
+  const [qrName, setQrName] = useState("");
+  const [qrServerUrl, setQrServerUrl] = useState("");
+  const [qrInstance, setQrInstance] = useState("");
+  const [qrApiKey, setQrApiKey] = useState("");
+  const qrPollRef = useRef<number | null>(null);
+  const qrRefreshRef = useRef<number | null>(null);
+
+  const stopQrPolling = useCallback(() => {
+    if (qrPollRef.current) { clearInterval(qrPollRef.current); qrPollRef.current = null; }
+    if (qrRefreshRef.current) { clearInterval(qrRefreshRef.current); qrRefreshRef.current = null; }
+  }, []);
+
+  const fetchQrForAccount = useCallback(async (accountId: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke("evolution-instance", {
+        body: { action: "connect", account_id: accountId },
+      });
+      if (error) throw error;
+      if (data?.qr_code) {
+        const qr = String(data.qr_code);
+        setQrImage(qr.startsWith("data:") ? qr : `data:image/png;base64,${qr}`);
+      }
+      if (data?.pairing_code) setQrPairingCode(data.pairing_code);
+    } catch (e: any) {
+      console.error("QR refresh failed:", e);
+    }
+  }, []);
+
+  const pollQrStatus = useCallback(async (accountId: string) => {
+    try {
+      const { data } = await supabase.functions.invoke("evolution-instance", {
+        body: { action: "status", account_id: accountId },
+      });
+      const state = String(data?.state || "unknown");
+      setQrConnState(state);
+      if (state === "open") {
+        stopQrPolling();
+        toast.success("WhatsApp conectado com sucesso! 🎉");
+        queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
+        setTimeout(() => setQrDialogOpen(false), 1500);
+      }
+    } catch (e) {
+      console.warn("Status poll failed:", e);
+    }
+  }, [stopQrPolling, queryClient]);
+
+  const startQrPolling = useCallback((accountId: string) => {
+    stopQrPolling();
+    qrPollRef.current = window.setInterval(() => pollQrStatus(accountId), 3000) as any;
+    qrRefreshRef.current = window.setInterval(() => fetchQrForAccount(accountId), 30000) as any;
+  }, [pollQrStatus, fetchQrForAccount, stopQrPolling]);
+
+  const openQrDialogForExisting = (account: any) => {
+    setQrMode("existing");
+    setQrAccountId(account.id);
+    setQrImage(null);
+    setQrPairingCode(null);
+    setQrConnState("connecting");
+    setQrDialogOpen(true);
+    setQrLoading(true);
+    fetchQrForAccount(account.id).finally(() => setQrLoading(false));
+    startQrPolling(account.id);
+  };
+
+  const openQrDialogForNew = () => {
+    setQrMode("new");
+    setQrAccountId(null);
+    setQrImage(null);
+    setQrPairingCode(null);
+    setQrConnState("connecting");
+    setQrName("");
+    setQrServerUrl("");
+    setQrInstance("");
+    setQrApiKey("");
+    setQrDialogOpen(true);
+  };
+
+  const handleCreateAndConnect = async () => {
+    if (!qrName.trim() || !qrServerUrl.trim() || !qrInstance.trim() || !qrApiKey.trim()) {
+      toast.error("Preencha nome, URL do servidor, instance e API Key.");
+      return;
+    }
+    setQrLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("evolution-instance", {
+        body: {
+          action: "create_and_connect",
+          name: qrName.trim(),
+          serverUrl: qrServerUrl.trim().replace(/\/+$/, ""),
+          instance: qrInstance.trim(),
+          apiKey: qrApiKey.trim(),
+          is_default: (accounts?.length || 0) === 0,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast.success(data?.already_existed ? "Instance já existia — gerando QR…" : "Instance criada! Escaneie o QR.");
+      queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
+
+      if (data?.qr_code) {
+        const qr = String(data.qr_code);
+        setQrImage(qr.startsWith("data:") ? qr : `data:image/png;base64,${qr}`);
+      }
+      if (data?.pairing_code) setQrPairingCode(data.pairing_code);
+      if (data?.account_id) {
+        setQrAccountId(data.account_id);
+        setQrMode("existing");
+        startQrPolling(data.account_id);
+      }
+    } catch (e: any) {
+      toast.error(`Erro: ${e.message}`);
+    } finally {
+      setQrLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!qrDialogOpen) stopQrPolling();
+    return stopQrPolling;
+  }, [qrDialogOpen, stopQrPolling]);
+
+  return (
+    <div className="animate-fade-in">
 
   return (
     <div className="animate-fade-in">
