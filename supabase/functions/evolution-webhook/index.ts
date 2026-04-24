@@ -20,7 +20,11 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const url = new URL(req.url);
-    const accountIdParam = url.searchParams.get("account_id");
+    // Some Evolution servers append the event name to the URL path/query, dirtying account_id (e.g. "uuid/messages-upsert").
+    // Sanitize: keep only the leading UUID portion.
+    const rawAccountId = url.searchParams.get("account_id") || "";
+    const uuidMatch = rawAccountId.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    const accountIdParam = uuidMatch ? uuidMatch[0] : "";
 
     const payload = await req.json().catch(() => ({}));
     console.log("Evolution webhook received:", JSON.stringify(payload).substring(0, 500));
@@ -28,17 +32,29 @@ Deno.serve(async (req) => {
     const event: string = payload.event || "";
     const instance: string = payload.instance || payload.instanceName || "";
 
-    // Resolve account from query param OR from instance name
-    let accountQuery = supabase.from("whatsapp_accounts").select("id, user_id, phone_number_id").eq("provider", "evolution");
+    // Resolve account by id, then fall back to instance slug
+    let account: any = null;
     if (accountIdParam) {
-      accountQuery = accountQuery.eq("id", accountIdParam);
-    } else if (instance) {
-      accountQuery = accountQuery.eq("phone_number_id", instance);
+      const { data } = await supabase
+        .from("whatsapp_accounts")
+        .select("id, user_id, phone_number_id")
+        .eq("provider", "evolution")
+        .eq("id", accountIdParam)
+        .maybeSingle();
+      account = data;
     }
-    const { data: account } = await accountQuery.maybeSingle();
+    if (!account && instance) {
+      const { data } = await supabase
+        .from("whatsapp_accounts")
+        .select("id, user_id, phone_number_id")
+        .eq("provider", "evolution")
+        .eq("phone_number_id", instance)
+        .maybeSingle();
+      account = data;
+    }
 
     if (!account) {
-      console.log("No matching evolution account for instance:", instance, "param:", accountIdParam);
+      console.log("No matching evolution account for instance:", instance, "param:", accountIdParam, "raw:", rawAccountId);
       return new Response(JSON.stringify({ ok: true, ignored: true }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
