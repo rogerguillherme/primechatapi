@@ -69,14 +69,6 @@ Deno.serve(async (req) => {
       const fromMe: boolean = !!key.fromMe;
       const messageId: string = key.id || "";
 
-      // Ignore own outbound echoes (we already log them on send)
-      if (fromMe) {
-        return new Response(JSON.stringify({ ok: true, skipped: "fromMe" }), {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
       // Ignore groups & broadcasts
       if (remoteJid.includes("@g.us") || remoteJid.includes("status@broadcast")) {
         return new Response(JSON.stringify({ ok: true, skipped: "group" }), {
@@ -93,9 +85,24 @@ Deno.serve(async (req) => {
         });
       }
 
+      // Dedupe: skip if we already stored this message id (avoids double when our own send echoes back)
+      if (messageId) {
+        const { data: existing } = await supabase
+          .from("chat_messages")
+          .select("id")
+          .eq("zapi_message_id", messageId)
+          .maybeSingle();
+        if (existing) {
+          return new Response(JSON.stringify({ ok: true, skipped: "duplicate" }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+
       // Extract text + media
       const msg = data.message || {};
-      let text =
+      const text =
         msg.conversation ||
         msg.extendedTextMessage?.text ||
         msg.imageMessage?.caption ||
@@ -106,13 +113,14 @@ Deno.serve(async (req) => {
         "";
 
       let mediaType: string | null = null;
-      let mediaUrl: string | null = data.message?.imageMessage?.url || data.message?.videoMessage?.url || data.message?.audioMessage?.url || data.message?.documentMessage?.url || null;
+      const mediaUrl: string | null = msg.imageMessage?.url || msg.videoMessage?.url || msg.audioMessage?.url || msg.documentMessage?.url || null;
       if (msg.imageMessage) mediaType = "image";
       else if (msg.videoMessage) mediaType = "video";
       else if (msg.audioMessage) mediaType = "audio";
       else if (msg.documentMessage) mediaType = "document";
 
       const pushName: string = data.pushName || phone;
+      const direction = fromMe ? "outbound" : "inbound";
 
       // Upsert lead by phone
       const { data: existingLead } = await supabase
@@ -131,7 +139,7 @@ Deno.serve(async (req) => {
             phone,
             name: pushName,
             origin: "evolution",
-            chat_status: "aguardando_respostas",
+            chat_status: fromMe ? "respondidas" : "aguardando_respostas",
           })
           .select("id")
           .single();
@@ -145,31 +153,33 @@ Deno.serve(async (req) => {
         leadId = newLead.id;
       }
 
-      // Insert chat message
+      // Insert chat message (inbound from contact OR outbound sent from the phone)
       await supabase.from("chat_messages").insert({
         lead_id: leadId,
-        direction: "inbound",
+        direction,
         content: text || (mediaType ? `[${mediaType}]` : "(sem conteúdo)"),
         media_type: mediaType,
         media_url: mediaUrl,
         zapi_message_id: messageId,
-        status: "received",
+        status: fromMe ? "sent" : "received",
         account_id: account.id,
       });
 
-      // Try to advance any flow execution waiting for reply
-      try {
-        await fetch(`${supabaseUrl}/functions/v1/flow-processor`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${supabaseKey}`,
-          },
-          body: JSON.stringify({ inbound_lead_id: leadId, inbound_text: text }),
-        }).catch(() => {});
-      } catch {}
+      // Only trigger flows on real inbound replies
+      if (!fromMe) {
+        try {
+          await fetch(`${supabaseUrl}/functions/v1/flow-processor`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${supabaseKey}`,
+            },
+            body: JSON.stringify({ inbound_lead_id: leadId, inbound_text: text }),
+          }).catch(() => {});
+        } catch {}
+      }
 
-      return new Response(JSON.stringify({ ok: true, lead_id: leadId }), {
+      return new Response(JSON.stringify({ ok: true, lead_id: leadId, direction }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
