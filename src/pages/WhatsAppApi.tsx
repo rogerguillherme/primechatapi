@@ -20,6 +20,9 @@ import { AudioRecorder } from "@/components/AudioRecorder";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import {
   Phone, Key, Link2, Send, CheckCircle2, AlertCircle, Copy, ExternalLink,
@@ -27,6 +30,7 @@ import {
   Truck, Users, ArrowLeft, BarChart3, MoreVertical, Pencil, Trash2, Star,
   KeyRound, ChevronDown, Webhook, LogOut, Plug, Tag, ChevronLeft, ChevronRight,
   Instagram, GitBranch, TrendingUp, Bot, Volume2, Sparkles, DollarSign,
+  QrCode, RefreshCw, Loader2, Smartphone,
 } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
@@ -1706,7 +1710,135 @@ export default function WhatsAppApi() {
     }
   };
 
-  
+  /* ── QR Code (Evolution) state ── */
+  const [qrDialogOpen, setQrDialogOpen] = useState(false);
+  const [qrMode, setQrMode] = useState<"new" | "existing">("new");
+  const [qrAccountId, setQrAccountId] = useState<string | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrImage, setQrImage] = useState<string | null>(null);
+  const [qrPairingCode, setQrPairingCode] = useState<string | null>(null);
+  const [qrConnState, setQrConnState] = useState<string>("connecting");
+  const [qrName, setQrName] = useState("");
+  const [qrServerUrl, setQrServerUrl] = useState("");
+  const [qrInstance, setQrInstance] = useState("");
+  const [qrApiKey, setQrApiKey] = useState("");
+  const qrPollRef = useRef<number | null>(null);
+  const qrRefreshRef = useRef<number | null>(null);
+
+  const stopQrPolling = useCallback(() => {
+    if (qrPollRef.current) { clearInterval(qrPollRef.current); qrPollRef.current = null; }
+    if (qrRefreshRef.current) { clearInterval(qrRefreshRef.current); qrRefreshRef.current = null; }
+  }, []);
+
+  const fetchQrForAccount = useCallback(async (accountId: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke("evolution-instance", {
+        body: { action: "connect", account_id: accountId },
+      });
+      if (error) throw error;
+      if (data?.qr_code) {
+        const qr = String(data.qr_code);
+        setQrImage(qr.startsWith("data:") ? qr : `data:image/png;base64,${qr}`);
+      }
+      if (data?.pairing_code) setQrPairingCode(data.pairing_code);
+    } catch (e: any) {
+      console.error("QR refresh failed:", e);
+    }
+  }, []);
+
+  const pollQrStatus = useCallback(async (accountId: string) => {
+    try {
+      const { data } = await supabase.functions.invoke("evolution-instance", {
+        body: { action: "status", account_id: accountId },
+      });
+      const state = String(data?.state || "unknown");
+      setQrConnState(state);
+      if (state === "open") {
+        stopQrPolling();
+        toast.success("WhatsApp conectado com sucesso! 🎉");
+        queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
+        setTimeout(() => setQrDialogOpen(false), 1500);
+      }
+    } catch (e) {
+      console.warn("Status poll failed:", e);
+    }
+  }, [stopQrPolling, queryClient]);
+
+  const startQrPolling = useCallback((accountId: string) => {
+    stopQrPolling();
+    qrPollRef.current = window.setInterval(() => pollQrStatus(accountId), 3000) as any;
+    qrRefreshRef.current = window.setInterval(() => fetchQrForAccount(accountId), 30000) as any;
+  }, [pollQrStatus, fetchQrForAccount, stopQrPolling]);
+
+  const openQrDialogForExisting = (account: any) => {
+    setQrMode("existing");
+    setQrAccountId(account.id);
+    setQrImage(null);
+    setQrPairingCode(null);
+    setQrConnState("connecting");
+    setQrDialogOpen(true);
+    setQrLoading(true);
+    fetchQrForAccount(account.id).finally(() => setQrLoading(false));
+    startQrPolling(account.id);
+  };
+
+  const openQrDialogForNew = () => {
+    setQrMode("new");
+    setQrAccountId(null);
+    setQrImage(null);
+    setQrPairingCode(null);
+    setQrConnState("connecting");
+    setQrName("");
+    setQrServerUrl("");
+    setQrInstance("");
+    setQrApiKey("");
+    setQrDialogOpen(true);
+  };
+
+  const handleCreateAndConnect = async () => {
+    if (!qrName.trim() || !qrServerUrl.trim() || !qrInstance.trim() || !qrApiKey.trim()) {
+      toast.error("Preencha nome, URL do servidor, instance e API Key.");
+      return;
+    }
+    setQrLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("evolution-instance", {
+        body: {
+          action: "create_and_connect",
+          name: qrName.trim(),
+          serverUrl: qrServerUrl.trim().replace(/\/+$/, ""),
+          instance: qrInstance.trim(),
+          apiKey: qrApiKey.trim(),
+          is_default: (accounts?.length || 0) === 0,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast.success(data?.already_existed ? "Instance já existia — gerando QR…" : "Instance criada! Escaneie o QR.");
+      queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
+
+      if (data?.qr_code) {
+        const qr = String(data.qr_code);
+        setQrImage(qr.startsWith("data:") ? qr : `data:image/png;base64,${qr}`);
+      }
+      if (data?.pairing_code) setQrPairingCode(data.pairing_code);
+      if (data?.account_id) {
+        setQrAccountId(data.account_id);
+        setQrMode("existing");
+        startQrPolling(data.account_id);
+      }
+    } catch (e: any) {
+      toast.error(`Erro: ${e.message}`);
+    } finally {
+      setQrLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!qrDialogOpen) stopQrPolling();
+    return stopQrPolling;
+  }, [qrDialogOpen, stopQrPolling]);
 
   return (
     <div className="animate-fade-in">
@@ -1896,7 +2028,10 @@ export default function WhatsAppApi() {
                       <MessageCircle size={14} /> 360dialog
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => { resetForm(); setProvider("evolution"); setIsAddingAccount(true); }} className="gap-2">
-                      <MessageCircle size={14} /> Evolution API
+                      <MessageCircle size={14} /> Evolution API (manual)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={openQrDialogForNew} className="gap-2">
+                      <QrCode size={14} /> Conectar via QR Code (Evolution)
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -1995,6 +2130,12 @@ export default function WhatsAppApi() {
                             {!account.is_default && (
                               <Button variant="ghost" size="sm" onClick={() => handleSetDefault(account.id)} className="text-xs h-8 gap-1 text-muted-foreground hover:text-foreground">
                                 <Star size={14} /> Padrão
+                              </Button>
+                            )}
+
+                            {account.provider === "evolution" && (
+                              <Button variant="default" size="sm" onClick={() => openQrDialogForExisting(account)} className="text-xs h-8 gap-1">
+                                <QrCode size={14} /> Conectar (QR)
                               </Button>
                             )}
 
@@ -2296,6 +2437,98 @@ export default function WhatsAppApi() {
         </TabsContent>
         </div>
       </Tabs>
+
+      {/* ── QR Code Dialog (Evolution) ── */}
+      <Dialog open={qrDialogOpen} onOpenChange={setQrDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <QrCode size={20} />
+              {qrMode === "new" ? "Conectar nova instância via QR" : "Escanear QR Code"}
+            </DialogTitle>
+            <DialogDescription>
+              {qrMode === "new"
+                ? "Crie uma nova instância no seu servidor Evolution e conecte um número WhatsApp."
+                : "Abra o WhatsApp → Aparelhos conectados → Conectar um aparelho e aponte para o QR abaixo."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {qrMode === "new" && !qrAccountId ? (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="qrName">Nome da conta</Label>
+                <Input id="qrName" placeholder="Ex: Suporte Loja" value={qrName} onChange={(e) => setQrName(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="qrServer">URL do servidor Evolution</Label>
+                <Input id="qrServer" placeholder="https://evolution.seudominio.com" value={qrServerUrl} onChange={(e) => setQrServerUrl(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="qrInstance">Nome da instância</Label>
+                <Input id="qrInstance" placeholder="ex: suporte-01" value={qrInstance} onChange={(e) => setQrInstance(e.target.value)} />
+                <p className="text-xs text-muted-foreground">Se não existir, será criada automaticamente.</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="qrApi">API Key (apikey global)</Label>
+                <Input id="qrApi" type="password" placeholder="AUTHENTICATION_API_KEY" value={qrApiKey} onChange={(e) => setQrApiKey(e.target.value)} />
+              </div>
+              <DialogFooter className="gap-2">
+                <Button variant="outline" onClick={() => setQrDialogOpen(false)}>Cancelar</Button>
+                <Button onClick={handleCreateAndConnect} disabled={qrLoading}>
+                  {qrLoading ? <><Loader2 size={14} className="animate-spin mr-1" /> Criando…</> : <><QrCode size={14} className="mr-1" /> Criar & gerar QR</>}
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex flex-col items-center justify-center gap-3 py-2">
+                {qrLoading && !qrImage ? (
+                  <div className="w-64 h-64 flex items-center justify-center bg-muted rounded-lg">
+                    <Loader2 size={32} className="animate-spin text-muted-foreground" />
+                  </div>
+                ) : qrConnState === "open" ? (
+                  <div className="w-64 h-64 flex flex-col items-center justify-center bg-emerald-500/10 rounded-lg gap-2">
+                    <CheckCircle2 size={48} className="text-emerald-500" />
+                    <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">Conectado!</p>
+                  </div>
+                ) : qrImage ? (
+                  <img src={qrImage} alt="QR Code Evolution" className="w-64 h-64 rounded-lg border bg-white p-2" />
+                ) : (
+                  <div className="w-64 h-64 flex items-center justify-center bg-muted rounded-lg text-xs text-muted-foreground text-center px-4">
+                    Aguardando QR Code do servidor…
+                  </div>
+                )}
+
+                {qrPairingCode && qrConnState !== "open" && (
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground">ou use o código de pareamento</p>
+                    <p className="font-mono text-lg font-semibold tracking-widest">{qrPairingCode}</p>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 text-xs">
+                  <Smartphone size={14} className="text-muted-foreground" />
+                  <span className="text-muted-foreground">
+                    Status: <span className="font-medium text-foreground capitalize">{qrConnState}</span>
+                  </span>
+                </div>
+              </div>
+
+              <DialogFooter className="gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => qrAccountId && fetchQrForAccount(qrAccountId)}
+                  disabled={!qrAccountId || qrConnState === "open"}
+                >
+                  <RefreshCw size={14} className="mr-1" /> Atualizar QR
+                </Button>
+                <Button onClick={() => setQrDialogOpen(false)}>Fechar</Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
+
   );
 }
