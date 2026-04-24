@@ -101,8 +101,9 @@ const clearFlowDraft = (storageKey: string) => {
 };
 
 /* ── Flow List View ── */
-function FlowListView({ onEdit }: { onEdit: (flow: Flow | null) => void }) {
+function FlowListView({ onEdit }: { onEdit: (flow: Flow | null, kind?: FlowKind) => void }) {
   const queryClient = useQueryClient();
+  const [activeKind, setActiveKind] = useState<FlowKind>("api");
 
   const { data: flows, isLoading } = useQuery({
     queryKey: ["flows"],
@@ -148,6 +149,64 @@ function FlowListView({ onEdit }: { onEdit: (flow: Flow | null) => void }) {
     onError: (err: any) => toast.error(err.message),
   });
 
+  const filteredFlows = (flows || []).filter((f) => ((f.flow_kind as FlowKind) || "api") === activeKind);
+
+  const renderList = () => {
+    if (isLoading) {
+      return <p className="text-sm text-muted-foreground text-center py-8">Carregando...</p>;
+    }
+    if (!filteredFlows.length) {
+      return (
+        <p className="text-sm text-muted-foreground text-center py-8">
+          {activeKind === "api"
+            ? "Nenhum fluxo de API (Meta Cloud) criado ainda."
+            : "Nenhum fluxo de WhatsApp (360Messenger) criado ainda."}
+        </p>
+      );
+    }
+    return (
+      <div className="divide-y divide-border">
+        {filteredFlows.map((flow) => (
+          <div key={flow.id} className="flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium truncate">{flow.name}</p>
+                <Badge variant={flow.active ? "default" : "secondary"} className="text-[10px]">
+                  {flow.active ? "Ativo" : "Inativo"}
+                </Badge>
+              </div>
+              {flow.description && (
+                <p className="text-xs text-muted-foreground truncate mt-0.5">{flow.description}</p>
+              )}
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {stepCounts?.get(flow.id) || 0} passo(s)
+              </p>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost" size="icon" className="h-8 w-8"
+                onClick={() => toggleActive.mutate({ id: flow.id, active: !flow.active })}
+                title={flow.active ? "Desativar" : "Ativar"}
+              >
+                {flow.active ? <Pause size={14} /> : <Play size={14} />}
+              </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(flow)}>
+                <ChevronRight size={14} />
+              </Button>
+              <Button
+                variant="ghost" size="icon"
+                className="h-8 w-8 text-destructive hover:text-destructive"
+                onClick={() => { if (confirm("Remover fluxo?")) deleteFlow.mutate(flow.id); }}
+              >
+                <Trash2 size={14} />
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-3">
@@ -156,58 +215,35 @@ function FlowListView({ onEdit }: { onEdit: (flow: Flow | null) => void }) {
             <GitBranch size={18} />
             Fluxos de Automação
           </CardTitle>
-          <CardDescription>Crie sequências de mensagens com delays e condições de botão.</CardDescription>
+          <CardDescription>
+            {activeKind === "api"
+              ? "Fluxos para contas conectadas via Meta Cloud API."
+              : "Fluxos para contas conectadas via 360Messenger (360dialog)."}
+          </CardDescription>
         </div>
-        <Button size="sm" onClick={() => onEdit(null)}>
+        <Button size="sm" onClick={() => onEdit(null, activeKind)}>
           <Plus size={14} /> Novo Fluxo
         </Button>
       </CardHeader>
       <CardContent className="p-0">
-        {isLoading ? (
-          <p className="text-sm text-muted-foreground text-center py-8">Carregando...</p>
-        ) : !flows?.length ? (
-          <p className="text-sm text-muted-foreground text-center py-8">Nenhum fluxo criado ainda.</p>
-        ) : (
-          <div className="divide-y divide-border">
-            {flows.map((flow) => (
-              <div key={flow.id} className="flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium truncate">{flow.name}</p>
-                    <Badge variant={flow.active ? "default" : "secondary"} className="text-[10px]">
-                      {flow.active ? "Ativo" : "Inativo"}
-                    </Badge>
-                  </div>
-                  {flow.description && (
-                    <p className="text-xs text-muted-foreground truncate mt-0.5">{flow.description}</p>
-                  )}
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {stepCounts?.get(flow.id) || 0} passo(s)
-                  </p>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost" size="icon" className="h-8 w-8"
-                    onClick={() => toggleActive.mutate({ id: flow.id, active: !flow.active })}
-                    title={flow.active ? "Desativar" : "Ativar"}
-                  >
-                    {flow.active ? <Pause size={14} /> : <Play size={14} />}
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(flow)}>
-                    <ChevronRight size={14} />
-                  </Button>
-                  <Button
-                    variant="ghost" size="icon"
-                    className="h-8 w-8 text-destructive hover:text-destructive"
-                    onClick={() => { if (confirm("Remover fluxo?")) deleteFlow.mutate(flow.id); }}
-                  >
-                    <Trash2 size={14} />
-                  </Button>
-                </div>
-              </div>
-            ))}
+        <Tabs value={activeKind} onValueChange={(v) => setActiveKind(v as FlowKind)}>
+          <div className="px-4 pb-3">
+            <TabsList className="grid w-full max-w-md grid-cols-2">
+              <TabsTrigger value="api" className="gap-2">
+                <Code2 size={14} /> Fluxo API
+              </TabsTrigger>
+              <TabsTrigger value="whatsapp" className="gap-2">
+                <MessageCircle size={14} /> Fluxo WhatsApp
+              </TabsTrigger>
+            </TabsList>
           </div>
-        )}
+          <TabsContent value="api" className="m-0">
+            {renderList()}
+          </TabsContent>
+          <TabsContent value="whatsapp" className="m-0">
+            {renderList()}
+          </TabsContent>
+        </Tabs>
       </CardContent>
     </Card>
   );
