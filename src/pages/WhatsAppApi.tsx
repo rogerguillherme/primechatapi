@@ -1549,7 +1549,7 @@ export default function WhatsAppApi() {
   const startEditing = (account: any) => {
     setEditingAccount(account);
     setAccountName(account.name);
-    setProvider((account.provider as "meta_cloud" | "d360") || "meta_cloud");
+    setProvider((account.provider as "meta_cloud" | "d360" | "360messenger") || "meta_cloud");
     setPhoneNumberId(account.phone_number_id);
     setAccessToken(account.access_token);
     setBusinessAccountId(account.business_account_id || "");
