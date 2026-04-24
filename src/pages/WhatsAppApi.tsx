@@ -2088,6 +2088,10 @@ export default function WhatsAppApi() {
                     <DropdownMenuItem onClick={openQrDialogForNew} className="gap-2">
                       <QrCode size={14} /> Conectar via QR Code (Evolution)
                     </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => toggleAutoReconnect(!autoReconnect)} className="gap-2">
+                      <RefreshCw size={14} /> Reconexão automática: {autoReconnect ? "ON" : "OFF"}
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
