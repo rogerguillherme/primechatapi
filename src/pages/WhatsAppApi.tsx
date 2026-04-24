@@ -2123,6 +2123,7 @@ export default function WhatsAppApi() {
                     </div>
                     <p className="text-xs text-muted-foreground">Use este valor no campo "Verify Token" ao configurar o webhook no Facebook.</p>
                   </div>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">
