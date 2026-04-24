@@ -11,9 +11,10 @@ interface NodeEditPanelProps {
   templates: any[];
   onUpdate: (data: Record<string, unknown>) => void;
   onClose: () => void;
+  variationEnabled?: boolean;
 }
 
-export function NodeEditPanel({ node, templates, onUpdate, onClose }: NodeEditPanelProps) {
+export function NodeEditPanel({ node, templates, onUpdate, onClose, variationEnabled }: NodeEditPanelProps) {
   const { type, data } = node;
 
   if (type === "trigger") return null;
