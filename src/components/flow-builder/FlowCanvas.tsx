@@ -90,10 +90,11 @@ interface FlowCanvasProps {
   setNodes: React.Dispatch<React.SetStateAction<Node[]>>;
   setEdges: React.Dispatch<React.SetStateAction<Edge[]>>;
   templates: any[];
+  variationEnabled?: boolean;
 }
 
 export function FlowCanvas({
-  nodes, edges, onNodesChange, onEdgesChange, setNodes, setEdges, templates,
+  nodes, edges, onNodesChange, onEdgesChange, setNodes, setEdges, templates, variationEnabled,
 }: FlowCanvasProps) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
@@ -327,6 +328,7 @@ export function FlowCanvas({
           templates={templates}
           onUpdate={(data) => updateNodeData(selectedNode.id, data)}
           onClose={() => setSelectedNodeId(null)}
+          variationEnabled={variationEnabled}
         />
       )}
     </div>

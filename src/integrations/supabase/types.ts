@@ -562,10 +562,13 @@ export type Database = {
           buttons: Json | null
           created_at: string
           custom_message: string | null
+          delay_max_seconds: number | null
+          delay_min_seconds: number | null
           delay_minutes: number | null
           flow_id: string
           id: string
           max_interactions: number | null
+          message_variations: Json
           parent_step_id: string | null
           step_order: number
           step_type: string
@@ -579,10 +582,13 @@ export type Database = {
           buttons?: Json | null
           created_at?: string
           custom_message?: string | null
+          delay_max_seconds?: number | null
+          delay_min_seconds?: number | null
           delay_minutes?: number | null
           flow_id: string
           id?: string
           max_interactions?: number | null
+          message_variations?: Json
           parent_step_id?: string | null
           step_order?: number
           step_type?: string
@@ -596,10 +602,13 @@ export type Database = {
           buttons?: Json | null
           created_at?: string
           custom_message?: string | null
+          delay_max_seconds?: number | null
+          delay_min_seconds?: number | null
           delay_minutes?: number | null
           flow_id?: string
           id?: string
           max_interactions?: number | null
+          message_variations?: Json
           parent_step_id?: string | null
           step_order?: number
           step_type?: string
@@ -642,35 +651,56 @@ export type Database = {
         Row: {
           active: boolean
           created_at: string
+          delay_max_seconds: number
+          delay_min_seconds: number
           description: string | null
           flow_kind: string
           id: string
           name: string
+          sending_window_enabled: boolean
+          sending_window_end: string
+          sending_window_start: string
+          sending_window_timezone: string
           trigger_type: string | null
           updated_at: string
           user_id: string
+          variation_enabled: boolean
         }
         Insert: {
           active?: boolean
           created_at?: string
+          delay_max_seconds?: number
+          delay_min_seconds?: number
           description?: string | null
           flow_kind?: string
           id?: string
           name: string
+          sending_window_enabled?: boolean
+          sending_window_end?: string
+          sending_window_start?: string
+          sending_window_timezone?: string
           trigger_type?: string | null
           updated_at?: string
           user_id: string
+          variation_enabled?: boolean
         }
         Update: {
           active?: boolean
           created_at?: string
+          delay_max_seconds?: number
+          delay_min_seconds?: number
           description?: string | null
           flow_kind?: string
           id?: string
           name?: string
+          sending_window_enabled?: boolean
+          sending_window_end?: string
+          sending_window_start?: string
+          sending_window_timezone?: string
           trigger_type?: string | null
           updated_at?: string
           user_id?: string
+          variation_enabled?: boolean
         }
         Relationships: []
       }

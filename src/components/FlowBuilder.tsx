@@ -13,9 +13,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
   Plus, Trash2, GitBranch, ChevronRight, Play, Pause, ArrowLeft, Save,
-  Sparkles, Send, Loader2, Bot, X, MessageCircle, Code2,
+  Sparkles, Send, Loader2, Bot, X, MessageCircle, Code2, Settings2,
 } from "lucide-react";
 import { FlowCanvas } from "@/components/flow-builder/FlowCanvas";
+import { FlowSettingsDrawer, DEFAULT_FLOW_SETTINGS, type FlowSettings } from "@/components/flow-builder/FlowSettingsDrawer";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 interface Flow {
@@ -392,6 +393,11 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initialDraft?.edges ?? []);
   const [isLoaded, setIsLoaded] = useState(Boolean(initialDraft) || !flow);
   const [hydratedFromDraft, setHydratedFromDraft] = useState(Boolean(initialDraft));
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settings, setSettings] = useState<FlowSettings>(DEFAULT_FLOW_SETTINGS);
+
+  const flowKind: FlowKind = (flow?.flow_kind as FlowKind) || initialKind || "api";
+  const isWhatsAppFlow = flowKind === "whatsapp";
 
   const { templates } = useUserTemplates();
 
@@ -433,6 +439,9 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
             agent_id: s.ai_agent_id || null,
             ai_prompt: s.ai_prompt || "",
             max_interactions: s.max_interactions || 5,
+            message_variations: Array.isArray(s.message_variations) ? s.message_variations : [],
+            delay_min_seconds: s.delay_min_seconds ?? null,
+            delay_max_seconds: s.delay_max_seconds ?? null,
             // For blacklist: reason is stored in custom_message
             ...(s.step_type === "blacklist" ? { reason: s.custom_message || "opt-out via fluxo" } : {}),
           },
@@ -533,6 +542,24 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
     setDescription(flow.description || "");
     setIsLoaded(false);
   }, [initialDraft, flow, setNodes, setEdges]);
+
+  // Carregar settings do fluxo (variação, delay, janela horária)
+  useEffect(() => {
+    if (!flow) {
+      setSettings(DEFAULT_FLOW_SETTINGS);
+      return;
+    }
+    const f = flow as any;
+    setSettings({
+      variation_enabled: !!f.variation_enabled,
+      delay_min_seconds: f.delay_min_seconds ?? DEFAULT_FLOW_SETTINGS.delay_min_seconds,
+      delay_max_seconds: f.delay_max_seconds ?? DEFAULT_FLOW_SETTINGS.delay_max_seconds,
+      sending_window_enabled: !!f.sending_window_enabled,
+      sending_window_start: f.sending_window_start ?? DEFAULT_FLOW_SETTINGS.sending_window_start,
+      sending_window_end: f.sending_window_end ?? DEFAULT_FLOW_SETTINGS.sending_window_end,
+      sending_window_timezone: f.sending_window_timezone ?? DEFAULT_FLOW_SETTINGS.sending_window_timezone,
+    });
+  }, [flow]);
 
   const handleAiGenerate = useCallback((steps: any[]) => {
     // Keep trigger, add AI-generated nodes
@@ -666,13 +693,23 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
       const triggerNode = nodes.find((n) => n.id === "trigger");
       const triggerType = (triggerNode?.data?.trigger_type as string) || null;
 
+      const flowSettingsPayload = {
+        variation_enabled: settings.variation_enabled,
+        delay_min_seconds: settings.delay_min_seconds,
+        delay_max_seconds: settings.delay_max_seconds,
+        sending_window_enabled: settings.sending_window_enabled,
+        sending_window_start: settings.sending_window_start,
+        sending_window_end: settings.sending_window_end,
+        sending_window_timezone: settings.sending_window_timezone,
+      };
+
       if (flowId) {
-        const { error } = await supabase.from("flows").update({ name, description: description || null, trigger_type: triggerType }).eq("id", flowId);
+        const { error } = await supabase.from("flows").update({ name, description: description || null, trigger_type: triggerType, ...flowSettingsPayload } as any).eq("id", flowId);
         if (error) throw error;
       } else {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error("Usuário não autenticado");
-        const { data, error } = await supabase.from("flows").insert({ name, description: description || null, user_id: user.id, trigger_type: triggerType, flow_kind: (initialKind || "api") } as any).select("id").single();
+        const { data, error } = await supabase.from("flows").insert({ name, description: description || null, user_id: user.id, trigger_type: triggerType, flow_kind: (initialKind || "api"), ...flowSettingsPayload } as any).select("id").single();
         if (error) throw error;
         flowId = data.id;
       }
@@ -694,6 +731,9 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
         ai_agent_id: e.node.type === "ai_agent" ? (e.node.data.agent_id as string) || null : null,
         ai_prompt: e.node.type === "ai_agent" ? (e.node.data.ai_prompt as string) || null : null,
         max_interactions: e.node.type === "ai_agent" ? (e.node.data.max_interactions as number) || 5 : null,
+        message_variations: e.node.type === "message" ? ((e.node.data.message_variations as string[]) || []).filter((s) => s && s.trim()) : [],
+        delay_min_seconds: (e.node.data.delay_min_seconds as number | null) ?? null,
+        delay_max_seconds: (e.node.data.delay_max_seconds as number | null) ?? null,
       }));
 
       const { error: stepsError } = await supabase
@@ -728,11 +768,32 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onBack}>
           <ArrowLeft size={16} />
         </Button>
-        <h3 className="text-sm font-medium">{flow ? "Editar Fluxo" : "Novo Fluxo"}</h3>
+        <h3 className="text-sm font-medium flex items-center gap-2">
+          {flow ? "Editar Fluxo" : "Novo Fluxo"}
+          {isWhatsAppFlow && (
+            <Badge variant="outline" className="text-[10px] gap-1 font-normal">
+              <MessageCircle size={10} /> WhatsApp 360
+            </Badge>
+          )}
+        </h3>
         <div className="flex-1 flex items-center gap-3 ml-4">
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome do fluxo" className="h-8 max-w-[200px] text-sm" />
           <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição (opcional)" className="h-8 max-w-[200px] text-sm" />
         </div>
+        {isWhatsAppFlow && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <Settings2 size={14} />
+            Configurações
+            {(settings.variation_enabled || settings.sending_window_enabled) && (
+              <span className="ml-1 h-1.5 w-1.5 rounded-full bg-primary" />
+            )}
+          </Button>
+        )}
         <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} size="sm" className="gap-1.5">
           <Save size={14} />
           {saveMutation.isPending ? "Salvando..." : "Salvar"}
@@ -749,9 +810,17 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
           setNodes={setNodes}
           setEdges={setEdges}
           templates={templates || []}
+          variationEnabled={isWhatsAppFlow && settings.variation_enabled}
         />
         <AiFlowChat onGenerate={handleAiGenerate} />
       </div>
+
+      <FlowSettingsDrawer
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        settings={settings}
+        onChange={(patch) => setSettings((s) => ({ ...s, ...patch }))}
+      />
     </div>
   );
 }

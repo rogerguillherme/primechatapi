@@ -11,9 +11,10 @@ interface NodeEditPanelProps {
   templates: any[];
   onUpdate: (data: Record<string, unknown>) => void;
   onClose: () => void;
+  variationEnabled?: boolean;
 }
 
-export function NodeEditPanel({ node, templates, onUpdate, onClose }: NodeEditPanelProps) {
+export function NodeEditPanel({ node, templates, onUpdate, onClose, variationEnabled }: NodeEditPanelProps) {
   const { type, data } = node;
 
   if (type === "trigger") return null;
@@ -71,6 +72,17 @@ export function NodeEditPanel({ node, templates, onUpdate, onClose }: NodeEditPa
                   rows={3}
                 />
               </div>
+            )}
+            {variationEnabled && !data.template_id && (
+              <MessageVariationsField
+                variations={(data.message_variations as string[]) || []}
+                onChange={(v) => onUpdate({ message_variations: v })}
+              />
+            )}
+            {variationEnabled && data.template_id && (
+              <p className="text-[11px] text-muted-foreground rounded-md border border-dashed border-border p-2">
+                Variação automática só funciona em mensagens personalizadas (não em templates Meta).
+              </p>
             )}
           </>
         )}
@@ -319,5 +331,59 @@ function AiAgentFields({ data, onUpdate }: { data: Record<string, unknown>; onUp
         </p>
       </div>
     </>
+  );
+}
+
+function MessageVariationsField({
+  variations,
+  onChange,
+}: {
+  variations: string[];
+  onChange: (v: string[]) => void;
+}) {
+  return (
+    <div className="space-y-2 rounded-md border border-dashed border-primary/30 bg-primary/5 p-3">
+      <div className="flex items-center justify-between">
+        <Label className="text-xs">Variações da mensagem</Label>
+        <span className="text-[10px] text-muted-foreground">
+          {variations.length} variação(ões)
+        </span>
+      </div>
+      <p className="text-[11px] text-muted-foreground leading-relaxed">
+        O sistema escolherá uma destas versões aleatoriamente a cada envio (anti-ban).
+        Deixe vazio para sempre usar a mensagem principal.
+      </p>
+      {variations.map((v, idx) => (
+        <div key={idx} className="flex items-start gap-2">
+          <textarea
+            value={v}
+            onChange={(e) => {
+              const next = [...variations];
+              next[idx] = e.target.value;
+              onChange(next);
+            }}
+            placeholder={`Variação ${idx + 1}...`}
+            rows={2}
+            className="flex-1 rounded-md border border-input bg-background px-2 py-1.5 text-xs min-h-[50px] resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-destructive shrink-0"
+            onClick={() => onChange(variations.filter((_, i) => i !== idx))}
+          >
+            <Trash2 size={12} />
+          </Button>
+        </div>
+      ))}
+      <Button
+        variant="outline"
+        size="sm"
+        className="text-xs gap-1 w-full"
+        onClick={() => onChange([...variations, ""])}
+      >
+        <Plus size={12} /> Adicionar variação
+      </Button>
+    </div>
   );
 }
