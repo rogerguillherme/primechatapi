@@ -1386,9 +1386,11 @@ export default function WhatsAppApi() {
   const [editingAccount, setEditingAccount] = useState<any | null>(null);
   const [isAddingAccount, setIsAddingAccount] = useState(false);
   const [accountName, setAccountName] = useState("");
+  const [provider, setProvider] = useState<"meta_cloud" | "d360">("meta_cloud");
   const [phoneNumberId, setPhoneNumberId] = useState("");
   const [accessToken, setAccessToken] = useState("");
   const [businessAccountId, setBusinessAccountId] = useState("");
+  const [apiKey, setApiKey] = useState("");
   const [isDefault, setIsDefault] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -1506,9 +1508,11 @@ export default function WhatsAppApi() {
 
   const resetForm = () => {
     setAccountName("");
+    setProvider("meta_cloud");
     setPhoneNumberId("");
     setAccessToken("");
     setBusinessAccountId("");
+    setApiKey("");
     setIsDefault(false);
     setEditingAccount(null);
     setIsAddingAccount(false);
@@ -1535,25 +1539,37 @@ export default function WhatsAppApi() {
   const startEditing = (account: any) => {
     setEditingAccount(account);
     setAccountName(account.name);
+    setProvider((account.provider as "meta_cloud" | "d360") || "meta_cloud");
     setPhoneNumberId(account.phone_number_id);
     setAccessToken(account.access_token);
     setBusinessAccountId(account.business_account_id || "");
+    setApiKey(account.api_key || "");
     setIsDefault(account.is_default);
     setIsAddingAccount(true);
   };
 
   const handleSaveAccount = async () => {
-    if (!accountName.trim() || !phoneNumberId.trim() || !accessToken.trim()) {
-      toast.error("Preencha o nome, Phone Number ID e Access Token.");
+    if (!accountName.trim() || !phoneNumberId.trim()) {
+      toast.error("Preencha o nome e o Phone Number ID.");
+      return;
+    }
+    if (provider === "meta_cloud" && !accessToken.trim()) {
+      toast.error("Informe o Access Token da Meta.");
+      return;
+    }
+    if (provider === "d360" && !apiKey.trim()) {
+      toast.error("Informe a D360-API-KEY do 360dialog.");
       return;
     }
     setIsSaving(true);
     try {
       const payload: any = {
         name: accountName.trim(),
+        provider,
         phone_number_id: phoneNumberId.trim(),
         business_account_id: businessAccountId.trim() || null,
-        access_token: accessToken.trim(),
+        access_token: provider === "meta_cloud" ? accessToken.trim() : (apiKey.trim() || accessToken.trim() || "d360"),
+        api_key: provider === "d360" ? apiKey.trim() : null,
         is_default: isDefault || (accounts?.length === 0),
       };
 
@@ -1890,6 +1906,11 @@ export default function WhatsAppApi() {
                               {account.is_default && (
                                 <Badge variant="default" className="text-[10px] px-1.5 py-0">Padrão</Badge>
                               )}
+                              {account.provider === "d360" ? (
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">360dialog</Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0">Meta Cloud</Badge>
+                              )}
                             </div>
 
                             <div className="space-y-1 text-xs text-muted-foreground">
@@ -2007,36 +2028,96 @@ export default function WhatsAppApi() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
+                  <Label>Provedor</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setProvider("meta_cloud")}
+                      className={`text-left rounded-lg border p-3 transition-colors ${
+                        provider === "meta_cloud" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
+                      }`}
+                    >
+                      <p className="text-sm font-medium">Meta Cloud API</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Conexão oficial via Facebook Business</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setProvider("d360")}
+                      className={`text-left rounded-lg border p-3 transition-colors ${
+                        provider === "d360" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
+                      }`}
+                    >
+                      <p className="text-sm font-medium">360dialog (Messenger)</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">BSP alternativo via D360-API-KEY</p>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
                   <Label htmlFor="accountName">Nome da Conta</Label>
                   <Input id="accountName" placeholder="Ex: Minha Loja Principal" value={accountName} onChange={(e) => setAccountName(e.target.value)} />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="phoneNumberId">Phone Number ID</Label>
+                  <Label htmlFor="phoneNumberId">
+                    {provider === "d360" ? "Phone Number ID (do 360dialog)" : "Phone Number ID"}
+                  </Label>
                   <Input id="phoneNumberId" placeholder="Ex: 123456789012345" value={phoneNumberId} onChange={(e) => setPhoneNumberId(e.target.value)} />
+                  {provider === "d360" && (
+                    <p className="text-xs text-muted-foreground">No Hub do 360dialog: WhatsApp Accounts → seu número → "Phone Number ID".</p>
+                  )}
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="businessAccountId">Business Account ID</Label>
-                  <Input id="businessAccountId" placeholder="Ex: 987654321098765" value={businessAccountId} onChange={(e) => setBusinessAccountId(e.target.value)} />
-                </div>
+                {provider === "meta_cloud" ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="businessAccountId">Business Account ID</Label>
+                      <Input id="businessAccountId" placeholder="Ex: 987654321098765" value={businessAccountId} onChange={(e) => setBusinessAccountId(e.target.value)} />
+                    </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="accessToken">Access Token (permanente)</Label>
-                  <Input id="accessToken" type="password" placeholder="EAAxxxxxxx..." value={accessToken} onChange={(e) => setAccessToken(e.target.value)} />
-                  <p className="text-xs text-muted-foreground">Use um token permanente do System User no Business Manager.</p>
-                </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="accessToken">Access Token (permanente)</Label>
+                      <Input id="accessToken" type="password" placeholder="EAAxxxxxxx..." value={accessToken} onChange={(e) => setAccessToken(e.target.value)} />
+                      <p className="text-xs text-muted-foreground">Use um token permanente do System User no Business Manager.</p>
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-2">
+                    <Label htmlFor="apiKey">D360-API-KEY</Label>
+                    <Input id="apiKey" type="password" placeholder="Sua D360-API-KEY..." value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
+                    <p className="text-xs text-muted-foreground">
+                      Gere no Hub do 360dialog em <span className="font-mono">API Keys</span>. A chave é única por número.
+                    </p>
+                  </div>
+                )}
 
                 <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
                   <p className="text-sm font-medium flex items-center gap-2"><Link2 size={16} /> Webhook do WhatsApp</p>
-                  <p className="text-xs text-muted-foreground">Configure este webhook no App do Facebook para receber mensagens.</p>
+                  <p className="text-xs text-muted-foreground">
+                    {provider === "d360"
+                      ? "Cole esta URL no campo 'Webhook URL' do Hub do 360dialog (WhatsApp Accounts → seu número → Webhook). Não é necessário Verify Token."
+                      : "Configure este webhook no App do Facebook para receber mensagens."}
+                  </p>
                   <div className="space-y-2">
                     <Label>URL do Webhook (Callback URL)</Label>
                     <div className="flex gap-2">
-                      <Input value={webhookUrl} readOnly className="font-mono text-xs" />
-                      <Button variant="outline" size="icon" onClick={handleCopyWebhook}><Copy size={16} /></Button>
+                      <Input
+                        value={provider === "d360"
+                          ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/d360-webhook`
+                          : webhookUrl}
+                        readOnly
+                        className="font-mono text-xs"
+                      />
+                      <Button variant="outline" size="icon" onClick={() => {
+                        const url = provider === "d360"
+                          ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/d360-webhook`
+                          : webhookUrl;
+                        navigator.clipboard.writeText(url);
+                        toast.success("URL copiada!");
+                      }}><Copy size={16} /></Button>
                     </div>
                   </div>
+                  {provider === "meta_cloud" && (
                   <div className="space-y-2">
                     <Label htmlFor="verifyToken">Verify Token</Label>
                     <div className="flex gap-2">
@@ -2047,6 +2128,7 @@ export default function WhatsAppApi() {
                     </div>
                     <p className="text-xs text-muted-foreground">Use este valor no campo "Verify Token" ao configurar o webhook no Facebook.</p>
                   </div>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">

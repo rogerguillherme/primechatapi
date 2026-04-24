@@ -7,10 +7,12 @@ const corsHeaders = {
 };
 
 async function getAccountCredentials(supabase: any, accountId?: string) {
+  const baseSelect = "id, phone_number_id, access_token, business_account_id, provider, api_key";
+
   if (accountId) {
     const { data, error } = await supabase
       .from("whatsapp_accounts")
-      .select("id, phone_number_id, access_token, business_account_id")
+      .select(baseSelect)
       .eq("id", accountId)
       .maybeSingle();
     if (error) throw new Error(`Failed to fetch account: ${error.message}`);
@@ -20,6 +22,8 @@ async function getAccountCredentials(supabase: any, accountId?: string) {
         phoneNumberId: data.phone_number_id,
         accessToken: data.access_token,
         businessAccountId: data.business_account_id,
+        provider: (data.provider as string) || "meta_cloud",
+        apiKey: data.api_key as string | null,
       };
     }
   }
@@ -27,7 +31,7 @@ async function getAccountCredentials(supabase: any, accountId?: string) {
   // Fallback: try default account from DB
   const { data: defaultAcc } = await supabase
     .from("whatsapp_accounts")
-    .select("id, phone_number_id, access_token, business_account_id")
+    .select(baseSelect)
     .eq("is_default", true)
     .maybeSingle();
   if (defaultAcc) {
@@ -36,13 +40,15 @@ async function getAccountCredentials(supabase: any, accountId?: string) {
       phoneNumberId: defaultAcc.phone_number_id,
       accessToken: defaultAcc.access_token,
       businessAccountId: defaultAcc.business_account_id,
+      provider: (defaultAcc.provider as string) || "meta_cloud",
+      apiKey: defaultAcc.api_key as string | null,
     };
   }
 
   // Fallback: try first account
   const { data: firstAcc } = await supabase
     .from("whatsapp_accounts")
-    .select("id, phone_number_id, access_token, business_account_id")
+    .select(baseSelect)
     .order("created_at")
     .limit(1)
     .maybeSingle();
@@ -52,13 +58,15 @@ async function getAccountCredentials(supabase: any, accountId?: string) {
       phoneNumberId: firstAcc.phone_number_id,
       accessToken: firstAcc.access_token,
       businessAccountId: firstAcc.business_account_id,
+      provider: (firstAcc.provider as string) || "meta_cloud",
+      apiKey: firstAcc.api_key as string | null,
     };
   }
 
-  // Final fallback: env vars
+  // Final fallback: env vars (always meta_cloud)
   const phoneNumberId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID");
   const accessToken = Deno.env.get("WHATSAPP_ACCESS_TOKEN");
-  if (phoneNumberId && accessToken) return { phoneNumberId, accessToken };
+  if (phoneNumberId && accessToken) return { phoneNumberId, accessToken, provider: "meta_cloud", apiKey: null };
 
   throw new Error("No WhatsApp account configured");
 }
@@ -152,12 +160,20 @@ Deno.serve(async (req) => {
       phoneNumberId: PHONE_NUMBER_ID,
       accessToken: ACCESS_TOKEN,
       businessAccountId,
+      provider,
+      apiKey: D360_API_KEY,
     } = await getAccountCredentials(supabase, account_id);
 
-    await ensureWebhookSubscription(ACCESS_TOKEN, businessAccountId);
+    const isD360 = provider === "d360";
+
+    if (!isD360) {
+      await ensureWebhookSubscription(ACCESS_TOKEN, businessAccountId);
+    }
 
     const cleanPhone = phone.replace(/\D/g, "");
-    const apiUrl = `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`;
+    const apiUrl = isD360
+      ? `https://waba-v2.360dialog.io/messages`
+      : `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`;
 
     let body: any;
     let templateRecord: any = null;
@@ -267,11 +283,29 @@ Deno.serve(async (req) => {
       body = { messaging_product: "whatsapp", to: cleanPhone, type: "text", text: { body: message } };
     }
 
-    console.log("WhatsApp Cloud API request:", JSON.stringify(body));
+    // 360dialog API uses the same body shape but without `messaging_product`
+    if (isD360) {
+      delete body.messaging_product;
+    }
+
+    console.log(`WhatsApp ${isD360 ? "360dialog" : "Cloud"} API request:`, JSON.stringify(body));
+
+    const requestHeaders: Record<string, string> = { "Content-Type": "application/json" };
+    if (isD360) {
+      if (!D360_API_KEY) {
+        return new Response(
+          JSON.stringify({ error: "D360-API-KEY não configurada para esta conta. Edite a conta nas configurações." }),
+          { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      requestHeaders["D360-API-KEY"] = D360_API_KEY;
+    } else {
+      requestHeaders["Authorization"] = `Bearer ${ACCESS_TOKEN}`;
+    }
 
     const waRes = await fetch(apiUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${ACCESS_TOKEN}` },
+      headers: requestHeaders,
       body: JSON.stringify(body),
     });
 

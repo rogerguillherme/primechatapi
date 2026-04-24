@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.instagram-webhook]
 verify_jwt = false
+
+[functions.d360-webhook]
+verify_jwt = false
