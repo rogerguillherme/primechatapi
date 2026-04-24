@@ -165,12 +165,107 @@ Deno.serve(async (req) => {
     } = await getAccountCredentials(supabase, account_id);
 
     const isD360 = provider === "d360";
+    const is360Messenger = provider === "360messenger";
 
-    if (!isD360) {
+    if (!isD360 && !is360Messenger) {
       await ensureWebhookSubscription(ACCESS_TOKEN, businessAccountId);
     }
 
     const cleanPhone = phone.replace(/\D/g, "");
+
+    // 360Messenger has a completely different (simpler) API: form-encoded text-only sender.
+    if (is360Messenger) {
+      const apiKey = D360_API_KEY || ACCESS_TOKEN;
+      if (!apiKey) {
+        return new Response(
+          JSON.stringify({ error: "API Key do 360Messenger não configurada. Edite a conta nas configurações." }),
+          { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      // Resolve text body. Templates fall back to their stored content text.
+      let outgoingText = message || "";
+      let templateContentRecord: any = null;
+      if (template_name && !outgoingText) {
+        const lookup = await getTemplateRecord(supabase, template_name, account_id);
+        templateContentRecord = lookup.template;
+        if (templateContentRecord?.content) {
+          const { data: leadData } = lead_id
+            ? await supabase.from("leads").select("name").eq("id", lead_id).maybeSingle()
+            : { data: null };
+          const firstName = (leadData?.name || "").split(" ")[0] || "amigo(a)";
+          outgoingText = String(templateContentRecord.content)
+            .replace(/\{nome\}/gi, firstName)
+            .replace(/\{\{1\}\}/g, firstName)
+            .replace(/\{codigo\}/gi, "-");
+        }
+      }
+      if (!outgoingText && media_url) {
+        outgoingText = media_url;
+      }
+      if (!outgoingText) {
+        outgoingText = "(sem conteúdo)";
+      }
+
+      const form = new URLSearchParams();
+      form.append("phonenumber", cleanPhone);
+      form.append("text", outgoingText);
+
+      console.log("360Messenger request:", cleanPhone, outgoingText.substring(0, 80));
+
+      const mRes = await fetch("https://api.360messenger.com/v2/sendMessage", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: form.toString(),
+      });
+
+      const mText = await mRes.text();
+      console.log("360Messenger response:", mRes.status, mText);
+      let mData: any;
+      try { mData = JSON.parse(mText); } catch { mData = { raw: mText }; }
+
+      if (!mRes.ok || mData?.success === false) {
+        const friendlyMsg = mData?.message || `Falha no envio via 360Messenger (HTTP ${mRes.status}).`;
+        if (lead_id) {
+          await supabase.from("chat_messages").insert({
+            lead_id,
+            direction: "outbound",
+            content: `❌ ${friendlyMsg}`,
+            status: "failed",
+            account_id: account_id || resolvedAccountId || null,
+          });
+        }
+        return new Response(
+          JSON.stringify({ error: friendlyMsg, provider_response: mData }),
+          { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      const messageId = mData?.data?.id || null;
+      if (lead_id) {
+        const activityAt = new Date().toISOString();
+        await supabase.from("chat_messages").insert({
+          lead_id,
+          direction: "outbound",
+          content: outgoingText,
+          media_type: media_type || null,
+          media_url: media_url || null,
+          zapi_message_id: messageId,
+          status: "sent",
+          account_id: account_id || resolvedAccountId || null,
+        });
+        await supabase.from("leads").update({ last_outbound_at: activityAt, updated_at: activityAt }).eq("id", lead_id);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, messageId }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const apiUrl = isD360
       ? `https://waba-v2.360dialog.io/messages`
       : `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`;

@@ -1396,7 +1396,7 @@ export default function WhatsAppApi() {
   const [editingAccount, setEditingAccount] = useState<any | null>(null);
   const [isAddingAccount, setIsAddingAccount] = useState(false);
   const [accountName, setAccountName] = useState("");
-  const [provider, setProvider] = useState<"meta_cloud" | "d360">("meta_cloud");
+  const [provider, setProvider] = useState<"meta_cloud" | "d360" | "360messenger">("meta_cloud");
   const [phoneNumberId, setPhoneNumberId] = useState("");
   const [accessToken, setAccessToken] = useState("");
   const [businessAccountId, setBusinessAccountId] = useState("");
@@ -1549,7 +1549,7 @@ export default function WhatsAppApi() {
   const startEditing = (account: any) => {
     setEditingAccount(account);
     setAccountName(account.name);
-    setProvider((account.provider as "meta_cloud" | "d360") || "meta_cloud");
+    setProvider((account.provider as "meta_cloud" | "d360" | "360messenger") || "meta_cloud");
     setPhoneNumberId(account.phone_number_id);
     setAccessToken(account.access_token);
     setBusinessAccountId(account.business_account_id || "");
@@ -1573,16 +1573,18 @@ export default function WhatsAppApi() {
         return;
       }
     }
-    if (provider === "d360" && !apiKey.trim()) {
-      toast.error("Informe a D360-API-KEY do 360dialog.");
+    if ((provider === "d360" || provider === "360messenger") && !apiKey.trim()) {
+      toast.error(provider === "360messenger" ? "Informe a API Key do 360Messenger." : "Informe a D360-API-KEY do 360dialog.");
       return;
     }
     setIsSaving(true);
     try {
-      // 360dialog não usa phone_number_id (a API Key já identifica o número),
+      // 360dialog/360messenger não usam phone_number_id (a API Key já identifica o número),
       // mas a coluna no banco é NOT NULL — então geramos um identificador sintético.
-      const effectivePhoneNumberId = provider === "d360"
-        ? (phoneNumberId.trim() || (editingAccount?.phone_number_id) || `d360_${crypto.randomUUID().slice(0, 12)}`)
+      const isApiKeyProvider = provider === "d360" || provider === "360messenger";
+      const syntheticPrefix = provider === "360messenger" ? "360m" : "d360";
+      const effectivePhoneNumberId = isApiKeyProvider
+        ? (phoneNumberId.trim() || (editingAccount?.phone_number_id) || `${syntheticPrefix}_${crypto.randomUUID().slice(0, 12)}`)
         : phoneNumberId.trim();
 
       const payload: any = {
@@ -1590,8 +1592,8 @@ export default function WhatsAppApi() {
         provider,
         phone_number_id: effectivePhoneNumberId,
         business_account_id: provider === "meta_cloud" ? (businessAccountId.trim() || null) : null,
-        access_token: provider === "meta_cloud" ? accessToken.trim() : (apiKey.trim() || "d360"),
-        api_key: provider === "d360" ? apiKey.trim() : null,
+        access_token: provider === "meta_cloud" ? accessToken.trim() : (apiKey.trim() || provider),
+        api_key: isApiKeyProvider ? apiKey.trim() : null,
         is_default: isDefault || (accounts?.length === 0),
       };
 
@@ -1875,7 +1877,10 @@ export default function WhatsAppApi() {
                       <ExternalLink size={14} /> Conectar via Meta OAuth
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => { resetForm(); setProvider("d360"); setIsAddingAccount(true); }} className="gap-2">
-                      <MessageCircle size={14} /> 360dialog (Messenger)
+                      <MessageCircle size={14} /> 360dialog
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => { resetForm(); setProvider("360messenger"); setIsAddingAccount(true); }} className="gap-2">
+                      <MessageCircle size={14} /> 360Messenger
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -1933,6 +1938,8 @@ export default function WhatsAppApi() {
                               )}
                               {account.provider === "d360" ? (
                                 <Badge variant="secondary" className="text-[10px] px-1.5 py-0">360dialog</Badge>
+                              ) : account.provider === "360messenger" ? (
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">360Messenger</Badge>
                               ) : (
                                 <Badge variant="outline" className="text-[10px] px-1.5 py-0">Meta Cloud</Badge>
                               )}
@@ -2054,7 +2061,7 @@ export default function WhatsAppApi() {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label>Provedor</Label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <button
                       type="button"
                       onClick={() => setProvider("meta_cloud")}
@@ -2072,8 +2079,18 @@ export default function WhatsAppApi() {
                         provider === "d360" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
                       }`}
                     >
-                      <p className="text-sm font-medium">360dialog (Messenger)</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">BSP alternativo via D360-API-KEY</p>
+                      <p className="text-sm font-medium">360dialog</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">BSP via D360-API-KEY</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setProvider("360messenger")}
+                      className={`text-left rounded-lg border p-3 transition-colors ${
+                        provider === "360messenger" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
+                      }`}
+                    >
+                      <p className="text-sm font-medium">360Messenger</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">API simples via APIKEY</p>
                     </button>
                   </div>
                 </div>
@@ -2108,7 +2125,17 @@ export default function WhatsAppApi() {
                     <Label htmlFor="apiKey">D360-API-KEY</Label>
                     <Input id="apiKey" type="password" placeholder="Sua D360-API-KEY..." value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
                     <p className="text-xs text-muted-foreground">
-                      Gere no Hub do 360dialog/360Messenger em <span className="font-mono">API Keys</span>. A chave já identifica o número — Phone Number ID não é necessário.
+                      Gere no Hub do 360dialog em <span className="font-mono">API Keys</span>. A chave já identifica o número — Phone Number ID não é necessário.
+                    </p>
+                  </div>
+                )}
+
+                {provider === "360messenger" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="apiKey">APIKEY do 360Messenger</Label>
+                    <Input id="apiKey" type="password" placeholder="Sua APIKEY do 360Messenger..." value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
+                    <p className="text-xs text-muted-foreground">
+                      Encontre em <span className="font-mono">Product Details → APIKEY</span> no painel 360Messenger. Envia mensagens de texto via <span className="font-mono">api.360messenger.com/v2/sendMessage</span>.
                     </p>
                   </div>
                 )}
@@ -2118,27 +2145,31 @@ export default function WhatsAppApi() {
                   <p className="text-xs text-muted-foreground">
                     {provider === "d360"
                       ? "Cole esta URL no campo 'Webhook URL' do Hub do 360dialog (WhatsApp Accounts → seu número → Webhook). Não é necessário Verify Token."
+                      : provider === "360messenger"
+                      ? "O 360Messenger não exige webhook para envio. Mensagens recebidas precisam ser configuradas no painel deles, se disponível."
                       : "Configure este webhook no App do Facebook para receber mensagens."}
                   </p>
-                  <div className="space-y-2">
-                    <Label>URL do Webhook (Callback URL)</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        value={provider === "d360"
-                          ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/d360-webhook`
-                          : webhookUrl}
-                        readOnly
-                        className="font-mono text-xs"
-                      />
-                      <Button variant="outline" size="icon" onClick={() => {
-                        const url = provider === "d360"
-                          ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/d360-webhook`
-                          : webhookUrl;
-                        navigator.clipboard.writeText(url);
-                        toast.success("URL copiada!");
-                      }}><Copy size={16} /></Button>
+                  {provider !== "360messenger" && (
+                    <div className="space-y-2">
+                      <Label>URL do Webhook (Callback URL)</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          value={provider === "d360"
+                            ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/d360-webhook`
+                            : webhookUrl}
+                          readOnly
+                          className="font-mono text-xs"
+                        />
+                        <Button variant="outline" size="icon" onClick={() => {
+                          const url = provider === "d360"
+                            ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/d360-webhook`
+                            : webhookUrl;
+                          navigator.clipboard.writeText(url);
+                          toast.success("URL copiada!");
+                        }}><Copy size={16} /></Button>
+                      </div>
                     </div>
-                  </div>
+                  )}
                   {provider === "meta_cloud" && (
                   <div className="space-y-2">
                     <Label htmlFor="verifyToken">Verify Token</Label>
