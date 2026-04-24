@@ -2023,36 +2023,96 @@ export default function WhatsAppApi() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
+                  <Label>Provedor</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setProvider("meta_cloud")}
+                      className={`text-left rounded-lg border p-3 transition-colors ${
+                        provider === "meta_cloud" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
+                      }`}
+                    >
+                      <p className="text-sm font-medium">Meta Cloud API</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Conexão oficial via Facebook Business</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setProvider("d360")}
+                      className={`text-left rounded-lg border p-3 transition-colors ${
+                        provider === "d360" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
+                      }`}
+                    >
+                      <p className="text-sm font-medium">360dialog (Messenger)</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">BSP alternativo via D360-API-KEY</p>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
                   <Label htmlFor="accountName">Nome da Conta</Label>
                   <Input id="accountName" placeholder="Ex: Minha Loja Principal" value={accountName} onChange={(e) => setAccountName(e.target.value)} />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="phoneNumberId">Phone Number ID</Label>
+                  <Label htmlFor="phoneNumberId">
+                    {provider === "d360" ? "Phone Number ID (do 360dialog)" : "Phone Number ID"}
+                  </Label>
                   <Input id="phoneNumberId" placeholder="Ex: 123456789012345" value={phoneNumberId} onChange={(e) => setPhoneNumberId(e.target.value)} />
+                  {provider === "d360" && (
+                    <p className="text-xs text-muted-foreground">No Hub do 360dialog: WhatsApp Accounts → seu número → "Phone Number ID".</p>
+                  )}
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="businessAccountId">Business Account ID</Label>
-                  <Input id="businessAccountId" placeholder="Ex: 987654321098765" value={businessAccountId} onChange={(e) => setBusinessAccountId(e.target.value)} />
-                </div>
+                {provider === "meta_cloud" ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="businessAccountId">Business Account ID</Label>
+                      <Input id="businessAccountId" placeholder="Ex: 987654321098765" value={businessAccountId} onChange={(e) => setBusinessAccountId(e.target.value)} />
+                    </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="accessToken">Access Token (permanente)</Label>
-                  <Input id="accessToken" type="password" placeholder="EAAxxxxxxx..." value={accessToken} onChange={(e) => setAccessToken(e.target.value)} />
-                  <p className="text-xs text-muted-foreground">Use um token permanente do System User no Business Manager.</p>
-                </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="accessToken">Access Token (permanente)</Label>
+                      <Input id="accessToken" type="password" placeholder="EAAxxxxxxx..." value={accessToken} onChange={(e) => setAccessToken(e.target.value)} />
+                      <p className="text-xs text-muted-foreground">Use um token permanente do System User no Business Manager.</p>
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-2">
+                    <Label htmlFor="apiKey">D360-API-KEY</Label>
+                    <Input id="apiKey" type="password" placeholder="Sua D360-API-KEY..." value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
+                    <p className="text-xs text-muted-foreground">
+                      Gere no Hub do 360dialog em <span className="font-mono">API Keys</span>. A chave é única por número.
+                    </p>
+                  </div>
+                )}
 
                 <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
                   <p className="text-sm font-medium flex items-center gap-2"><Link2 size={16} /> Webhook do WhatsApp</p>
-                  <p className="text-xs text-muted-foreground">Configure este webhook no App do Facebook para receber mensagens.</p>
+                  <p className="text-xs text-muted-foreground">
+                    {provider === "d360"
+                      ? "Cole esta URL no campo 'Webhook URL' do Hub do 360dialog (WhatsApp Accounts → seu número → Webhook). Não é necessário Verify Token."
+                      : "Configure este webhook no App do Facebook para receber mensagens."}
+                  </p>
                   <div className="space-y-2">
                     <Label>URL do Webhook (Callback URL)</Label>
                     <div className="flex gap-2">
-                      <Input value={webhookUrl} readOnly className="font-mono text-xs" />
-                      <Button variant="outline" size="icon" onClick={handleCopyWebhook}><Copy size={16} /></Button>
+                      <Input
+                        value={provider === "d360"
+                          ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/d360-webhook`
+                          : webhookUrl}
+                        readOnly
+                        className="font-mono text-xs"
+                      />
+                      <Button variant="outline" size="icon" onClick={() => {
+                        const url = provider === "d360"
+                          ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/d360-webhook`
+                          : webhookUrl;
+                        navigator.clipboard.writeText(url);
+                        toast.success("URL copiada!");
+                      }}><Copy size={16} /></Button>
                     </div>
                   </div>
+                  {provider === "meta_cloud" && (
                   <div className="space-y-2">
                     <Label htmlFor="verifyToken">Verify Token</Label>
                     <div className="flex gap-2">
