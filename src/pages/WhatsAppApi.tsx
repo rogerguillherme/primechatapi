@@ -1796,8 +1796,8 @@ export default function WhatsAppApi() {
   };
 
   const handleCreateAndConnect = async () => {
-    if (!qrName.trim() || !qrServerUrl.trim() || !qrInstance.trim() || !qrApiKey.trim()) {
-      toast.error("Preencha nome, URL do servidor, instance e API Key.");
+    if (!qrName.trim()) {
+      toast.error("Informe o nome da conta.");
       return;
     }
     setQrLoading(true);
@@ -1806,16 +1806,13 @@ export default function WhatsAppApi() {
         body: {
           action: "create_and_connect",
           name: qrName.trim(),
-          serverUrl: qrServerUrl.trim().replace(/\/+$/, ""),
-          instance: qrInstance.trim(),
-          apiKey: qrApiKey.trim(),
           is_default: (accounts?.length || 0) === 0,
         },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
-      toast.success(data?.already_existed ? "Instance já existia — gerando QR…" : "Instance criada! Escaneie o QR.");
+      toast.success(data?.already_existed ? "Instância já existia — gerando QR…" : "Instância criada! Escaneie o QR.");
       queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
 
       if (data?.qr_code) {
