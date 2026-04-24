@@ -1847,6 +1847,59 @@ export default function WhatsAppApi() {
     return stopQrPolling;
   }, [qrDialogOpen, stopQrPolling]);
 
+  useEffect(() => {
+    if (!qrDialogOpen) stopQrPolling();
+    return stopQrPolling;
+  }, [qrDialogOpen, stopQrPolling]);
+
+  // ── Health monitor: detecta queda de instâncias Evolution e reabre QR automaticamente
+  useEffect(() => {
+    if (!autoReconnect) {
+      if (healthPollRef.current) { clearInterval(healthPollRef.current); healthPollRef.current = null; }
+      return;
+    }
+    const check = async () => {
+      // Não interfere se já existe um modal aberto
+      if (qrDialogOpen) return;
+      const evoAccounts = (accounts || []).filter((a: any) => a.provider === "evolution");
+      if (evoAccounts.length === 0) return;
+
+      for (const acc of evoAccounts) {
+        try {
+          const { data } = await supabase.functions.invoke("evolution-instance", {
+            body: { action: "status", account_id: acc.id },
+          });
+          const state = String(data?.state || "unknown");
+          if (state === "close" || state === "disconnected") {
+            if (reopenedForRef.current.has(acc.id)) continue;
+            reopenedForRef.current.add(acc.id);
+            toast.warning(`"${acc.name}" desconectou — reabrindo QR para reconexão…`);
+            openQrDialogForExisting(acc);
+            return; // 1 reconexão por ciclo
+          }
+          if (state === "open") {
+            reopenedForRef.current.delete(acc.id);
+          }
+        } catch (e) {
+          console.warn("Health check falhou para", acc.name, e);
+        }
+      }
+    };
+    // Primeira verificação após 5s, depois a cada 20s
+    const t0 = window.setTimeout(check, 5000);
+    healthPollRef.current = window.setInterval(check, 20000) as any;
+    return () => {
+      clearTimeout(t0);
+      if (healthPollRef.current) { clearInterval(healthPollRef.current); healthPollRef.current = null; }
+    };
+  }, [autoReconnect, accounts, qrDialogOpen, openQrDialogForExisting]);
+
+  const toggleAutoReconnect = useCallback((next: boolean) => {
+    setAutoReconnect(next);
+    try { localStorage.setItem("evo_auto_reconnect", next ? "true" : "false"); } catch {}
+    toast.info(next ? "Reconexão automática ativada" : "Reconexão automática desativada");
+  }, []);
+
   return (
     <div className="animate-fade-in">
       <Tabs value={activeMainTab} onValueChange={(v) => { setActiveMainTab(v); if (v !== "flows") setFlowTriggerType(undefined); }} className="flex h-screen gap-0" orientation="vertical">
