@@ -1518,34 +1518,40 @@ export type Database = {
       whatsapp_accounts: {
         Row: {
           access_token: string
+          api_key: string | null
           business_account_id: string | null
           created_at: string
           id: string
           is_default: boolean
           name: string
           phone_number_id: string
+          provider: string
           updated_at: string
           user_id: string | null
         }
         Insert: {
           access_token: string
+          api_key?: string | null
           business_account_id?: string | null
           created_at?: string
           id?: string
           is_default?: boolean
           name: string
           phone_number_id: string
+          provider?: string
           updated_at?: string
           user_id?: string | null
         }
         Update: {
           access_token?: string
+          api_key?: string | null
           business_account_id?: string | null
           created_at?: string
           id?: string
           is_default?: boolean
           name?: string
           phone_number_id?: string
+          provider?: string
           updated_at?: string
           user_id?: string | null
         }
