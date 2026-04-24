@@ -160,12 +160,20 @@ Deno.serve(async (req) => {
       phoneNumberId: PHONE_NUMBER_ID,
       accessToken: ACCESS_TOKEN,
       businessAccountId,
+      provider,
+      apiKey: D360_API_KEY,
     } = await getAccountCredentials(supabase, account_id);
 
-    await ensureWebhookSubscription(ACCESS_TOKEN, businessAccountId);
+    const isD360 = provider === "d360";
+
+    if (!isD360) {
+      await ensureWebhookSubscription(ACCESS_TOKEN, businessAccountId);
+    }
 
     const cleanPhone = phone.replace(/\D/g, "");
-    const apiUrl = `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`;
+    const apiUrl = isD360
+      ? `https://waba-v2.360dialog.io/messages`
+      : `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`;
 
     let body: any;
     let templateRecord: any = null;
