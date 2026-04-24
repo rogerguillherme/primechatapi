@@ -94,9 +94,9 @@ function extractPayload(payload: any) {
 
   const paymentMethod = invoice?.paymentMethod || payload.payment_method || payload.payment?.method || null;
 
-  const status = invoice
+  const status: string = invoice
     ? mapHublaStatus(eventType, invoice.status)
-    : (payload.status || "approved");
+    : String(payload.status || "approved");
 
   return {
     externalOrderId, buyerName, buyerEmail, buyerPhone, buyerCpf,
