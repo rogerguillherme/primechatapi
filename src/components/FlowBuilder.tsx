@@ -693,13 +693,23 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
       const triggerNode = nodes.find((n) => n.id === "trigger");
       const triggerType = (triggerNode?.data?.trigger_type as string) || null;
 
+      const flowSettingsPayload = {
+        variation_enabled: settings.variation_enabled,
+        delay_min_seconds: settings.delay_min_seconds,
+        delay_max_seconds: settings.delay_max_seconds,
+        sending_window_enabled: settings.sending_window_enabled,
+        sending_window_start: settings.sending_window_start,
+        sending_window_end: settings.sending_window_end,
+        sending_window_timezone: settings.sending_window_timezone,
+      };
+
       if (flowId) {
-        const { error } = await supabase.from("flows").update({ name, description: description || null, trigger_type: triggerType }).eq("id", flowId);
+        const { error } = await supabase.from("flows").update({ name, description: description || null, trigger_type: triggerType, ...flowSettingsPayload } as any).eq("id", flowId);
         if (error) throw error;
       } else {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error("Usuário não autenticado");
-        const { data, error } = await supabase.from("flows").insert({ name, description: description || null, user_id: user.id, trigger_type: triggerType, flow_kind: (initialKind || "api") } as any).select("id").single();
+        const { data, error } = await supabase.from("flows").insert({ name, description: description || null, user_id: user.id, trigger_type: triggerType, flow_kind: (initialKind || "api"), ...flowSettingsPayload } as any).select("id").single();
         if (error) throw error;
         flowId = data.id;
       }
@@ -721,6 +731,9 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
         ai_agent_id: e.node.type === "ai_agent" ? (e.node.data.agent_id as string) || null : null,
         ai_prompt: e.node.type === "ai_agent" ? (e.node.data.ai_prompt as string) || null : null,
         max_interactions: e.node.type === "ai_agent" ? (e.node.data.max_interactions as number) || 5 : null,
+        message_variations: e.node.type === "message" ? ((e.node.data.message_variations as string[]) || []).filter((s) => s && s.trim()) : [],
+        delay_min_seconds: (e.node.data.delay_min_seconds as number | null) ?? null,
+        delay_max_seconds: (e.node.data.delay_max_seconds as number | null) ?? null,
       }));
 
       const { error: stepsError } = await supabase
