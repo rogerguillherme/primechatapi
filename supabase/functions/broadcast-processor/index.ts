@@ -471,12 +471,13 @@ Deno.serve(async (req) => {
         }
 
         // ── AUTO-TRACK: Register campaign event ──
-        await supabase.from("campaign_events").insert({
+        const { error: campaignEventError } = await supabase.from("campaign_events").insert({
           campaign_id: jobId,
           lead_id: lead.id,
           lead_phone: cleanPhone,
           event_type: "sent",
-        }).catch(() => {});
+        });
+        if (campaignEventError) console.error("Failed to register campaign event:", campaignEventError);
       } catch (e: any) {
         await supabase.from("message_logs").insert({
           job_id: jobId, user_id: job.user_id, lead_id: lead.id,
