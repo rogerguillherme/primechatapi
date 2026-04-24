@@ -244,17 +244,50 @@ Deno.serve(async (req) => {
           document: "document",
         };
         const evoMediaType = mediaTypeMap[media_type] || "document";
-        // Evolution supports audio via separate endpoint for ptt; use sendMedia for everything else
+
+        // Download media and convert to base64 — Evolution's axios fetch fails on some public URLs (returns 400).
+        // Base64 is the most reliable transport.
+        let mediaPayload = media_url;
+        let mimeType = "";
+        try {
+          const mediaRes = await fetch(media_url);
+          if (mediaRes.ok) {
+            mimeType = mediaRes.headers.get("content-type") || "";
+            const buf = new Uint8Array(await mediaRes.arrayBuffer());
+            // Convert to base64 in chunks to avoid call stack overflow on large files
+            let binary = "";
+            const chunkSize = 0x8000;
+            for (let i = 0; i < buf.length; i += chunkSize) {
+              binary += String.fromCharCode.apply(null, Array.from(buf.subarray(i, i + chunkSize)) as any);
+            }
+            mediaPayload = btoa(binary);
+            console.log(`Media downloaded: ${buf.length} bytes, mime: ${mimeType}`);
+          } else {
+            console.warn(`Failed to download media (${mediaRes.status}), falling back to URL`);
+          }
+        } catch (err) {
+          console.warn("Media download error, falling back to URL:", err);
+        }
+
         if (media_type === "audio") {
           endpoint = `${evoServerUrl}/message/sendWhatsAppAudio/${evoInstance}`;
-          evoBody = { number: cleanPhone, audio: media_url };
+          evoBody = { number: cleanPhone, audio: mediaPayload };
         } else {
+          // Pick filename + extension by mime/media type
+          const extByType: Record<string, string> = {
+            image: mimeType.includes("png") ? "png" : mimeType.includes("webp") ? "webp" : "jpg",
+            video: "mp4",
+            document: mimeType.includes("pdf") ? "pdf" : "bin",
+          };
+          const ext = extByType[media_type] || "bin";
+          const fileName = media_type === "document" ? `arquivo.${ext}` : `media.${ext}`;
           evoBody = {
             number: cleanPhone,
             mediatype: evoMediaType,
-            media: media_url,
+            media: mediaPayload,
+            mimetype: mimeType || undefined,
             caption: outgoingText || undefined,
-            fileName: media_type === "document" ? "arquivo" : undefined,
+            fileName,
           };
         }
         logContent = outgoingText || (
