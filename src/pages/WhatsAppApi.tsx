@@ -2061,7 +2061,7 @@ export default function WhatsAppApi() {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label>Provedor</Label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <button
                       type="button"
                       onClick={() => setProvider("meta_cloud")}
@@ -2079,8 +2079,18 @@ export default function WhatsAppApi() {
                         provider === "d360" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
                       }`}
                     >
-                      <p className="text-sm font-medium">360dialog (Messenger)</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">BSP alternativo via D360-API-KEY</p>
+                      <p className="text-sm font-medium">360dialog</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">BSP via D360-API-KEY</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setProvider("360messenger")}
+                      className={`text-left rounded-lg border p-3 transition-colors ${
+                        provider === "360messenger" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
+                      }`}
+                    >
+                      <p className="text-sm font-medium">360Messenger</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">API simples via APIKEY</p>
                     </button>
                   </div>
                 </div>
