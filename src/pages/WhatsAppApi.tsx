@@ -1724,6 +1724,12 @@ export default function WhatsAppApi() {
   const [qrApiKey, setQrApiKey] = useState("");
   const qrPollRef = useRef<number | null>(null);
   const qrRefreshRef = useRef<number | null>(null);
+  const healthPollRef = useRef<number | null>(null);
+  const reopenedForRef = useRef<Set<string>>(new Set());
+  const [autoReconnect, setAutoReconnect] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("evo_auto_reconnect") !== "false";
+  });
 
   const stopQrPolling = useCallback(() => {
     if (qrPollRef.current) { clearInterval(qrPollRef.current); qrPollRef.current = null; }
