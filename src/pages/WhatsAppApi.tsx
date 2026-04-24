@@ -2133,6 +2133,12 @@ export default function WhatsAppApi() {
                               </Button>
                             )}
 
+                            {account.provider === "evolution" && (
+                              <Button variant="default" size="sm" onClick={() => openQrDialogForExisting(account)} className="text-xs h-8 gap-1">
+                                <QrCode size={14} /> Conectar (QR)
+                              </Button>
+                            )}
+
                             <Button variant="outline" size="sm" onClick={() => startEditing(account)} className="text-xs h-8 gap-1">
                               <Pencil size={14} /> Configurações
                             </Button>
