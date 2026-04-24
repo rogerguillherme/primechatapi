@@ -768,11 +768,32 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onBack}>
           <ArrowLeft size={16} />
         </Button>
-        <h3 className="text-sm font-medium">{flow ? "Editar Fluxo" : "Novo Fluxo"}</h3>
+        <h3 className="text-sm font-medium flex items-center gap-2">
+          {flow ? "Editar Fluxo" : "Novo Fluxo"}
+          {isWhatsAppFlow && (
+            <Badge variant="outline" className="text-[10px] gap-1 font-normal">
+              <MessageCircle size={10} /> WhatsApp 360
+            </Badge>
+          )}
+        </h3>
         <div className="flex-1 flex items-center gap-3 ml-4">
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome do fluxo" className="h-8 max-w-[200px] text-sm" />
           <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição (opcional)" className="h-8 max-w-[200px] text-sm" />
         </div>
+        {isWhatsAppFlow && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <Settings2 size={14} />
+            Configurações
+            {(settings.variation_enabled || settings.sending_window_enabled) && (
+              <span className="ml-1 h-1.5 w-1.5 rounded-full bg-primary" />
+            )}
+          </Button>
+        )}
         <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} size="sm" className="gap-1.5">
           <Save size={14} />
           {saveMutation.isPending ? "Salvando..." : "Salvar"}
@@ -789,9 +810,17 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
           setNodes={setNodes}
           setEdges={setEdges}
           templates={templates || []}
+          variationEnabled={isWhatsAppFlow && settings.variation_enabled}
         />
         <AiFlowChat onGenerate={handleAiGenerate} />
       </div>
+
+      <FlowSettingsDrawer
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        settings={settings}
+        onChange={(patch) => setSettings((s) => ({ ...s, ...patch }))}
+      />
     </div>
   );
 }
