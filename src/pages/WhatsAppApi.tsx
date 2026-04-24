@@ -2028,7 +2028,10 @@ export default function WhatsAppApi() {
                       <MessageCircle size={14} /> 360dialog
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => { resetForm(); setProvider("evolution"); setIsAddingAccount(true); }} className="gap-2">
-                      <MessageCircle size={14} /> Evolution API
+                      <MessageCircle size={14} /> Evolution API (manual)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={openQrDialogForNew} className="gap-2">
+                      <QrCode size={14} /> Conectar via QR Code (Evolution)
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
