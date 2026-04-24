@@ -2454,25 +2454,23 @@ export default function WhatsAppApi() {
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <Label htmlFor="qrName">Nome da conta</Label>
-                <Input id="qrName" placeholder="Ex: Suporte Loja" value={qrName} onChange={(e) => setQrName(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="qrServer">URL do servidor Evolution</Label>
-                <Input id="qrServer" placeholder="https://evolution.seudominio.com" value={qrServerUrl} onChange={(e) => setQrServerUrl(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="qrInstance">Nome da instância</Label>
-                <Input id="qrInstance" placeholder="ex: suporte-01" value={qrInstance} onChange={(e) => setQrInstance(e.target.value)} />
-                <p className="text-xs text-muted-foreground">Se não existir, será criada automaticamente.</p>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="qrApi">API Key (apikey global)</Label>
-                <Input id="qrApi" type="password" placeholder="AUTHENTICATION_API_KEY" value={qrApiKey} onChange={(e) => setQrApiKey(e.target.value)} />
+                <Input
+                  id="qrName"
+                  placeholder="Ex: Suporte Loja"
+                  value={qrName}
+                  onChange={(e) => setQrName(e.target.value)}
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === "Enter" && !qrLoading) handleCreateAndConnect(); }}
+                />
+                <p className="text-xs text-muted-foreground">
+                  O servidor e a API Key são usados automaticamente das configurações do backend.
+                  A instância será criada com base no nome.
+                </p>
               </div>
               <DialogFooter className="gap-2">
                 <Button variant="outline" onClick={() => setQrDialogOpen(false)}>Cancelar</Button>
                 <Button onClick={handleCreateAndConnect} disabled={qrLoading}>
-                  {qrLoading ? <><Loader2 size={14} className="animate-spin mr-1" /> Criando…</> : <><QrCode size={14} className="mr-1" /> Criar & gerar QR</>}
+                  {qrLoading ? <><Loader2 size={14} className="animate-spin mr-1" /> Gerando QR…</> : <><QrCode size={14} className="mr-1" /> Gerar QR Code</>}
                 </Button>
               </DialogFooter>
             </div>
