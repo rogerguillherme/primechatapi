@@ -129,7 +129,7 @@ Deno.serve(async (req) => {
 
       // 1) Cria a instance no Evolution (idempotente: se já existir, segue para connect)
       const createRes = await evoFetch(
-        { serverUrl: cleanServer, apiKey, instance: cleanInstance, accountId: "" },
+        { serverUrl: cleanServer, apiKey: apiKeyClean, instance: cleanInstance, accountId: "" },
         "/instance/create",
         {
           method: "POST",
@@ -163,8 +163,8 @@ Deno.serve(async (req) => {
           provider: "evolution",
           phone_number_id: cleanInstance,
           business_account_id: cleanServer,
-          access_token: apiKey,
-          api_key: apiKey,
+          access_token: apiKeyClean,
+          api_key: apiKeyClean,
           is_default,
         })
         .select()
@@ -177,7 +177,7 @@ Deno.serve(async (req) => {
       // 3) Configura webhook automático apontando para esta plataforma
       const webhookUrl = `${supabaseUrl}/functions/v1/evolution-webhook?account_id=${account.id}`;
       await evoFetch(
-        { serverUrl: cleanServer, apiKey, instance: cleanInstance, accountId: account.id },
+        { serverUrl: cleanServer, apiKey: apiKeyClean, instance: cleanInstance, accountId: account.id },
         `/webhook/set/${cleanInstance}`,
         {
           method: "POST",
@@ -197,7 +197,7 @@ Deno.serve(async (req) => {
 
       // 4) Solicita QR Code
       const qrRes = await evoFetch(
-        { serverUrl: cleanServer, apiKey, instance: cleanInstance, accountId: account.id },
+        { serverUrl: cleanServer, apiKey: apiKeyClean, instance: cleanInstance, accountId: account.id },
         `/instance/connect/${cleanInstance}`,
         { method: "GET" },
       );
