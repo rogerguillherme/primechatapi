@@ -1396,7 +1396,7 @@ export default function WhatsAppApi() {
   const [editingAccount, setEditingAccount] = useState<any | null>(null);
   const [isAddingAccount, setIsAddingAccount] = useState(false);
   const [accountName, setAccountName] = useState("");
-  const [provider, setProvider] = useState<"meta_cloud" | "d360">("meta_cloud");
+  const [provider, setProvider] = useState<"meta_cloud" | "d360" | "360messenger">("meta_cloud");
   const [phoneNumberId, setPhoneNumberId] = useState("");
   const [accessToken, setAccessToken] = useState("");
   const [businessAccountId, setBusinessAccountId] = useState("");
