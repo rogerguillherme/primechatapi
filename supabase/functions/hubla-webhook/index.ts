@@ -322,18 +322,19 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (latestLog?.job_id) {
-        await supabase.from("campaign_events").insert({
+        const { error: campaignEventError } = await supabase.from("campaign_events").insert({
           campaign_id: latestLog.job_id,
           lead_id: leadId,
           lead_phone: extracted.buyerPhone,
           event_type: "purchase",
           metadata: { valor: extracted.amount, produto: extracted.productName || null },
-        }).catch(() => {});
+        });
+        if (campaignEventError) console.error("Failed to register purchase event:", campaignEventError);
       }
     }
 
     // ── AUTO-TRIGGER: Start matching flows based on event type ──
-    const triggerType = mapToFlowTrigger(status, extracted.paymentMethod, payload?.type || "");
+    const triggerType = mapToFlowTrigger(status, extracted.paymentMethod || null, payload?.type || "");
     if (triggerType && leadId) {
       try {
         // Find active flows matching this trigger
