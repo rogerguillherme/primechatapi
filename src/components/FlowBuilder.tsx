@@ -672,7 +672,7 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
       } else {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error("Usuário não autenticado");
-        const { data, error } = await supabase.from("flows").insert({ name, description: description || null, user_id: user.id, trigger_type: triggerType }).select("id").single();
+        const { data, error } = await supabase.from("flows").insert({ name, description: description || null, user_id: user.id, trigger_type: triggerType, flow_kind: (initialKind || "api") } as any).select("id").single();
         if (error) throw error;
         flowId = data.id;
       }
