@@ -471,12 +471,13 @@ Deno.serve(async (req) => {
         }
 
         // ── AUTO-TRACK: Register campaign event ──
-        await supabase.from("campaign_events").insert({
+        const { error: campaignEventError } = await supabase.from("campaign_events").insert({
           campaign_id: jobId,
           lead_id: lead.id,
           lead_phone: cleanPhone,
           event_type: "sent",
-        }).catch(() => {});
+        });
+        if (campaignEventError) console.error("Failed to register campaign event:", campaignEventError);
       } catch (e: any) {
         await supabase.from("message_logs").insert({
           job_id: jobId, user_id: job.user_id, lead_id: lead.id,
@@ -520,13 +521,14 @@ Deno.serve(async (req) => {
 
     // Update user daily counter
     if (sentInBatch > 0) {
-      await supabase.rpc("increment_daily_messages" as any, { p_user_id: job.user_id, p_count: sentInBatch }).catch(() => {
-        // Fallback: direct update if RPC doesn't exist
-        supabase
+      const { error: incrementError } = await supabase.rpc("increment_daily_messages" as any, { p_user_id: job.user_id, p_count: sentInBatch });
+      if (incrementError) {
+        console.error("Failed to increment daily messages via RPC:", incrementError);
+        await supabase
           .from("user_plan_limits")
           .update({ messages_sent_today: (planLimits?.messages_sent_today || 0) + sentInBatch, updated_at: new Date().toISOString() })
           .eq("user_id", job.user_id);
-      });
+      }
     }
 
     // Chain next batch if not complete

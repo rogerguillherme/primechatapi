@@ -94,9 +94,9 @@ function extractPayload(payload: any) {
 
   const paymentMethod = invoice?.paymentMethod || payload.payment_method || payload.payment?.method || null;
 
-  const status = invoice
+  const status: string = invoice
     ? mapHublaStatus(eventType, invoice.status)
-    : (payload.status || "approved");
+    : String(payload.status || "approved");
 
   return {
     externalOrderId, buyerName, buyerEmail, buyerPhone, buyerCpf,
@@ -322,18 +322,19 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (latestLog?.job_id) {
-        await supabase.from("campaign_events").insert({
+        const { error: campaignEventError } = await supabase.from("campaign_events").insert({
           campaign_id: latestLog.job_id,
           lead_id: leadId,
           lead_phone: extracted.buyerPhone,
           event_type: "purchase",
           metadata: { valor: extracted.amount, produto: extracted.productName || null },
-        }).catch(() => {});
+        });
+        if (campaignEventError) console.error("Failed to register purchase event:", campaignEventError);
       }
     }
 
     // ── AUTO-TRIGGER: Start matching flows based on event type ──
-    const triggerType = mapToFlowTrigger(status, extracted.paymentMethod, payload?.type || "");
+    const triggerType = mapToFlowTrigger(status, extracted.paymentMethod || null, payload?.type || "");
     if (triggerType && leadId) {
       try {
         // Find active flows matching this trigger
@@ -417,9 +418,10 @@ Deno.serve(async (req) => {
     );
   } catch (error) {
     console.error("Webhook error:", error);
-    await logWebhook(supabase, externalOrderId, status, 500, error.message, payload);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    await logWebhook(supabase, externalOrderId, status, 500, errorMessage, payload);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

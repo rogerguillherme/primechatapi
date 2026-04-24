@@ -39,19 +39,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Only fetch default account when there's work
-    const { data: defaultAccount } = await supabase
-      .from("whatsapp_accounts")
-      .select("id")
-      .eq("is_default", true)
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    const accountId = defaultAccount?.id || null;
-
     let processed = 0;
-
+ 
     for (const exec of readyExecutions) {
       let claimed = false;
 
@@ -84,8 +73,25 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        let executionAccountId = typeof exec.metadata?.account_id === "string" && exec.metadata.account_id
+          ? exec.metadata.account_id
+          : null;
+
+        if (!executionAccountId) {
+          const { data: recentLeadMessage } = await supabase
+            .from("chat_messages")
+            .select("account_id")
+            .eq("lead_id", lead.id)
+            .not("account_id", "is", null)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          executionAccountId = recentLeadMessage?.account_id || null;
+        }
+
         if (currentStep.step_type === "no_response" || exec.status === "waiting_no_response") {
-          await advanceToNextStep(exec, currentStep, lead, supabase, supabaseUrl, supabaseKey, accountId);
+          await advanceToNextStep(exec, currentStep, lead, supabase, supabaseUrl, supabaseKey, executionAccountId);
           processed++;
           continue;
         }
@@ -112,7 +118,7 @@ Deno.serve(async (req) => {
             console.log("Lead added to blacklist:", lead.id, "via flow:", exec.flow_id);
           }
 
-          await advanceToNextStep(exec, currentStep, lead, supabase, supabaseUrl, supabaseKey, accountId);
+          await advanceToNextStep(exec, currentStep, lead, supabase, supabaseUrl, supabaseKey, executionAccountId);
           processed++;
           continue;
         }
@@ -122,7 +128,7 @@ Deno.serve(async (req) => {
           currentStep.step_type === "interactive_buttons" ||
           currentStep.step_type === "cta_url"
         ) {
-          const sent = await sendStepMessage(currentStep, lead, supabase, supabaseUrl, supabaseKey, exec.metadata, accountId);
+          const sent = await sendStepMessage(currentStep, lead, supabase, supabaseUrl, supabaseKey, exec.metadata, executionAccountId);
           if (!sent) {
             console.error("Failed to send message for execution:", exec.id);
             await requeueExecution(exec, supabase);
@@ -130,7 +136,7 @@ Deno.serve(async (req) => {
           }
         }
 
-        await advanceToNextStep(exec, currentStep, lead, supabase, supabaseUrl, supabaseKey, accountId);
+        await advanceToNextStep(exec, currentStep, lead, supabase, supabaseUrl, supabaseKey, executionAccountId);
         processed++;
       } catch (stepErr) {
         console.error("Error processing execution:", exec.id, stepErr);
