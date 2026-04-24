@@ -81,20 +81,6 @@ export default function Chat() {
   const { toast } = useToast();
   const { accounts, defaultAccount } = useWhatsAppAccounts();
 
-  // Auto-select the most relevant account for the current lead
-  useEffect(() => {
-    if (selectedAccountId || !selectedLeadId) return;
-
-    const lastLeadAccountId = messages?.slice().reverse().find((msg) => msg.account_id)?.account_id;
-    if (lastLeadAccountId) {
-      setSelectedAccountId(lastLeadAccountId);
-      return;
-    }
-
-    if (defaultAccount) {
-      setSelectedAccountId(defaultAccount.id);
-    }
-  }, [defaultAccount, selectedAccountId, selectedLeadId, messages]);
 
   // Fetch leads
   const { data: leads } = useQuery({
