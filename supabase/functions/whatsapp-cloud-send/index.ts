@@ -283,11 +283,29 @@ Deno.serve(async (req) => {
       body = { messaging_product: "whatsapp", to: cleanPhone, type: "text", text: { body: message } };
     }
 
-    console.log("WhatsApp Cloud API request:", JSON.stringify(body));
+    // 360dialog API uses the same body shape but without `messaging_product`
+    if (isD360) {
+      delete body.messaging_product;
+    }
+
+    console.log(`WhatsApp ${isD360 ? "360dialog" : "Cloud"} API request:`, JSON.stringify(body));
+
+    const requestHeaders: Record<string, string> = { "Content-Type": "application/json" };
+    if (isD360) {
+      if (!D360_API_KEY) {
+        return new Response(
+          JSON.stringify({ error: "D360-API-KEY não configurada para esta conta. Edite a conta nas configurações." }),
+          { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      requestHeaders["D360-API-KEY"] = D360_API_KEY;
+    } else {
+      requestHeaders["Authorization"] = `Bearer ${ACCESS_TOKEN}`;
+    }
 
     const waRes = await fetch(apiUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${ACCESS_TOKEN}` },
+      headers: requestHeaders,
       body: JSON.stringify(body),
     });
 
