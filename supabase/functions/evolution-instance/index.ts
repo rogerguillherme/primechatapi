@@ -78,16 +78,58 @@ Deno.serve(async (req) => {
         is_default = false,
       } = body;
 
-      if (!name || !serverUrl || !apiKey || !instance) {
-        return json({ error: "name, serverUrl, apiKey e instance são obrigatórios" }, 400);
+      if (!name) {
+        return json({ error: "name é obrigatório" }, 400);
       }
 
-      const cleanServer = String(serverUrl).trim().replace(/\/+$/, "");
-      const cleanInstance = String(instance).trim();
+      // Fallback automático para secrets do backend
+      const envServer = Deno.env.get("EVOLUTION_SERVER_URL") || "";
+      const envKey = Deno.env.get("EVOLUTION_API_KEY") || "";
+      const finalServer = String(serverUrl || envServer).trim();
+      const finalKey = String(apiKey || envKey).trim();
+
+      if (!finalServer || !finalKey) {
+        return json({
+          error: "Configure EVOLUTION_SERVER_URL e EVOLUTION_API_KEY nos secrets, ou envie no body.",
+        }, 400);
+      }
+
+      // Auto-slug do nome se instance não vier
+      const slugify = (s: string) =>
+        s.toLowerCase()
+          .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "")
+          .slice(0, 40) || `instance-${Date.now()}`;
+
+      const cleanServer = finalServer.replace(/\/+$/, "");
+      const baseSlug = instance ? String(instance).trim() : slugify(String(name));
+
+      // Garante unicidade da instance no DB do usuário (evita colisão)
+      let cleanInstance = baseSlug;
+      let suffix = 1;
+      while (true) {
+        const { data: existing } = await admin
+          .from("whatsapp_accounts")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("phone_number_id", cleanInstance)
+          .maybeSingle();
+        if (!existing) break;
+        suffix += 1;
+        cleanInstance = `${baseSlug}-${suffix}`;
+        if (suffix > 50) {
+          cleanInstance = `${baseSlug}-${Date.now()}`;
+          break;
+        }
+      }
+
+      // Reatribui apiKey limpa
+      const apiKeyClean = finalKey;
 
       // 1) Cria a instance no Evolution (idempotente: se já existir, segue para connect)
       const createRes = await evoFetch(
-        { serverUrl: cleanServer, apiKey, instance: cleanInstance, accountId: "" },
+        { serverUrl: cleanServer, apiKey: apiKeyClean, instance: cleanInstance, accountId: "" },
         "/instance/create",
         {
           method: "POST",
@@ -121,8 +163,8 @@ Deno.serve(async (req) => {
           provider: "evolution",
           phone_number_id: cleanInstance,
           business_account_id: cleanServer,
-          access_token: apiKey,
-          api_key: apiKey,
+          access_token: apiKeyClean,
+          api_key: apiKeyClean,
           is_default,
         })
         .select()
@@ -135,7 +177,7 @@ Deno.serve(async (req) => {
       // 3) Configura webhook automático apontando para esta plataforma
       const webhookUrl = `${supabaseUrl}/functions/v1/evolution-webhook?account_id=${account.id}`;
       await evoFetch(
-        { serverUrl: cleanServer, apiKey, instance: cleanInstance, accountId: account.id },
+        { serverUrl: cleanServer, apiKey: apiKeyClean, instance: cleanInstance, accountId: account.id },
         `/webhook/set/${cleanInstance}`,
         {
           method: "POST",
@@ -155,7 +197,7 @@ Deno.serve(async (req) => {
 
       // 4) Solicita QR Code
       const qrRes = await evoFetch(
-        { serverUrl: cleanServer, apiKey, instance: cleanInstance, accountId: account.id },
+        { serverUrl: cleanServer, apiKey: apiKeyClean, instance: cleanInstance, accountId: account.id },
         `/instance/connect/${cleanInstance}`,
         { method: "GET" },
       );
