@@ -39,19 +39,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Only fetch default account when there's work
-    const { data: defaultAccount } = await supabase
-      .from("whatsapp_accounts")
-      .select("id")
-      .eq("is_default", true)
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    const accountId = defaultAccount?.id || null;
-
     let processed = 0;
-
+ 
     for (const exec of readyExecutions) {
       let claimed = false;
 
