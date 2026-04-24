@@ -640,13 +640,14 @@ function BroadcastTab() {
         .eq("lead_id", leadId)
         .in("status", ["running", "waiting_delay", "waiting_reply", "waiting_no_response"]);
 
+      const flowAccountId = selectedAccountIds.size > 0 ? Array.from(selectedAccountIds)[0] : (defaultAccount?.id || null);
       const { error: insertExecutionError } = await supabase.from("flow_executions").insert({
         flow_id: flowId,
         lead_id: leadId,
         current_step_id: firstStep.id,
         status: firstStepStatus,
         next_action_at: firstStepNextActionAt,
-        metadata: { codigo: codigo || "" },
+        metadata: { codigo: codigo || "", account_id: flowAccountId },
       });
       if (insertExecutionError) throw new Error(`Erro ao iniciar execução do fluxo: ${insertExecutionError.message}`);
     };
@@ -709,6 +710,7 @@ function BroadcastTab() {
       let insertedCount = 0;
       let insertErrors = 0;
 
+      const flowAccountIdBulk = selectedAccountIds.size > 0 ? Array.from(selectedAccountIds)[0] : (defaultAccount?.id || null);
       for (let i = 0; i < leadIds.length; i += INSERT_BATCH) {
         const batch = leadIds.slice(i, i + INSERT_BATCH);
         const rows = batch.map((leadId) => ({
@@ -717,7 +719,7 @@ function BroadcastTab() {
           current_step_id: firstStep!.id,
           status: firstStepStatus,
           next_action_at: firstStepNextActionAt,
-          metadata: { codigo: codigoMap?.[leadId] || "" },
+          metadata: { codigo: codigoMap?.[leadId] || "", account_id: flowAccountIdBulk },
         }));
 
         const { error: batchError } = await supabase.from("flow_executions").insert(rows);
@@ -1256,13 +1258,21 @@ function BroadcastTab() {
               </div>
             )}
 
-            {sendType !== "flow" && (
+            {sendType !== "flow" ? (
               <AccountSelector
                 accounts={accounts}
                 selectedIds={selectedAccountIds}
                 onToggle={toggleAccount}
                 mode="multi"
                 label="Contas para envio"
+              />
+            ) : (
+              <AccountSelector
+                accounts={accounts}
+                selectedIds={selectedAccountIds}
+                onToggle={(id) => setSelectedAccountIds(new Set([id]))}
+                mode="single"
+                label="Número que vai enviar o fluxo"
               />
             )}
 
