@@ -2437,6 +2437,98 @@ export default function WhatsAppApi() {
         </TabsContent>
         </div>
       </Tabs>
+
+      {/* ── QR Code Dialog (Evolution) ── */}
+      <Dialog open={qrDialogOpen} onOpenChange={setQrDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <QrCode size={20} />
+              {qrMode === "new" ? "Conectar nova instância via QR" : "Escanear QR Code"}
+            </DialogTitle>
+            <DialogDescription>
+              {qrMode === "new"
+                ? "Crie uma nova instância no seu servidor Evolution e conecte um número WhatsApp."
+                : "Abra o WhatsApp → Aparelhos conectados → Conectar um aparelho e aponte para o QR abaixo."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {qrMode === "new" && !qrAccountId ? (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="qrName">Nome da conta</Label>
+                <Input id="qrName" placeholder="Ex: Suporte Loja" value={qrName} onChange={(e) => setQrName(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="qrServer">URL do servidor Evolution</Label>
+                <Input id="qrServer" placeholder="https://evolution.seudominio.com" value={qrServerUrl} onChange={(e) => setQrServerUrl(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="qrInstance">Nome da instância</Label>
+                <Input id="qrInstance" placeholder="ex: suporte-01" value={qrInstance} onChange={(e) => setQrInstance(e.target.value)} />
+                <p className="text-xs text-muted-foreground">Se não existir, será criada automaticamente.</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="qrApi">API Key (apikey global)</Label>
+                <Input id="qrApi" type="password" placeholder="AUTHENTICATION_API_KEY" value={qrApiKey} onChange={(e) => setQrApiKey(e.target.value)} />
+              </div>
+              <DialogFooter className="gap-2">
+                <Button variant="outline" onClick={() => setQrDialogOpen(false)}>Cancelar</Button>
+                <Button onClick={handleCreateAndConnect} disabled={qrLoading}>
+                  {qrLoading ? <><Loader2 size={14} className="animate-spin mr-1" /> Criando…</> : <><QrCode size={14} className="mr-1" /> Criar & gerar QR</>}
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex flex-col items-center justify-center gap-3 py-2">
+                {qrLoading && !qrImage ? (
+                  <div className="w-64 h-64 flex items-center justify-center bg-muted rounded-lg">
+                    <Loader2 size={32} className="animate-spin text-muted-foreground" />
+                  </div>
+                ) : qrConnState === "open" ? (
+                  <div className="w-64 h-64 flex flex-col items-center justify-center bg-emerald-500/10 rounded-lg gap-2">
+                    <CheckCircle2 size={48} className="text-emerald-500" />
+                    <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">Conectado!</p>
+                  </div>
+                ) : qrImage ? (
+                  <img src={qrImage} alt="QR Code Evolution" className="w-64 h-64 rounded-lg border bg-white p-2" />
+                ) : (
+                  <div className="w-64 h-64 flex items-center justify-center bg-muted rounded-lg text-xs text-muted-foreground text-center px-4">
+                    Aguardando QR Code do servidor…
+                  </div>
+                )}
+
+                {qrPairingCode && qrConnState !== "open" && (
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground">ou use o código de pareamento</p>
+                    <p className="font-mono text-lg font-semibold tracking-widest">{qrPairingCode}</p>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 text-xs">
+                  <Smartphone size={14} className="text-muted-foreground" />
+                  <span className="text-muted-foreground">
+                    Status: <span className="font-medium text-foreground capitalize">{qrConnState}</span>
+                  </span>
+                </div>
+              </div>
+
+              <DialogFooter className="gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => qrAccountId && fetchQrForAccount(qrAccountId)}
+                  disabled={!qrAccountId || qrConnState === "open"}
+                >
+                  <RefreshCw size={14} className="mr-1" /> Atualizar QR
+                </Button>
+                <Button onClick={() => setQrDialogOpen(false)}>Fechar</Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
+
   );
 }
