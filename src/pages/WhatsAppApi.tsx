@@ -2073,18 +2073,13 @@ export default function WhatsAppApi() {
                   <Input id="accountName" placeholder="Ex: Minha Loja Principal" value={accountName} onChange={(e) => setAccountName(e.target.value)} />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="phoneNumberId">
-                    {provider === "d360" ? "Phone Number ID (do 360dialog)" : "Phone Number ID"}
-                  </Label>
-                  <Input id="phoneNumberId" placeholder="Ex: 123456789012345" value={phoneNumberId} onChange={(e) => setPhoneNumberId(e.target.value)} />
-                  {provider === "d360" && (
-                    <p className="text-xs text-muted-foreground">No Hub do 360dialog: WhatsApp Accounts → seu número → "Phone Number ID".</p>
-                  )}
-                </div>
-
-                {provider === "meta_cloud" ? (
+                {provider === "meta_cloud" && (
                   <>
+                    <div className="space-y-2">
+                      <Label htmlFor="phoneNumberId">Phone Number ID</Label>
+                      <Input id="phoneNumberId" placeholder="Ex: 123456789012345" value={phoneNumberId} onChange={(e) => setPhoneNumberId(e.target.value)} />
+                    </div>
+
                     <div className="space-y-2">
                       <Label htmlFor="businessAccountId">Business Account ID</Label>
                       <Input id="businessAccountId" placeholder="Ex: 987654321098765" value={businessAccountId} onChange={(e) => setBusinessAccountId(e.target.value)} />
@@ -2096,12 +2091,14 @@ export default function WhatsAppApi() {
                       <p className="text-xs text-muted-foreground">Use um token permanente do System User no Business Manager.</p>
                     </div>
                   </>
-                ) : (
+                )}
+
+                {provider === "d360" && (
                   <div className="space-y-2">
                     <Label htmlFor="apiKey">D360-API-KEY</Label>
                     <Input id="apiKey" type="password" placeholder="Sua D360-API-KEY..." value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
                     <p className="text-xs text-muted-foreground">
-                      Gere no Hub do 360dialog em <span className="font-mono">API Keys</span>. A chave é única por número.
+                      Gere no Hub do 360dialog/360Messenger em <span className="font-mono">API Keys</span>. A chave já identifica o número — Phone Number ID não é necessário.
                     </p>
                   </div>
                 )}
