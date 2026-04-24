@@ -1842,9 +1842,6 @@ export default function WhatsAppApi() {
 
   return (
     <div className="animate-fade-in">
-
-  return (
-    <div className="animate-fade-in">
       <Tabs value={activeMainTab} onValueChange={(v) => { setActiveMainTab(v); if (v !== "flows") setFlowTriggerType(undefined); }} className="flex h-screen gap-0" orientation="vertical">
         {/* Sidebar */}
         <div className={cn("shrink-0 border-r border-sidebar-border gradient-header flex flex-col transition-all duration-300", sidebarCollapsed ? "w-14" : "w-56")}>
