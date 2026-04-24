@@ -13,9 +13,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
   Plus, Trash2, GitBranch, ChevronRight, Play, Pause, ArrowLeft, Save,
-  Sparkles, Send, Loader2, Bot, X,
+  Sparkles, Send, Loader2, Bot, X, MessageCircle, Code2,
 } from "lucide-react";
 import { FlowCanvas } from "@/components/flow-builder/FlowCanvas";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 interface Flow {
   id: string;
