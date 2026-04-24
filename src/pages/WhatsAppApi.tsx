@@ -1256,13 +1256,21 @@ function BroadcastTab() {
               </div>
             )}
 
-            {sendType !== "flow" && (
+            {sendType !== "flow" ? (
               <AccountSelector
                 accounts={accounts}
                 selectedIds={selectedAccountIds}
                 onToggle={toggleAccount}
                 mode="multi"
                 label="Contas para envio"
+              />
+            ) : (
+              <AccountSelector
+                accounts={accounts}
+                selectedIds={selectedAccountIds.slice(0, 1)}
+                onToggle={(id) => setSelectedAccountIds([id])}
+                mode="single"
+                label="Número que vai enviar o fluxo"
               />
             )}
 
