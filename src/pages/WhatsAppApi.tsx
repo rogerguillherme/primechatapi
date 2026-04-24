@@ -1386,9 +1386,11 @@ export default function WhatsAppApi() {
   const [editingAccount, setEditingAccount] = useState<any | null>(null);
   const [isAddingAccount, setIsAddingAccount] = useState(false);
   const [accountName, setAccountName] = useState("");
+  const [provider, setProvider] = useState<"meta_cloud" | "d360">("meta_cloud");
   const [phoneNumberId, setPhoneNumberId] = useState("");
   const [accessToken, setAccessToken] = useState("");
   const [businessAccountId, setBusinessAccountId] = useState("");
+  const [apiKey, setApiKey] = useState("");
   const [isDefault, setIsDefault] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -1506,9 +1508,11 @@ export default function WhatsAppApi() {
 
   const resetForm = () => {
     setAccountName("");
+    setProvider("meta_cloud");
     setPhoneNumberId("");
     setAccessToken("");
     setBusinessAccountId("");
+    setApiKey("");
     setIsDefault(false);
     setEditingAccount(null);
     setIsAddingAccount(false);
@@ -1535,25 +1539,37 @@ export default function WhatsAppApi() {
   const startEditing = (account: any) => {
     setEditingAccount(account);
     setAccountName(account.name);
+    setProvider((account.provider as "meta_cloud" | "d360") || "meta_cloud");
     setPhoneNumberId(account.phone_number_id);
     setAccessToken(account.access_token);
     setBusinessAccountId(account.business_account_id || "");
+    setApiKey(account.api_key || "");
     setIsDefault(account.is_default);
     setIsAddingAccount(true);
   };
 
   const handleSaveAccount = async () => {
-    if (!accountName.trim() || !phoneNumberId.trim() || !accessToken.trim()) {
-      toast.error("Preencha o nome, Phone Number ID e Access Token.");
+    if (!accountName.trim() || !phoneNumberId.trim()) {
+      toast.error("Preencha o nome e o Phone Number ID.");
+      return;
+    }
+    if (provider === "meta_cloud" && !accessToken.trim()) {
+      toast.error("Informe o Access Token da Meta.");
+      return;
+    }
+    if (provider === "d360" && !apiKey.trim()) {
+      toast.error("Informe a D360-API-KEY do 360dialog.");
       return;
     }
     setIsSaving(true);
     try {
       const payload: any = {
         name: accountName.trim(),
+        provider,
         phone_number_id: phoneNumberId.trim(),
         business_account_id: businessAccountId.trim() || null,
-        access_token: accessToken.trim(),
+        access_token: provider === "meta_cloud" ? accessToken.trim() : (apiKey.trim() || accessToken.trim() || "d360"),
+        api_key: provider === "d360" ? apiKey.trim() : null,
         is_default: isDefault || (accounts?.length === 0),
       };
 
