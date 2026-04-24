@@ -24,7 +24,10 @@ interface Flow {
   active: boolean;
   created_at: string;
   trigger_type?: string | null;
+  flow_kind?: "api" | "whatsapp";
 }
+
+type FlowKind = "api" | "whatsapp";
 
 const defaultEdgeOptions = {
   animated: true,
