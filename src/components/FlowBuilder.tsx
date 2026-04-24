@@ -762,6 +762,7 @@ export function FlowBuilder({ initialTriggerType, initialFlowId }: { initialTrig
   const [editingFlow, setEditingFlow] = useState<Flow | null | undefined>(
     initialTriggerType ? null : undefined
   );
+  const [newFlowKind, setNewFlowKind] = useState<FlowKind>("api");
 
   // Load flow by ID when initialFlowId is provided
   useEffect(() => {
@@ -785,9 +786,17 @@ export function FlowBuilder({ initialTriggerType, initialFlowId }: { initialTrig
         flow={editingFlow}
         onBack={() => setEditingFlow(undefined)}
         initialTriggerType={!editingFlow ? initialTriggerType : undefined}
+        initialKind={!editingFlow ? newFlowKind : undefined}
       />
     );
   }
 
-  return <FlowListView onEdit={(flow) => setEditingFlow(flow)} />;
+  return (
+    <FlowListView
+      onEdit={(flow, kind) => {
+        if (!flow && kind) setNewFlowKind(kind);
+        setEditingFlow(flow);
+      }}
+    />
+  );
 }
