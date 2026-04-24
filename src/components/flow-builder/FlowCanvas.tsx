@@ -328,6 +328,7 @@ export function FlowCanvas({
           templates={templates}
           onUpdate={(data) => updateNodeData(selectedNode.id, data)}
           onClose={() => setSelectedNodeId(null)}
+          variationEnabled={variationEnabled}
         />
       )}
     </div>
