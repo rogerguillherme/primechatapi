@@ -1938,6 +1938,8 @@ export default function WhatsAppApi() {
                               )}
                               {account.provider === "d360" ? (
                                 <Badge variant="secondary" className="text-[10px] px-1.5 py-0">360dialog</Badge>
+                              ) : account.provider === "360messenger" ? (
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">360Messenger</Badge>
                               ) : (
                                 <Badge variant="outline" className="text-[10px] px-1.5 py-0">Meta Cloud</Badge>
                               )}
