@@ -73,8 +73,17 @@ export function NodeEditPanel({ node, templates, onUpdate, onClose, variationEna
                 />
               </div>
             )}
-          </>
-        )}
+            {variationEnabled && !data.template_id && (
+              <MessageVariationsField
+                variations={(data.message_variations as string[]) || []}
+                onChange={(v) => onUpdate({ message_variations: v })}
+              />
+            )}
+            {variationEnabled && data.template_id && (
+              <p className="text-[11px] text-muted-foreground rounded-md border border-dashed border-border p-2">
+                Variação automática só funciona em mensagens personalizadas (não em templates Meta).
+              </p>
+            )}
 
         {type === "delay" && (
           <div className="space-y-2">
