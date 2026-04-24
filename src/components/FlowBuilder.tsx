@@ -543,6 +543,24 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
     setIsLoaded(false);
   }, [initialDraft, flow, setNodes, setEdges]);
 
+  // Carregar settings do fluxo (variação, delay, janela horária)
+  useEffect(() => {
+    if (!flow) {
+      setSettings(DEFAULT_FLOW_SETTINGS);
+      return;
+    }
+    const f = flow as any;
+    setSettings({
+      variation_enabled: !!f.variation_enabled,
+      delay_min_seconds: f.delay_min_seconds ?? DEFAULT_FLOW_SETTINGS.delay_min_seconds,
+      delay_max_seconds: f.delay_max_seconds ?? DEFAULT_FLOW_SETTINGS.delay_max_seconds,
+      sending_window_enabled: !!f.sending_window_enabled,
+      sending_window_start: f.sending_window_start ?? DEFAULT_FLOW_SETTINGS.sending_window_start,
+      sending_window_end: f.sending_window_end ?? DEFAULT_FLOW_SETTINGS.sending_window_end,
+      sending_window_timezone: f.sending_window_timezone ?? DEFAULT_FLOW_SETTINGS.sending_window_timezone,
+    });
+  }, [flow]);
+
   const handleAiGenerate = useCallback((steps: any[]) => {
     // Keep trigger, add AI-generated nodes
     const triggerNode = nodes.find((n) => n.id === "trigger") || createTriggerNode();
