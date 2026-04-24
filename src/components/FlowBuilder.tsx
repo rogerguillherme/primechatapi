@@ -393,6 +393,11 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initialDraft?.edges ?? []);
   const [isLoaded, setIsLoaded] = useState(Boolean(initialDraft) || !flow);
   const [hydratedFromDraft, setHydratedFromDraft] = useState(Boolean(initialDraft));
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settings, setSettings] = useState<FlowSettings>(DEFAULT_FLOW_SETTINGS);
+
+  const flowKind: FlowKind = (flow?.flow_kind as FlowKind) || initialKind || "api";
+  const isWhatsAppFlow = flowKind === "whatsapp";
 
   const { templates } = useUserTemplates();
 
