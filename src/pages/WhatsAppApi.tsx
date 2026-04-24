@@ -1549,13 +1549,19 @@ export default function WhatsAppApi() {
   };
 
   const handleSaveAccount = async () => {
-    if (!accountName.trim() || !phoneNumberId.trim()) {
-      toast.error("Preencha o nome e o Phone Number ID.");
+    if (!accountName.trim()) {
+      toast.error("Informe o nome da conta.");
       return;
     }
-    if (provider === "meta_cloud" && !accessToken.trim()) {
-      toast.error("Informe o Access Token da Meta.");
-      return;
+    if (provider === "meta_cloud") {
+      if (!phoneNumberId.trim()) {
+        toast.error("Informe o Phone Number ID.");
+        return;
+      }
+      if (!accessToken.trim()) {
+        toast.error("Informe o Access Token da Meta.");
+        return;
+      }
     }
     if (provider === "d360" && !apiKey.trim()) {
       toast.error("Informe a D360-API-KEY do 360dialog.");
@@ -1563,12 +1569,18 @@ export default function WhatsAppApi() {
     }
     setIsSaving(true);
     try {
+      // 360dialog não usa phone_number_id (a API Key já identifica o número),
+      // mas a coluna no banco é NOT NULL — então geramos um identificador sintético.
+      const effectivePhoneNumberId = provider === "d360"
+        ? (phoneNumberId.trim() || (editingAccount?.phone_number_id) || `d360_${crypto.randomUUID().slice(0, 12)}`)
+        : phoneNumberId.trim();
+
       const payload: any = {
         name: accountName.trim(),
         provider,
-        phone_number_id: phoneNumberId.trim(),
-        business_account_id: businessAccountId.trim() || null,
-        access_token: provider === "meta_cloud" ? accessToken.trim() : (apiKey.trim() || accessToken.trim() || "d360"),
+        phone_number_id: effectivePhoneNumberId,
+        business_account_id: provider === "meta_cloud" ? (businessAccountId.trim() || null) : null,
+        access_token: provider === "meta_cloud" ? accessToken.trim() : (apiKey.trim() || "d360"),
         api_key: provider === "d360" ? apiKey.trim() : null,
         is_default: isDefault || (accounts?.length === 0),
       };
