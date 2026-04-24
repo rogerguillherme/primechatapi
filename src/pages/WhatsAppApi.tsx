@@ -1877,7 +1877,10 @@ export default function WhatsAppApi() {
                       <ExternalLink size={14} /> Conectar via Meta OAuth
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => { resetForm(); setProvider("d360"); setIsAddingAccount(true); }} className="gap-2">
-                      <MessageCircle size={14} /> 360dialog (Messenger)
+                      <MessageCircle size={14} /> 360dialog
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => { resetForm(); setProvider("360messenger"); setIsAddingAccount(true); }} className="gap-2">
+                      <MessageCircle size={14} /> 360Messenger
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
