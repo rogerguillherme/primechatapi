@@ -165,25 +165,29 @@ Deno.serve(async (req) => {
     } = await getAccountCredentials(supabase, account_id);
 
     const isD360 = provider === "d360";
-    const is360Messenger = provider === "360messenger";
+    const isEvolution = provider === "evolution";
 
-    if (!isD360 && !is360Messenger) {
+    if (!isD360 && !isEvolution) {
       await ensureWebhookSubscription(ACCESS_TOKEN, businessAccountId);
     }
 
     const cleanPhone = phone.replace(/\D/g, "");
 
-    // 360Messenger has a completely different (simpler) API: form-encoded text-only sender.
-    if (is360Messenger) {
-      const apiKey = D360_API_KEY || ACCESS_TOKEN;
-      if (!apiKey) {
+    // ============= EVOLUTION API (self-hosted) =============
+    // business_account_id stores Server URL; phone_number_id stores Instance Name; api_key stores apikey.
+    if (isEvolution) {
+      const evoApiKey = D360_API_KEY || ACCESS_TOKEN;
+      const evoServerUrl = (businessAccountId || "").trim().replace(/\/+$/, "");
+      const evoInstance = (PHONE_NUMBER_ID || "").trim();
+
+      if (!evoApiKey || !evoServerUrl || !evoInstance) {
         return new Response(
-          JSON.stringify({ error: "API Key do 360Messenger não configurada. Edite a conta nas configurações." }),
+          JSON.stringify({ error: "Configuração da Evolution API incompleta (Server URL, Instance e API Key são obrigatórios). Edite a conta nas configurações." }),
           { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
 
-      // Resolve text body. Templates fall back to their stored content text.
+      // Resolve dynamic content: template fallback to stored content
       let outgoingText = message || "";
       let templateContentRecord: any = null;
       if (template_name && !outgoingText) {
@@ -200,35 +204,84 @@ Deno.serve(async (req) => {
             .replace(/\{codigo\}/gi, "-");
         }
       }
-      if (!outgoingText && media_url) {
-        outgoingText = media_url;
+
+      const evoHeaders = {
+        "Content-Type": "application/json",
+        "apikey": evoApiKey,
+      };
+
+      let endpoint = "";
+      let evoBody: any = {};
+      let logContent = outgoingText;
+
+      // Decide endpoint based on payload type
+      if (interactive_buttons && Array.isArray(interactive_buttons) && interactive_buttons.length > 0) {
+        endpoint = `${evoServerUrl}/message/sendButtons/${evoInstance}`;
+        evoBody = {
+          number: cleanPhone,
+          title: "",
+          description: outgoingText || "Escolha uma opção:",
+          footer: "",
+          buttons: interactive_buttons.slice(0, 3).map((btn: any, i: number) => ({
+            type: "reply",
+            displayText: (btn.title || `Opção ${i + 1}`).substring(0, 40),
+            id: btn.id || `btn_${i}`,
+          })),
+        };
+        logContent = `🔘 ${outgoingText || "Mensagem com botões"}`;
+      } else if (cta_url) {
+        // Evolution doesn't have a native CTA; send as text + URL
+        const ctaText = `${outgoingText || "Acesse o link abaixo:"}\n\n👉 ${cta_url.display_text || "Acessar"}: ${cta_url.url}`;
+        endpoint = `${evoServerUrl}/message/sendText/${evoInstance}`;
+        evoBody = { number: cleanPhone, text: ctaText };
+        logContent = `🔗 ${outgoingText || cta_url.url}`;
+      } else if (media_url && media_type) {
+        endpoint = `${evoServerUrl}/message/sendMedia/${evoInstance}`;
+        const mediaTypeMap: Record<string, string> = {
+          image: "image",
+          video: "video",
+          audio: "audio",
+          document: "document",
+        };
+        const evoMediaType = mediaTypeMap[media_type] || "document";
+        // Evolution supports audio via separate endpoint for ptt; use sendMedia for everything else
+        if (media_type === "audio") {
+          endpoint = `${evoServerUrl}/message/sendWhatsAppAudio/${evoInstance}`;
+          evoBody = { number: cleanPhone, audio: media_url };
+        } else {
+          evoBody = {
+            number: cleanPhone,
+            mediatype: evoMediaType,
+            media: media_url,
+            caption: outgoingText || undefined,
+            fileName: media_type === "document" ? "arquivo" : undefined,
+          };
+        }
+        logContent = outgoingText || (
+          media_type === "audio" ? "🎤 Áudio" : media_type === "image" ? "📷 Imagem" : media_type === "video" ? "🎥 Vídeo" : "📎 Arquivo"
+        );
+      } else {
+        if (!outgoingText) outgoingText = "(sem conteúdo)";
+        endpoint = `${evoServerUrl}/message/sendText/${evoInstance}`;
+        evoBody = { number: cleanPhone, text: outgoingText };
+        logContent = outgoingText;
       }
-      if (!outgoingText) {
-        outgoingText = "(sem conteúdo)";
-      }
 
-      const form = new URLSearchParams();
-      form.append("phonenumber", cleanPhone);
-      form.append("text", outgoingText);
+      console.log("Evolution request:", endpoint, JSON.stringify(evoBody).substring(0, 200));
 
-      console.log("360Messenger request:", cleanPhone, outgoingText.substring(0, 80));
-
-      const mRes = await fetch("https://api.360messenger.com/v2/sendMessage", {
+      const eRes = await fetch(endpoint, {
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: form.toString(),
+        headers: evoHeaders,
+        body: JSON.stringify(evoBody),
       });
 
-      const mText = await mRes.text();
-      console.log("360Messenger response:", mRes.status, mText);
-      let mData: any;
-      try { mData = JSON.parse(mText); } catch { mData = { raw: mText }; }
+      const eText = await eRes.text();
+      console.log("Evolution response:", eRes.status, eText.substring(0, 400));
+      let eData: any;
+      try { eData = JSON.parse(eText); } catch { eData = { raw: eText }; }
 
-      if (!mRes.ok || mData?.success === false) {
-        const friendlyMsg = mData?.message || `Falha no envio via 360Messenger (HTTP ${mRes.status}).`;
+      if (!eRes.ok) {
+        const friendlyMsg = eData?.message || eData?.error || `Falha no envio via Evolution API (HTTP ${eRes.status}).`;
         if (lead_id) {
           await supabase.from("chat_messages").insert({
             lead_id,
@@ -239,18 +292,18 @@ Deno.serve(async (req) => {
           });
         }
         return new Response(
-          JSON.stringify({ error: friendlyMsg, provider_response: mData }),
+          JSON.stringify({ error: friendlyMsg, provider_response: eData }),
           { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
 
-      const messageId = mData?.data?.id || null;
+      const messageId = eData?.key?.id || eData?.messageId || null;
       if (lead_id) {
         const activityAt = new Date().toISOString();
         await supabase.from("chat_messages").insert({
           lead_id,
           direction: "outbound",
-          content: outgoingText,
+          content: logContent,
           media_type: media_type || null,
           media_url: media_url || null,
           zapi_message_id: messageId,
