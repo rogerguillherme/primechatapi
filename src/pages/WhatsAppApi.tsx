@@ -1724,6 +1724,12 @@ export default function WhatsAppApi() {
   const [qrApiKey, setQrApiKey] = useState("");
   const qrPollRef = useRef<number | null>(null);
   const qrRefreshRef = useRef<number | null>(null);
+  const healthPollRef = useRef<number | null>(null);
+  const reopenedForRef = useRef<Set<string>>(new Set());
+  const [autoReconnect, setAutoReconnect] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("evo_auto_reconnect") !== "false";
+  });
 
   const stopQrPolling = useCallback(() => {
     if (qrPollRef.current) { clearInterval(qrPollRef.current); qrPollRef.current = null; }
@@ -1755,14 +1761,18 @@ export default function WhatsAppApi() {
       setQrConnState(state);
       if (state === "open") {
         stopQrPolling();
+        reopenedForRef.current.delete(accountId);
         toast.success("WhatsApp conectado com sucesso! 🎉");
         queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
         setTimeout(() => setQrDialogOpen(false), 1500);
+      } else if (state === "close" || state === "disconnected") {
+        // QR expirou ou caiu — força refresh do QR
+        fetchQrForAccount(accountId);
       }
     } catch (e) {
       console.warn("Status poll failed:", e);
     }
-  }, [stopQrPolling, queryClient]);
+  }, [stopQrPolling, queryClient, fetchQrForAccount]);
 
   const startQrPolling = useCallback((accountId: string) => {
     stopQrPolling();
@@ -1770,7 +1780,7 @@ export default function WhatsAppApi() {
     qrRefreshRef.current = window.setInterval(() => fetchQrForAccount(accountId), 30000) as any;
   }, [pollQrStatus, fetchQrForAccount, stopQrPolling]);
 
-  const openQrDialogForExisting = (account: any) => {
+  const openQrDialogForExisting = useCallback((account: any) => {
     setQrMode("existing");
     setQrAccountId(account.id);
     setQrImage(null);
@@ -1780,7 +1790,7 @@ export default function WhatsAppApi() {
     setQrLoading(true);
     fetchQrForAccount(account.id).finally(() => setQrLoading(false));
     startQrPolling(account.id);
-  };
+  }, [fetchQrForAccount, startQrPolling]);
 
   const openQrDialogForNew = () => {
     setQrMode("new");
@@ -1836,6 +1846,54 @@ export default function WhatsAppApi() {
     if (!qrDialogOpen) stopQrPolling();
     return stopQrPolling;
   }, [qrDialogOpen, stopQrPolling]);
+
+  // ── Health monitor: detecta queda de instâncias Evolution e reabre QR automaticamente
+  useEffect(() => {
+    if (!autoReconnect) {
+      if (healthPollRef.current) { clearInterval(healthPollRef.current); healthPollRef.current = null; }
+      return;
+    }
+    const check = async () => {
+      // Não interfere se já existe um modal aberto
+      if (qrDialogOpen) return;
+      const evoAccounts = (accounts || []).filter((a: any) => a.provider === "evolution");
+      if (evoAccounts.length === 0) return;
+
+      for (const acc of evoAccounts) {
+        try {
+          const { data } = await supabase.functions.invoke("evolution-instance", {
+            body: { action: "status", account_id: acc.id },
+          });
+          const state = String(data?.state || "unknown");
+          if (state === "close" || state === "disconnected") {
+            if (reopenedForRef.current.has(acc.id)) continue;
+            reopenedForRef.current.add(acc.id);
+            toast.warning(`"${acc.name}" desconectou — reabrindo QR para reconexão…`);
+            openQrDialogForExisting(acc);
+            return; // 1 reconexão por ciclo
+          }
+          if (state === "open") {
+            reopenedForRef.current.delete(acc.id);
+          }
+        } catch (e) {
+          console.warn("Health check falhou para", acc.name, e);
+        }
+      }
+    };
+    // Primeira verificação após 5s, depois a cada 20s
+    const t0 = window.setTimeout(check, 5000);
+    healthPollRef.current = window.setInterval(check, 20000) as any;
+    return () => {
+      clearTimeout(t0);
+      if (healthPollRef.current) { clearInterval(healthPollRef.current); healthPollRef.current = null; }
+    };
+  }, [autoReconnect, accounts, qrDialogOpen, openQrDialogForExisting]);
+
+  const toggleAutoReconnect = useCallback((next: boolean) => {
+    setAutoReconnect(next);
+    try { localStorage.setItem("evo_auto_reconnect", next ? "true" : "false"); } catch {}
+    toast.info(next ? "Reconexão automática ativada" : "Reconexão automática desativada");
+  }, []);
 
   return (
     <div className="animate-fade-in">
@@ -2029,6 +2087,10 @@ export default function WhatsAppApi() {
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={openQrDialogForNew} className="gap-2">
                       <QrCode size={14} /> Conectar via QR Code (Evolution)
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => toggleAutoReconnect(!autoReconnect)} className="gap-2">
+                      <RefreshCw size={14} /> Reconexão automática: {autoReconnect ? "ON" : "OFF"}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
