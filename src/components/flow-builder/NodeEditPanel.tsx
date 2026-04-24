@@ -84,6 +84,8 @@ export function NodeEditPanel({ node, templates, onUpdate, onClose, variationEna
                 Variação automática só funciona em mensagens personalizadas (não em templates Meta).
               </p>
             )}
+          </>
+        )}
 
         {type === "delay" && (
           <div className="space-y-2">
