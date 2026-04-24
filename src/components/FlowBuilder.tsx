@@ -439,6 +439,9 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
             agent_id: s.ai_agent_id || null,
             ai_prompt: s.ai_prompt || "",
             max_interactions: s.max_interactions || 5,
+            message_variations: Array.isArray(s.message_variations) ? s.message_variations : [],
+            delay_min_seconds: s.delay_min_seconds ?? null,
+            delay_max_seconds: s.delay_max_seconds ?? null,
             // For blacklist: reason is stored in custom_message
             ...(s.step_type === "blacklist" ? { reason: s.custom_message || "opt-out via fluxo" } : {}),
           },
