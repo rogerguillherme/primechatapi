@@ -1267,8 +1267,8 @@ function BroadcastTab() {
             ) : (
               <AccountSelector
                 accounts={accounts}
-                selectedIds={selectedAccountIds.slice(0, 1)}
-                onToggle={(id) => setSelectedAccountIds([id])}
+                selectedIds={selectedAccountIds}
+                onToggle={(id) => setSelectedAccountIds(new Set([id]))}
                 mode="single"
                 label="Número que vai enviar o fluxo"
               />
