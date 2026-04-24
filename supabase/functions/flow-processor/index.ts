@@ -73,8 +73,12 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        const executionAccountId = typeof exec.metadata?.account_id === "string" && exec.metadata.account_id
+          ? exec.metadata.account_id
+          : null;
+
         if (currentStep.step_type === "no_response" || exec.status === "waiting_no_response") {
-          await advanceToNextStep(exec, currentStep, lead, supabase, supabaseUrl, supabaseKey, accountId);
+          await advanceToNextStep(exec, currentStep, lead, supabase, supabaseUrl, supabaseKey, executionAccountId);
           processed++;
           continue;
         }
@@ -101,7 +105,7 @@ Deno.serve(async (req) => {
             console.log("Lead added to blacklist:", lead.id, "via flow:", exec.flow_id);
           }
 
-          await advanceToNextStep(exec, currentStep, lead, supabase, supabaseUrl, supabaseKey, accountId);
+          await advanceToNextStep(exec, currentStep, lead, supabase, supabaseUrl, supabaseKey, executionAccountId);
           processed++;
           continue;
         }
@@ -111,7 +115,7 @@ Deno.serve(async (req) => {
           currentStep.step_type === "interactive_buttons" ||
           currentStep.step_type === "cta_url"
         ) {
-          const sent = await sendStepMessage(currentStep, lead, supabase, supabaseUrl, supabaseKey, exec.metadata, accountId);
+          const sent = await sendStepMessage(currentStep, lead, supabase, supabaseUrl, supabaseKey, exec.metadata, executionAccountId);
           if (!sent) {
             console.error("Failed to send message for execution:", exec.id);
             await requeueExecution(exec, supabase);
@@ -119,7 +123,7 @@ Deno.serve(async (req) => {
           }
         }
 
-        await advanceToNextStep(exec, currentStep, lead, supabase, supabaseUrl, supabaseKey, accountId);
+        await advanceToNextStep(exec, currentStep, lead, supabase, supabaseUrl, supabaseKey, executionAccountId);
         processed++;
       } catch (stepErr) {
         console.error("Error processing execution:", exec.id, stepErr);
