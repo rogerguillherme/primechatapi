@@ -1847,11 +1847,6 @@ export default function WhatsAppApi() {
     return stopQrPolling;
   }, [qrDialogOpen, stopQrPolling]);
 
-  useEffect(() => {
-    if (!qrDialogOpen) stopQrPolling();
-    return stopQrPolling;
-  }, [qrDialogOpen, stopQrPolling]);
-
   // ── Health monitor: detecta queda de instâncias Evolution e reabre QR automaticamente
   useEffect(() => {
     if (!autoReconnect) {
