@@ -2125,7 +2125,17 @@ export default function WhatsAppApi() {
                     <Label htmlFor="apiKey">D360-API-KEY</Label>
                     <Input id="apiKey" type="password" placeholder="Sua D360-API-KEY..." value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
                     <p className="text-xs text-muted-foreground">
-                      Gere no Hub do 360dialog/360Messenger em <span className="font-mono">API Keys</span>. A chave já identifica o número — Phone Number ID não é necessário.
+                      Gere no Hub do 360dialog em <span className="font-mono">API Keys</span>. A chave já identifica o número — Phone Number ID não é necessário.
+                    </p>
+                  </div>
+                )}
+
+                {provider === "360messenger" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="apiKey">APIKEY do 360Messenger</Label>
+                    <Input id="apiKey" type="password" placeholder="Sua APIKEY do 360Messenger..." value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
+                    <p className="text-xs text-muted-foreground">
+                      Encontre em <span className="font-mono">Product Details → APIKEY</span> no painel 360Messenger. Envia mensagens de texto via <span className="font-mono">api.360messenger.com/v2/sendMessage</span>.
                     </p>
                   </div>
                 )}
@@ -2135,27 +2145,31 @@ export default function WhatsAppApi() {
                   <p className="text-xs text-muted-foreground">
                     {provider === "d360"
                       ? "Cole esta URL no campo 'Webhook URL' do Hub do 360dialog (WhatsApp Accounts → seu número → Webhook). Não é necessário Verify Token."
+                      : provider === "360messenger"
+                      ? "O 360Messenger não exige webhook para envio. Mensagens recebidas precisam ser configuradas no painel deles, se disponível."
                       : "Configure este webhook no App do Facebook para receber mensagens."}
                   </p>
-                  <div className="space-y-2">
-                    <Label>URL do Webhook (Callback URL)</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        value={provider === "d360"
-                          ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/d360-webhook`
-                          : webhookUrl}
-                        readOnly
-                        className="font-mono text-xs"
-                      />
-                      <Button variant="outline" size="icon" onClick={() => {
-                        const url = provider === "d360"
-                          ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/d360-webhook`
-                          : webhookUrl;
-                        navigator.clipboard.writeText(url);
-                        toast.success("URL copiada!");
-                      }}><Copy size={16} /></Button>
+                  {provider !== "360messenger" && (
+                    <div className="space-y-2">
+                      <Label>URL do Webhook (Callback URL)</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          value={provider === "d360"
+                            ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/d360-webhook`
+                            : webhookUrl}
+                          readOnly
+                          className="font-mono text-xs"
+                        />
+                        <Button variant="outline" size="icon" onClick={() => {
+                          const url = provider === "d360"
+                            ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/d360-webhook`
+                            : webhookUrl;
+                          navigator.clipboard.writeText(url);
+                          toast.success("URL copiada!");
+                        }}><Copy size={16} /></Button>
+                      </div>
                     </div>
-                  </div>
+                  )}
                   {provider === "meta_cloud" && (
                   <div className="space-y-2">
                     <Label htmlFor="verifyToken">Verify Token</Label>
