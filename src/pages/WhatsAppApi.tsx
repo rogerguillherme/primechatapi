@@ -1845,12 +1845,15 @@ export default function WhatsAppApi() {
                       <span className="text-lg leading-none">+</span> Nova Conta <ChevronDown size={14} />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-52">
-                    <DropdownMenuItem onClick={() => { resetForm(); setIsAddingAccount(true); }} className="gap-2">
-                      <Key size={14} /> Manual (credenciais)
+                  <DropdownMenuContent align="end" className="w-60">
+                    <DropdownMenuItem onClick={() => { resetForm(); setProvider("meta_cloud"); setIsAddingAccount(true); }} className="gap-2">
+                      <Key size={14} /> Meta Cloud (manual)
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={handleMetaOAuth} className="gap-2">
                       <ExternalLink size={14} /> Conectar via Meta OAuth
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => { resetForm(); setProvider("d360"); setIsAddingAccount(true); }} className="gap-2">
+                      <MessageCircle size={14} /> 360dialog (Messenger)
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
