@@ -143,6 +143,73 @@ export default function Chat() {
     enabled: !!selectedLeadId,
   });
 
+  // AI: per-lead toggle
+  const { data: leadAiEnabled } = useQuery({
+    queryKey: ["lead-ai", selectedLeadId],
+    queryFn: async () => {
+      if (!selectedLeadId) return false;
+      const { data } = await supabase
+        .from("leads")
+        .select("ai_enabled")
+        .eq("id", selectedLeadId)
+        .maybeSingle();
+      return !!data?.ai_enabled;
+    },
+    enabled: !!selectedLeadId,
+  });
+
+  const toggleLeadAi = useMutation({
+    mutationFn: async (next: boolean) => {
+      if (!selectedLeadId) return;
+      const { error } = await supabase
+        .from("leads")
+        .update({ ai_enabled: next })
+        .eq("id", selectedLeadId);
+      if (error) throw error;
+      return next;
+    },
+    onSuccess: (next) => {
+      queryClient.invalidateQueries({ queryKey: ["lead-ai", selectedLeadId] });
+      toast({
+        title: next ? "Agente IA ativado nesta conversa" : "Agente IA desativado nesta conversa",
+      });
+    },
+    onError: () => toast({ title: "Erro ao atualizar agente", variant: "destructive" }),
+  });
+
+  // AI: global mode (off | all | selected)
+  const { data: aiMode } = useQuery({
+    queryKey: ["ai-auto-reply-mode"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("app_settings")
+        .select("value")
+        .eq("key", "ai_auto_reply_mode")
+        .maybeSingle();
+      const v = (data?.value || "off") as "off" | "all" | "selected";
+      return v;
+    },
+  });
+
+  const setAiMode = useMutation({
+    mutationFn: async (mode: "off" | "all" | "selected") => {
+      await supabase.from("app_settings").upsert(
+        { key: "ai_auto_reply_mode", value: mode, updated_at: new Date().toISOString() },
+        { onConflict: "key" }
+      );
+      await supabase.from("app_settings").upsert(
+        { key: "ai_auto_reply_enabled", value: mode === "all" ? "true" : "false", updated_at: new Date().toISOString() },
+        { onConflict: "key" }
+      );
+      return mode;
+    },
+    onSuccess: (mode) => {
+      queryClient.invalidateQueries({ queryKey: ["ai-auto-reply-mode"] });
+      const label = mode === "all" ? "todas as conversas" : mode === "selected" ? "conversas selecionadas" : "desativado";
+      toast({ title: `Agente IA: ${label}` });
+    },
+  });
+
   // Auto-select the most relevant account for the current lead
   useEffect(() => {
     if (selectedAccountId || !selectedLeadId) return;
