@@ -394,7 +394,7 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Lookup per-user event config (custom copy + media)
+        // Lookup per-user event config (custom copy + media + agent)
         let mediaUrl: string | undefined;
         let mediaType: string | undefined;
         let pixMessage: string;
@@ -402,11 +402,18 @@ Deno.serve(async (req) => {
         if (ownerUserId) {
           const { data: cfg } = await supabase
             .from("event_agent_config")
-            .select("active, send_media, media_url, media_type, message_template")
+            .select("active, send_media, media_url, media_type, message_template, agent_id")
             .eq("user_id", ownerUserId)
             .eq("event_type", "pix_generated")
             .maybeSingle();
           eventConfig = cfg;
+        }
+
+        // Activate AI for this lead and bind the configured agent (so follow-up replies are handled by the right agent)
+        if (eventConfig?.active) {
+          const leadUpdate: any = { ai_enabled: true };
+          if (eventConfig.agent_id) leadUpdate.ai_agent_id = eventConfig.agent_id;
+          await supabase.from("leads").update(leadUpdate).eq("id", leadId);
         }
 
         const replaceVars = (tpl: string) => tpl
