@@ -348,10 +348,20 @@ Deno.serve(async (req) => {
 
     if (isPixCreated && leadId && extracted.buyerPhone) {
       try {
-        // Hubla checkout URL: the most reliable link is built from product/offer ID
-        // pay.hub.la/{productId} opens the checkout where the buyer can view the PIX
+        // Build Hubla PIX checkout URL.
+        // Best link = paymentSession.url + "/" + subscriptionId (opens directly the PIX page)
+        // Fallback to paymentSession.url, then to product page.
+        const sessionUrl: string | undefined = invoiceObj?.paymentSession?.url;
+        const subscriptionId: string | undefined = invoiceObj?.subscriptionId;
         const productHublaId = extracted.hublaProductId || invoiceObj?.id;
-        const checkoutUrl = `https://pay.hub.la/${productHublaId}`;
+        let checkoutUrl: string;
+        if (sessionUrl && subscriptionId) {
+          checkoutUrl = `${sessionUrl.replace(/\/$/, "")}/${subscriptionId}`;
+        } else if (sessionUrl) {
+          checkoutUrl = sessionUrl;
+        } else {
+          checkoutUrl = `https://pay.hub.la/${productHublaId}`;
+        }
         const firstName = (extracted.buyerName || "").split(/\s+/)[0] || "amigo(a)";
         const valor = extracted.amount.toLocaleString("pt-BR", {
           style: "currency", currency: "BRL",
