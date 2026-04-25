@@ -333,6 +333,55 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ── AUTO-SEND PIX: When a PIX invoice is created, send checkout link via WhatsApp ──
+    const eventType = payload?.type || "";
+    const isPixCreated =
+      (eventType === "invoice.created" || eventType === "invoice.status_updated") &&
+      (extracted.paymentMethod?.toLowerCase() === "pix") &&
+      (status === "approved" ? false : true) && // skip if already paid
+      (invoice?.status === "unpaid" || invoice?.status === "draft" || invoice?.status === "overdue");
+
+    if (isPixCreated && leadId && extracted.buyerPhone) {
+      try {
+        const checkoutUrl = `https://pay.hub.la/${externalOrderId}`;
+        const firstName = (extracted.buyerName || "").split(/\s+/)[0] || "amigo(a)";
+        const valor = extracted.amount.toLocaleString("pt-BR", {
+          style: "currency", currency: "BRL",
+        });
+        const productLabel = extracted.productName ? ` do *${extracted.productName}*` : "";
+        const pixMessage =
+          `Oi ${firstName}! 👋\n\n` +
+          `Seu PIX${productLabel} foi gerado no valor de *${valor}*.\n\n` +
+          `Pra finalizar é só pagar por aqui 👇\n${checkoutUrl}\n\n` +
+          `Assim que cair a confirmação eu te aviso por aqui! 🚀`;
+
+        // Find the user's default WhatsApp account
+        const { data: account } = await supabase
+          .from("whatsapp_accounts")
+          .select("id")
+          .eq("user_id", (await supabase.from("leads").select("user_id").eq("id", leadId).maybeSingle()).data?.user_id)
+          .eq("is_default", true)
+          .maybeSingle();
+
+        await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/whatsapp-cloud-send`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
+          body: JSON.stringify({
+            phone: extracted.buyerPhone,
+            message: pixMessage,
+            lead_id: leadId,
+            account_id: account?.id || undefined,
+          }),
+        });
+        console.log(`PIX checkout link sent to lead ${leadId} (${extracted.buyerPhone})`);
+      } catch (pixErr) {
+        console.error("Failed to send PIX message (non-fatal):", pixErr);
+      }
+    }
+
     // ── AUTO-TRIGGER: Start matching flows based on event type ──
     const triggerType = mapToFlowTrigger(status, extracted.paymentMethod || null, payload?.type || "");
     if (triggerType && leadId) {
