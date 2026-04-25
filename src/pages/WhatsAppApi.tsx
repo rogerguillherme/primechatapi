@@ -52,6 +52,14 @@ async function resolveQrToDataUrl(raw: string): Promise<string> {
   // Caso contrário, tratamos como payload do QR e geramos a imagem localmente
   return await QRCodeLib.toDataURL(value, { width: 320, margin: 1 });
 }
+
+function normalizePairingCode(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const code = value.trim();
+  // Evolution às vezes devolve o payload bruto do QR em "code"; isso não é código de pareamento.
+  if (!code || code.length > 32 || code.includes("@") || code.includes(",")) return null;
+  return code;
+}
 import { BroadcastQueue } from "@/components/BroadcastQueue";
 import { ContactImporter } from "@/components/ContactImporter";
 import { SendingMetrics } from "@/components/SendingMetrics";
@@ -1781,7 +1789,7 @@ export default function WhatsAppApi() {
         const url = await resolveQrToDataUrl(String(data.qr_code));
         setQrImage(url);
       }
-      if (data?.pairing_code) setQrPairingCode(data.pairing_code);
+      setQrPairingCode(normalizePairingCode(data?.pairing_code));
     } catch (e: any) {
       console.error("QR refresh failed:", e);
     }
@@ -1858,7 +1866,7 @@ export default function WhatsAppApi() {
         const url = await resolveQrToDataUrl(String(data.qr_code));
         setQrImage(url);
       }
-      if (data?.pairing_code) setQrPairingCode(data.pairing_code);
+      setQrPairingCode(normalizePairingCode(data?.pairing_code));
       if (data?.account_id) {
         setQrAccountId(data.account_id);
         setQrMode("existing");
@@ -2526,7 +2534,7 @@ export default function WhatsAppApi() {
 
       {/* ── QR Code Dialog (Evolution) ── */}
       <Dialog open={qrDialogOpen} onOpenChange={setQrDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <QrCode size={20} />
