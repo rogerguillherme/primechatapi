@@ -442,6 +442,8 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
             message_variations: Array.isArray(s.message_variations) ? s.message_variations : [],
             delay_min_seconds: s.delay_min_seconds ?? null,
             delay_max_seconds: s.delay_max_seconds ?? null,
+            media_url: s.media_url ?? null,
+            media_type: s.media_type ?? null,
             // For blacklist: reason is stored in custom_message
             ...(s.step_type === "blacklist" ? { reason: s.custom_message || "opt-out via fluxo" } : {}),
           },
