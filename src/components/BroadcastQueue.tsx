@@ -1014,6 +1014,65 @@ function QueueItemCard({
                 </div>
               )}
 
+              {/* Timing controls */}
+              <div className="space-y-2 rounded-md border border-border/50 bg-background/40 p-2">
+                <div className="flex items-center gap-1.5">
+                  <CalendarClock size={12} className="text-muted-foreground" />
+                  <span className="text-[11px] font-medium">Velocidade de envio</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground">Mín (s)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step={0.5}
+                      value={item.delayMinSeconds}
+                      onChange={(e) => {
+                        const v = Math.max(0, parseFloat(e.target.value) || 0);
+                        onUpdate({
+                          delayMinSeconds: v,
+                          delayMaxSeconds: Math.max(v, item.delayMaxSeconds),
+                        });
+                      }}
+                      className="h-7 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground">Máx (s)</Label>
+                    <Input
+                      type="number"
+                      min={item.delayMinSeconds}
+                      step={0.5}
+                      value={item.delayMaxSeconds}
+                      onChange={(e) =>
+                        onUpdate({
+                          delayMaxSeconds: Math.max(item.delayMinSeconds, parseFloat(e.target.value) || 0),
+                        })
+                      }
+                      className="h-7 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground">Msgs/s</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={300}
+                      value={item.messagesPerSecond}
+                      onChange={(e) =>
+                        onUpdate({ messagesPerSecond: Math.max(1, parseInt(e.target.value) || 1) })
+                      }
+                      className="h-7 text-xs"
+                    />
+                  </div>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Cada envio espera entre {item.delayMinSeconds}s e {item.delayMaxSeconds}s (jitter
+                  aleatório). Limite global: {item.messagesPerSecond} msg/s.
+                </p>
+              </div>
+
               {/* Multi-number */}
               {accounts.length > 1 && (
                 <div className="space-y-2">
