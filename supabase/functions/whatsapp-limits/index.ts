@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
 
     const { data: accounts, error } = await adminClient
       .from("whatsapp_accounts")
-      .select("id, name, phone_number_id, access_token, is_default, business_account_id")
+      .select("id, name, phone_number_id, access_token, is_default, business_account_id, provider")
       .eq("user_id", userId)
       .order("is_default", { ascending: false });
 
@@ -72,6 +72,22 @@ Deno.serve(async (req) => {
 
     const limits = await Promise.all(
       accounts.map(async (acc) => {
+        // Skip non-Meta providers (Evolution, Z-API etc.) — they don't expose Meta limits
+        if (acc.provider && acc.provider !== "meta_cloud") {
+          return {
+            account_id: acc.id,
+            account_name: acc.name,
+            is_default: acc.is_default,
+            provider: acc.provider,
+            phone: null,
+            verified_name: null,
+            quality_rating: null,
+            messaging_limit_tier: null,
+            current_limit: null,
+            error: null,
+          };
+        }
+
         try {
           // Prefer meta_connections token over stored access_token
           const effectiveToken =
@@ -89,6 +105,7 @@ Deno.serve(async (req) => {
             account_id: acc.id,
             account_name: acc.name,
             is_default: acc.is_default,
+            provider: acc.provider || "meta_cloud",
             phone: data.display_phone_number || null,
             verified_name: data.verified_name || null,
             quality_rating: data.quality_rating || null,
@@ -101,6 +118,7 @@ Deno.serve(async (req) => {
             account_id: acc.id,
             account_name: acc.name,
             is_default: acc.is_default,
+            provider: acc.provider || "meta_cloud",
             error: e.message,
           };
         }
