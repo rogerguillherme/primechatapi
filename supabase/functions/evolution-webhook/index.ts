@@ -381,8 +381,97 @@ Deno.serve(async (req) => {
         account_id: account.id,
       });
 
-      // Only trigger flows on real inbound replies
+      // Continue waiting flows on real inbound replies
       if (!fromMe) {
+        const { data: lead } = await supabase
+          .from("leads")
+          .select("id, name, phone")
+          .eq("id", leadId)
+          .maybeSingle();
+
+        if (lead && text) {
+          const { data: executions } = await supabase
+            .from("flow_executions")
+            .select("id, current_step_id, flow_id, metadata")
+            .eq("lead_id", lead.id)
+            .eq("status", "waiting_reply");
+
+          for (const exec of executions || []) {
+            const candidateTriggers = Array.from(new Set([
+              normalizeTriggerValue(text),
+            ].filter(Boolean)));
+
+            let matchedStep: any = await resolveMatchedFlowStep(
+              supabase,
+              exec.flow_id,
+              exec.current_step_id,
+              candidateTriggers,
+            );
+
+            if (!matchedStep) {
+              const { data: conditionSteps } = await supabase
+                .from("flow_steps")
+                .select("*")
+                .eq("flow_id", exec.flow_id)
+                .eq("step_type", "condition");
+
+              const conditionStep = (conditionSteps || []).find((s: any) =>
+                candidateTriggers.includes(normalizeTriggerValue(s.trigger_value))
+              );
+
+              if (conditionStep) {
+                const { data: condChildren } = await supabase
+                  .from("flow_steps")
+                  .select("*")
+                  .eq("flow_id", exec.flow_id)
+                  .eq("parent_step_id", conditionStep.id)
+                  .order("step_order")
+                  .limit(1);
+
+                if (condChildren && condChildren.length > 0) {
+                  matchedStep = condChildren[0];
+                }
+              }
+            }
+
+            console.log("Evolution flow reply resolution:", JSON.stringify({
+              executionId: exec.id,
+              currentStepId: exec.current_step_id,
+              candidateTriggers,
+              matchedStepId: matchedStep?.id || null,
+              matchedStepType: matchedStep?.step_type || null,
+            }));
+
+            if (matchedStep) {
+              if (matchedStep.step_type === "condition") {
+                const { data: condChildren } = await supabase
+                  .from("flow_steps")
+                  .select("*")
+                  .eq("flow_id", exec.flow_id)
+                  .eq("parent_step_id", matchedStep.id)
+                  .order("step_order")
+                  .limit(1);
+
+                if (condChildren && condChildren.length > 0) {
+                  await processFlowStep(condChildren[0], exec, lead, supabase, account.id);
+                } else {
+                  await supabase.from("flow_executions").update({
+                    status: "completed",
+                    updated_at: new Date().toISOString(),
+                  }).eq("id", exec.id);
+                }
+              } else {
+                await processFlowStep(matchedStep, exec, lead, supabase, account.id);
+              }
+            } else {
+              await supabase.from("flow_executions").update({
+                status: "waiting_reply",
+                updated_at: new Date().toISOString(),
+              }).eq("id", exec.id);
+            }
+          }
+        }
+
         try {
           await fetch(`${supabaseUrl}/functions/v1/flow-processor`, {
             method: "POST",
