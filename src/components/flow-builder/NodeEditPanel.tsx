@@ -65,12 +65,26 @@ export function NodeEditPanel({ node, templates, onUpdate, onClose, variationEna
               </Select>
             </div>
             {!data.template_id && (
+              <ImageUploadField
+                mediaUrl={(data.media_url as string) || null}
+                onChange={(url) =>
+                  onUpdate({ media_url: url, media_type: url ? "image" : null })
+                }
+              />
+            )}
+            {!data.template_id && (
               <div className="space-y-2">
-                <Label className="text-xs">Mensagem</Label>
+                <Label className="text-xs">
+                  {data.media_url ? "Legenda da imagem (opcional)" : "Mensagem"}
+                </Label>
                 <textarea
                   value={(data.custom_message as string) || ""}
                   onChange={(e) => onUpdate({ custom_message: e.target.value })}
-                  placeholder="Digite a mensagem... (use {nome} para personalizar)"
+                  placeholder={
+                    data.media_url
+                      ? "Texto que aparecerá abaixo da imagem..."
+                      : "Digite a mensagem... (use {nome} para personalizar)"
+                  }
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm min-h-[80px] resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   rows={3}
                 />
