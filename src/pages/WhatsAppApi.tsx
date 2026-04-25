@@ -52,6 +52,14 @@ async function resolveQrToDataUrl(raw: string): Promise<string> {
   // Caso contrário, tratamos como payload do QR e geramos a imagem localmente
   return await QRCodeLib.toDataURL(value, { width: 320, margin: 1 });
 }
+
+function normalizePairingCode(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const code = value.trim();
+  // Evolution às vezes devolve o payload bruto do QR em "code"; isso não é código de pareamento.
+  if (!code || code.length > 32 || code.includes("@") || code.includes(",")) return null;
+  return code;
+}
 import { BroadcastQueue } from "@/components/BroadcastQueue";
 import { ContactImporter } from "@/components/ContactImporter";
 import { SendingMetrics } from "@/components/SendingMetrics";
