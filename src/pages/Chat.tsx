@@ -16,6 +16,7 @@ import {
   Search, Send, MessageSquare, FileText, User, Smile, Check, CheckCheck,
   MoreVertical, Phone, Video, ArrowLeft, Image, Paperclip, Mic,
   ShoppingBag, Clock, MessageCircleReply, RotateCcw, AlertCircle,
+  Bot, Users, PowerOff,
 } from "lucide-react";
 import { format, isToday, isYesterday, isSameDay, addDays, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -140,6 +141,73 @@ export default function Chat() {
       return data || [];
     },
     enabled: !!selectedLeadId,
+  });
+
+  // AI: per-lead toggle
+  const { data: leadAiEnabled } = useQuery({
+    queryKey: ["lead-ai", selectedLeadId],
+    queryFn: async () => {
+      if (!selectedLeadId) return false;
+      const { data } = await supabase
+        .from("leads")
+        .select("ai_enabled")
+        .eq("id", selectedLeadId)
+        .maybeSingle();
+      return !!data?.ai_enabled;
+    },
+    enabled: !!selectedLeadId,
+  });
+
+  const toggleLeadAi = useMutation({
+    mutationFn: async (next: boolean) => {
+      if (!selectedLeadId) return;
+      const { error } = await supabase
+        .from("leads")
+        .update({ ai_enabled: next })
+        .eq("id", selectedLeadId);
+      if (error) throw error;
+      return next;
+    },
+    onSuccess: (next) => {
+      queryClient.invalidateQueries({ queryKey: ["lead-ai", selectedLeadId] });
+      toast({
+        title: next ? "Agente IA ativado nesta conversa" : "Agente IA desativado nesta conversa",
+      });
+    },
+    onError: () => toast({ title: "Erro ao atualizar agente", variant: "destructive" }),
+  });
+
+  // AI: global mode (off | all | selected)
+  const { data: aiMode } = useQuery({
+    queryKey: ["ai-auto-reply-mode"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("app_settings")
+        .select("value")
+        .eq("key", "ai_auto_reply_mode")
+        .maybeSingle();
+      const v = (data?.value || "off") as "off" | "all" | "selected";
+      return v;
+    },
+  });
+
+  const setAiMode = useMutation({
+    mutationFn: async (mode: "off" | "all" | "selected") => {
+      await supabase.from("app_settings").upsert(
+        { key: "ai_auto_reply_mode", value: mode, updated_at: new Date().toISOString() },
+        { onConflict: "key" }
+      );
+      await supabase.from("app_settings").upsert(
+        { key: "ai_auto_reply_enabled", value: mode === "all" ? "true" : "false", updated_at: new Date().toISOString() },
+        { onConflict: "key" }
+      );
+      return mode;
+    },
+    onSuccess: (mode) => {
+      queryClient.invalidateQueries({ queryKey: ["ai-auto-reply-mode"] });
+      const label = mode === "all" ? "todas as conversas" : mode === "selected" ? "conversas selecionadas" : "desativado";
+      toast({ title: `Agente IA: ${label}` });
+    },
   });
 
   // Auto-select the most relevant account for the current lead
@@ -573,12 +641,80 @@ export default function Chat() {
                 </select>
               )}
               <div className="flex items-center gap-1">
+                {/* Per-conversation AI toggle */}
+                <button
+                  onClick={() => toggleLeadAi.mutate(!leadAiEnabled)}
+                  disabled={toggleLeadAi.isPending}
+                  title={
+                    aiMode === "all"
+                      ? "Agente IA respondendo todas as conversas"
+                      : leadAiEnabled
+                      ? "Agente IA ativo nesta conversa — clique para desativar"
+                      : "Ativar agente IA nesta conversa"
+                  }
+                  className={cn(
+                    "p-2 rounded-full transition-colors",
+                    leadAiEnabled || aiMode === "all"
+                      ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30"
+                      : "hover:bg-white/10 text-sidebar-foreground/70 hover:text-sidebar-foreground"
+                  )}
+                >
+                  <Bot size={18} />
+                </button>
+
                 <button className="p-2 rounded-full hover:bg-white/10 text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors">
                   <Search size={18} />
                 </button>
-                <button className="p-2 rounded-full hover:bg-white/10 text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors">
-                  <MoreVertical size={18} />
-                </button>
+
+                {/* Global AI mode menu */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      title="Configurar agente IA"
+                      className="p-2 rounded-full hover:bg-white/10 text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors"
+                    >
+                      <MoreVertical size={18} />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-64">
+                    <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                      Agente IA — modo global
+                    </div>
+                    <DropdownMenuItem
+                      onClick={() => setAiMode.mutate("off")}
+                      className={cn("gap-2", aiMode === "off" && "bg-accent")}
+                    >
+                      <PowerOff size={14} />
+                      <div className="flex-1">
+                        <p className="text-sm">Desativado</p>
+                        <p className="text-[11px] text-muted-foreground">Não responde nenhuma conversa</p>
+                      </div>
+                      {aiMode === "off" && <Check size={14} />}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setAiMode.mutate("all")}
+                      className={cn("gap-2", aiMode === "all" && "bg-accent")}
+                    >
+                      <Users size={14} />
+                      <div className="flex-1">
+                        <p className="text-sm">Todas as conversas</p>
+                        <p className="text-[11px] text-muted-foreground">Responde qualquer mensagem recebida</p>
+                      </div>
+                      {aiMode === "all" && <Check size={14} />}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setAiMode.mutate("selected")}
+                      className={cn("gap-2", aiMode === "selected" && "bg-accent")}
+                    >
+                      <MessageSquare size={14} />
+                      <div className="flex-1">
+                        <p className="text-sm">Conversas selecionadas</p>
+                        <p className="text-[11px] text-muted-foreground">Apenas onde a IA foi ativada</p>
+                      </div>
+                      {aiMode === "selected" && <Check size={14} />}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
 
