@@ -372,12 +372,13 @@ Deno.serve(async (req) => {
             const dlBody = await dlRes.json();
             const base64: string | undefined = dlBody?.base64 || dlBody?.media?.base64 || dlBody?.data;
             if (base64) {
-              const ext = (mimetype.split("/")[1] || "bin").split(";")[0];
+              const mt = mimetype || "application/octet-stream";
+              const ext = (mt.split("/")[1] || "bin").split(";")[0];
               const path = `evolution/${account.user_id}/${Date.now()}-${messageId}.${ext}`;
               const bin = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
               const { error: upErr } = await supabase.storage
                 .from("chat-media")
-                .upload(path, bin, { contentType: mimetype, upsert: true });
+                .upload(path, bin, { contentType: mt, upsert: true });
               if (!upErr) {
                 const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path);
                 mediaUrl = pub.publicUrl;
