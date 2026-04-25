@@ -372,16 +372,19 @@ Deno.serve(async (req) => {
         (Date.now() - new Date(lead.last_inbound_at).getTime()) < 24 * 60 * 60 * 1000;
 
       try {
-        // Resolve template params
-        const resolvedParams = (templateParams as any[]).map((p: any) => {
+        // Resolve template params with per-message uniqueness
+        const paramArr = templateParams as any[];
+        const resolvedParams = paramArr.map((p: any, idx: number) => {
           const text = typeof p === "string" ? p : p?.text || "";
+          const isLast = idx === paramArr.length - 1;
+          const baseText = (text
+            .replace(/\{nome\}/g, varyName(lead.name))
+            .replace(/\{codigo\}/g, "-")
+            .replace(/\{\{\d+\}\}/g, "-")
+            .trim() || "-");
           return {
             type: "text",
-            text: text
-              .replace(/\{nome\}/g, lead.name.split(" ")[0] || "-")
-              .replace(/\{codigo\}/g, "-")
-              .replace(/\{\{\d+\}\}/g, "-")
-              .trim() || "-",
+            text: makeParamUnique(baseText, isLast),
           };
         });
 
