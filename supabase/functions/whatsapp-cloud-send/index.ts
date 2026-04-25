@@ -215,40 +215,28 @@ Deno.serve(async (req) => {
       let logContent = outgoingText;
 
       // Decide endpoint based on payload type
+      // NOTE: Evolution QR-Code accounts accept sendButtons (201 PENDING) but WhatsApp
+      // silently drops the resulting interactiveMessage — it never reaches the device.
+      // To guarantee delivery on QR-Code instances we send a formatted text fallback.
       if (interactive_buttons && Array.isArray(interactive_buttons) && interactive_buttons.length > 0) {
-        // Use Evolution's native sendButtons with reply/url/call types
         const bodyText = (outgoingText || "Escolha uma opção:").trim();
-        const evoButtons = interactive_buttons.slice(0, 3).map((btn: any, i: number) => {
-          const display = (btn.title || `Opção ${i + 1}`).substring(0, 20);
-          if (btn.url) {
-            return { type: "url", displayText: display, url: btn.url };
-          }
-          if (btn.phoneNumber || btn.phone) {
-            return { type: "call", displayText: display, phoneNumber: btn.phoneNumber || btn.phone };
-          }
-          return { type: "reply", displayText: display, id: btn.id || `btn_${i + 1}` };
-        });
-        endpoint = `${evoServerUrl}/message/sendButtons/${evoInstance}`;
-        evoBody = {
-          number: cleanPhone,
-          title: bodyText.substring(0, 60),
-          description: bodyText,
-          footer: " ",
-          buttons: evoButtons,
-        };
+        const optionsList = interactive_buttons
+          .slice(0, 10)
+          .map((btn: any, i: number) => {
+            const label = btn.title || `Opção ${i + 1}`;
+            return btn.url ? `*${i + 1}*. ${label} → ${btn.url}` : `*${i + 1}*. ${label}`;
+          })
+          .join("\n");
+        const fullText = `${bodyText}\n\n${optionsList}\n\n_Responda com o número da opção._`;
+        endpoint = `${evoServerUrl}/message/sendText/${evoInstance}`;
+        evoBody = { number: cleanPhone, text: fullText, linkPreview: true };
         logContent = `🔘 ${bodyText}`;
       } else if (cta_url) {
-        // Send as a single-button URL message via sendButtons (real clickable button)
         const bodyText = (outgoingText || "Acesse o link abaixo:").trim();
-        const display = (cta_url.display_text || "Acessar").substring(0, 20);
-        endpoint = `${evoServerUrl}/message/sendButtons/${evoInstance}`;
-        evoBody = {
-          number: cleanPhone,
-          title: bodyText.substring(0, 60),
-          description: bodyText,
-          footer: " ",
-          buttons: [{ type: "url", displayText: display, url: cta_url.url }],
-        };
+        const display = cta_url.display_text || "Acessar";
+        const fullText = `${bodyText}\n\n👉 *${display}*\n${cta_url.url}`;
+        endpoint = `${evoServerUrl}/message/sendText/${evoInstance}`;
+        evoBody = { number: cleanPhone, text: fullText, linkPreview: true };
         logContent = `🔗 ${bodyText}`;
       } else if (media_url && media_type) {
         endpoint = `${evoServerUrl}/message/sendMedia/${evoInstance}`;
