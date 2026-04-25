@@ -313,7 +313,16 @@ async function sendStepMessage(
     expectedLogContent = body.message;
   }
 
-  if (!body.message && !body.template_name && !body.interactive_buttons && !body.cta_url) {
+  // Attach media if present (works as image-only or image + caption)
+  if (step.step_type === "message" && step.media_url) {
+    body.media_url = step.media_url;
+    body.media_type = step.media_type || "image";
+    if (!expectedLogContent) {
+      expectedLogContent = body.media_type === "image" ? "📷 Imagem" : "📎 Arquivo";
+    }
+  }
+
+  if (!body.message && !body.template_name && !body.interactive_buttons && !body.cta_url && !body.media_url) {
     console.error("No message to send for step:", step.id);
     return false;
   }

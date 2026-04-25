@@ -55,7 +55,7 @@ const defaultEdgeOptions = {
 
 const createDefaultNodeData = (type: InsertableStepType): Record<string, unknown> => {
   if (type === "message") {
-    return { custom_message: "", template_id: null };
+    return { custom_message: "", template_id: null, media_url: null, media_type: null };
   }
   if (type === "delay") {
     return { delay_minutes: 60 };
