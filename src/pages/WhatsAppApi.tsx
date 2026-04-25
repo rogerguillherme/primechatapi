@@ -38,6 +38,20 @@ import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { FlowBuilder } from "@/components/FlowBuilder";
 import { TemplateManager } from "@/components/TemplateManager";
+import QRCodeLib from "qrcode";
+
+// Converte o retorno do Evolution em um data-url renderizável.
+// O Evolution pode devolver: base64 PNG puro, data:image/png;base64,..., ou apenas a string do QR (ex: "2@AQUMum+...").
+async function resolveQrToDataUrl(raw: string): Promise<string> {
+  const value = raw.trim();
+  if (value.startsWith("data:image")) return value;
+  // Heurística: base64 PNG puro costuma começar com "iVBOR"
+  if (/^[A-Za-z0-9+/=]+$/.test(value) && value.length > 200 && value.startsWith("iVBOR")) {
+    return `data:image/png;base64,${value}`;
+  }
+  // Caso contrário, tratamos como payload do QR e geramos a imagem localmente
+  return await QRCodeLib.toDataURL(value, { width: 320, margin: 1 });
+}
 import { BroadcastQueue } from "@/components/BroadcastQueue";
 import { ContactImporter } from "@/components/ContactImporter";
 import { SendingMetrics } from "@/components/SendingMetrics";
@@ -1764,8 +1778,8 @@ export default function WhatsAppApi() {
     try {
       const data = await invokeEvolutionInstance({ action: "connect", account_id: accountId });
       if (data?.qr_code) {
-        const qr = String(data.qr_code);
-        setQrImage(qr.startsWith("data:") ? qr : `data:image/png;base64,${qr}`);
+        const url = await resolveQrToDataUrl(String(data.qr_code));
+        setQrImage(url);
       }
       if (data?.pairing_code) setQrPairingCode(data.pairing_code);
     } catch (e: any) {
@@ -1841,8 +1855,8 @@ export default function WhatsAppApi() {
       queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
 
       if (data?.qr_code) {
-        const qr = String(data.qr_code);
-        setQrImage(qr.startsWith("data:") ? qr : `data:image/png;base64,${qr}`);
+        const url = await resolveQrToDataUrl(String(data.qr_code));
+        setQrImage(url);
       }
       if (data?.pairing_code) setQrPairingCode(data.pairing_code);
       if (data?.account_id) {
