@@ -293,13 +293,34 @@ Deno.serve(async (req) => {
         });
       }
 
-      const phone = remoteJid.split("@")[0].replace(/\D/g, "");
-      if (!phone) {
+      const rawPhone = remoteJid.split("@")[0].replace(/\D/g, "");
+      if (!rawPhone) {
         return new Response(JSON.stringify({ ok: true, skipped: "noPhone" }), {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
+      // Brazilian numbers: handle the 9th digit ambiguity.
+      // Mobile format with 9: 55 + DDD(2) + 9 + 8 digits = 13 chars
+      // Without 9: 55 + DDD(2) + 8 digits = 12 chars
+      // We generate both variants to match leads stored either way.
+      const phoneVariants: string[] = [rawPhone];
+      if (rawPhone.startsWith("55") && rawPhone.length === 12) {
+        // missing 9th digit -> add it
+        const ddd = rawPhone.substring(2, 4);
+        const rest = rawPhone.substring(4);
+        phoneVariants.push(`55${ddd}9${rest}`);
+      } else if (rawPhone.startsWith("55") && rawPhone.length === 13) {
+        const ddd = rawPhone.substring(2, 4);
+        const ninth = rawPhone.substring(4, 5);
+        const rest = rawPhone.substring(5);
+        if (ninth === "9") {
+          phoneVariants.push(`55${ddd}${rest}`);
+        }
+      }
+      // canonical phone used for new leads = the longer (with 9) variant when applicable
+      const phone = phoneVariants.length > 1 ? phoneVariants[1] : rawPhone;
 
       // Dedupe: skip if we already stored this message id (avoids double when our own send echoes back)
       if (messageId) {
