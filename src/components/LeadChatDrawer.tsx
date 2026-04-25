@@ -270,6 +270,31 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
                 <p className="font-medium text-[15px] text-sidebar-foreground truncate">{lead.name}</p>
                 <p className="text-xs text-sidebar-foreground/50">{lead.phone}</p>
               </div>
+              {aiMode === "selected" && (
+                <button
+                  type="button"
+                  onClick={() => toggleAiMutation.mutate(!leadAi)}
+                  disabled={toggleAiMutation.isPending}
+                  title={leadAi ? "Agente IA ativo nesta conversa" : "Ativar agente IA nesta conversa"}
+                  className={cn(
+                    "h-8 px-2 rounded-md inline-flex items-center gap-1.5 text-xs font-medium transition-colors border",
+                    leadAi
+                      ? "bg-violet-500/15 text-violet-300 border-violet-500/30 hover:bg-violet-500/25"
+                      : "bg-transparent text-sidebar-foreground/70 border-sidebar-foreground/20 hover:bg-sidebar-foreground/10"
+                  )}
+                >
+                  <Bot size={14} />
+                  IA {leadAi ? "ON" : "OFF"}
+                </button>
+              )}
+              {aiMode === "all" && (
+                <span
+                  title="Agente IA respondendo todas as conversas"
+                  className="h-8 px-2 rounded-md inline-flex items-center gap-1.5 text-xs font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                >
+                  <Bot size={14} /> IA ON
+                </span>
+              )}
               {accounts.length > 1 && (
                 <select
                   value={selectedAccountId || ""}
