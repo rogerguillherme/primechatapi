@@ -420,7 +420,7 @@ Deno.serve(async (req) => {
       const { data: leadData } = lead_id
         ? await supabase.from("leads").select("name").eq("id", lead_id).maybeSingle()
         : { data: null };
-      const leadFirstName = (leadData?.name || "").split(" ")[0] || "";
+      const leadFirstName = varyName(leadData?.name);
 
       let finalParams = template_params;
       let resolvedLanguage = template_language || templateRecord.template_language;
@@ -450,14 +450,18 @@ Deno.serve(async (req) => {
       };
       if (finalParams && Array.isArray(finalParams) && finalParams.length > 0) {
         const fallbackName = leadFirstName || "amigo(a)";
-        const mappedParams = finalParams
+        const rawParams = finalParams
           .map((p: any) => typeof p === "string" ? { type: "text", text: p || fallbackName } : { type: "text", text: p.text || fallbackName })
           .map((p: any) => ({
             ...p,
-            // Replace unresolved {{N}} placeholders with the lead's first name
             text: p.text.replace(/\{\{\d+\}\}/g, fallbackName).trim() || fallbackName,
           }))
           .filter((p: any) => p.text && p.text.trim() !== "");
+        // Append unique invisible signature ONLY to the last param so each
+        // outgoing template message has a unique payload (anti-fingerprint).
+        const mappedParams = rawParams.map((p: any, idx: number) =>
+          idx === rawParams.length - 1 ? { ...p, text: withUniqueSignature(p.text) } : p
+        );
         if (mappedParams.length > 0) {
           templateBody.template.components = [{ type: "body", parameters: mappedParams }];
         }
