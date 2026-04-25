@@ -503,6 +503,56 @@ export type Database = {
           },
         ]
       }
+      event_agent_config: {
+        Row: {
+          active: boolean
+          agent_id: string | null
+          created_at: string
+          event_type: string
+          id: string
+          media_type: string | null
+          media_url: string | null
+          message_template: string | null
+          send_media: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          agent_id?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          media_type?: string | null
+          media_url?: string | null
+          message_template?: string | null
+          send_media?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          agent_id?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          media_type?: string | null
+          media_url?: string | null
+          message_template?: string | null
+          send_media?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_agent_config_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       flow_executions: {
         Row: {
           current_step_id: string | null

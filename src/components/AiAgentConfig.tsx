@@ -8,7 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Bot, User, FileText, HelpCircle, FolderOpen, Save, Volume2, Plus, Trash2, Upload, ArrowLeft, ChevronRight, Play, Pause } from "lucide-react";
+import { Bot, User, FileText, HelpCircle, FolderOpen, Save, Volume2, Plus, Trash2, Upload, ArrowLeft, ChevronRight, Play, Pause, Zap } from "lucide-react";
+import { EventAgentMapping } from "@/components/EventAgentMapping";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -89,67 +90,82 @@ function AgentListView({ onEdit }: { onEdit: (agent: AiAgent | null) => void }) 
             <Bot className="text-primary" size={24} />
             Agentes IA
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">Crie e gerencie seus agentes de atendimento</p>
+          <p className="text-sm text-muted-foreground mt-1">Crie e gerencie seus agentes de atendimento e eventos</p>
         </div>
-        <Button size="sm" onClick={() => onEdit(null)}>
-          <Plus size={14} /> Novo Agente
-        </Button>
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <p className="text-sm text-muted-foreground text-center py-8">Carregando...</p>
-          ) : !agents?.length ? (
-            <div className="text-center py-12 space-y-3">
-              <Bot size={40} className="mx-auto text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">Nenhum agente criado ainda.</p>
-              <Button variant="outline" size="sm" onClick={() => onEdit(null)}>
-                Criar primeiro agente
-              </Button>
-            </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {agents.map((agent) => (
-                <div key={agent.id} className="flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors">
-                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Bot size={16} className="text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium truncate">{agent.name}</p>
-                      <Badge variant={agent.active ? "default" : "secondary"} className="text-[10px]">
-                        {agent.active ? "Ativo" : "Inativo"}
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground truncate mt-0.5">
-                      {agent.identity || "Sem identidade definida"}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost" size="icon" className="h-8 w-8"
-                      onClick={() => toggleActive.mutate({ id: agent.id, active: !agent.active })}
-                    >
-                      {agent.active ? <Pause size={14} /> : <Play size={14} />}
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(agent)}>
-                      <ChevronRight size={14} />
-                    </Button>
-                    <Button
-                      variant="ghost" size="icon"
-                      className="h-8 w-8 text-destructive hover:text-destructive"
-                      onClick={() => { if (confirm("Remover agente?")) deleteAgent.mutate(agent.id); }}
-                    >
-                      <Trash2 size={14} />
-                    </Button>
-                  </div>
+      <Tabs defaultValue="agents" className="w-full">
+        <TabsList>
+          <TabsTrigger value="agents" className="gap-2"><Bot size={14} /> Agentes</TabsTrigger>
+          <TabsTrigger value="events" className="gap-2"><Zap size={14} /> Eventos</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="agents" className="mt-4 space-y-4">
+          <div className="flex justify-end">
+            <Button size="sm" onClick={() => onEdit(null)}>
+              <Plus size={14} /> Novo Agente
+            </Button>
+          </div>
+          <Card>
+            <CardContent className="p-0">
+              {isLoading ? (
+                <p className="text-sm text-muted-foreground text-center py-8">Carregando...</p>
+              ) : !agents?.length ? (
+                <div className="text-center py-12 space-y-3">
+                  <Bot size={40} className="mx-auto text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">Nenhum agente criado ainda.</p>
+                  <Button variant="outline" size="sm" onClick={() => onEdit(null)}>
+                    Criar primeiro agente
+                  </Button>
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              ) : (
+                <div className="divide-y divide-border">
+                  {agents.map((agent) => (
+                    <div key={agent.id} className="flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Bot size={16} className="text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium truncate">{agent.name}</p>
+                          <Badge variant={agent.active ? "default" : "secondary"} className="text-[10px]">
+                            {agent.active ? "Ativo" : "Inativo"}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate mt-0.5">
+                          {agent.identity || "Sem identidade definida"}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost" size="icon" className="h-8 w-8"
+                          onClick={() => toggleActive.mutate({ id: agent.id, active: !agent.active })}
+                        >
+                          {agent.active ? <Pause size={14} /> : <Play size={14} />}
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(agent)}>
+                          <ChevronRight size={14} />
+                        </Button>
+                        <Button
+                          variant="ghost" size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          onClick={() => { if (confirm("Remover agente?")) deleteAgent.mutate(agent.id); }}
+                        >
+                          <Trash2 size={14} />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="events" className="mt-4">
+          <EventAgentMapping />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -349,8 +349,6 @@ Deno.serve(async (req) => {
     if (isPixCreated && leadId && extracted.buyerPhone) {
       try {
         // Build Hubla PIX checkout URL.
-        // Best link = paymentSession.url + "/" + subscriptionId (opens directly the PIX page)
-        // Fallback to paymentSession.url, then to product page.
         const sessionUrl: string | undefined = invoiceObj?.paymentSession?.url;
         const subscriptionId: string | undefined = invoiceObj?.subscriptionId;
         const productHublaId = extracted.hublaProductId || invoiceObj?.id;
@@ -366,12 +364,6 @@ Deno.serve(async (req) => {
         const valor = extracted.amount.toLocaleString("pt-BR", {
           style: "currency", currency: "BRL",
         });
-        const productLabel = extracted.productName ? ` do *${extracted.productName}*` : "";
-        const pixMessage =
-          `Oi ${firstName}! 👋\n\n` +
-          `Seu PIX${productLabel} foi gerado no valor de *${valor}*.\n\n` +
-          `Pra finalizar é só pagar por aqui 👇\n${checkoutUrl}\n\n` +
-          `Assim que cair a confirmação eu te aviso por aqui! 🚀`;
 
         // Find the lead's owner and their default WhatsApp account
         const { data: leadOwner } = await supabase
@@ -381,25 +373,62 @@ Deno.serve(async (req) => {
           .maybeSingle();
 
         let accountId: string | undefined;
-        if (leadOwner?.user_id) {
+        let ownerUserId: string | undefined = leadOwner?.user_id;
+        if (ownerUserId) {
           const { data: account } = await supabase
             .from("whatsapp_accounts")
             .select("id")
-            .eq("user_id", leadOwner.user_id)
+            .eq("user_id", ownerUserId)
             .eq("is_default", true)
             .maybeSingle();
           accountId = account?.id;
 
-          // Fallback: any account from the same user
           if (!accountId) {
             const { data: anyAccount } = await supabase
               .from("whatsapp_accounts")
               .select("id")
-              .eq("user_id", leadOwner.user_id)
+              .eq("user_id", ownerUserId)
               .limit(1)
               .maybeSingle();
             accountId = anyAccount?.id;
           }
+        }
+
+        // Lookup per-user event config (custom copy + media)
+        let mediaUrl: string | undefined;
+        let mediaType: string | undefined;
+        let pixMessage: string;
+        let eventConfig: any = null;
+        if (ownerUserId) {
+          const { data: cfg } = await supabase
+            .from("event_agent_config")
+            .select("active, send_media, media_url, media_type, message_template")
+            .eq("user_id", ownerUserId)
+            .eq("event_type", "pix_generated")
+            .maybeSingle();
+          eventConfig = cfg;
+        }
+
+        const replaceVars = (tpl: string) => tpl
+          .replaceAll("{nome}", firstName)
+          .replaceAll("{name}", firstName)
+          .replaceAll("{link}", checkoutUrl)
+          .replaceAll("{valor}", valor)
+          .replaceAll("{produto}", extracted.productName || "");
+
+        if (eventConfig && eventConfig.active && eventConfig.message_template) {
+          pixMessage = replaceVars(eventConfig.message_template);
+          if (eventConfig.send_media && eventConfig.media_url) {
+            mediaUrl = eventConfig.media_url;
+            mediaType = eventConfig.media_type || "image";
+          }
+        } else {
+          const productLabel = extracted.productName ? ` do *${extracted.productName}*` : "";
+          pixMessage =
+            `Oi ${firstName}! 👋\n\n` +
+            `Seu PIX${productLabel} foi gerado no valor de *${valor}*.\n\n` +
+            `Pra finalizar é só pagar por aqui 👇\n${checkoutUrl}\n\n` +
+            `Assim que cair a confirmação eu te aviso por aqui! 🚀`;
         }
 
         const sendRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/whatsapp-cloud-send`, {
@@ -413,10 +442,12 @@ Deno.serve(async (req) => {
             message: pixMessage,
             lead_id: leadId,
             account_id: accountId,
+            media_url: mediaUrl,
+            media_type: mediaType,
           }),
         });
         const sendBody = await sendRes.text();
-        console.log(`[PIX-SEND] status=${sendRes.status} account=${accountId} body=${sendBody.slice(0, 300)}`);
+        console.log(`[PIX-SEND] status=${sendRes.status} account=${accountId} media=${mediaUrl ? "yes" : "no"} body=${sendBody.slice(0, 300)}`);
       } catch (pixErr) {
         console.error("Failed to send PIX message (non-fatal):", pixErr);
       }
