@@ -1778,8 +1778,8 @@ export default function WhatsAppApi() {
     try {
       const data = await invokeEvolutionInstance({ action: "connect", account_id: accountId });
       if (data?.qr_code) {
-        const qr = String(data.qr_code);
-        setQrImage(qr.startsWith("data:") ? qr : `data:image/png;base64,${qr}`);
+        const url = await resolveQrToDataUrl(String(data.qr_code));
+        setQrImage(url);
       }
       if (data?.pairing_code) setQrPairingCode(data.pairing_code);
     } catch (e: any) {
