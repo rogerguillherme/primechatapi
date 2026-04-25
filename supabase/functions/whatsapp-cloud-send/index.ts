@@ -216,20 +216,16 @@ Deno.serve(async (req) => {
 
       // Decide endpoint based on payload type
       if (interactive_buttons && Array.isArray(interactive_buttons) && interactive_buttons.length > 0) {
-        // Evolution sendButtons requires non-empty 'title' otherwise WhatsApp drops the message silently
+        // Baileys/Evolution sends buttons as `interactiveMessage` which modern WhatsApp client
+        // silently drops on personal numbers. Convert to numbered text list — guaranteed delivery.
         const bodyText = (outgoingText || "Escolha uma opção:").trim();
-        endpoint = `${evoServerUrl}/message/sendButtons/${evoInstance}`;
-        evoBody = {
-          number: cleanPhone,
-          title: bodyText,
-          description: bodyText,
-          footer: " ",
-          buttons: interactive_buttons.slice(0, 3).map((btn: any, i: number) => ({
-            type: "reply",
-            displayText: (btn.title || `Opção ${i + 1}`).substring(0, 40),
-            id: btn.id || `btn_${i}`,
-          })),
-        };
+        const optionsList = interactive_buttons
+          .slice(0, 10)
+          .map((btn: any, i: number) => `*${i + 1}*. ${btn.title || `Opção ${i + 1}`}`)
+          .join("\n");
+        const fullText = `${bodyText}\n\n${optionsList}\n\n_Responda com o número da opção._`;
+        endpoint = `${evoServerUrl}/message/sendText/${evoInstance}`;
+        evoBody = { number: cleanPhone, text: fullText };
         logContent = `🔘 ${bodyText}`;
       } else if (cta_url) {
         // Evolution doesn't have a native CTA; send as text + URL
