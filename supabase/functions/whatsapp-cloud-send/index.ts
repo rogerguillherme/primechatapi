@@ -227,11 +227,13 @@ Deno.serve(async (req) => {
           const { data: leadData } = lead_id
             ? await supabase.from("leads").select("name").eq("id", lead_id).maybeSingle()
             : { data: null };
-          const firstName = (leadData?.name || "").split(" ")[0] || "amigo(a)";
-          outgoingText = String(templateContentRecord.content)
-            .replace(/\{nome\}/gi, firstName)
-            .replace(/\{\{1\}\}/g, firstName)
-            .replace(/\{codigo\}/gi, "-");
+          const firstName = varyName(leadData?.name);
+          outgoingText = withUniqueSignature(
+            String(templateContentRecord.content)
+              .replace(/\{nome\}/gi, firstName)
+              .replace(/\{\{1\}\}/g, firstName)
+              .replace(/\{codigo\}/gi, "-")
+          );
         }
       }
 
