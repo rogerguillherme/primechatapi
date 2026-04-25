@@ -6,6 +6,36 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// ============================================================
+// UNIQUENESS HELPERS — anti-spam / anti-duplicate detection
+// Each outgoing message gets a unique invisible signature so
+// providers cannot fingerprint identical payloads.
+// ============================================================
+const ZW_CHARS = ["\u200B", "\u200C", "\u200D", "\u2060"];
+
+function uniqueZeroWidthSuffix(len = 8): string {
+  let s = "";
+  for (let i = 0; i < len; i++) s += ZW_CHARS[Math.floor(Math.random() * ZW_CHARS.length)];
+  return s;
+}
+
+function varyName(rawName: string | null | undefined): string {
+  const first = (rawName || "").trim().split(/\s+/)[0] || "";
+  if (!first) return "amigo(a)";
+  const variations = [
+    first,
+    first.toLowerCase(),
+    first.charAt(0).toUpperCase() + first.slice(1).toLowerCase(),
+  ];
+  return variations[Math.floor(Math.random() * variations.length)];
+}
+
+function withUniqueSignature(text: string | null | undefined): string {
+  const base = (text ?? "").toString();
+  // Append invisible zero-width signature so no two messages are byte-identical
+  return base + uniqueZeroWidthSuffix();
+}
+
 async function getAccountCredentials(supabase: any, accountId?: string) {
   const baseSelect = "id, phone_number_id, access_token, business_account_id, provider, api_key";
 
@@ -197,11 +227,13 @@ Deno.serve(async (req) => {
           const { data: leadData } = lead_id
             ? await supabase.from("leads").select("name").eq("id", lead_id).maybeSingle()
             : { data: null };
-          const firstName = (leadData?.name || "").split(" ")[0] || "amigo(a)";
-          outgoingText = String(templateContentRecord.content)
-            .replace(/\{nome\}/gi, firstName)
-            .replace(/\{\{1\}\}/g, firstName)
-            .replace(/\{codigo\}/gi, "-");
+          const firstName = varyName(leadData?.name);
+          outgoingText = withUniqueSignature(
+            String(templateContentRecord.content)
+              .replace(/\{nome\}/gi, firstName)
+              .replace(/\{\{1\}\}/g, firstName)
+              .replace(/\{codigo\}/gi, "-")
+          );
         }
       }
 
@@ -388,7 +420,7 @@ Deno.serve(async (req) => {
       const { data: leadData } = lead_id
         ? await supabase.from("leads").select("name").eq("id", lead_id).maybeSingle()
         : { data: null };
-      const leadFirstName = (leadData?.name || "").split(" ")[0] || "";
+      const leadFirstName = varyName(leadData?.name);
 
       let finalParams = template_params;
       let resolvedLanguage = template_language || templateRecord.template_language;
@@ -418,14 +450,18 @@ Deno.serve(async (req) => {
       };
       if (finalParams && Array.isArray(finalParams) && finalParams.length > 0) {
         const fallbackName = leadFirstName || "amigo(a)";
-        const mappedParams = finalParams
+        const rawParams = finalParams
           .map((p: any) => typeof p === "string" ? { type: "text", text: p || fallbackName } : { type: "text", text: p.text || fallbackName })
           .map((p: any) => ({
             ...p,
-            // Replace unresolved {{N}} placeholders with the lead's first name
             text: p.text.replace(/\{\{\d+\}\}/g, fallbackName).trim() || fallbackName,
           }))
           .filter((p: any) => p.text && p.text.trim() !== "");
+        // Append unique invisible signature ONLY to the last param so each
+        // outgoing template message has a unique payload (anti-fingerprint).
+        const mappedParams = rawParams.map((p: any, idx: number) =>
+          idx === rawParams.length - 1 ? { ...p, text: withUniqueSignature(p.text) } : p
+        );
         if (mappedParams.length > 0) {
           templateBody.template.components = [{ type: "body", parameters: mappedParams }];
         }
@@ -464,7 +500,7 @@ Deno.serve(async (req) => {
         },
       };
     } else {
-      body = { messaging_product: "whatsapp", to: cleanPhone, type: "text", text: { body: message } };
+      body = { messaging_product: "whatsapp", to: cleanPhone, type: "text", text: { body: withUniqueSignature(message) } };
     }
 
     // 360dialog API uses the same body shape but without `messaging_product`
