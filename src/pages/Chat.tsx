@@ -641,12 +641,80 @@ export default function Chat() {
                 </select>
               )}
               <div className="flex items-center gap-1">
+                {/* Per-conversation AI toggle */}
+                <button
+                  onClick={() => toggleLeadAi.mutate(!leadAiEnabled)}
+                  disabled={toggleLeadAi.isPending}
+                  title={
+                    aiMode === "all"
+                      ? "Agente IA respondendo todas as conversas"
+                      : leadAiEnabled
+                      ? "Agente IA ativo nesta conversa — clique para desativar"
+                      : "Ativar agente IA nesta conversa"
+                  }
+                  className={cn(
+                    "p-2 rounded-full transition-colors",
+                    leadAiEnabled || aiMode === "all"
+                      ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30"
+                      : "hover:bg-white/10 text-sidebar-foreground/70 hover:text-sidebar-foreground"
+                  )}
+                >
+                  <Bot size={18} />
+                </button>
+
                 <button className="p-2 rounded-full hover:bg-white/10 text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors">
                   <Search size={18} />
                 </button>
-                <button className="p-2 rounded-full hover:bg-white/10 text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors">
-                  <MoreVertical size={18} />
-                </button>
+
+                {/* Global AI mode menu */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      title="Configurar agente IA"
+                      className="p-2 rounded-full hover:bg-white/10 text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors"
+                    >
+                      <MoreVertical size={18} />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-64">
+                    <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                      Agente IA — modo global
+                    </div>
+                    <DropdownMenuItem
+                      onClick={() => setAiMode.mutate("off")}
+                      className={cn("gap-2", aiMode === "off" && "bg-accent")}
+                    >
+                      <PowerOff size={14} />
+                      <div className="flex-1">
+                        <p className="text-sm">Desativado</p>
+                        <p className="text-[11px] text-muted-foreground">Não responde nenhuma conversa</p>
+                      </div>
+                      {aiMode === "off" && <Check size={14} />}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setAiMode.mutate("all")}
+                      className={cn("gap-2", aiMode === "all" && "bg-accent")}
+                    >
+                      <Users size={14} />
+                      <div className="flex-1">
+                        <p className="text-sm">Todas as conversas</p>
+                        <p className="text-[11px] text-muted-foreground">Responde qualquer mensagem recebida</p>
+                      </div>
+                      {aiMode === "all" && <Check size={14} />}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setAiMode.mutate("selected")}
+                      className={cn("gap-2", aiMode === "selected" && "bg-accent")}
+                    >
+                      <MessageSquare size={14} />
+                      <div className="flex-1">
+                        <p className="text-sm">Conversas selecionadas</p>
+                        <p className="text-[11px] text-muted-foreground">Apenas onde a IA foi ativada</p>
+                      </div>
+                      {aiMode === "selected" && <Check size={14} />}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
 
