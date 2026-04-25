@@ -337,14 +337,21 @@ Deno.serve(async (req) => {
     const eventType = payload?.type || "";
     const invoiceObj = payload?.event?.invoice;
     const invoiceStatus = invoiceObj?.status;
+    const pmLower = (extracted.paymentMethod || "").toLowerCase();
+    const isPixPayment = pmLower === "pix" || pmLower.includes("pix");
     const isPixCreated =
       (eventType === "invoice.created" || eventType === "invoice.status_updated") &&
-      (extracted.paymentMethod?.toLowerCase() === "pix") &&
-      (invoiceStatus === "unpaid" || invoiceStatus === "draft" || invoiceStatus === "overdue");
+      isPixPayment &&
+      (invoiceStatus === "unpaid" || invoiceStatus === "draft" || invoiceStatus === "overdue" || invoiceStatus === "pending");
+
+    console.log(`[PIX-CHECK] type=${eventType} pm=${extracted.paymentMethod} status=${invoiceStatus} isPix=${isPixCreated} leadId=${leadId} phone=${extracted.buyerPhone}`);
 
     if (isPixCreated && leadId && extracted.buyerPhone) {
       try {
-        const checkoutUrl = `https://pay.hub.la/${externalOrderId}`;
+        // Hubla checkout URL: the most reliable link is built from product/offer ID
+        // pay.hub.la/{productId} opens the checkout where the buyer can view the PIX
+        const productHublaId = extracted.hublaProductId || invoiceObj?.id;
+        const checkoutUrl = `https://pay.hub.la/${productHublaId}`;
         const firstName = (extracted.buyerName || "").split(/\s+/)[0] || "amigo(a)";
         const valor = extracted.amount.toLocaleString("pt-BR", {
           style: "currency", currency: "BRL",
@@ -356,15 +363,36 @@ Deno.serve(async (req) => {
           `Pra finalizar é só pagar por aqui 👇\n${checkoutUrl}\n\n` +
           `Assim que cair a confirmação eu te aviso por aqui! 🚀`;
 
-        // Find the user's default WhatsApp account
-        const { data: account } = await supabase
-          .from("whatsapp_accounts")
-          .select("id")
-          .eq("user_id", (await supabase.from("leads").select("user_id").eq("id", leadId).maybeSingle()).data?.user_id)
-          .eq("is_default", true)
+        // Find the lead's owner and their default WhatsApp account
+        const { data: leadOwner } = await supabase
+          .from("leads")
+          .select("user_id")
+          .eq("id", leadId)
           .maybeSingle();
 
-        await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/whatsapp-cloud-send`, {
+        let accountId: string | undefined;
+        if (leadOwner?.user_id) {
+          const { data: account } = await supabase
+            .from("whatsapp_accounts")
+            .select("id")
+            .eq("user_id", leadOwner.user_id)
+            .eq("is_default", true)
+            .maybeSingle();
+          accountId = account?.id;
+
+          // Fallback: any account from the same user
+          if (!accountId) {
+            const { data: anyAccount } = await supabase
+              .from("whatsapp_accounts")
+              .select("id")
+              .eq("user_id", leadOwner.user_id)
+              .limit(1)
+              .maybeSingle();
+            accountId = anyAccount?.id;
+          }
+        }
+
+        const sendRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/whatsapp-cloud-send`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -374,10 +402,11 @@ Deno.serve(async (req) => {
             phone: extracted.buyerPhone,
             message: pixMessage,
             lead_id: leadId,
-            account_id: account?.id || undefined,
+            account_id: accountId,
           }),
         });
-        console.log(`PIX checkout link sent to lead ${leadId} (${extracted.buyerPhone})`);
+        const sendBody = await sendRes.text();
+        console.log(`[PIX-SEND] status=${sendRes.status} account=${accountId} body=${sendBody.slice(0, 300)}`);
       } catch (pixErr) {
         console.error("Failed to send PIX message (non-fatal):", pixErr);
       }
