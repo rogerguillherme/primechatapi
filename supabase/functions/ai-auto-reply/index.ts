@@ -217,7 +217,7 @@ ${customInstructions ? `\n📝 INSTRUÇÕES ADICIONAIS:\n${customInstructions}` 
     }
 
     const aiData = await aiResponse.json();
-    const replyText = aiData.choices?.[0]?.message?.content;
+    let replyText = aiData.choices?.[0]?.message?.content;
 
     if (!replyText) {
       console.error("No reply from AI");
@@ -226,6 +226,9 @@ ${customInstructions ? `\n📝 INSTRUÇÕES ADICIONAIS:\n${customInstructions}` 
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // Normalize formatting for WhatsApp: convert markdown ** to single * (WhatsApp bold)
+    replyText = replyText.replace(/\*\*([^*\n]+)\*\*/g, "*$1*");
 
     // Send the reply via whatsapp-cloud-send
     const sendBody: any = {
