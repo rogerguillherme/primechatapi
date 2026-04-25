@@ -26,8 +26,10 @@ function shuffleArray<T>(arr: T[]): T[] {
   return shuffled;
 }
 
-function randomDelay(): Promise<void> {
-  const ms = 300 + Math.random() * 1200; // 300ms to 1500ms
+function randomDelay(minSec = 0.3, maxSec = 1.5): Promise<void> {
+  const minMs = Math.max(0, minSec) * 1000;
+  const maxMs = Math.max(minMs, maxSec * 1000);
+  const ms = minMs + Math.random() * (maxMs - minMs);
   return new Promise((r) => setTimeout(r, ms));
 }
 
@@ -305,6 +307,10 @@ Deno.serve(async (req) => {
     const templateParams = job.template_params || [];
     const retryMap: Record<string, number> = job.retry_map || {};
     const rateLimit = job.messages_per_second || 75;
+    // Per-job timing controls (jitter window between sends).
+    // Falls back to legacy 0.3-1.5s window when not set.
+    const delayMinSec = typeof job.delay_min_seconds === "number" ? job.delay_min_seconds : 0.3;
+    const delayMaxSec = typeof job.delay_max_seconds === "number" ? job.delay_max_seconds : 1.5;
 
     let sentInBatch = 0;
     let errorsInBatch = 0;
@@ -356,7 +362,7 @@ Deno.serve(async (req) => {
       }
 
       // ── RANDOM DELAY (anti-spam) ──
-      await randomDelay();
+      await randomDelay(delayMinSec, delayMaxSec);
 
       // ── ROUND-ROBIN ACCOUNT SELECTION ──
       const currentAccount = accountCredentials[accountIndex % accountCredentials.length];
