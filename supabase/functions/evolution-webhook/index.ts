@@ -359,13 +359,15 @@ Deno.serve(async (req) => {
       const pushName: string = data.pushName || phone;
       const direction = fromMe ? "outbound" : "inbound";
 
-      // Upsert lead by phone
-      const { data: existingLead } = await supabase
+      // Upsert lead by phone (try all variants to handle BR 9th digit ambiguity)
+      const { data: existingLeads } = await supabase
         .from("leads")
-        .select("id")
-        .eq("phone", phone)
+        .select("id, phone")
+        .in("phone", phoneVariants)
         .eq("user_id", account.user_id)
-        .maybeSingle();
+        .limit(1);
+
+      const existingLead = existingLeads && existingLeads.length > 0 ? existingLeads[0] : null;
 
       let leadId = existingLead?.id;
       if (!leadId) {
