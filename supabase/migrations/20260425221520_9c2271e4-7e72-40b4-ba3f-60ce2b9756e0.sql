@@ -1,0 +1,1 @@
+INSERT INTO public.app_settings (key, value, updated_at) VALUES ('ai_auto_reply_mode', 'selected', now()) ON CONFLICT (key) DO NOTHING;
