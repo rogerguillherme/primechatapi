@@ -568,6 +568,8 @@ export type Database = {
           flow_id: string
           id: string
           max_interactions: number | null
+          media_type: string | null
+          media_url: string | null
           message_variations: Json
           parent_step_id: string | null
           step_order: number
@@ -588,6 +590,8 @@ export type Database = {
           flow_id: string
           id?: string
           max_interactions?: number | null
+          media_type?: string | null
+          media_url?: string | null
           message_variations?: Json
           parent_step_id?: string | null
           step_order?: number
@@ -608,6 +612,8 @@ export type Database = {
           flow_id?: string
           id?: string
           max_interactions?: number | null
+          media_type?: string | null
+          media_url?: string | null
           message_variations?: Json
           parent_step_id?: string | null
           step_order?: number
