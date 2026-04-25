@@ -362,7 +362,7 @@ Deno.serve(async (req) => {
       }
 
       // ── RANDOM DELAY (anti-spam) ──
-      await randomDelay();
+      await randomDelay(delayMinSec, delayMaxSec);
 
       // ── ROUND-ROBIN ACCOUNT SELECTION ──
       const currentAccount = accountCredentials[accountIndex % accountCredentials.length];
