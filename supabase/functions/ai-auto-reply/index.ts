@@ -33,18 +33,44 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Check if AI auto-reply is enabled
-    const { data: aiEnabled } = await supabase
+    // Check AI auto-reply mode: "off" | "all" | "selected"
+    const { data: modeRow } = await supabase
       .from("app_settings")
       .select("value")
-      .eq("key", "ai_auto_reply_enabled")
+      .eq("key", "ai_auto_reply_mode")
       .maybeSingle();
 
-    if (!aiEnabled || aiEnabled.value !== "true") {
+    // Backwards compat: if old "ai_auto_reply_enabled" was true and no mode set => "all"
+    let mode = modeRow?.value as string | undefined;
+    if (!mode) {
+      const { data: legacy } = await supabase
+        .from("app_settings")
+        .select("value")
+        .eq("key", "ai_auto_reply_enabled")
+        .maybeSingle();
+      mode = legacy?.value === "true" ? "all" : "off";
+    }
+
+    if (mode === "off") {
       return new Response(JSON.stringify({ skipped: "ai_disabled" }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // In "selected" mode, only respond when the lead has ai_enabled = true
+    if (mode === "selected") {
+      const { data: leadFlag } = await supabase
+        .from("leads")
+        .select("ai_enabled")
+        .eq("id", lead_id)
+        .maybeSingle();
+      if (!leadFlag?.ai_enabled) {
+        return new Response(JSON.stringify({ skipped: "lead_ai_off" }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     // Get AI config from app_settings
