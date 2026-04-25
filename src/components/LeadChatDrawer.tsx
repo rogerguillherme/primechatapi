@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Send, FileText, Smile, Check, CheckCheck, Paperclip, AlertCircle } from "lucide-react";
+import { Send, FileText, Smile, Check, CheckCheck, Paperclip, AlertCircle, Bot } from "lucide-react";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -69,6 +69,55 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
       return data || [];
     },
     enabled: !!lead && open,
+  });
+
+  // AI mode (global) + per-lead AI flag
+  const { data: aiMode } = useQuery({
+    queryKey: ["ai-auto-reply-mode"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("app_settings")
+        .select("value")
+        .eq("key", "ai_auto_reply_mode")
+        .maybeSingle();
+      return (data?.value as "off" | "all" | "selected" | undefined) ?? "off";
+    },
+    enabled: open,
+  });
+
+  const { data: leadAi } = useQuery({
+    queryKey: ["lead-ai-enabled", lead?.id],
+    queryFn: async () => {
+      if (!lead) return false;
+      const { data } = await supabase
+        .from("leads")
+        .select("ai_enabled")
+        .eq("id", lead.id)
+        .maybeSingle();
+      return !!data?.ai_enabled;
+    },
+    enabled: !!lead && open,
+  });
+
+  const toggleAiMutation = useMutation({
+    mutationFn: async (next: boolean) => {
+      if (!lead) throw new Error("No lead");
+      const { error } = await supabase
+        .from("leads")
+        .update({ ai_enabled: next })
+        .eq("id", lead.id);
+      if (error) throw error;
+      return next;
+    },
+    onSuccess: (next) => {
+      queryClient.setQueryData(["lead-ai-enabled", lead?.id], next);
+      toast({
+        title: next ? "Agente IA ativado nesta conversa" : "Agente IA desativado nesta conversa",
+      });
+    },
+    onError: () => {
+      toast({ title: "Erro ao atualizar", variant: "destructive" });
+    },
   });
 
   const { templates } = useUserTemplates(open);
@@ -221,6 +270,31 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
                 <p className="font-medium text-[15px] text-sidebar-foreground truncate">{lead.name}</p>
                 <p className="text-xs text-sidebar-foreground/50">{lead.phone}</p>
               </div>
+              {aiMode === "selected" && (
+                <button
+                  type="button"
+                  onClick={() => toggleAiMutation.mutate(!leadAi)}
+                  disabled={toggleAiMutation.isPending}
+                  title={leadAi ? "Agente IA ativo nesta conversa" : "Ativar agente IA nesta conversa"}
+                  className={cn(
+                    "h-8 px-2 rounded-md inline-flex items-center gap-1.5 text-xs font-medium transition-colors border",
+                    leadAi
+                      ? "bg-violet-500/15 text-violet-300 border-violet-500/30 hover:bg-violet-500/25"
+                      : "bg-transparent text-sidebar-foreground/70 border-sidebar-foreground/20 hover:bg-sidebar-foreground/10"
+                  )}
+                >
+                  <Bot size={14} />
+                  IA {leadAi ? "ON" : "OFF"}
+                </button>
+              )}
+              {aiMode === "all" && (
+                <span
+                  title="Agente IA respondendo todas as conversas"
+                  className="h-8 px-2 rounded-md inline-flex items-center gap-1.5 text-xs font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                >
+                  <Bot size={14} /> IA ON
+                </span>
+              )}
               {accounts.length > 1 && (
                 <select
                   value={selectedAccountId || ""}

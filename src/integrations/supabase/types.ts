@@ -1013,6 +1013,7 @@ export type Database = {
       }
       leads: {
         Row: {
+          ai_enabled: boolean
           assigned_to: string | null
           chat_status: string
           cpf: string | null
@@ -1030,6 +1031,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          ai_enabled?: boolean
           assigned_to?: string | null
           chat_status?: string
           cpf?: string | null
@@ -1047,6 +1049,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          ai_enabled?: boolean
           assigned_to?: string | null
           chat_status?: string
           cpf?: string | null
