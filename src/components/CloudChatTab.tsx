@@ -17,13 +17,14 @@ import { toast } from "sonner";
 import {
   Search, Send, MessageSquare, FileText, Check, CheckCheck,
   MoreVertical, ArrowLeft, Paperclip, Clock, MessageCircleReply,
-  ShoppingBag, RotateCcw, Tag, X, AlertCircle,
+  ShoppingBag, RotateCcw, Tag, X, AlertCircle, Bot, Users, PowerOff,
 } from "lucide-react";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 
 type ChatTab = "novos_pedidos" | "aguardando_respostas" | "respondidas" | "reembolso";
+type AiMode = "off" | "all" | "selected";
 
 const CHAT_TABS: { value: ChatTab; label: string; icon: React.ReactNode }[] = [
   { value: "aguardando_respostas", label: "Aguardando", icon: <Clock size={14} /> },
@@ -105,7 +106,7 @@ export function CloudChatTab() {
     queryFn: async () => {
       const { data } = await supabase
         .from("leads")
-        .select("id, name, phone, email, photo_url, chat_status")
+        .select("id, name, phone, email, photo_url, chat_status, ai_enabled")
         .order("name");
       return data || [];
     },
@@ -142,6 +143,54 @@ export function CloudChatTab() {
       }
       return map;
     },
+  });
+
+  const { data: aiMode = "off" } = useQuery({
+    queryKey: ["ai-auto-reply-mode"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("app_settings")
+        .select("value")
+        .eq("key", "ai_auto_reply_mode")
+        .maybeSingle();
+      return (data?.value as AiMode | undefined) ?? "off";
+    },
+  });
+
+  const setAiMode = useMutation({
+    mutationFn: async (mode: AiMode) => {
+      const { error } = await supabase
+        .from("app_settings")
+        .upsert(
+          { key: "ai_auto_reply_mode", value: mode, updated_at: new Date().toISOString() },
+          { onConflict: "key" }
+        );
+      if (error) throw error;
+      return mode;
+    },
+    onSuccess: (mode) => {
+      queryClient.setQueryData(["ai-auto-reply-mode"], mode);
+      const label = mode === "all" ? "todas as conversas" : mode === "selected" ? "conversas selecionadas" : "desativado";
+      toast.success(`Agente IA: ${label}`);
+    },
+    onError: () => toast.error("Erro ao atualizar agente IA"),
+  });
+
+  const toggleLeadAi = useMutation({
+    mutationFn: async (next: boolean) => {
+      if (!selectedLeadId) throw new Error("Nenhum contato selecionado");
+      const { error } = await supabase
+        .from("leads")
+        .update({ ai_enabled: next })
+        .eq("id", selectedLeadId);
+      if (error) throw error;
+      return next;
+    },
+    onSuccess: (next) => {
+      queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
+      toast.success(next ? "Agente IA ativado nesta conversa" : "Agente IA desativado nesta conversa");
+    },
+    onError: () => toast.error("Erro ao atualizar agente IA"),
   });
 
   // Messages for selected lead
@@ -197,6 +246,13 @@ export function CloudChatTab() {
   }, [message]);
 
   const selectedLead = leads?.find((l) => l.id === selectedLeadId);
+  const leadAiEnabled = !!selectedLead?.ai_enabled;
+
+  const handleToggleCurrentLeadAi = () => {
+    if (!selectedLeadId) return;
+    if (aiMode !== "selected") setAiMode.mutate("selected");
+    toggleLeadAi.mutate(!leadAiEnabled);
+  };
 
   const sendMutation = useMutation({
     mutationFn: async ({ text, mediaUrl, mediaType }: { text?: string; mediaUrl?: string; mediaType?: string }) => {
@@ -363,6 +419,46 @@ export function CloudChatTab() {
                 <Badge variant="secondary" className="h-4 text-[9px] px-1 ml-0.5">{filterLabelIds.size}</Badge>
               )}
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant={aiMode === "off" ? "outline" : "default"}
+                  size="sm"
+                  className="h-7 px-2 text-xs gap-1"
+                  title="Configurar agente IA"
+                >
+                  <Bot size={12} />
+                  IA
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Agente IA</div>
+                <DropdownMenuItem onClick={() => setAiMode.mutate("off")} className={cn("gap-2", aiMode === "off" && "bg-accent")}>
+                  <PowerOff size={14} />
+                  <div className="flex-1">
+                    <p className="text-sm">Desativado</p>
+                    <p className="text-[11px] text-muted-foreground">Não responde nenhuma conversa</p>
+                  </div>
+                  {aiMode === "off" && <Check size={14} />}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setAiMode.mutate("all")} className={cn("gap-2", aiMode === "all" && "bg-accent")}>
+                  <Users size={14} />
+                  <div className="flex-1">
+                    <p className="text-sm">Todas as conversas</p>
+                    <p className="text-[11px] text-muted-foreground">Responde qualquer mensagem recebida</p>
+                  </div>
+                  {aiMode === "all" && <Check size={14} />}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setAiMode.mutate("selected")} className={cn("gap-2", aiMode === "selected" && "bg-accent")}>
+                  <MessageSquare size={14} />
+                  <div className="flex-1">
+                    <p className="text-sm">Conversas selecionadas</p>
+                    <p className="text-[11px] text-muted-foreground">Use o botão IA dentro do chat</p>
+                  </div>
+                  {aiMode === "selected" && <Check size={14} />}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
@@ -506,6 +602,24 @@ export function CloudChatTab() {
                   ))}
                 </select>
               )}
+              <Button
+                type="button"
+                size="sm"
+                variant={aiMode === "all" || leadAiEnabled ? "default" : "outline"}
+                className="h-8 px-2 text-xs gap-1.5 shrink-0"
+                onClick={handleToggleCurrentLeadAi}
+                disabled={toggleLeadAi.isPending || setAiMode.isPending}
+                title={
+                  aiMode === "all"
+                    ? "Agente IA ativo globalmente — clique para usar apenas conversas selecionadas"
+                    : leadAiEnabled
+                    ? "Agente IA ativo nesta conversa — clique para desativar"
+                    : "Ativar agente IA nesta conversa"
+                }
+              >
+                <Bot size={14} />
+                IA {aiMode === "all" || leadAiEnabled ? "ON" : "OFF"}
+              </Button>
             </div>
 
             {/* Messages */}
