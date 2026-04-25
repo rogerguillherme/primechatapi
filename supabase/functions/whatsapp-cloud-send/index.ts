@@ -6,6 +6,36 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// ============================================================
+// UNIQUENESS HELPERS — anti-spam / anti-duplicate detection
+// Each outgoing message gets a unique invisible signature so
+// providers cannot fingerprint identical payloads.
+// ============================================================
+const ZW_CHARS = ["\u200B", "\u200C", "\u200D", "\u2060"];
+
+function uniqueZeroWidthSuffix(len = 8): string {
+  let s = "";
+  for (let i = 0; i < len; i++) s += ZW_CHARS[Math.floor(Math.random() * ZW_CHARS.length)];
+  return s;
+}
+
+function varyName(rawName: string | null | undefined): string {
+  const first = (rawName || "").trim().split(/\s+/)[0] || "";
+  if (!first) return "amigo(a)";
+  const variations = [
+    first,
+    first.toLowerCase(),
+    first.charAt(0).toUpperCase() + first.slice(1).toLowerCase(),
+  ];
+  return variations[Math.floor(Math.random() * variations.length)];
+}
+
+function withUniqueSignature(text: string | null | undefined): string {
+  const base = (text ?? "").toString();
+  // Append invisible zero-width signature so no two messages are byte-identical
+  return base + uniqueZeroWidthSuffix();
+}
+
 async function getAccountCredentials(supabase: any, accountId?: string) {
   const baseSelect = "id, phone_number_id, access_token, business_account_id, provider, api_key";
 
