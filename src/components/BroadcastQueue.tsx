@@ -201,6 +201,9 @@ export function BroadcastQueue() {
       shuffleLeads: true,
       multiNumber: false,
       extraAccountIds: [],
+      delayMinSeconds: 1,
+      delayMaxSeconds: 5,
+      messagesPerSecond: 75,
       scheduledAt: "",
     };
     setQueue((prev) => [...prev, newItem]);
