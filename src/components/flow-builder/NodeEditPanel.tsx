@@ -404,3 +404,93 @@ function MessageVariationsField({
     </div>
   );
 }
+
+function ImageUploadField({
+  mediaUrl,
+  onChange,
+}: {
+  mediaUrl: string | null;
+  onChange: (url: string | null) => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleFile = async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Selecione um arquivo de imagem.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Imagem muito grande (máximo 5MB).");
+      return;
+    }
+    setUploading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Não autenticado");
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `${user.id}/flow-${crypto.randomUUID()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("chat-media")
+        .upload(path, file, { contentType: file.type, upsert: false });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path);
+      onChange(pub.publicUrl);
+      toast.success("Imagem carregada!");
+    } catch (err: any) {
+      toast.error(err.message || "Falha ao enviar imagem");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs flex items-center gap-1.5">
+        <ImageIcon size={12} /> Imagem (opcional)
+      </Label>
+      {mediaUrl ? (
+        <div className="relative rounded-md border border-border overflow-hidden bg-muted/30">
+          <img src={mediaUrl} alt="Preview" className="w-full max-h-40 object-contain" />
+          <Button
+            variant="destructive"
+            size="icon"
+            className="absolute top-1 right-1 h-6 w-6"
+            onClick={() => onChange(null)}
+          >
+            <Trash2 size={12} />
+          </Button>
+        </div>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={uploading}
+          onClick={() => fileInputRef.current?.click()}
+          className="w-full gap-2 text-xs h-9 border-dashed"
+        >
+          {uploading ? (
+            <><Loader2 size={12} className="animate-spin" /> Enviando...</>
+          ) : (
+            <><Upload size={12} /> Enviar imagem</>
+          )}
+        </Button>
+      )}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleFile(file);
+          e.target.value = "";
+        }}
+      />
+      <p className="text-[11px] text-muted-foreground">
+        Pode enviar só imagem, só texto, ou imagem + texto (legenda).
+      </p>
+    </div>
+  );
+}
