@@ -71,6 +71,55 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
     enabled: !!lead && open,
   });
 
+  // AI mode (global) + per-lead AI flag
+  const { data: aiMode } = useQuery({
+    queryKey: ["ai-auto-reply-mode"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("app_settings")
+        .select("value")
+        .eq("key", "ai_auto_reply_mode")
+        .maybeSingle();
+      return (data?.value as "off" | "all" | "selected" | undefined) ?? "off";
+    },
+    enabled: open,
+  });
+
+  const { data: leadAi } = useQuery({
+    queryKey: ["lead-ai-enabled", lead?.id],
+    queryFn: async () => {
+      if (!lead) return false;
+      const { data } = await supabase
+        .from("leads")
+        .select("ai_enabled")
+        .eq("id", lead.id)
+        .maybeSingle();
+      return !!data?.ai_enabled;
+    },
+    enabled: !!lead && open,
+  });
+
+  const toggleAiMutation = useMutation({
+    mutationFn: async (next: boolean) => {
+      if (!lead) throw new Error("No lead");
+      const { error } = await supabase
+        .from("leads")
+        .update({ ai_enabled: next })
+        .eq("id", lead.id);
+      if (error) throw error;
+      return next;
+    },
+    onSuccess: (next) => {
+      queryClient.setQueryData(["lead-ai-enabled", lead?.id], next);
+      toast({
+        title: next ? "Agente IA ativado nesta conversa" : "Agente IA desativado nesta conversa",
+      });
+    },
+    onError: () => {
+      toast({ title: "Erro ao atualizar", variant: "destructive" });
+    },
+  });
+
   const { templates } = useUserTemplates(open);
 
   const { data: accountTemplates = [] } = useQuery({
