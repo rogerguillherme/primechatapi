@@ -1866,7 +1866,7 @@ export default function WhatsAppApi() {
         const url = await resolveQrToDataUrl(String(data.qr_code));
         setQrImage(url);
       }
-      if (data?.pairing_code) setQrPairingCode(data.pairing_code);
+      setQrPairingCode(normalizePairingCode(data?.pairing_code));
       if (data?.account_id) {
         setQrAccountId(data.account_id);
         setQrMode("existing");
