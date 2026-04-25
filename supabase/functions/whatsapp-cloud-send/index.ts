@@ -216,23 +216,40 @@ Deno.serve(async (req) => {
 
       // Decide endpoint based on payload type
       if (interactive_buttons && Array.isArray(interactive_buttons) && interactive_buttons.length > 0) {
-        // Baileys/Evolution sends buttons as `interactiveMessage` which modern WhatsApp client
-        // silently drops on personal numbers. Convert to numbered text list — guaranteed delivery.
+        // Use Evolution's native sendButtons with reply/url/call types
         const bodyText = (outgoingText || "Escolha uma opção:").trim();
-        const optionsList = interactive_buttons
-          .slice(0, 10)
-          .map((btn: any, i: number) => `*${i + 1}*. ${btn.title || `Opção ${i + 1}`}`)
-          .join("\n");
-        const fullText = `${bodyText}\n\n${optionsList}\n\n_Responda com o número da opção._`;
-        endpoint = `${evoServerUrl}/message/sendText/${evoInstance}`;
-        evoBody = { number: cleanPhone, text: fullText };
+        const evoButtons = interactive_buttons.slice(0, 3).map((btn: any, i: number) => {
+          const display = (btn.title || `Opção ${i + 1}`).substring(0, 20);
+          if (btn.url) {
+            return { type: "url", displayText: display, url: btn.url };
+          }
+          if (btn.phoneNumber || btn.phone) {
+            return { type: "call", displayText: display, phoneNumber: btn.phoneNumber || btn.phone };
+          }
+          return { type: "reply", displayText: display, id: btn.id || `btn_${i + 1}` };
+        });
+        endpoint = `${evoServerUrl}/message/sendButtons/${evoInstance}`;
+        evoBody = {
+          number: cleanPhone,
+          title: bodyText.substring(0, 60),
+          description: bodyText,
+          footer: " ",
+          buttons: evoButtons,
+        };
         logContent = `🔘 ${bodyText}`;
       } else if (cta_url) {
-        // Evolution doesn't have a native CTA; send as text + URL
-        const ctaText = `${outgoingText || "Acesse o link abaixo:"}\n\n👉 ${cta_url.display_text || "Acessar"}: ${cta_url.url}`;
-        endpoint = `${evoServerUrl}/message/sendText/${evoInstance}`;
-        evoBody = { number: cleanPhone, text: ctaText };
-        logContent = `🔗 ${outgoingText || cta_url.url}`;
+        // Send as a single-button URL message via sendButtons (real clickable button)
+        const bodyText = (outgoingText || "Acesse o link abaixo:").trim();
+        const display = (cta_url.display_text || "Acessar").substring(0, 20);
+        endpoint = `${evoServerUrl}/message/sendButtons/${evoInstance}`;
+        evoBody = {
+          number: cleanPhone,
+          title: bodyText.substring(0, 60),
+          description: bodyText,
+          footer: " ",
+          buttons: [{ type: "url", displayText: display, url: cta_url.url }],
+        };
+        logContent = `🔗 ${bodyText}`;
       } else if (media_url && media_type) {
         endpoint = `${evoServerUrl}/message/sendMedia/${evoInstance}`;
         const mediaTypeMap: Record<string, string> = {
