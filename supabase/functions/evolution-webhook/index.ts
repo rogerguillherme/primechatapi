@@ -505,6 +505,32 @@ Deno.serve(async (req) => {
             body: JSON.stringify({ inbound_lead_id: leadId, inbound_text: text }),
           }).catch(() => {});
         } catch {}
+
+        // ── AI AUTO-REPLY: trigger AI agent for inbound text messages ──
+        if (text) {
+          try {
+            const aiRes = await fetch(`${supabaseUrl}/functions/v1/ai-auto-reply`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${supabaseKey}`,
+              },
+              body: JSON.stringify({
+                lead_id: leadId,
+                message: text,
+                account_id: account.id,
+              }),
+            });
+            if (!aiRes.ok) {
+              console.error("Evolution AI auto-reply failed:", aiRes.status, await aiRes.text());
+            } else {
+              const aiResult = await aiRes.json();
+              console.log("Evolution AI auto-reply result:", JSON.stringify(aiResult));
+            }
+          } catch (aiErr) {
+            console.error("Evolution AI auto-reply error:", aiErr);
+          }
+        }
       }
 
       return new Response(JSON.stringify({ ok: true, lead_id: leadId, direction }), {
