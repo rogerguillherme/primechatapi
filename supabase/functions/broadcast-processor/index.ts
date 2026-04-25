@@ -307,6 +307,10 @@ Deno.serve(async (req) => {
     const templateParams = job.template_params || [];
     const retryMap: Record<string, number> = job.retry_map || {};
     const rateLimit = job.messages_per_second || 75;
+    // Per-job timing controls (jitter window between sends).
+    // Falls back to legacy 0.3-1.5s window when not set.
+    const delayMinSec = typeof job.delay_min_seconds === "number" ? job.delay_min_seconds : 0.3;
+    const delayMaxSec = typeof job.delay_max_seconds === "number" ? job.delay_max_seconds : 1.5;
 
     let sentInBatch = 0;
     let errorsInBatch = 0;
