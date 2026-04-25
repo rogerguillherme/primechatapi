@@ -350,11 +350,48 @@ Deno.serve(async (req) => {
         "";
 
       let mediaType: string | null = null;
-      const mediaUrl: string | null = msg.imageMessage?.url || msg.videoMessage?.url || msg.audioMessage?.url || msg.documentMessage?.url || null;
-      if (msg.imageMessage) mediaType = "image";
-      else if (msg.videoMessage) mediaType = "video";
-      else if (msg.audioMessage) mediaType = "audio";
-      else if (msg.documentMessage) mediaType = "document";
+      let mediaUrl: string | null = null;
+      let mimetype: string | null = null;
+      if (msg.imageMessage) { mediaType = "image"; mimetype = msg.imageMessage.mimetype || "image/jpeg"; }
+      else if (msg.videoMessage) { mediaType = "video"; mimetype = msg.videoMessage.mimetype || "video/mp4"; }
+      else if (msg.audioMessage) { mediaType = "audio"; mimetype = msg.audioMessage.mimetype || "audio/ogg"; }
+      else if (msg.documentMessage) { mediaType = "document"; mimetype = msg.documentMessage.mimetype || "application/octet-stream"; }
+
+      // For inbound media: download via Evolution and re-upload to chat-media (WhatsApp URLs are encrypted)
+      if (mediaType && messageId && !fromMe) {
+        try {
+          const evoServer = (account.business_account_id || "").replace(/\/+$/, "");
+          const evoKey = account.api_key || account.access_token;
+          const evoInstance = account.phone_number_id;
+          const dlRes = await fetch(`${evoServer}/chat/getBase64FromMediaMessage/${evoInstance}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", apikey: evoKey },
+            body: JSON.stringify({ message: { key: data.key } }),
+          });
+          if (dlRes.ok) {
+            const dlBody = await dlRes.json();
+            const base64: string | undefined = dlBody?.base64 || dlBody?.media?.base64 || dlBody?.data;
+            if (base64) {
+              const ext = (mimetype.split("/")[1] || "bin").split(";")[0];
+              const path = `evolution/${account.user_id}/${Date.now()}-${messageId}.${ext}`;
+              const bin = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+              const { error: upErr } = await supabase.storage
+                .from("chat-media")
+                .upload(path, bin, { contentType: mimetype, upsert: true });
+              if (!upErr) {
+                const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path);
+                mediaUrl = pub.publicUrl;
+              } else {
+                console.error("Evolution media upload failed:", upErr.message);
+              }
+            }
+          } else {
+            console.error("Evolution media download failed:", dlRes.status, await dlRes.text());
+          }
+        } catch (mediaErr) {
+          console.error("Evolution media handling error:", mediaErr);
+        }
+      }
 
       const pushName: string = data.pushName || phone;
       const direction = fromMe ? "outbound" : "inbound";
