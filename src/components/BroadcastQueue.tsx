@@ -312,6 +312,9 @@ export function BroadcastQueue() {
         shuffle_leads: item.shuffleLeads,
         multi_number: item.multiNumber,
         account_ids: item.multiNumber ? [item.accountId, ...item.extraAccountIds] : [],
+        delay_min_seconds: item.delayMinSeconds,
+        delay_max_seconds: item.delayMaxSeconds,
+        messages_per_second: item.messagesPerSecond,
       };
       if (item.scheduledAt) insertData.scheduled_at = new Date(item.scheduledAt).toISOString();
 
