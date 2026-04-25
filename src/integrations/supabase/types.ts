@@ -167,6 +167,8 @@ export type Database = {
           account_ids: string[] | null
           consecutive_errors: number
           created_at: string
+          delay_max_seconds: number
+          delay_min_seconds: number
           delivered_count: number
           error_count: number
           error_rate: number
@@ -199,6 +201,8 @@ export type Database = {
           account_ids?: string[] | null
           consecutive_errors?: number
           created_at?: string
+          delay_max_seconds?: number
+          delay_min_seconds?: number
           delivered_count?: number
           error_count?: number
           error_rate?: number
@@ -231,6 +235,8 @@ export type Database = {
           account_ids?: string[] | null
           consecutive_errors?: number
           created_at?: string
+          delay_max_seconds?: number
+          delay_min_seconds?: number
           delivered_count?: number
           error_count?: number
           error_rate?: number
