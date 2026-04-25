@@ -59,6 +59,30 @@ import { Home } from "lucide-react";
 const isUnauthorizedFunctionError = (error: unknown) =>
   error instanceof Error && error.message.includes("401");
 
+const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+const isTransientEvolutionError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /503|temporarily unavailable|failed to fetch|edge runtime/i.test(message);
+};
+
+const invokeEvolutionInstance = async (body: Record<string, unknown>, retries = 2) => {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      const { data, error } = await supabase.functions.invoke("evolution-instance", { body });
+      if (error) throw error;
+      if (data?.error) throw new Error(String(data.error));
+      return data;
+    } catch (error) {
+      lastError = error;
+      if (!isTransientEvolutionError(error) || attempt === retries) break;
+      await sleep(600 * (attempt + 1));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Falha temporária ao acessar a conexão WhatsApp.");
+};
+
 const META_REDIRECT_URI = "https://primechatapi.lovable.app/auth/meta/callback";
 
 /* ── Helpers ── */
@@ -1738,10 +1762,7 @@ export default function WhatsAppApi() {
 
   const fetchQrForAccount = useCallback(async (accountId: string) => {
     try {
-      const { data, error } = await supabase.functions.invoke("evolution-instance", {
-        body: { action: "connect", account_id: accountId },
-      });
-      if (error) throw error;
+      const data = await invokeEvolutionInstance({ action: "connect", account_id: accountId });
       if (data?.qr_code) {
         const qr = String(data.qr_code);
         setQrImage(qr.startsWith("data:") ? qr : `data:image/png;base64,${qr}`);
@@ -1754,9 +1775,7 @@ export default function WhatsAppApi() {
 
   const pollQrStatus = useCallback(async (accountId: string) => {
     try {
-      const { data } = await supabase.functions.invoke("evolution-instance", {
-        body: { action: "status", account_id: accountId },
-      });
+      const data = await invokeEvolutionInstance({ action: "status", account_id: accountId }, 1);
       const state = String(data?.state || "unknown");
       setQrConnState(state);
       if (state === "open") {
@@ -1812,15 +1831,11 @@ export default function WhatsAppApi() {
     }
     setQrLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("evolution-instance", {
-        body: {
-          action: "create_and_connect",
-          name: qrName.trim(),
-          is_default: (accounts?.length || 0) === 0,
-        },
+      const data = await invokeEvolutionInstance({
+        action: "create_and_connect",
+        name: qrName.trim(),
+        is_default: (accounts?.length || 0) === 0,
       });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
 
       toast.success(data?.already_existed ? "Instância já existia — gerando QR…" : "Instância criada! Escaneie o QR.");
       queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
@@ -1861,9 +1876,7 @@ export default function WhatsAppApi() {
 
       for (const acc of evoAccounts) {
         try {
-          const { data } = await supabase.functions.invoke("evolution-instance", {
-            body: { action: "status", account_id: acc.id },
-          });
+          const data = await invokeEvolutionInstance({ action: "status", account_id: acc.id }, 1);
           const state = String(data?.state || "unknown");
           if (state === "close" || state === "disconnected") {
             if (reopenedForRef.current.has(acc.id)) continue;
