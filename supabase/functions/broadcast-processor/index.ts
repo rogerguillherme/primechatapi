@@ -26,8 +26,10 @@ function shuffleArray<T>(arr: T[]): T[] {
   return shuffled;
 }
 
-function randomDelay(): Promise<void> {
-  const ms = 300 + Math.random() * 1200; // 300ms to 1500ms
+function randomDelay(minSec = 0.3, maxSec = 1.5): Promise<void> {
+  const minMs = Math.max(0, minSec) * 1000;
+  const maxMs = Math.max(minMs, maxSec * 1000);
+  const ms = minMs + Math.random() * (maxMs - minMs);
   return new Promise((r) => setTimeout(r, ms));
 }
 
