@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
 
     const { data: accounts, error } = await adminClient
       .from("whatsapp_accounts")
-      .select("id, name, phone_number_id, access_token, is_default, business_account_id")
+      .select("id, name, phone_number_id, access_token, is_default, business_account_id, provider")
       .eq("user_id", userId)
       .order("is_default", { ascending: false });
 
