@@ -500,7 +500,7 @@ Deno.serve(async (req) => {
         },
       };
     } else {
-      body = { messaging_product: "whatsapp", to: cleanPhone, type: "text", text: { body: message } };
+      body = { messaging_product: "whatsapp", to: cleanPhone, type: "text", text: { body: withUniqueSignature(message) } };
     }
 
     // 360dialog API uses the same body shape but without `messaging_product`
