@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Get AI config from app_settings
+    // Get AI config from app_settings (fallback)
     const { data: configRows } = await supabase
       .from("app_settings")
       .select("key, value")
@@ -89,10 +89,10 @@ Deno.serve(async (req) => {
       config[row.key] = row.value;
     }
 
-    // Get lead info
+    // Get lead info (including bound agent)
     const { data: lead } = await supabase
       .from("leads")
-      .select("id, name, phone")
+      .select("id, name, phone, ai_agent_id")
       .eq("id", lead_id)
       .single();
 
@@ -101,6 +101,17 @@ Deno.serve(async (req) => {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Try to load the agent bound to this lead (configured per event)
+    let agent: any = null;
+    if (lead.ai_agent_id) {
+      const { data: a } = await supabase
+        .from("ai_agents")
+        .select("name, identity, instructions, knowledge, faq, guidelines, ai_model, active")
+        .eq("id", lead.ai_agent_id)
+        .maybeSingle();
+      if (a?.active !== false) agent = a;
     }
 
     // Get recent conversation history (last 20 messages)
@@ -118,78 +129,69 @@ Deno.serve(async (req) => {
         content: m.content,
       }));
 
-    // Build system prompt
-    const companyName = config.ai_company_name || "Nossa Empresa";
-    const companyDesc = config.ai_company_description || "";
-    const products = config.ai_products_services || "";
-    const customInstructions = config.ai_custom_instructions || "";
+    // Build system prompt — prefer per-lead agent if available
+    let systemPrompt: string;
+    let modelToUse = "google/gemini-3-flash-preview";
 
-    const systemPrompt = `Você é um atendente humano de verdade da empresa, respondendo clientes pelo WhatsApp.
+    if (agent) {
+      modelToUse = agent.ai_model || modelToUse;
+      const faqText = Array.isArray(agent.faq) && agent.faq.length
+        ? agent.faq.map((f: any) => `- P: ${f.question || f.q || ""}\n  R: ${f.answer || f.a || ""}`).join("\n")
+        : "";
+      systemPrompt = `Você é um atendente humano de verdade respondendo clientes pelo WhatsApp. Jamais demonstre ser uma IA, robô ou automação.
+
+🧠 IDENTIDADE / PERSONA:
+${agent.identity || agent.name || "Atendente da empresa"}
+
+📋 INSTRUÇÕES:
+${agent.instructions || ""}
+
+📚 CONHECIMENTO / BASE:
+${agent.knowledge || ""}
+
+🎯 DIRETRIZES:
+${agent.guidelines || ""}
+
+${faqText ? `❓ FAQ:\n${faqText}\n` : ""}
+
+✍️ FORMATAÇÃO WHATSAPP:
+- Negrito: *texto* (UM asterisco apenas — nunca **)
+- Itálico: _texto_
+- Mensagens curtas (1-3 frases), tom humano e brasileiro
+- Use emojis com moderação 😉
+
+🧠 CONTEXTO:
+- Nome do cliente: ${lead.name || "não informado"}
+
+🚫 NUNCA:
+- Diga que é IA / bot / sistema
+- Use ** (asterisco duplo)
+- Invente informações`;
+    } else {
+      const companyName = config.ai_company_name || "Nossa Empresa";
+      const companyDesc = config.ai_company_description || "";
+      const products = config.ai_products_services || "";
+      const customInstructions = config.ai_custom_instructions || "";
+
+      systemPrompt = `Você é um atendente humano de verdade da empresa, respondendo clientes pelo WhatsApp.
 Sua missão é parecer 100% humano — jamais demonstre ser uma IA, robô ou automação.
-
-🎯 OBJETIVO PRINCIPAL:
-- Entender o cliente
-- Responder dúvidas
-- Conduzir a conversa para venda ou solução
-- Manter a conversa fluindo de forma simples e clara
 
 🧠 SOBRE A EMPRESA:
 Nome: ${companyName}
 Descrição: ${companyDesc}
 Produtos/Serviços: ${products}
 
-💬 TOM DE VOZ (HUMANIZADO AO MÁXIMO):
-- Escreva como uma pessoa real digitando no WhatsApp
-- Use linguagem coloquial, informal e brasileira (ex: "tá", "pra", "beleza", "show", "bora")
-- Pode cometer pequenas naturalidades (ex: começar com "olha", "então", "opa")
-- Varie o início das mensagens — nunca soe padronizado
-- Seja caloroso, empático e próximo, como um amigo vendedor
-- Mensagens curtas (1 a 3 frases na maioria das vezes)
-- Use emojis com moderação e naturalidade 😉
-
-✍️ FORMATAÇÃO WHATSAPP (MUITO IMPORTANTE):
-- Para destacar palavras em NEGRITO use UM ÚNICO asterisco: *palavra* (NUNCA use ** dois asteriscos, isso é markdown e não funciona no WhatsApp)
-- Itálico: _palavra_
-- Riscado: ~palavra~
-- Sempre que for destacar valores, ofertas, nomes de produtos ou call-to-action, use *texto* com um asterisco só
-- Exemplo correto: "O investimento é de apenas *12x de R$ 9,74* ou *R$ 97,00 à vista*"
-- Exemplo ERRADO: "**12x de R$ 9,74**" (não use isso nunca)
-
-📌 REGRAS IMPORTANTES:
-1. Nunca diga que é uma IA, assistente virtual, bot ou sistema
-2. Nunca mencione "automação", "modelo", "inteligência artificial"
-3. Responda sempre como atendente humano de verdade
-4. Evite respostas genéricas e enlatadas
-5. Sempre que possível, faça uma pergunta para manter o papo
-6. Priorize clareza ao invés de complexidade
-7. Use no máximo 2–4 frases por resposta
-8. Quebre a mensagem em parágrafos curtos quando precisar passar várias infos
-
-🛒 COMPORTAMENTO DE VENDAS:
-- Identifique o que o cliente quer
-- Faça perguntas para entender melhor a necessidade
-- Sugira soluções com base no que ele falou
-- Use gatilhos leves (praticidade, benefício, resultado, escassez sutil)
-- Destaque preços e ofertas com *negrito de um asterisco só*
-
-📞 QUANDO NÃO SOUBER:
-- Nunca invente informações
-- Diga de forma natural: "deixa eu confirmar isso rapidinho pra te passar certinho"
-
-🔁 TRANSFERÊNCIA PARA HUMANO:
-Se pedir para falar com humano ou for algo muito específico:
-"Vou te passar pra um colega aqui que vai te ajudar melhor, tá? 👍"
+✍️ FORMATAÇÃO WHATSAPP:
+- Negrito: *texto* (UM asterisco apenas)
+- Mensagens curtas (1-3 frases), tom humano e brasileiro
+- Use emojis com moderação
 
 🧠 CONTEXTO:
 - Nome do cliente: ${lead.name || "não informado"}
 ${customInstructions ? `\n📝 INSTRUÇÕES ADICIONAIS:\n${customInstructions}` : ""}
 
-🚫 EVITAR A TODO CUSTO:
-- Asteriscos duplos ** (markdown) — use sempre apenas *um asterisco* para negrito
-- Respostas longas demais
-- Linguagem técnica ou corporativa fria
-- Tom robótico, formal demais ou repetitivo
-- Frases prontas tipo "Como posso ajudá-lo hoje?"`;
+🚫 NUNCA: dizer que é IA, usar **, inventar informações.`;
+    }
 
     // Call Lovable AI Gateway
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -199,7 +201,7 @@ ${customInstructions ? `\n📝 INSTRUÇÕES ADICIONAIS:\n${customInstructions}` 
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: modelToUse,
         messages: [
           { role: "system", content: systemPrompt },
           ...conversationHistory,

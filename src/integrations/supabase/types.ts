@@ -1075,6 +1075,7 @@ export type Database = {
       }
       leads: {
         Row: {
+          ai_agent_id: string | null
           ai_enabled: boolean
           assigned_to: string | null
           chat_status: string
@@ -1093,6 +1094,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          ai_agent_id?: string | null
           ai_enabled?: boolean
           assigned_to?: string | null
           chat_status?: string
@@ -1111,6 +1113,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          ai_agent_id?: string | null
           ai_enabled?: boolean
           assigned_to?: string | null
           chat_status?: string
@@ -1128,7 +1131,15 @@ export type Database = {
           updated_at?: string
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "leads_ai_agent_id_fkey"
+            columns: ["ai_agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       message_logs: {
         Row: {
