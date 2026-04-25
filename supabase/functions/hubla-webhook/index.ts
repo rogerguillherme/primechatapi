@@ -335,11 +335,12 @@ Deno.serve(async (req) => {
 
     // ── AUTO-SEND PIX: When a PIX invoice is created, send checkout link via WhatsApp ──
     const eventType = payload?.type || "";
+    const invoiceObj = payload?.event?.invoice;
+    const invoiceStatus = invoiceObj?.status;
     const isPixCreated =
       (eventType === "invoice.created" || eventType === "invoice.status_updated") &&
       (extracted.paymentMethod?.toLowerCase() === "pix") &&
-      (status === "approved" ? false : true) && // skip if already paid
-      (invoice?.status === "unpaid" || invoice?.status === "draft" || invoice?.status === "overdue");
+      (invoiceStatus === "unpaid" || invoiceStatus === "draft" || invoiceStatus === "overdue");
 
     if (isPixCreated && leadId && extracted.buyerPhone) {
       try {
