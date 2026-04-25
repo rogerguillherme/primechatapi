@@ -2534,7 +2534,7 @@ export default function WhatsAppApi() {
 
       {/* ── QR Code Dialog (Evolution) ── */}
       <Dialog open={qrDialogOpen} onOpenChange={setQrDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <QrCode size={20} />
