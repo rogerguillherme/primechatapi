@@ -31,6 +31,42 @@ function randomDelay(): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+// ============================================================
+// UNIQUENESS HELPERS — anti-spam / anti-duplicate detection
+// Each outgoing message gets a unique invisible signature so Meta
+// cannot fingerprint identical payloads across the broadcast.
+// ============================================================
+
+const ZW_CHARS = ["\u200B", "\u200C", "\u200D", "\u2060"]; // zero-width space/non-joiner/joiner/word-joiner
+
+function uniqueZeroWidthSuffix(): string {
+  // 8 chars × 4 options = 65k combinations. Visually invisible.
+  let s = "";
+  for (let i = 0; i < 8; i++) {
+    s += ZW_CHARS[Math.floor(Math.random() * ZW_CHARS.length)];
+  }
+  return s;
+}
+
+function varyName(rawName: string | null | undefined): string {
+  const first = (rawName || "").trim().split(/\s+/)[0] || "";
+  if (!first) return "amigo(a)";
+  // Naturally rotate between presentations of the first name
+  const variations = [
+    first,                                                     // Maria
+    first.toLowerCase(),                                       // maria
+    first.charAt(0).toUpperCase() + first.slice(1).toLowerCase(), // Maria
+  ];
+  return variations[Math.floor(Math.random() * variations.length)];
+}
+
+function makeParamUnique(text: string, isLast: boolean): string {
+  // Append zero-width signature only to the LAST parameter so the
+  // user never sees odd characters mid-sentence.
+  if (!isLast) return text;
+  return `${text}${uniqueZeroWidthSuffix()}`;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
