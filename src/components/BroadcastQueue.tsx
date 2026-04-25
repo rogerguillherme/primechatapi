@@ -54,6 +54,10 @@ interface QueueItem {
   shuffleLeads: boolean;
   multiNumber: boolean;
   extraAccountIds: string[];
+  // Timing controls
+  delayMinSeconds: number;
+  delayMaxSeconds: number;
+  messagesPerSecond: number;
   // Scheduling
   scheduledAt: string;
 }
