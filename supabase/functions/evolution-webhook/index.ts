@@ -9,6 +9,222 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function normalizeTriggerValue(value: string | null | undefined): string {
+  return (value || "").trim().toLowerCase();
+}
+
+async function resolveMatchedFlowStep(
+  supabase: any,
+  flowId: string,
+  currentStepId: string | null,
+  candidateTriggers: string[],
+) {
+  if (!currentStepId || candidateTriggers.length === 0) {
+    return null;
+  }
+
+  const { data: currentStep } = await supabase
+    .from("flow_steps")
+    .select("id, step_type, parent_step_id, buttons")
+    .eq("id", currentStepId)
+    .maybeSingle();
+
+  if (!currentStep) {
+    return null;
+  }
+
+  let branchSteps: any[] = [];
+
+  if (currentStep.step_type === "condition" && currentStep.parent_step_id) {
+    const { data } = await supabase
+      .from("flow_steps")
+      .select("*")
+      .eq("flow_id", flowId)
+      .eq("parent_step_id", currentStep.parent_step_id);
+
+    branchSteps = data || [];
+  } else {
+    const { data } = await supabase
+      .from("flow_steps")
+      .select("*")
+      .eq("flow_id", flowId)
+      .eq("parent_step_id", currentStepId);
+
+    branchSteps = data || [];
+  }
+
+  let expandedTriggers = [...candidateTriggers];
+  if (currentStep.step_type === "interactive_buttons") {
+    const buttons = Array.isArray(currentStep.buttons) ? currentStep.buttons : [];
+    for (const trigger of candidateTriggers) {
+      const match = trigger.match(/^(\d+)$/);
+      if (!match) continue;
+      const buttonIndex = Number(match[1]) - 1;
+      const button = buttons[buttonIndex];
+      if (button?.title) {
+        expandedTriggers.push(normalizeTriggerValue(button.title));
+      }
+    }
+  }
+
+  expandedTriggers = Array.from(new Set(expandedTriggers.filter(Boolean)));
+
+  return branchSteps.find((step: any) => expandedTriggers.includes(normalizeTriggerValue(step.trigger_value))) || null;
+}
+
+async function processFlowStep(step: any, execution: any, lead: any, supabase: any, fallbackAccountId?: string | null) {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+  const accountId = execution.metadata?.account_id || fallbackAccountId || null;
+
+  if (step.step_type === "message" || step.step_type === "cta_url" || step.step_type === "interactive_buttons") {
+    const body: any = { phone: lead.phone, lead_id: lead.id };
+    if (accountId) body.account_id = accountId;
+
+    const codigo = execution.metadata?.codigo || "";
+    const firstName = (lead.name || "").split(" ")[0];
+
+    if (step.step_type === "cta_url") {
+      const buttons = Array.isArray(step.buttons) ? step.buttons : [];
+      const ctaBtn = buttons[0];
+      body.message = (step.custom_message || "Acesse o link abaixo:")
+        .replace(/\{nome\}/g, firstName)
+        .replace(/\{codigo\}/g, codigo)
+        .replace(/\{\{\d+\}\}/g, firstName);
+      if (ctaBtn?.url) {
+        body.cta_url = { display_text: ctaBtn.title || "Acessar", url: ctaBtn.url };
+      }
+    } else if (step.step_type === "interactive_buttons") {
+      body.message = (step.custom_message || "Escolha uma opção:")
+        .replace(/\{nome\}/g, firstName)
+        .replace(/\{codigo\}/g, codigo)
+        .replace(/\{\{\d+\}\}/g, firstName);
+      body.interactive_buttons = Array.isArray(step.buttons) ? step.buttons : [];
+    } else if (step.template_id) {
+      const { data: template } = await supabase
+        .from("chat_templates")
+        .select("*")
+        .eq("id", step.template_id)
+        .single();
+
+      if (template?.template_name) {
+        body.template_name = template.template_name;
+        body.template_language = template.template_language || "pt_BR";
+        const rawParams = (template.template_params || []) as any[];
+        body.template_params = rawParams.map((p: any) => {
+          const text = typeof p === "string" ? p : p?.text || "";
+          const resolved = text
+            .replace(/\{nome\}/g, firstName)
+            .replace(/\{codigo\}/g, codigo)
+            .replace(/\{\{\d+\}\}/g, firstName);
+          return { type: "text", text: resolved || firstName };
+        });
+      } else if (template) {
+        body.message = template.content;
+      }
+    } else if (step.custom_message) {
+      body.message = step.custom_message
+        .replace(/\{nome\}/g, firstName)
+        .replace(/\{codigo\}/g, codigo)
+        .replace(/\{\{\d+\}\}/g, firstName);
+    }
+
+    if (!body.message && !body.template_name && !body.interactive_buttons && !body.cta_url) {
+      console.error("Evolution processFlowStep: nothing to send for step:", step.id);
+      return;
+    }
+
+    console.log("Evolution processFlowStep sending:", step.id, JSON.stringify(body));
+    const sendRes = await fetch(`${supabaseUrl}/functions/v1/whatsapp-cloud-send`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${supabaseKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!sendRes.ok) {
+      const errText = await sendRes.text();
+      console.error("Evolution processFlowStep send failed:", sendRes.status, errText);
+      return;
+    }
+
+    await sendRes.text();
+    await advanceExecution(execution, step, lead, supabase, accountId);
+  } else if (step.step_type === "delay") {
+    await supabase.from("flow_executions").update({
+      current_step_id: step.id,
+      status: "waiting_delay",
+      next_action_at: new Date(Date.now() + (step.delay_minutes || 0) * 60 * 1000).toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq("id", execution.id);
+  } else if (step.step_type === "no_response") {
+    const timeoutMin = step.timeout_minutes || 10;
+    await supabase.from("flow_executions").update({
+      current_step_id: step.id,
+      status: "waiting_no_response",
+      next_action_at: new Date(Date.now() + timeoutMin * 60 * 1000).toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq("id", execution.id);
+  } else if (step.step_type === "condition") {
+    await supabase.from("flow_executions").update({
+      current_step_id: step.id,
+      status: "waiting_reply",
+      updated_at: new Date().toISOString(),
+    }).eq("id", execution.id);
+  }
+}
+
+async function advanceExecution(execution: any, currentStep: any, lead: any, supabase: any, accountId?: string | null) {
+  const { data: childSteps } = await supabase
+    .from("flow_steps")
+    .select("*")
+    .eq("flow_id", execution.flow_id)
+    .eq("parent_step_id", currentStep.id)
+    .order("step_order");
+
+  if (childSteps && childSteps.length > 0) {
+    if (childSteps.length === 1) {
+      await processFlowStep(childSteps[0], execution, lead, supabase, accountId);
+      return;
+    }
+
+    const hasConditionalBranches = childSteps.some((step: any) => step.step_type === "condition");
+    if (currentStep.step_type === "interactive_buttons" || hasConditionalBranches) {
+      await supabase.from("flow_executions").update({
+        current_step_id: currentStep.id,
+        status: "waiting_reply",
+        updated_at: new Date().toISOString(),
+      }).eq("id", execution.id);
+      return;
+    }
+
+    await processFlowStep(childSteps[0], execution, lead, supabase, accountId);
+    return;
+  }
+
+  const { data: nextSteps } = await supabase
+    .from("flow_steps")
+    .select("*")
+    .eq("flow_id", execution.flow_id)
+    .gt("step_order", currentStep.step_order)
+    .is("parent_step_id", null)
+    .order("step_order")
+    .limit(1);
+
+  if (!nextSteps || nextSteps.length === 0) {
+    await supabase.from("flow_executions").update({
+      status: "completed",
+      updated_at: new Date().toISOString(),
+    }).eq("id", execution.id);
+    return;
+  }
+
+  await processFlowStep(nextSteps[0], execution, lead, supabase, accountId);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
