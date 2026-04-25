@@ -736,6 +736,8 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
         message_variations: e.node.type === "message" ? ((e.node.data.message_variations as string[]) || []).filter((s) => s && s.trim()) : [],
         delay_min_seconds: (e.node.data.delay_min_seconds as number | null) ?? null,
         delay_max_seconds: (e.node.data.delay_max_seconds as number | null) ?? null,
+        media_url: e.node.type === "message" ? ((e.node.data.media_url as string) || null) : null,
+        media_type: e.node.type === "message" ? ((e.node.data.media_type as string) || null) : null,
       }));
 
       const { error: stepsError } = await supabase
