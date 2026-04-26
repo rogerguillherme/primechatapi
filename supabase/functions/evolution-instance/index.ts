@@ -39,6 +39,90 @@ async function evoFetch(
   return { ok: res.ok, status: res.status, body };
 }
 
+// ============= Backoff exponencial para QR / connect =============
+// Persistido em app_settings com chave "evo_qr_backoff:<account_id>"
+// Sequência: 30s, 1m, 2m, 4m, 8m, 15m, 30m, 60m (cap)
+// "QR code limit reached" detectado → pula direto para 15m e marca cooldown longo.
+const BACKOFF_STEPS_SEC = [30, 60, 120, 240, 480, 900, 1800, 3600];
+const QR_LIMIT_STEP_INDEX = 5; // 15 minutos quando bate o limite
+
+interface BackoffState {
+  attempts: number;
+  next_allowed_at: string; // ISO
+  last_reason?: string;
+}
+
+async function getBackoffState(admin: any, key: string): Promise<BackoffState | null> {
+  const { data } = await admin
+    .from("app_settings")
+    .select("value")
+    .eq("key", key)
+    .maybeSingle();
+  if (!data?.value) return null;
+  try { return JSON.parse(data.value) as BackoffState; } catch { return null; }
+}
+
+async function setBackoffState(admin: any, key: string, state: BackoffState) {
+  await admin
+    .from("app_settings")
+    .upsert({ key, value: JSON.stringify(state), updated_at: new Date().toISOString() }, { onConflict: "key" });
+}
+
+async function clearBackoffState(admin: any, key: string) {
+  await admin.from("app_settings").delete().eq("key", key);
+}
+
+function computeNextDelaySec(attempts: number, hitQrLimit: boolean): number {
+  if (hitQrLimit) {
+    return BACKOFF_STEPS_SEC[Math.max(QR_LIMIT_STEP_INDEX, attempts)] ??
+      BACKOFF_STEPS_SEC[BACKOFF_STEPS_SEC.length - 1];
+  }
+  return BACKOFF_STEPS_SEC[Math.min(attempts, BACKOFF_STEPS_SEC.length - 1)];
+}
+
+/** Retorna { allowed, retry_after_sec, state }. Se allowed=true, NÃO incrementa ainda. */
+async function checkBackoff(admin: any, accountId: string) {
+  const key = `evo_qr_backoff:${accountId}`;
+  const state = await getBackoffState(admin, key);
+  if (!state) return { allowed: true, retry_after_sec: 0, state: null, key };
+  const now = Date.now();
+  const next = new Date(state.next_allowed_at).getTime();
+  if (now >= next) return { allowed: true, retry_after_sec: 0, state, key };
+  return {
+    allowed: false,
+    retry_after_sec: Math.ceil((next - now) / 1000),
+    state,
+    key,
+  };
+}
+
+/** Registra uma tentativa (sucesso ou falha) atualizando o backoff. */
+async function recordAttempt(
+  admin: any,
+  key: string,
+  prev: BackoffState | null,
+  outcome: "success" | "failed" | "qr_limit",
+  reason?: string,
+) {
+  if (outcome === "success") {
+    await clearBackoffState(admin, key);
+    return;
+  }
+  const attempts = (prev?.attempts ?? 0) + 1;
+  const delaySec = computeNextDelaySec(attempts - 1, outcome === "qr_limit");
+  const next = new Date(Date.now() + delaySec * 1000).toISOString();
+  await setBackoffState(admin, key, {
+    attempts,
+    next_allowed_at: next,
+    last_reason: reason || outcome,
+  });
+}
+
+function detectQrLimit(body: any): boolean {
+  const s = JSON.stringify(body || "").toLowerCase();
+  return s.includes("qr code limit") || s.includes("qrcode limit") || s.includes("please login again");
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
