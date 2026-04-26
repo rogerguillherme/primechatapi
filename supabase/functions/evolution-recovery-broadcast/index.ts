@@ -188,6 +188,23 @@ Deno.serve(async (req) => {
           return;
         }
 
+        // Idempotência: pula se já enviado para esse lead neste job
+        const { data: prior } = await supabase
+          .from("message_logs")
+          .select("id")
+          .eq("job_id", job.id)
+          .eq("lead_id", lead.id)
+          .eq("status", "sent")
+          .limit(1)
+          .maybeSingle();
+        if (prior) {
+          console.log(`Skip duplicado lead ${lead.phone} (já enviado neste job)`);
+          await supabase.from("broadcast_jobs").update({
+            last_cursor: i + 1, updated_at: new Date().toISOString(),
+          }).eq("id", job.id);
+          continue;
+        }
+
         const fname = firstName(lead.name);
         const tpl = TEMPLATES[i % TEMPLATES.length];
         const link = `https://hub.la/r/oferta-aqui-fabrica`;
