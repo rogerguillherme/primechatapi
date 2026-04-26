@@ -281,7 +281,25 @@ Deno.serve(async (req) => {
         },
       ).catch((e) => console.warn("Set webhook failed (non-critical):", e));
 
-      // 4) Solicita QR Code
+      // 4) Solicita QR Code (com backoff)
+      const bo1 = await checkBackoff(admin, account.id);
+      if (!bo1.allowed) {
+        return json({
+          ok: true,
+          account_id: account.id,
+          qr_code: null,
+          pairing_code: null,
+          webhook_url: webhookUrl,
+          already_existed: alreadyExists,
+          backoff: {
+            blocked: true,
+            retry_after_sec: bo1.retry_after_sec,
+            attempts: bo1.state?.attempts ?? 0,
+            reason: bo1.state?.last_reason,
+          },
+        });
+      }
+
       const qrRes = await evoFetch(
         { serverUrl: cleanServer, apiKey: apiKeyClean, instance: cleanInstance, accountId: account.id },
         `/instance/connect/${cleanInstance}`,
@@ -289,12 +307,19 @@ Deno.serve(async (req) => {
       );
 
       const qrBody: any = qrRes.body || {};
-      const qrCode =
-        qrBody?.base64 ||
-        qrBody?.qrcode?.base64 ||
-        qrBody?.qr ||
-        null;
+      const qrCode = qrBody?.base64 || qrBody?.qrcode?.base64 || qrBody?.qr || null;
       const pairingCode = qrBody?.code || qrBody?.pairingCode || null;
+
+      const hitLimit1 = detectQrLimit(qrBody);
+      if (hitLimit1) {
+        await recordAttempt(admin, bo1.key, bo1.state, "qr_limit", "QR code limit reached");
+      } else if (!qrRes.ok || (!qrCode && !pairingCode)) {
+        await recordAttempt(admin, bo1.key, bo1.state, "failed", `status_${qrRes.status}`);
+      } else {
+        // QR entregue: registramos como tentativa para escalonar caso o usuário fique gerando QR sem parear.
+        // O webhook connection.update=open chamará success e zerará o backoff.
+        await recordAttempt(admin, bo1.key, bo1.state, "failed", "qr_issued");
+      }
 
       return json({
         ok: true,
@@ -303,6 +328,7 @@ Deno.serve(async (req) => {
         pairing_code: pairingCode,
         webhook_url: webhookUrl,
         already_existed: alreadyExists,
+        backoff: hitLimit1 ? { blocked: true, qr_limit: true } : undefined,
       });
     }
 
@@ -321,6 +347,19 @@ Deno.serve(async (req) => {
 
       if (!account) return json({ error: "Conta não encontrada" }, 404);
 
+      // Backoff: bloqueia se ainda em cooldown
+      const bo = await checkBackoff(admin, account.id);
+      if (!bo.allowed) {
+        return json({
+          ok: false,
+          blocked: true,
+          retry_after_sec: bo.retry_after_sec,
+          attempts: bo.state?.attempts ?? 0,
+          reason: bo.state?.last_reason,
+          message: `Aguarde ${bo.retry_after_sec}s antes de tentar novo QR (proteção anti-ban).`,
+        }, 429);
+      }
+
       const creds: EvoCreds = {
         serverUrl: (account.business_account_id || "").replace(/\/+$/, ""),
         apiKey: account.api_key || account.access_token,
@@ -333,10 +372,22 @@ Deno.serve(async (req) => {
       const qrCode = qrBody?.base64 || qrBody?.qrcode?.base64 || qrBody?.qr || null;
       const pairingCode = qrBody?.code || qrBody?.pairingCode || null;
 
+      const hitLimit = detectQrLimit(qrBody);
+      if (hitLimit) {
+        await recordAttempt(admin, bo.key, bo.state, "qr_limit", "QR code limit reached");
+      } else if (!qrRes.ok || (!qrCode && !pairingCode)) {
+        await recordAttempt(admin, bo.key, bo.state, "failed", `status_${qrRes.status}`);
+      } else {
+        await recordAttempt(admin, bo.key, bo.state, "failed", "qr_issued");
+      }
+
       return json({
-        ok: qrRes.ok,
+        ok: qrRes.ok && !hitLimit,
         qr_code: qrCode,
         pairing_code: pairingCode,
+        backoff: hitLimit
+          ? { blocked: true, qr_limit: true, retry_after_sec: BACKOFF_STEPS_SEC[QR_LIMIT_STEP_INDEX] }
+          : undefined,
         raw: qrBody,
       });
     }
