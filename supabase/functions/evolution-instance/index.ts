@@ -420,7 +420,25 @@ Deno.serve(async (req) => {
         stRes.body?.state ||
         "unknown";
 
-      return json({ ok: stRes.ok, state, raw: stRes.body });
+      // Conexão aberta → limpa backoff de QR
+      if (state === "open") {
+        await clearBackoffState(admin, `evo_qr_backoff:${account.id}`);
+      }
+
+      // Inclui info do backoff atual para a UI exibir
+      const boState = await getBackoffState(admin, `evo_qr_backoff:${account.id}`);
+      const retrySec = boState
+        ? Math.max(0, Math.ceil((new Date(boState.next_allowed_at).getTime() - Date.now()) / 1000))
+        : 0;
+
+      return json({
+        ok: stRes.ok,
+        state,
+        backoff: boState
+          ? { attempts: boState.attempts, retry_after_sec: retrySec, reason: boState.last_reason }
+          : null,
+        raw: stRes.body,
+      });
     }
 
     // --------- Logout (desconecta WhatsApp mas mantém instance) ---------
@@ -445,10 +463,27 @@ Deno.serve(async (req) => {
       };
 
       const res = await evoFetch(creds, `/instance/logout/${creds.instance}`, { method: "DELETE" });
+      // Logout manual zera backoff (usuário decidiu reiniciar do zero)
+      await clearBackoffState(admin, `evo_qr_backoff:${account.id}`);
       return json({ ok: res.ok, raw: res.body });
     }
 
-    return json({ error: "Ação inválida. Use: create_and_connect | connect | status | logout" }, 400);
+    // --------- Reset backoff manualmente (admin override) ---------
+    if (action === "reset_backoff") {
+      const { account_id } = body;
+      if (!account_id) return json({ error: "account_id obrigatório" }, 400);
+      const { data: account } = await admin
+        .from("whatsapp_accounts")
+        .select("id")
+        .eq("id", account_id)
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (!account) return json({ error: "Conta não encontrada" }, 404);
+      await clearBackoffState(admin, `evo_qr_backoff:${account.id}`);
+      return json({ ok: true });
+    }
+
+    return json({ error: "Ação inválida. Use: create_and_connect | connect | status | logout | reset_backoff" }, 400);
   } catch (err: any) {
     console.error("evolution-instance error:", err);
     return json({ error: err?.message || "Internal error" }, 500);
