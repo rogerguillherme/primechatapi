@@ -88,7 +88,7 @@ const isTransientEvolutionError = (error: unknown) => {
   return /503|temporarily unavailable|failed to fetch|edge runtime/i.test(message);
 };
 
-const invokeEvolutionInstance = async (body: Record<string, unknown>, retries = 2) => {
+const invokeEvolutionInstance = async (body: Record<string, unknown>, retries = 4) => {
   let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     try {
@@ -99,7 +99,8 @@ const invokeEvolutionInstance = async (body: Record<string, unknown>, retries = 
     } catch (error) {
       lastError = error;
       if (!isTransientEvolutionError(error) || attempt === retries) break;
-      await sleep(600 * (attempt + 1));
+      // Exponential backoff: 1s, 2s, 4s, 8s — handles edge runtime cold starts
+      await sleep(1000 * Math.pow(2, attempt));
     }
   }
   throw lastError instanceof Error ? lastError : new Error("Falha temporária ao acessar a conexão WhatsApp.");
