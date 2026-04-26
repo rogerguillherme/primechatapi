@@ -39,6 +39,90 @@ async function evoFetch(
   return { ok: res.ok, status: res.status, body };
 }
 
+// ============= Backoff exponencial para QR / connect =============
+// Persistido em app_settings com chave "evo_qr_backoff:<account_id>"
+// Sequência: 30s, 1m, 2m, 4m, 8m, 15m, 30m, 60m (cap)
+// "QR code limit reached" detectado → pula direto para 15m e marca cooldown longo.
+const BACKOFF_STEPS_SEC = [30, 60, 120, 240, 480, 900, 1800, 3600];
+const QR_LIMIT_STEP_INDEX = 5; // 15 minutos quando bate o limite
+
+interface BackoffState {
+  attempts: number;
+  next_allowed_at: string; // ISO
+  last_reason?: string;
+}
+
+async function getBackoffState(admin: any, key: string): Promise<BackoffState | null> {
+  const { data } = await admin
+    .from("app_settings")
+    .select("value")
+    .eq("key", key)
+    .maybeSingle();
+  if (!data?.value) return null;
+  try { return JSON.parse(data.value) as BackoffState; } catch { return null; }
+}
+
+async function setBackoffState(admin: any, key: string, state: BackoffState) {
+  await admin
+    .from("app_settings")
+    .upsert({ key, value: JSON.stringify(state), updated_at: new Date().toISOString() }, { onConflict: "key" });
+}
+
+async function clearBackoffState(admin: any, key: string) {
+  await admin.from("app_settings").delete().eq("key", key);
+}
+
+function computeNextDelaySec(attempts: number, hitQrLimit: boolean): number {
+  if (hitQrLimit) {
+    return BACKOFF_STEPS_SEC[Math.max(QR_LIMIT_STEP_INDEX, attempts)] ??
+      BACKOFF_STEPS_SEC[BACKOFF_STEPS_SEC.length - 1];
+  }
+  return BACKOFF_STEPS_SEC[Math.min(attempts, BACKOFF_STEPS_SEC.length - 1)];
+}
+
+/** Retorna { allowed, retry_after_sec, state }. Se allowed=true, NÃO incrementa ainda. */
+async function checkBackoff(admin: any, accountId: string) {
+  const key = `evo_qr_backoff:${accountId}`;
+  const state = await getBackoffState(admin, key);
+  if (!state) return { allowed: true, retry_after_sec: 0, state: null, key };
+  const now = Date.now();
+  const next = new Date(state.next_allowed_at).getTime();
+  if (now >= next) return { allowed: true, retry_after_sec: 0, state, key };
+  return {
+    allowed: false,
+    retry_after_sec: Math.ceil((next - now) / 1000),
+    state,
+    key,
+  };
+}
+
+/** Registra uma tentativa (sucesso ou falha) atualizando o backoff. */
+async function recordAttempt(
+  admin: any,
+  key: string,
+  prev: BackoffState | null,
+  outcome: "success" | "failed" | "qr_limit",
+  reason?: string,
+) {
+  if (outcome === "success") {
+    await clearBackoffState(admin, key);
+    return;
+  }
+  const attempts = (prev?.attempts ?? 0) + 1;
+  const delaySec = computeNextDelaySec(attempts - 1, outcome === "qr_limit");
+  const next = new Date(Date.now() + delaySec * 1000).toISOString();
+  await setBackoffState(admin, key, {
+    attempts,
+    next_allowed_at: next,
+    last_reason: reason || outcome,
+  });
+}
+
+function detectQrLimit(body: any): boolean {
+  const s = JSON.stringify(body || "").toLowerCase();
+  return s.includes("qr code limit") || s.includes("qrcode limit") || s.includes("please login again");
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -197,7 +281,25 @@ Deno.serve(async (req) => {
         },
       ).catch((e) => console.warn("Set webhook failed (non-critical):", e));
 
-      // 4) Solicita QR Code
+      // 4) Solicita QR Code (com backoff)
+      const bo1 = await checkBackoff(admin, account.id);
+      if (!bo1.allowed) {
+        return json({
+          ok: true,
+          account_id: account.id,
+          qr_code: null,
+          pairing_code: null,
+          webhook_url: webhookUrl,
+          already_existed: alreadyExists,
+          backoff: {
+            blocked: true,
+            retry_after_sec: bo1.retry_after_sec,
+            attempts: bo1.state?.attempts ?? 0,
+            reason: bo1.state?.last_reason,
+          },
+        });
+      }
+
       const qrRes = await evoFetch(
         { serverUrl: cleanServer, apiKey: apiKeyClean, instance: cleanInstance, accountId: account.id },
         `/instance/connect/${cleanInstance}`,
@@ -205,12 +307,19 @@ Deno.serve(async (req) => {
       );
 
       const qrBody: any = qrRes.body || {};
-      const qrCode =
-        qrBody?.base64 ||
-        qrBody?.qrcode?.base64 ||
-        qrBody?.qr ||
-        null;
+      const qrCode = qrBody?.base64 || qrBody?.qrcode?.base64 || qrBody?.qr || null;
       const pairingCode = qrBody?.code || qrBody?.pairingCode || null;
+
+      const hitLimit1 = detectQrLimit(qrBody);
+      if (hitLimit1) {
+        await recordAttempt(admin, bo1.key, bo1.state, "qr_limit", "QR code limit reached");
+      } else if (!qrRes.ok || (!qrCode && !pairingCode)) {
+        await recordAttempt(admin, bo1.key, bo1.state, "failed", `status_${qrRes.status}`);
+      } else {
+        // QR entregue: registramos como tentativa para escalonar caso o usuário fique gerando QR sem parear.
+        // O webhook connection.update=open chamará success e zerará o backoff.
+        await recordAttempt(admin, bo1.key, bo1.state, "failed", "qr_issued");
+      }
 
       return json({
         ok: true,
@@ -219,6 +328,7 @@ Deno.serve(async (req) => {
         pairing_code: pairingCode,
         webhook_url: webhookUrl,
         already_existed: alreadyExists,
+        backoff: hitLimit1 ? { blocked: true, qr_limit: true } : undefined,
       });
     }
 
@@ -237,6 +347,19 @@ Deno.serve(async (req) => {
 
       if (!account) return json({ error: "Conta não encontrada" }, 404);
 
+      // Backoff: bloqueia se ainda em cooldown
+      const bo = await checkBackoff(admin, account.id);
+      if (!bo.allowed) {
+        return json({
+          ok: false,
+          blocked: true,
+          retry_after_sec: bo.retry_after_sec,
+          attempts: bo.state?.attempts ?? 0,
+          reason: bo.state?.last_reason,
+          message: `Aguarde ${bo.retry_after_sec}s antes de tentar novo QR (proteção anti-ban).`,
+        }, 429);
+      }
+
       const creds: EvoCreds = {
         serverUrl: (account.business_account_id || "").replace(/\/+$/, ""),
         apiKey: account.api_key || account.access_token,
@@ -249,10 +372,22 @@ Deno.serve(async (req) => {
       const qrCode = qrBody?.base64 || qrBody?.qrcode?.base64 || qrBody?.qr || null;
       const pairingCode = qrBody?.code || qrBody?.pairingCode || null;
 
+      const hitLimit = detectQrLimit(qrBody);
+      if (hitLimit) {
+        await recordAttempt(admin, bo.key, bo.state, "qr_limit", "QR code limit reached");
+      } else if (!qrRes.ok || (!qrCode && !pairingCode)) {
+        await recordAttempt(admin, bo.key, bo.state, "failed", `status_${qrRes.status}`);
+      } else {
+        await recordAttempt(admin, bo.key, bo.state, "failed", "qr_issued");
+      }
+
       return json({
-        ok: qrRes.ok,
+        ok: qrRes.ok && !hitLimit,
         qr_code: qrCode,
         pairing_code: pairingCode,
+        backoff: hitLimit
+          ? { blocked: true, qr_limit: true, retry_after_sec: BACKOFF_STEPS_SEC[QR_LIMIT_STEP_INDEX] }
+          : undefined,
         raw: qrBody,
       });
     }
@@ -285,7 +420,25 @@ Deno.serve(async (req) => {
         stRes.body?.state ||
         "unknown";
 
-      return json({ ok: stRes.ok, state, raw: stRes.body });
+      // Conexão aberta → limpa backoff de QR
+      if (state === "open") {
+        await clearBackoffState(admin, `evo_qr_backoff:${account.id}`);
+      }
+
+      // Inclui info do backoff atual para a UI exibir
+      const boState = await getBackoffState(admin, `evo_qr_backoff:${account.id}`);
+      const retrySec = boState
+        ? Math.max(0, Math.ceil((new Date(boState.next_allowed_at).getTime() - Date.now()) / 1000))
+        : 0;
+
+      return json({
+        ok: stRes.ok,
+        state,
+        backoff: boState
+          ? { attempts: boState.attempts, retry_after_sec: retrySec, reason: boState.last_reason }
+          : null,
+        raw: stRes.body,
+      });
     }
 
     // --------- Logout (desconecta WhatsApp mas mantém instance) ---------
@@ -310,10 +463,27 @@ Deno.serve(async (req) => {
       };
 
       const res = await evoFetch(creds, `/instance/logout/${creds.instance}`, { method: "DELETE" });
+      // Logout manual zera backoff (usuário decidiu reiniciar do zero)
+      await clearBackoffState(admin, `evo_qr_backoff:${account.id}`);
       return json({ ok: res.ok, raw: res.body });
     }
 
-    return json({ error: "Ação inválida. Use: create_and_connect | connect | status | logout" }, 400);
+    // --------- Reset backoff manualmente (admin override) ---------
+    if (action === "reset_backoff") {
+      const { account_id } = body;
+      if (!account_id) return json({ error: "account_id obrigatório" }, 400);
+      const { data: account } = await admin
+        .from("whatsapp_accounts")
+        .select("id")
+        .eq("id", account_id)
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (!account) return json({ error: "Conta não encontrada" }, 404);
+      await clearBackoffState(admin, `evo_qr_backoff:${account.id}`);
+      return json({ ok: true });
+    }
+
+    return json({ error: "Ação inválida. Use: create_and_connect | connect | status | logout | reset_backoff" }, 400);
   } catch (err: any) {
     console.error("evolution-instance error:", err);
     return json({ error: err?.message || "Internal error" }, 500);
