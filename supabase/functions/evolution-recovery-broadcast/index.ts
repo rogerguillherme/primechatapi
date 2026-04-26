@@ -153,7 +153,7 @@ Deno.serve(async (req) => {
 
         const fname = firstName(lead.name);
         const tpl = TEMPLATES[i % TEMPLATES.length];
-        const link = `https://pay.hub.la/nB2koW36bTCpa5rUOpcL`;
+        const link = `https://hub.la/r/oferta-aqui-fabrica`;
         const text = tpl(fname, link) + zwSig();
 
         try {
