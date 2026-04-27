@@ -621,6 +621,7 @@ export type Database = {
           delay_max_seconds: number | null
           delay_min_seconds: number | null
           delay_minutes: number | null
+          file_name: string | null
           flow_id: string
           id: string
           max_interactions: number | null
@@ -643,6 +644,7 @@ export type Database = {
           delay_max_seconds?: number | null
           delay_min_seconds?: number | null
           delay_minutes?: number | null
+          file_name?: string | null
           flow_id: string
           id?: string
           max_interactions?: number | null
@@ -665,6 +667,7 @@ export type Database = {
           delay_max_seconds?: number | null
           delay_min_seconds?: number | null
           delay_minutes?: number | null
+          file_name?: string | null
           flow_id?: string
           id?: string
           max_interactions?: number | null

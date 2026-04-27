@@ -176,7 +176,7 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { phone, message, lead_id, media_url, media_type, template_name, template_language, template_params, interactive_buttons, cta_url, account_id } = await req.json();
+    const { phone, message, lead_id, media_url, media_type, template_name, template_language, template_params, interactive_buttons, cta_url, account_id, file_name } = await req.json();
 
     if (!phone || (!message && !media_url && !template_name && !interactive_buttons && !cta_url)) {
       return new Response(
@@ -315,7 +315,15 @@ Deno.serve(async (req) => {
             document: mimeType.includes("pdf") ? "pdf" : "bin",
           };
           const ext = extByType[media_type] || "bin";
-          const fileName = media_type === "document" ? `arquivo.${ext}` : `media.${ext}`;
+          // Use custom file_name when provided (preserves user-defined PDF name shown on WhatsApp)
+          let fileName: string;
+          if (typeof file_name === "string" && file_name.trim()) {
+            const cleanName = file_name.trim();
+            // Ensure correct extension
+            fileName = cleanName.toLowerCase().endsWith(`.${ext}`) ? cleanName : `${cleanName}.${ext}`;
+          } else {
+            fileName = media_type === "document" ? `arquivo.${ext}` : `media.${ext}`;
+          }
           evoBody = {
             number: cleanPhone,
             mediatype: evoMediaType,
@@ -475,7 +483,10 @@ Deno.serve(async (req) => {
       } else if (media_type === "audio") {
         body = { messaging_product: "whatsapp", to: cleanPhone, type: "audio", audio: { link: media_url } };
       } else {
-        body = { messaging_product: "whatsapp", to: cleanPhone, type: "document", document: { link: media_url, caption: message || undefined } };
+        const docFileName = (typeof file_name === "string" && file_name.trim())
+          ? (file_name.trim().toLowerCase().endsWith(".pdf") ? file_name.trim() : `${file_name.trim()}.pdf`)
+          : undefined;
+        body = { messaging_product: "whatsapp", to: cleanPhone, type: "document", document: { link: media_url, caption: message || undefined, filename: docFileName } };
       }
     } else if (interactive_buttons && Array.isArray(interactive_buttons) && interactive_buttons.length > 0) {
       body = {

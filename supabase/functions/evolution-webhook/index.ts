@@ -89,6 +89,7 @@ async function processFlowStep(step: any, execution: any, lead: any, supabase: a
     if (step.media_url && step.media_type) {
       body.media_url = step.media_url;
       body.media_type = step.media_type;
+      if (step.file_name) body.file_name = step.file_name;
     }
 
     if (step.step_type === "cta_url") {

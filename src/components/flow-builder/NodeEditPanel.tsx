@@ -77,9 +77,11 @@ export function NodeEditPanel({ node, templates, onUpdate, onClose, variationEna
               <DocumentUploadField
                 mediaUrl={(data.media_url as string) || null}
                 mediaType={(data.media_type as string) || null}
+                fileName={(data.file_name as string) || null}
                 onChange={(url) =>
                   onUpdate({ media_url: url, media_type: url ? "document" : null })
                 }
+                onFileNameChange={(name) => onUpdate({ file_name: name })}
               />
             )}
             {!data.template_id && (
@@ -516,15 +518,21 @@ function ImageUploadField({
 function DocumentUploadField({
   mediaUrl,
   mediaType,
+  fileName: fileNameProp,
   onChange,
+  onFileNameChange,
 }: {
   mediaUrl: string | null;
   mediaType?: string | null;
+  fileName?: string | null;
   onChange: (url: string | null) => void;
+  onFileNameChange?: (name: string | null) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
-  const [fileName, setFileName] = useState<string | null>(null);
+  const [localFileName, setLocalFileName] = useState<string | null>(fileNameProp || null);
+
+  const displayName = fileNameProp ?? localFileName;
 
   const handleFile = async (file: File) => {
     const isPdf =
@@ -549,7 +557,10 @@ function DocumentUploadField({
       if (upErr) throw upErr;
       const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path);
       onChange(pub.publicUrl);
-      setFileName(file.name);
+      // Default the WhatsApp display name to the original filename (without .pdf)
+      const cleanName = file.name.replace(/\.pdf$/i, "");
+      setLocalFileName(cleanName);
+      onFileNameChange?.(cleanName);
       toast.success("PDF carregado!");
     } catch (err: any) {
       toast.error(err.message || "Falha ao enviar PDF");
@@ -569,29 +580,51 @@ function DocumentUploadField({
         <FileText size={12} /> PDF (opcional)
       </Label>
       {isDocAttached ? (
-        <div className="relative rounded-md border border-border bg-muted/30 p-3 flex items-center gap-2">
-          <FileText size={16} className="text-emerald-600 shrink-0" />
-          <a
-            href={mediaUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="text-xs text-foreground truncate hover:underline flex-1"
-            title={fileName || mediaUrl}
-          >
-            {fileName || "Documento PDF anexado"}
-          </a>
-          <Button
-            variant="destructive"
-            size="icon"
-            className="h-6 w-6 shrink-0"
-            onClick={() => {
-              setFileName(null);
-              onChange(null);
-            }}
-          >
-            <Trash2 size={12} />
-          </Button>
-        </div>
+        <>
+          <div className="relative rounded-md border border-border bg-muted/30 p-3 flex items-center gap-2">
+            <FileText size={16} className="text-emerald-600 shrink-0" />
+            <a
+              href={mediaUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs text-foreground truncate hover:underline flex-1"
+              title={displayName || mediaUrl}
+            >
+              {displayName || "Documento PDF anexado"}
+            </a>
+            <Button
+              variant="destructive"
+              size="icon"
+              className="h-6 w-6 shrink-0"
+              onClick={() => {
+                setLocalFileName(null);
+                onFileNameChange?.(null);
+                onChange(null);
+              }}
+            >
+              <Trash2 size={12} />
+            </Button>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-[11px] text-muted-foreground">
+              Nome exibido no WhatsApp
+            </Label>
+            <Input
+              value={displayName || ""}
+              onChange={(e) => {
+                const v = e.target.value;
+                setLocalFileName(v);
+                onFileNameChange?.(v);
+              }}
+              placeholder="Ex: Guia da Desinflamação Zero Lipedema"
+              className="h-8 text-sm"
+              maxLength={100}
+            />
+            <p className="text-[10px] text-muted-foreground">
+              A extensão ".pdf" é adicionada automaticamente.
+            </p>
+          </div>
+        </>
       ) : (
         <Button
           type="button"
@@ -619,9 +652,11 @@ function DocumentUploadField({
           e.target.value = "";
         }}
       />
-      <p className="text-[11px] text-muted-foreground">
-        Envie um PDF (até 20MB) que será anexado junto à mensagem.
-      </p>
+      {!isDocAttached && (
+        <p className="text-[11px] text-muted-foreground">
+          Envie um PDF (até 20MB) que será anexado junto à mensagem.
+        </p>
+      )}
     </div>
   );
 }

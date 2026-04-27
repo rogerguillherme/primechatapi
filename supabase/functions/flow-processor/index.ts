@@ -317,6 +317,7 @@ async function sendStepMessage(
   if (step.step_type === "message" && step.media_url) {
     body.media_url = step.media_url;
     body.media_type = step.media_type || "image";
+    if (step.file_name) body.file_name = step.file_name;
     if (!expectedLogContent) {
       expectedLogContent = body.media_type === "image" ? "📷 Imagem" : "📎 Arquivo";
     }
