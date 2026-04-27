@@ -118,6 +118,26 @@ Deno.serve(async (req) => {
     const payload = await req.json();
     console.log("WhatsApp Cloud webhook received:", JSON.stringify(payload));
 
+    // Some Evolution instances can be pointed at this legacy webhook URL.
+    // Forward those payloads to the Evolution handler so replies continue flows correctly.
+    if (typeof payload?.event === "string" && (payload.instance || payload.instanceName) && payload.data) {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const forwardRes = await fetch(`${supabaseUrl}/functions/v1/evolution-webhook`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${supabaseKey}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const forwardText = await forwardRes.text();
+      return new Response(forwardText || JSON.stringify({ ok: forwardRes.ok, forwarded: "evolution" }), {
+        status: forwardRes.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const changeValues = (payload.entry || [])
       .flatMap((entry: any) => entry?.changes || [])
       .map((change: any) => change?.value)
