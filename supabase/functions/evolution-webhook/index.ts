@@ -422,8 +422,25 @@ Deno.serve(async (req) => {
           .from("leads")
           .select("id, phone, user_id")
           .in("phone", phoneVariants)
-          .limit(1);
-        existingLead = globalLeads && globalLeads.length > 0 ? globalLeads[0] : null;
+          .limit(10);
+
+        if (globalLeads && globalLeads.length > 0) {
+          const leadIds = globalLeads.map((l: any) => l.id);
+          const { data: waitingExecutions } = await supabase
+            .from("flow_executions")
+            .select("lead_id, metadata, updated_at")
+            .in("lead_id", leadIds)
+            .eq("status", "waiting_reply")
+            .order("updated_at", { ascending: false })
+            .limit(10);
+
+          const matchingExecution = (waitingExecutions || []).find((e: any) => e.metadata?.account_id === account.id)
+            || (waitingExecutions || [])[0];
+
+          existingLead = matchingExecution
+            ? globalLeads.find((l: any) => l.id === matchingExecution.lead_id) || globalLeads[0]
+            : globalLeads[0];
+        }
       }
 
       let leadId = existingLead?.id;
