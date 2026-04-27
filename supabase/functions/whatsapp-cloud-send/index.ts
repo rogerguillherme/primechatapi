@@ -483,7 +483,10 @@ Deno.serve(async (req) => {
       } else if (media_type === "audio") {
         body = { messaging_product: "whatsapp", to: cleanPhone, type: "audio", audio: { link: media_url } };
       } else {
-        body = { messaging_product: "whatsapp", to: cleanPhone, type: "document", document: { link: media_url, caption: message || undefined } };
+        const docFileName = (typeof file_name === "string" && file_name.trim())
+          ? (file_name.trim().toLowerCase().endsWith(".pdf") ? file_name.trim() : `${file_name.trim()}.pdf`)
+          : undefined;
+        body = { messaging_product: "whatsapp", to: cleanPhone, type: "document", document: { link: media_url, caption: message || undefined, filename: docFileName } };
       }
     } else if (interactive_buttons && Array.isArray(interactive_buttons) && interactive_buttons.length > 0) {
       body = {
