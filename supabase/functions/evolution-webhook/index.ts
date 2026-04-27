@@ -85,6 +85,12 @@ async function processFlowStep(step: any, execution: any, lead: any, supabase: a
     const codigo = execution.metadata?.codigo || "";
     const firstName = (lead.name || "").split(" ")[0];
 
+    // Attach media (image or document/PDF) when present on the step
+    if (step.media_url && step.media_type) {
+      body.media_url = step.media_url;
+      body.media_type = step.media_type;
+    }
+
     if (step.step_type === "cta_url") {
       const buttons = Array.isArray(step.buttons) ? step.buttons : [];
       const ctaBtn = buttons[0];
@@ -130,7 +136,7 @@ async function processFlowStep(step: any, execution: any, lead: any, supabase: a
         .replace(/\{\{\d+\}\}/g, firstName);
     }
 
-    if (!body.message && !body.template_name && !body.interactive_buttons && !body.cta_url) {
+    if (!body.message && !body.template_name && !body.interactive_buttons && !body.cta_url && !body.media_url) {
       console.error("Evolution processFlowStep: nothing to send for step:", step.id);
       return;
     }
