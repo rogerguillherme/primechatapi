@@ -603,6 +603,132 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ============= Group participant updates (lead joined/left a WhatsApp group) =============
+    if (
+      event === "group.participants.update" ||
+      event === "GROUP_PARTICIPANTS_UPDATE" ||
+      event === "groups.update" ||
+      event === "GROUPS_UPDATE"
+    ) {
+      const data = payload.data || {};
+      // Evolution sends: { id: "<groupId>@g.us", participants: ["55..@s.whatsapp.net", ...], action: "add" | "remove" | ... }
+      const action: string = (data.action || data.type || "").toLowerCase();
+      const groupId: string = data.id || data.groupId || data.remoteJid || "";
+      const participants: string[] = Array.isArray(data.participants)
+        ? data.participants
+        : Array.isArray(data.participantsList)
+        ? data.participantsList
+        : [];
+
+      console.log("Evolution group event:", JSON.stringify({ action, groupId, count: participants.length }));
+
+      if (action === "add" || action === "promote" || action === "join" || action === "invite") {
+        // Find user's flows triggered by group_join
+        const { data: flows } = await supabase
+          .from("flows")
+          .select("id, user_id, trigger_type, active")
+          .eq("user_id", account.user_id)
+          .eq("trigger_type", "group_join")
+          .eq("active", true);
+
+        if (flows && flows.length > 0) {
+          for (const participantJid of participants) {
+            const rawPhone = String(participantJid).split("@")[0].replace(/\D/g, "");
+            if (!rawPhone) continue;
+
+            // Generate BR 9th-digit phone variants for matching
+            const phoneVariants: string[] = [rawPhone];
+            if (rawPhone.startsWith("55") && rawPhone.length === 12) {
+              const ddd = rawPhone.substring(2, 4);
+              const rest = rawPhone.substring(4);
+              phoneVariants.push(`55${ddd}9${rest}`);
+            } else if (rawPhone.startsWith("55") && rawPhone.length === 13) {
+              const ddd = rawPhone.substring(2, 4);
+              const ninth = rawPhone.substring(4, 5);
+              const rest = rawPhone.substring(5);
+              if (ninth === "9") phoneVariants.push(`55${ddd}${rest}`);
+            }
+            const canonicalPhone = phoneVariants.length > 1 ? phoneVariants[1] : rawPhone;
+
+            // Upsert lead
+            const { data: existingLeads } = await supabase
+              .from("leads")
+              .select("id, name, phone")
+              .in("phone", phoneVariants)
+              .eq("user_id", account.user_id)
+              .limit(1);
+
+            let lead = existingLeads && existingLeads.length > 0 ? existingLeads[0] : null;
+
+            if (!lead) {
+              const { data: newLead, error: leadErr } = await supabase
+                .from("leads")
+                .insert({
+                  user_id: account.user_id,
+                  phone: canonicalPhone,
+                  name: canonicalPhone,
+                  origin: "group_join",
+                  chat_status: "novos_pedidos",
+                })
+                .select("id, name, phone")
+                .single();
+              if (leadErr) {
+                console.error("group_join: failed to create lead:", leadErr);
+                continue;
+              }
+              lead = newLead;
+            }
+
+            for (const flow of flows) {
+              // Skip if a recent (last 1h) execution already exists for this lead+flow to avoid duplicates
+              const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+              const { data: recent } = await supabase
+                .from("flow_executions")
+                .select("id")
+                .eq("flow_id", flow.id)
+                .eq("lead_id", lead.id)
+                .gte("started_at", oneHourAgo)
+                .limit(1);
+              if (recent && recent.length > 0) {
+                console.log("group_join: skipping duplicate execution for lead", lead.id, "flow", flow.id);
+                continue;
+              }
+
+              // Find first root step
+              const { data: firstSteps } = await supabase
+                .from("flow_steps")
+                .select("*")
+                .eq("flow_id", flow.id)
+                .is("parent_step_id", null)
+                .order("step_order")
+                .limit(1);
+
+              if (!firstSteps || firstSteps.length === 0) continue;
+
+              const { data: execution, error: execErr } = await supabase
+                .from("flow_executions")
+                .insert({
+                  flow_id: flow.id,
+                  lead_id: lead.id,
+                  status: "running",
+                  current_step_id: firstSteps[0].id,
+                  metadata: { account_id: account.id, group_id: groupId, trigger: "group_join" },
+                })
+                .select("*")
+                .single();
+
+              if (execErr || !execution) {
+                console.error("group_join: failed to create execution:", execErr);
+                continue;
+              }
+
+              await processFlowStep(firstSteps[0], execution, lead, supabase, account.id);
+            }
+          }
+        }
+      }
+    }
+
     return new Response(JSON.stringify({ ok: true }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
