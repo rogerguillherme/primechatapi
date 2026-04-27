@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { X, Plus, Trash2, Upload, Image as ImageIcon, Loader2 } from "lucide-react";
+import { X, Plus, Trash2, Upload, Image as ImageIcon, Loader2, FileText } from "lucide-react";
 import { useAiAgents } from "@/hooks/use-ai-agents";
 import { useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -417,13 +417,18 @@ function MessageVariationsField({
 
 function ImageUploadField({
   mediaUrl,
+  mediaType,
   onChange,
 }: {
   mediaUrl: string | null;
+  mediaType?: string | null;
   onChange: (url: string | null) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+
+  // Hide image preview slot if a non-image media is set (e.g. document)
+  const showPreview = mediaUrl && (!mediaType || mediaType === "image");
 
   const handleFile = async (file: File) => {
     if (!file.type.startsWith("image/")) {
@@ -454,12 +459,15 @@ function ImageUploadField({
     }
   };
 
+  // If a document is already attached, don't render the image uploader (one media per node)
+  if (mediaUrl && mediaType === "document") return null;
+
   return (
     <div className="space-y-2">
       <Label className="text-xs flex items-center gap-1.5">
         <ImageIcon size={12} /> Imagem (opcional)
       </Label>
-      {mediaUrl ? (
+      {showPreview ? (
         <div className="relative rounded-md border border-border overflow-hidden bg-muted/30">
           <img src={mediaUrl} alt="Preview" className="w-full max-h-40 object-contain" />
           <Button
@@ -500,6 +508,119 @@ function ImageUploadField({
       />
       <p className="text-[11px] text-muted-foreground">
         Pode enviar só imagem, só texto, ou imagem + texto (legenda).
+      </p>
+    </div>
+  );
+}
+
+function DocumentUploadField({
+  mediaUrl,
+  mediaType,
+  onChange,
+}: {
+  mediaUrl: string | null;
+  mediaType?: string | null;
+  onChange: (url: string | null) => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [fileName, setFileName] = useState<string | null>(null);
+
+  const handleFile = async (file: File) => {
+    const isPdf =
+      file.type === "application/pdf" ||
+      file.name.toLowerCase().endsWith(".pdf");
+    if (!isPdf) {
+      toast.error("Selecione um arquivo PDF.");
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error("PDF muito grande (máximo 20MB).");
+      return;
+    }
+    setUploading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Não autenticado");
+      const path = `${user.id}/flow-doc-${crypto.randomUUID()}.pdf`;
+      const { error: upErr } = await supabase.storage
+        .from("chat-media")
+        .upload(path, file, { contentType: "application/pdf", upsert: false });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path);
+      onChange(pub.publicUrl);
+      setFileName(file.name);
+      toast.success("PDF carregado!");
+    } catch (err: any) {
+      toast.error(err.message || "Falha ao enviar PDF");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // If an image is already attached, don't render the document uploader (one media per node)
+  if (mediaUrl && mediaType === "image") return null;
+
+  const isDocAttached = mediaUrl && mediaType === "document";
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs flex items-center gap-1.5">
+        <FileText size={12} /> PDF (opcional)
+      </Label>
+      {isDocAttached ? (
+        <div className="relative rounded-md border border-border bg-muted/30 p-3 flex items-center gap-2">
+          <FileText size={16} className="text-emerald-600 shrink-0" />
+          <a
+            href={mediaUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs text-foreground truncate hover:underline flex-1"
+            title={fileName || mediaUrl}
+          >
+            {fileName || "Documento PDF anexado"}
+          </a>
+          <Button
+            variant="destructive"
+            size="icon"
+            className="h-6 w-6 shrink-0"
+            onClick={() => {
+              setFileName(null);
+              onChange(null);
+            }}
+          >
+            <Trash2 size={12} />
+          </Button>
+        </div>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={uploading}
+          onClick={() => fileInputRef.current?.click()}
+          className="w-full gap-2 text-xs h-9 border-dashed"
+        >
+          {uploading ? (
+            <><Loader2 size={12} className="animate-spin" /> Enviando...</>
+          ) : (
+            <><Upload size={12} /> Enviar PDF</>
+          )}
+        </Button>
+      )}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/pdf,.pdf"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleFile(file);
+          e.target.value = "";
+        }}
+      />
+      <p className="text-[11px] text-muted-foreground">
+        Envie um PDF (até 20MB) que será anexado junto à mensagem.
       </p>
     </div>
   );
