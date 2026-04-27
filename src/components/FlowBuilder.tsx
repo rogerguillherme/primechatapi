@@ -444,6 +444,7 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
             delay_max_seconds: s.delay_max_seconds ?? null,
             media_url: s.media_url ?? null,
             media_type: s.media_type ?? null,
+            file_name: s.file_name ?? null,
             // For blacklist: reason is stored in custom_message
             ...(s.step_type === "blacklist" ? { reason: s.custom_message || "opt-out via fluxo" } : {}),
           },
@@ -738,6 +739,7 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
         delay_max_seconds: (e.node.data.delay_max_seconds as number | null) ?? null,
         media_url: e.node.type === "message" ? ((e.node.data.media_url as string) || null) : null,
         media_type: e.node.type === "message" ? ((e.node.data.media_type as string) || null) : null,
+        file_name: e.node.type === "message" ? ((e.node.data.file_name as string) || null) : null,
       }));
 
       const { error: stepsError } = await supabase
