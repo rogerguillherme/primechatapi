@@ -67,8 +67,18 @@ export function NodeEditPanel({ node, templates, onUpdate, onClose, variationEna
             {!data.template_id && (
               <ImageUploadField
                 mediaUrl={(data.media_url as string) || null}
+                mediaType={(data.media_type as string) || null}
                 onChange={(url) =>
                   onUpdate({ media_url: url, media_type: url ? "image" : null })
+                }
+              />
+            )}
+            {!data.template_id && (
+              <DocumentUploadField
+                mediaUrl={(data.media_url as string) || null}
+                mediaType={(data.media_type as string) || null}
+                onChange={(url) =>
+                  onUpdate({ media_url: url, media_type: url ? "document" : null })
                 }
               />
             )}
