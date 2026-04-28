@@ -8,7 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Bot, User, FileText, HelpCircle, FolderOpen, Save, Volume2, Plus, Trash2, Upload, ArrowLeft, ChevronRight, Play, Pause, Zap } from "lucide-react";
+import { Bot, User, FileText, HelpCircle, FolderOpen, Save, Volume2, Plus, Trash2, Upload, ArrowLeft, ChevronRight, Play, Pause, Zap, GraduationCap, MessageSquare, Send, Loader2 } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { EventAgentMapping } from "@/components/EventAgentMapping";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -265,11 +266,13 @@ function AgentEditorView({ agent, onBack }: { agent: AiAgent | null; onBack: () 
       </div>
 
       <Tabs defaultValue="personality" className="w-full">
-        <TabsList className="bg-muted w-full justify-start">
+        <TabsList className="bg-muted w-full justify-start flex-wrap h-auto">
           <TabsTrigger value="personality" className="gap-2"><User size={14} /> Personalidade</TabsTrigger>
           <TabsTrigger value="instructions" className="gap-2"><FileText size={14} /> Instruções</TabsTrigger>
           <TabsTrigger value="knowledge" className="gap-2"><FolderOpen size={14} /> Base de Informações</TabsTrigger>
           <TabsTrigger value="faq" className="gap-2"><HelpCircle size={14} /> Perguntas e Respostas</TabsTrigger>
+          <TabsTrigger value="training" className="gap-2"><GraduationCap size={14} /> Treinamento</TabsTrigger>
+          <TabsTrigger value="simulation" className="gap-2" disabled={!agent}><MessageSquare size={14} /> Simulação</TabsTrigger>
           <TabsTrigger value="files" className="gap-2"><Upload size={14} /> Arquivos</TabsTrigger>
         </TabsList>
 
