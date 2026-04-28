@@ -192,6 +192,26 @@ Deno.serve(async (req) => {
         content: m.content,
       }));
 
+    // Load training feedbacks for this agent
+    let feedbackText = "";
+    if (agent && lead.user_id) {
+      const { data: feedbacks } = await supabase
+        .from("ai_agent_feedback")
+        .select("user_message, bad_reply, good_reply, note")
+        .eq("user_id", lead.user_id)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      if (feedbacks?.length) {
+        feedbackText = feedbacks.map((f: any, i: number) => {
+          const parts = [`📌 Treino ${i + 1}:`, `Cliente disse: "${f.user_message}"`];
+          if (f.bad_reply) parts.push(`❌ NÃO responda assim: "${f.bad_reply}"`);
+          parts.push(`✅ Responda assim: "${f.good_reply}"`);
+          if (f.note) parts.push(`💡 Observação: ${f.note}`);
+          return parts.join("\n");
+        }).join("\n\n");
+      }
+    }
+
     // Build system prompt — prefer per-lead agent if available
     let systemPrompt: string;
     let modelToUse = "google/gemini-3-flash-preview";
