@@ -58,6 +58,24 @@ Deno.serve(async (req) => {
       });
     }
 
+    let accountOwnerId: string | null = null;
+    if (account_id) {
+      const { data: account } = await supabase
+        .from("whatsapp_accounts")
+        .select("id, user_id")
+        .eq("id", account_id)
+        .maybeSingle();
+
+      if (!account?.user_id) {
+        return new Response(JSON.stringify({ skipped: "account_not_found" }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      accountOwnerId = account.user_id;
+    }
+
     // In "selected" mode, only respond when the lead has ai_enabled = true
     if (mode === "selected") {
       const { data: leadFlag } = await supabase
@@ -92,7 +110,7 @@ Deno.serve(async (req) => {
     // Get lead info (including bound agent)
     const { data: lead } = await supabase
       .from("leads")
-      .select("id, name, phone, ai_agent_id")
+      .select("id, name, phone, user_id, ai_agent_id")
       .eq("id", lead_id)
       .single();
 
@@ -103,15 +121,36 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Try to load the agent bound to this lead (configured per event)
+    if (accountOwnerId && lead.user_id !== accountOwnerId) {
+      console.warn("AI auto-reply skipped: account/lead owner mismatch", JSON.stringify({ lead_id, account_id }));
+      return new Response(JSON.stringify({ skipped: "account_lead_mismatch" }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Try to load the agent bound to this lead (configured per event), strictly scoped to the lead owner
     let agent: any = null;
     if (lead.ai_agent_id) {
       const { data: a } = await supabase
         .from("ai_agents")
-        .select("name, identity, instructions, knowledge, faq, guidelines, ai_model, active")
+        .select("name, identity, instructions, knowledge, faq, guidelines, ai_model, active, user_id")
         .eq("id", lead.ai_agent_id)
+        .eq("user_id", lead.user_id)
         .maybeSingle();
       if (a?.active !== false) agent = a;
+    }
+
+    if (!agent && lead.user_id) {
+      const { data: defaultAgent } = await supabase
+        .from("ai_agents")
+        .select("name, identity, instructions, knowledge, faq, guidelines, ai_model, active, user_id")
+        .eq("user_id", lead.user_id)
+        .eq("active", true)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (defaultAgent) agent = defaultAgent;
     }
 
     // Get recent conversation history (last 20 messages)
