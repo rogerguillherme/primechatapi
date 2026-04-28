@@ -440,36 +440,9 @@ Deno.serve(async (req) => {
         .eq("user_id", account.user_id)
         .limit(1);
 
-      let existingLead = existingLeads && existingLeads.length > 0 ? existingLeads[0] : null;
-
-      // The current schema has a global unique phone, so a lead may already exist
-      // under another owner from older imports/manual tests. Reuse it to avoid
-      // blocking inbound replies with duplicate-phone errors.
-      if (!existingLead) {
-        const { data: globalLeads } = await supabase
-          .from("leads")
-          .select("id, phone, user_id")
-          .in("phone", phoneVariants)
-          .limit(10);
-
-        if (globalLeads && globalLeads.length > 0) {
-          const leadIds = globalLeads.map((l: any) => l.id);
-          const { data: waitingExecutions } = await supabase
-            .from("flow_executions")
-            .select("lead_id, metadata, updated_at")
-            .in("lead_id", leadIds)
-            .eq("status", "waiting_reply")
-            .order("updated_at", { ascending: false })
-            .limit(10);
-
-          const matchingExecution = (waitingExecutions || []).find((e: any) => e.metadata?.account_id === account.id)
-            || (waitingExecutions || [])[0];
-
-          existingLead = matchingExecution
-            ? globalLeads.find((l: any) => l.id === matchingExecution.lead_id) || globalLeads[0]
-            : globalLeads[0];
-        }
-      }
+      // Strict multi-tenant isolation: only reuse leads that belong to the account's owner.
+      // Never reach across tenants — that would leak chat messages between users.
+      const existingLead = existingLeads && existingLeads.length > 0 ? existingLeads[0] : null;
 
       let leadId = existingLead?.id;
       if (!leadId) {
