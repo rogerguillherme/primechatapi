@@ -50,6 +50,47 @@ export type Database = {
           },
         ]
       }
+      ai_agent_feedback: {
+        Row: {
+          agent_id: string
+          bad_reply: string | null
+          created_at: string
+          good_reply: string
+          id: string
+          note: string | null
+          user_id: string
+          user_message: string
+        }
+        Insert: {
+          agent_id: string
+          bad_reply?: string | null
+          created_at?: string
+          good_reply: string
+          id?: string
+          note?: string | null
+          user_id: string
+          user_message: string
+        }
+        Update: {
+          agent_id?: string
+          bad_reply?: string | null
+          created_at?: string
+          good_reply?: string
+          id?: string
+          note?: string | null
+          user_id?: string
+          user_message?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_agent_feedback_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_agents: {
         Row: {
           active: boolean | null
