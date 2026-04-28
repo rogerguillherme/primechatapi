@@ -13,6 +13,34 @@ function normalizeTriggerValue(value: string | null | undefined): string {
   return (value || "").trim().toLowerCase();
 }
 
+function extractParticipantJid(participant: any): string {
+  if (!participant) return "";
+  if (typeof participant === "string" || typeof participant === "number") return String(participant);
+
+  const candidates = [
+    participant.phoneNumber,
+    participant.phone,
+    participant.participant,
+    participant.remoteJid,
+    participant.id,
+    participant.jid?.phoneNumber,
+    participant.jid?.id,
+  ];
+
+  for (const candidate of candidates) {
+    const jid = extractParticipantJid(candidate);
+    if (jid) return jid;
+  }
+
+  return "";
+}
+
+function collectGroupParticipants(data: any): any[] {
+  return [data.participants, data.participantsList, data.participantsData]
+    .filter(Array.isArray)
+    .flat();
+}
+
 async function resolveMatchedFlowStep(
   supabase: any,
   flowId: string,
@@ -640,7 +668,9 @@ Deno.serve(async (req) => {
     // ============= Group participant updates (lead joined/left a WhatsApp group) =============
     if (
       event === "group.participants.update" ||
+      event === "group-participants.update" ||
       event === "GROUP_PARTICIPANTS_UPDATE" ||
+      event === "GROUP-PARTICIPANTS.UPDATE" ||
       event === "groups.update" ||
       event === "GROUPS_UPDATE"
     ) {
@@ -648,11 +678,7 @@ Deno.serve(async (req) => {
       // Evolution sends: { id: "<groupId>@g.us", participants: ["55..@s.whatsapp.net", ...], action: "add" | "remove" | ... }
       const action: string = (data.action || data.type || "").toLowerCase();
       const groupId: string = data.id || data.groupId || data.remoteJid || "";
-      const participants: string[] = Array.isArray(data.participants)
-        ? data.participants
-        : Array.isArray(data.participantsList)
-        ? data.participantsList
-        : [];
+      const participants = collectGroupParticipants(data);
 
       console.log("Evolution group event:", JSON.stringify({ action, groupId, count: participants.length }));
 
@@ -666,8 +692,9 @@ Deno.serve(async (req) => {
           .eq("active", true);
 
         if (flows && flows.length > 0) {
-          for (const participantJid of participants) {
-            const rawPhone = String(participantJid).split("@")[0].replace(/\D/g, "");
+          for (const participant of participants) {
+            const participantJid = extractParticipantJid(participant);
+            const rawPhone = participantJid.split("@")[0].replace(/\D/g, "");
             if (!rawPhone) continue;
 
             // Generate BR 9th-digit phone variants for matching
