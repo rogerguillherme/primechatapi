@@ -153,6 +153,29 @@ Deno.serve(async (req) => {
       if (defaultAgent) agent = defaultAgent;
     }
 
+    const forbiddenContextTerms = [
+      "fábrica de dólar",
+      "fabrica de dolar",
+      "lucrar em dólar",
+      "lucrar em dolar",
+      "faturar em dólar",
+      "faturar em dolar",
+      "ganhar em dólar",
+      "ganhar em dolar",
+      "moeda forte",
+      "kiwify.com.br/j0hsxv3",
+    ];
+
+    const agentText = [agent?.name, agent?.identity, agent?.instructions, agent?.knowledge, agent?.guidelines]
+      .filter(Boolean)
+      .join("\n")
+      .toLowerCase();
+
+    const shouldIgnoreHistoryMessage = (content: string) => {
+      const lower = (content || "").toLowerCase();
+      return forbiddenContextTerms.some((term) => lower.includes(term) && !agentText.includes(term));
+    };
+
     // Get recent conversation history (last 20 messages)
     const { data: history } = await supabase
       .from("chat_messages")
@@ -163,6 +186,7 @@ Deno.serve(async (req) => {
 
     const conversationHistory = (history || [])
       .reverse()
+      .filter((m) => !shouldIgnoreHistoryMessage(m.content || ""))
       .map((m) => ({
         role: m.direction === "inbound" ? "user" as const : "assistant" as const,
         content: m.content,
@@ -205,7 +229,8 @@ ${faqText ? `❓ FAQ:\n${faqText}\n` : ""}
 🚫 NUNCA:
 - Diga que é IA / bot / sistema
 - Use ** (asterisco duplo)
-- Invente informações`;
+- Invente informações
+- Misture produtos, marcas, links, promessas ou histórico de outros agentes/empresas; responda somente com base na identidade e conhecimento deste agente`;
     } else {
       const companyName = config.ai_company_name || "Nossa Empresa";
       const companyDesc = config.ai_company_description || "";
