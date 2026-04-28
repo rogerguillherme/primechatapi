@@ -192,6 +192,26 @@ Deno.serve(async (req) => {
         content: m.content,
       }));
 
+    // Load training feedbacks for this agent
+    let feedbackText = "";
+    if (agent && lead.user_id) {
+      const { data: feedbacks } = await supabase
+        .from("ai_agent_feedback")
+        .select("user_message, bad_reply, good_reply, note")
+        .eq("user_id", lead.user_id)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      if (feedbacks?.length) {
+        feedbackText = feedbacks.map((f: any, i: number) => {
+          const parts = [`📌 Treino ${i + 1}:`, `Cliente disse: "${f.user_message}"`];
+          if (f.bad_reply) parts.push(`❌ NÃO responda assim: "${f.bad_reply}"`);
+          parts.push(`✅ Responda assim: "${f.good_reply}"`);
+          if (f.note) parts.push(`💡 Observação: ${f.note}`);
+          return parts.join("\n");
+        }).join("\n\n");
+      }
+    }
+
     // Build system prompt — prefer per-lead agent if available
     let systemPrompt: string;
     let modelToUse = "google/gemini-3-flash-preview";
@@ -201,7 +221,7 @@ Deno.serve(async (req) => {
       const faqText = Array.isArray(agent.faq) && agent.faq.length
         ? agent.faq.map((f: any) => `- P: ${f.question || f.q || ""}\n  R: ${f.answer || f.a || ""}`).join("\n")
         : "";
-      systemPrompt = `Você é um atendente humano de verdade respondendo clientes pelo WhatsApp. Jamais demonstre ser uma IA, robô ou automação.
+      systemPrompt = `Você é um atendente humano REAL respondendo clientes pelo WhatsApp. Jamais demonstre ser uma IA, robô ou automação.
 
 🧠 IDENTIDADE / PERSONA:
 ${agent.identity || agent.name || "Atendente da empresa"}
@@ -216,18 +236,22 @@ ${agent.knowledge || ""}
 ${agent.guidelines || ""}
 
 ${faqText ? `❓ FAQ:\n${faqText}\n` : ""}
+${feedbackText ? `🎓 TREINAMENTO POR FEEDBACK (siga rigorosamente o estilo dos exemplos abaixo):\n${feedbackText}\n` : ""}
 
-✍️ FORMATAÇÃO WHATSAPP:
+✍️ COMPORTAMENTO HUMANO NATURAL:
+- Escreva como pessoa real digitando no WhatsApp
+- Mensagens curtas (1-3 frases), tom brasileiro e natural
+- Use vírgulas, "kkk", "rs", "ah", "então", "olha" quando combinar
+- Não responda como manual, responda como gente
 - Negrito: *texto* (UM asterisco apenas — nunca **)
 - Itálico: _texto_
-- Mensagens curtas (1-3 frases), tom humano e brasileiro
 - Use emojis com moderação 😉
 
 🧠 CONTEXTO:
 - Nome do cliente: ${lead.name || "não informado"}
 
 🚫 NUNCA:
-- Diga que é IA / bot / sistema
+- Diga que é IA / bot / sistema / assistente virtual
 - Use ** (asterisco duplo)
 - Invente informações
 - Misture produtos, marcas, links, promessas ou histórico de outros agentes/empresas; responda somente com base na identidade e conhecimento deste agente`;
