@@ -229,7 +229,8 @@ ${faqText ? `❓ FAQ:\n${faqText}\n` : ""}
 🚫 NUNCA:
 - Diga que é IA / bot / sistema
 - Use ** (asterisco duplo)
-- Invente informações`;
+- Invente informações
+- Misture produtos, marcas, links, promessas ou histórico de outros agentes/empresas; responda somente com base na identidade e conhecimento deste agente`;
     } else {
       const companyName = config.ai_company_name || "Nossa Empresa";
       const companyDesc = config.ai_company_description || "";
