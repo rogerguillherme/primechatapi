@@ -385,6 +385,18 @@ function AgentEditorView({ agent, onBack }: { agent: AiAgent | null; onBack: () 
           )}
         </TabsContent>
 
+        <TabsContent value="training" className="space-y-4 mt-4">
+          {agent ? <TrainingPanel agentId={agent.id} /> : (
+            <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">Salve o agente primeiro para começar a treinar.</CardContent></Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="simulation" className="space-y-4 mt-4">
+          {agent ? <SimulationPanel agentId={agent.id} agentName={name || agent.name} /> : (
+            <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">Salve o agente primeiro para simular conversas.</CardContent></Card>
+          )}
+        </TabsContent>
+
         <TabsContent value="files" className="space-y-4 mt-4">
           <div className="space-y-2">
             <Label className="text-base font-semibold">Arquivos</Label>
