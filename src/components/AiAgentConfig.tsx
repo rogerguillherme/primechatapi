@@ -567,16 +567,31 @@ function TrainingPanel({ agentId }: { agentId: string }) {
 
 /* ── Simulation Panel ── */
 function SimulationPanel({ agentId, agentName }: { agentId: string; agentName: string }) {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [messages, setMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function send() {
-    if (!input.trim() || loading) return;
-    const userMsg = { role: "user" as const, content: input.trim() };
-    const newMessages = [...messages, userMsg];
+  // Feedback dialog state
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackIndex, setFeedbackIndex] = useState<number | null>(null);
+  const [goodReply, setGoodReply] = useState("");
+  const [feedbackNote, setFeedbackNote] = useState("");
+  const [savingFeedback, setSavingFeedback] = useState(false);
+  const [regenAfterSave, setRegenAfterSave] = useState(true);
+
+  async function send(historyOverride?: { role: "user" | "assistant"; content: string }[]) {
+    const baseHistory = historyOverride ?? messages;
+    const trimmed = input.trim();
+    if (!historyOverride) {
+      if (!trimmed || loading) return;
+    }
+    const newMessages = historyOverride
+      ? baseHistory
+      : [...baseHistory, { role: "user" as const, content: trimmed }];
     setMessages(newMessages);
-    setInput("");
+    if (!historyOverride) setInput("");
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("ai-agent-simulate", {
@@ -592,63 +607,198 @@ function SimulationPanel({ agentId, agentName }: { agentId: string; agentName: s
     }
   }
 
+  function openFeedback(index: number) {
+    setFeedbackIndex(index);
+    setGoodReply("");
+    setFeedbackNote("");
+    setRegenAfterSave(true);
+    setFeedbackOpen(true);
+  }
+
+  async function saveFeedback() {
+    if (feedbackIndex === null || !user) return;
+    if (!goodReply.trim()) {
+      toast.error("Escreva a resposta ideal.");
+      return;
+    }
+    const assistantMsg = messages[feedbackIndex];
+    // Find the most recent user message before this assistant reply
+    let userMsg = "";
+    for (let i = feedbackIndex - 1; i >= 0; i--) {
+      if (messages[i].role === "user") { userMsg = messages[i].content; break; }
+    }
+    if (!userMsg) {
+      toast.error("Não encontrei a mensagem do cliente correspondente.");
+      return;
+    }
+    setSavingFeedback(true);
+    try {
+      const { error } = await supabase.from("ai_agent_feedback").insert({
+        agent_id: agentId,
+        user_id: user.id,
+        user_message: userMsg,
+        bad_reply: assistantMsg.content,
+        good_reply: goodReply.trim(),
+        note: feedbackNote.trim() || null,
+      });
+      if (error) throw error;
+      toast.success("Feedback salvo! O agente vai aprender com isso.");
+      queryClient.invalidateQueries({ queryKey: ["agent-feedback", agentId] });
+      setFeedbackOpen(false);
+
+      if (regenAfterSave) {
+        // Remove the bad reply and regenerate using the same conversation up to the user message
+        const truncated = messages.slice(0, feedbackIndex);
+        await send(truncated);
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao salvar feedback");
+    } finally {
+      setSavingFeedback(false);
+    }
+  }
+
   return (
-    <Card>
-      <CardContent className="p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <Label className="text-base font-semibold flex items-center gap-2">
-              <MessageSquare size={16} className="text-primary" /> Simulação de Conversa
-            </Label>
-            <p className="text-xs text-muted-foreground mt-1">
-              Teste como <strong>{agentName || "o agente"}</strong> responderia a clientes reais.
-            </p>
+    <>
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label className="text-base font-semibold flex items-center gap-2">
+                <MessageSquare size={16} className="text-primary" /> Simulação de Conversa
+              </Label>
+              <p className="text-xs text-muted-foreground mt-1">
+                Teste como <strong>{agentName || "o agente"}</strong> responderia. Clique em <ThumbsDown size={11} className="inline" /> para corrigir uma resposta e treiná-lo.
+              </p>
+            </div>
+            {messages.length > 0 && (
+              <Button variant="ghost" size="sm" onClick={() => setMessages([])}>Limpar</Button>
+            )}
           </div>
-          {messages.length > 0 && (
-            <Button variant="ghost" size="sm" onClick={() => setMessages([])}>Limpar</Button>
-          )}
-        </div>
 
-        <ScrollArea className="h-[400px] border rounded-lg bg-muted/30 p-3">
-          {messages.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-center text-xs text-muted-foreground py-20">
-              Envie uma mensagem para começar a conversa de teste.
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {messages.map((m, i) => (
-                <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                  <div className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${
-                    m.role === "user" ? "bg-primary text-primary-foreground" : "bg-card border"
-                  }`}>
-                    {m.content}
+          <ScrollArea className="h-[400px] border rounded-lg bg-muted/30 p-3">
+            {messages.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-center text-xs text-muted-foreground py-20">
+                Envie uma mensagem para começar a conversa de teste.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {messages.map((m, i) => (
+                  <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"} group`}>
+                    <div className="flex flex-col gap-1 max-w-[75%]">
+                      <div className={`rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${
+                        m.role === "user" ? "bg-primary text-primary-foreground" : "bg-card border"
+                      }`}>
+                        {m.content}
+                      </div>
+                      {m.role === "assistant" && (
+                        <button
+                          onClick={() => openFeedback(i)}
+                          className="self-start flex items-center gap-1 text-[10px] text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity px-1"
+                          title="Corrigir esta resposta"
+                        >
+                          <ThumbsDown size={11} /> Corrigir resposta
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
-              {loading && (
-                <div className="flex justify-start">
-                  <div className="bg-card border rounded-2xl px-3 py-2 text-sm text-muted-foreground flex items-center gap-2">
-                    <Loader2 size={14} className="animate-spin" /> digitando...
+                ))}
+                {loading && (
+                  <div className="flex justify-start">
+                    <div className="bg-card border rounded-2xl px-3 py-2 text-sm text-muted-foreground flex items-center gap-2">
+                      <Loader2 size={14} className="animate-spin" /> digitando...
+                    </div>
                   </div>
+                )}
+              </div>
+            )}
+          </ScrollArea>
+
+          <div className="flex gap-2">
+            <Input
+              placeholder="Digite uma mensagem como se fosse o cliente..."
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+              disabled={loading}
+            />
+            <Button onClick={() => send()} disabled={!input.trim() || loading} className="gap-2">
+              <Send size={14} /> Enviar
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dialog open={feedbackOpen} onOpenChange={setFeedbackOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ThumbsDown size={16} className="text-destructive" /> Corrigir resposta do agente
+            </DialogTitle>
+            <DialogDescription>
+              Mostre como o agente deveria ter respondido. Isso será salvo como treino e usado em conversas futuras.
+            </DialogDescription>
+          </DialogHeader>
+
+          {feedbackIndex !== null && (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Mensagem do cliente</Label>
+                <div className="text-xs p-2 rounded-md bg-muted border whitespace-pre-wrap">
+                  {(() => {
+                    for (let i = feedbackIndex - 1; i >= 0; i--) {
+                      if (messages[i].role === "user") return messages[i].content;
+                    }
+                    return "—";
+                  })()}
                 </div>
-              )}
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-destructive">❌ Resposta atual (a ser corrigida)</Label>
+                <div className="text-xs p-2 rounded-md bg-destructive/5 border border-destructive/20 whitespace-pre-wrap max-h-32 overflow-auto">
+                  {messages[feedbackIndex]?.content}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-green-600">✅ Resposta ideal</Label>
+                <Textarea
+                  placeholder="Escreva como o agente deveria ter respondido..."
+                  value={goodReply}
+                  onChange={(e) => setGoodReply(e.target.value)}
+                  className="min-h-[100px]"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">💡 Observação (opcional)</Label>
+                <Input
+                  placeholder="Ex: ser mais direto, não dar preço sem criar curiosidade"
+                  value={feedbackNote}
+                  onChange={(e) => setFeedbackNote(e.target.value)}
+                />
+              </div>
+              <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={regenAfterSave}
+                  onChange={(e) => setRegenAfterSave(e.target.checked)}
+                  className="accent-primary"
+                />
+                <RefreshCw size={12} /> Refazer a resposta usando o novo treino
+              </label>
             </div>
           )}
-        </ScrollArea>
 
-        <div className="flex gap-2">
-          <Input
-            placeholder="Digite uma mensagem como se fosse o cliente..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-            disabled={loading}
-          />
-          <Button onClick={send} disabled={!input.trim() || loading} className="gap-2">
-            <Send size={14} /> Enviar
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFeedbackOpen(false)} disabled={savingFeedback}>
+              Cancelar
+            </Button>
+            <Button onClick={saveFeedback} disabled={savingFeedback || !goodReply.trim()} className="gap-2">
+              {savingFeedback ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              Salvar treino
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
