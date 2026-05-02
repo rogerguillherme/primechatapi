@@ -17,8 +17,9 @@ import { toast } from "sonner";
 import {
   Search, Send, MessageSquare, FileText, Check, CheckCheck,
   MoreVertical, ArrowLeft, Paperclip, Clock, MessageCircleReply,
-  ShoppingBag, RotateCcw, Tag, X, AlertCircle, Bot, Users, PowerOff,
+  ShoppingBag, RotateCcw, Tag, X, AlertCircle, Bot, Users, PowerOff, Megaphone,
 } from "lucide-react";
+import { BulkBroadcastDialog } from "@/components/BulkBroadcastDialog";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -66,6 +67,7 @@ export function CloudChatTab() {
   const [filterAccountId, setFilterAccountId] = useState<string | null>(null);
   const [filterLabelIds, setFilterLabelIds] = useState<Set<string>>(new Set());
   const [showLabelFilter, setShowLabelFilter] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -526,6 +528,25 @@ export function CloudChatTab() {
                 ))}
               </select>
             )}
+            {(() => {
+              const evoAccount =
+                accounts.find((a: any) => a.id === filterAccountId && a.provider === "evolution") ||
+                accounts.find((a: any) => a.id === selectedAccountId && a.provider === "evolution") ||
+                accounts.find((a: any) => a.provider === "evolution");
+              if (!evoAccount) return null;
+              return (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => setBulkOpen(true)}
+                  title={`Disparo em massa para ${evoAccount.name}`}
+                >
+                  <Megaphone size={12} />
+                  Disparo
+                </Button>
+              );
+            })()}
             <Button
               variant={showLabelFilter ? "default" : "outline"}
               size="sm"
@@ -849,6 +870,22 @@ export function CloudChatTab() {
           </div>
         )}
       </div>
+
+      {(() => {
+        const evoAccount =
+          accounts.find((a: any) => a.id === filterAccountId && a.provider === "evolution") ||
+          accounts.find((a: any) => a.id === selectedAccountId && a.provider === "evolution") ||
+          accounts.find((a: any) => a.provider === "evolution");
+        if (!evoAccount) return null;
+        return (
+          <BulkBroadcastDialog
+            open={bulkOpen}
+            onOpenChange={setBulkOpen}
+            accountId={evoAccount.id}
+            accountName={evoAccount.name}
+          />
+        );
+      })()}
     </div>
   );
 }
