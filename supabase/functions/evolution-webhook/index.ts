@@ -435,7 +435,7 @@ Deno.serve(async (req) => {
       // Upsert lead by phone (try all variants to handle BR 9th digit ambiguity)
       const { data: existingLeads } = await supabase
         .from("leads")
-        .select("id, phone, user_id")
+        .select("id, phone, user_id, photo_url, name")
         .in("phone", phoneVariants)
         .eq("user_id", account.user_id)
         .limit(1);
@@ -444,14 +444,37 @@ Deno.serve(async (req) => {
       // Never reach across tenants — that would leak chat messages between users.
       const existingLead = existingLeads && existingLeads.length > 0 ? existingLeads[0] : null;
 
+      // Helper to fetch profile picture from Evolution
+      const fetchProfilePic = async (): Promise<string | null> => {
+        try {
+          const evoServer = (account.business_account_id || "").replace(/\/+$/, "");
+          const evoKey = account.api_key || account.access_token;
+          const evoInstance = account.phone_number_id;
+          if (!evoServer || !evoKey || !evoInstance) return null;
+          const res = await fetch(`${evoServer}/chat/fetchProfilePictureUrl/${evoInstance}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", apikey: evoKey },
+            body: JSON.stringify({ number: remoteJid.split("@")[0] }),
+          });
+          if (!res.ok) return null;
+          const body = await res.json();
+          return body?.profilePictureUrl || body?.profilePicUrl || body?.url || null;
+        } catch (e) {
+          console.error("fetchProfilePic error:", e);
+          return null;
+        }
+      };
+
       let leadId = existingLead?.id;
       if (!leadId) {
+        const photoUrl = await fetchProfilePic();
         const { data: newLead, error: leadErr } = await supabase
           .from("leads")
           .insert({
             user_id: account.user_id,
             phone,
             name: pushName,
+            photo_url: photoUrl,
             origin: "evolution",
             chat_status: fromMe ? "respondidas" : "aguardando_respostas",
           })
@@ -465,6 +488,23 @@ Deno.serve(async (req) => {
           });
         }
         leadId = newLead.id;
+      } else {
+        // Backfill missing photo / improve generic name on existing leads
+        const updates: Record<string, any> = {};
+        if (!existingLead!.photo_url) {
+          const photoUrl = await fetchProfilePic();
+          if (photoUrl) updates.photo_url = photoUrl;
+        }
+        if (
+          pushName &&
+          pushName !== phone &&
+          (!existingLead!.name || existingLead!.name === existingLead!.phone || /^\+?\d+$/.test(existingLead!.name))
+        ) {
+          updates.name = pushName;
+        }
+        if (Object.keys(updates).length > 0) {
+          await supabase.from("leads").update(updates).eq("id", leadId);
+        }
       }
 
       // Insert chat message (inbound from contact OR outbound sent from the phone)
