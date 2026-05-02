@@ -153,6 +153,17 @@ Deno.serve(async (req) => {
       if (defaultAgent) agent = defaultAgent;
     }
 
+    // Multi-tenant safety: never fall back to the global app_settings prompt.
+    // Without an active agent owned by the lead's tenant, do NOT auto-reply —
+    // otherwise we'd leak another tenant's company persona/content.
+    if (!agent) {
+      console.log("AI auto-reply skipped: no active agent for tenant", lead.user_id);
+      return new Response(JSON.stringify({ skipped: "no_active_agent" }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const forbiddenContextTerms = [
       "fábrica de dólar",
       "fabrica de dolar",
