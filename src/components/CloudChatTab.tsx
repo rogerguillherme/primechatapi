@@ -225,6 +225,9 @@ export function CloudChatTab() {
         queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
         queryClient.invalidateQueries({ queryKey: ["chat-lead-accounts"] });
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
+      })
       .subscribe();
     const interval = setInterval(() => {
       const currentLeadId = selectedLeadIdRef.current;
@@ -232,7 +235,8 @@ export function CloudChatTab() {
         queryClient.invalidateQueries({ queryKey: ["chat-messages", currentLeadId] });
       }
       queryClient.invalidateQueries({ queryKey: ["chat-latest-messages"] });
-    }, 8000);
+      queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
+    }, 4000);
     return () => { supabase.removeChannel(channel); clearInterval(interval); };
   }, [queryClient]);
 
