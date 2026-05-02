@@ -28,7 +28,7 @@ const renderTemplate = (tpl: string, lead: { name: string; phone: string }) =>
     .replace(/\{primeiro_nome\}/gi, firstName(lead.name))
     .replace(/\{telefone\}/gi, lead.phone || "");
 
-const CHUNK_SIZE = 30;
+const CHUNK_SIZE = 80;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
 
       const {
         account_id, lead_ids, message, image_url: img,
-        delay_min: dmin = 5, delay_max: dmax = 15,
+        delay_min: dmin = 1, delay_max: dmax = 4,
       } = body;
       if (!account_id || !Array.isArray(lead_ids) || lead_ids.length === 0) {
         return json({ error: "account_id e lead_ids são obrigatórios" }, 400);
@@ -99,8 +99,8 @@ Deno.serve(async (req) => {
       }
       if (message.length > 4000) return json({ error: "message muito longa (máx 4000)" }, 400);
 
-      delay_min = Math.max(0, parseInt(dmin) || 5);
-      delay_max = Math.max(delay_min, parseInt(dmax) || 15);
+      delay_min = Math.max(0, parseInt(dmin) || 1);
+      delay_max = Math.max(delay_min, parseInt(dmax) || 4);
       image_url = img || undefined;
       messageTpl = message;
 
