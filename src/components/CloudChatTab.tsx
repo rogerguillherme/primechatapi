@@ -206,21 +206,19 @@ export function CloudChatTab() {
       return data || [];
     },
     enabled: !!selectedLeadId,
+    refetchOnWindowFocus: true,
+    refetchOnMount: "always",
   });
 
   // Keep a ref so the realtime callback always sees the latest selectedLeadId
   const selectedLeadIdRef = useRef(selectedLeadId);
   selectedLeadIdRef.current = selectedLeadId;
 
-  // Realtime – listen to INSERT + UPDATE so status changes (delivered/read) also refresh
+  // Realtime – global channel for sidebar (latest msgs / lead list)
   useEffect(() => {
     const channel = supabase
-      .channel("cloud-chat-realtime")
+      .channel("cloud-chat-global-rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_messages" }, () => {
-        const currentLeadId = selectedLeadIdRef.current;
-        if (currentLeadId) {
-          queryClient.invalidateQueries({ queryKey: ["chat-messages", currentLeadId] });
-        }
         queryClient.invalidateQueries({ queryKey: ["chat-latest-messages"] });
         queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
         queryClient.invalidateQueries({ queryKey: ["chat-lead-accounts"] });
@@ -229,16 +227,81 @@ export function CloudChatTab() {
         queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
       })
       .subscribe();
-    const interval = setInterval(() => {
-      const currentLeadId = selectedLeadIdRef.current;
-      if (currentLeadId) {
-        queryClient.invalidateQueries({ queryKey: ["chat-messages", currentLeadId] });
-      }
-      queryClient.invalidateQueries({ queryKey: ["chat-latest-messages"] });
-      queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
-    }, 4000);
-    return () => { supabase.removeChannel(channel); clearInterval(interval); };
+    return () => { supabase.removeChannel(channel); };
   }, [queryClient]);
+
+  // Realtime – dedicated channel per selected lead, with optimistic cache merge
+  // so new messages render IMMEDIATELY without waiting for a refetch or polling.
+  useEffect(() => {
+    if (!selectedLeadId) return;
+    const leadId = selectedLeadId;
+    const queryKey = ["chat-messages", leadId];
+
+    const channel = supabase
+      .channel(`cloud-chat-msgs-${leadId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "chat_messages", filter: `lead_id=eq.${leadId}` },
+        (payload) => {
+          const newMsg = payload.new as any;
+          queryClient.setQueryData<any[]>(queryKey, (prev) => {
+            const list = prev || [];
+            if (list.some((m) => m.id === newMsg.id)) return list;
+            // Insert keeping ascending order by created_at
+            const next = [...list, newMsg].sort(
+              (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+            );
+            return next;
+          });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "chat_messages", filter: `lead_id=eq.${leadId}` },
+        (payload) => {
+          const updated = payload.new as any;
+          queryClient.setQueryData<any[]>(queryKey, (prev) =>
+            (prev || []).map((m) => (m.id === updated.id ? { ...m, ...updated } : m))
+          );
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "chat_messages", filter: `lead_id=eq.${leadId}` },
+        (payload) => {
+          const oldMsg = payload.old as any;
+          queryClient.setQueryData<any[]>(queryKey, (prev) =>
+            (prev || []).filter((m) => m.id !== oldMsg.id)
+          );
+        }
+      )
+      .subscribe((status) => {
+        // Safety net: if subscription drops, fall back to a refetch on (re)connect
+        if (status === "SUBSCRIBED" || status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          queryClient.invalidateQueries({ queryKey });
+        }
+      });
+
+    // Refetch immediately on lead switch / tab visibility regain
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        queryClient.invalidateQueries({ queryKey });
+        queryClient.invalidateQueries({ queryKey: ["chat-latest-messages"] });
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    // Slow safety polling (only when this lead is open) — covers rare realtime gaps
+    const interval = setInterval(() => {
+      queryClient.invalidateQueries({ queryKey });
+    }, 10000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      document.removeEventListener("visibilitychange", onVisible);
+      clearInterval(interval);
+    };
+  }, [selectedLeadId, queryClient]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
