@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
 
       const {
         account_id, lead_ids, message, image_url: img,
-        delay_min: dmin = 1, delay_max: dmax = 4,
+        delay_min: dmin = 5, delay_max: dmax = 5,
       } = body;
       if (!account_id || !Array.isArray(lead_ids) || lead_ids.length === 0) {
         return json({ error: "account_id e lead_ids são obrigatórios" }, 400);
@@ -99,8 +99,8 @@ Deno.serve(async (req) => {
       }
       if (message.length > 4000) return json({ error: "message muito longa (máx 4000)" }, 400);
 
-      delay_min = Math.max(0, parseInt(dmin) || 1);
-      delay_max = Math.max(delay_min, parseInt(dmax) || 4);
+      delay_min = Math.max(0, parseInt(dmin) || 5);
+      delay_max = Math.max(delay_min, parseInt(dmax) || 5);
       image_url = img || undefined;
       messageTpl = message;
 
