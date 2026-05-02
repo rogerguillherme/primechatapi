@@ -248,10 +248,46 @@ export function CloudChatTab() {
   const selectedLead = leads?.find((l) => l.id === selectedLeadId);
   const leadAiEnabled = !!selectedLead?.ai_enabled;
 
-  const handleToggleCurrentLeadAi = () => {
+  const replyNowWithAi = useMutation({
+    mutationFn: async () => {
+      if (!selectedLead) throw new Error("Nenhum contato selecionado");
+      // Find last inbound message
+      const lastInbound = [...(messages || [])]
+        .reverse()
+        .find((m: any) => m.direction === "inbound");
+      if (!lastInbound) throw new Error("Nenhuma mensagem do cliente para responder");
+      const { data, error } = await supabase.functions.invoke("ai-auto-reply", {
+        body: {
+          lead_id: selectedLead.id,
+          message: lastInbound.content,
+          account_id: selectedAccountId || lastInbound.account_id || undefined,
+        },
+      });
+      if (error) throw error;
+      if ((data as any)?.skipped) throw new Error(`IA não respondeu: ${(data as any).skipped}`);
+      return data;
+    },
+    onSuccess: () => {
+      toast.success("Agente IA respondeu a última mensagem");
+      if (selectedLeadId) {
+        queryClient.invalidateQueries({ queryKey: ["chat-messages", selectedLeadId] });
+      }
+    },
+    onError: (e: any) => toast.error(e?.message || "Erro ao gerar resposta da IA"),
+  });
+
+  const handleToggleCurrentLeadAi = async () => {
     if (!selectedLeadId) return;
+    const willEnable = !leadAiEnabled;
     if (aiMode !== "selected") setAiMode.mutate("selected");
-    toggleLeadAi.mutate(!leadAiEnabled);
+    await toggleLeadAi.mutateAsync(willEnable);
+    // When activating, immediately respond to the last inbound message
+    if (willEnable) {
+      const hasInbound = (messages || []).some((m: any) => m.direction === "inbound");
+      if (hasInbound) {
+        replyNowWithAi.mutate();
+      }
+    }
   };
 
   const sendMutation = useMutation({
