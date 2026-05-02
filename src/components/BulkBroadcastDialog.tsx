@@ -29,8 +29,8 @@ export function BulkBroadcastDialog({ open, onOpenChange, accountId, accountName
   const [search, setSearch] = useState("");
   const [message, setMessage] = useState("");
   const [imageUrl, setImageUrl] = useState("");
-  const [delayMin, setDelayMin] = useState(1);
-  const [delayMax, setDelayMax] = useState(4);
+  const [delayMin, setDelayMin] = useState(5);
+  const [delayMax, setDelayMax] = useState(5);
   const [sending, setSending] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
