@@ -17,8 +17,9 @@ import { toast } from "sonner";
 import {
   Search, Send, MessageSquare, FileText, Check, CheckCheck,
   MoreVertical, ArrowLeft, Paperclip, Clock, MessageCircleReply,
-  ShoppingBag, RotateCcw, Tag, X, AlertCircle, Bot, Users, PowerOff,
+  ShoppingBag, RotateCcw, Tag, X, AlertCircle, Bot, Users, PowerOff, Megaphone,
 } from "lucide-react";
+import { BulkBroadcastDialog } from "@/components/BulkBroadcastDialog";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
