@@ -528,6 +528,25 @@ export function CloudChatTab() {
                 ))}
               </select>
             )}
+            {(() => {
+              const evoAccount =
+                accounts.find((a: any) => a.id === filterAccountId && a.provider === "evolution") ||
+                accounts.find((a: any) => a.id === selectedAccountId && a.provider === "evolution") ||
+                accounts.find((a: any) => a.provider === "evolution");
+              if (!evoAccount) return null;
+              return (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => setBulkOpen(true)}
+                  title={`Disparo em massa para ${evoAccount.name}`}
+                >
+                  <Megaphone size={12} />
+                  Disparo
+                </Button>
+              );
+            })()}
             <Button
               variant={showLabelFilter ? "default" : "outline"}
               size="sm"
