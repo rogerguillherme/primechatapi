@@ -77,6 +77,22 @@ export function CloudChatTab() {
     if (!selectedAccountId && defaultAccount) setSelectedAccountId(defaultAccount.id);
   }, [defaultAccount, selectedAccountId]);
 
+  // Auto backfill profile photos for leads (once per account per session)
+  useEffect(() => {
+    if (!selectedAccountId) return;
+    const key = `photos-backfilled-${selectedAccountId}`;
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, "1");
+    supabase.functions
+      .invoke("evolution-backfill-photos", { body: { account_id: selectedAccountId, limit: 200 } })
+      .then(({ data }: any) => {
+        if (data?.updated > 0) {
+          queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
+        }
+      })
+      .catch(() => {});
+  }, [selectedAccountId, queryClient]);
+
   // Fetch labels
   const { data: labels = [] } = useQuery({
     queryKey: ["chat-labels"],
