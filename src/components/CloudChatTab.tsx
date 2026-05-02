@@ -870,6 +870,22 @@ export function CloudChatTab() {
           </div>
         )}
       </div>
+
+      {(() => {
+        const evoAccount =
+          accounts.find((a: any) => a.id === filterAccountId && a.provider === "evolution") ||
+          accounts.find((a: any) => a.id === selectedAccountId && a.provider === "evolution") ||
+          accounts.find((a: any) => a.provider === "evolution");
+        if (!evoAccount) return null;
+        return (
+          <BulkBroadcastDialog
+            open={bulkOpen}
+            onOpenChange={setBulkOpen}
+            accountId={evoAccount.id}
+            accountName={evoAccount.name}
+          />
+        );
+      })()}
     </div>
   );
 }
