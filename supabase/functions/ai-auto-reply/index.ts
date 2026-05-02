@@ -240,8 +240,9 @@ ${feedbackText ? `🎓 TREINAMENTO POR FEEDBACK (siga rigorosamente o estilo dos
 
 ✍️ COMPORTAMENTO HUMANO NATURAL:
 - Escreva como pessoa real digitando no WhatsApp
-- Mensagens curtas (1-3 frases), tom brasileiro e natural
-- Use vírgulas, "kkk", "rs", "ah", "então", "olha" quando combinar
+- QUEBRE a resposta em 2 a 4 mensagens curtas separadas por "||" (ex: "Oi tudo bem? || Vi sua mensagem || Posso te ajudar com isso 😉")
+- Cada bloco com 1 frase curta (ideal até 100 caracteres)
+- Tom brasileiro e natural; use "kkk", "rs", "ah", "então", "olha" quando combinar
 - Não responda como manual, responda como gente
 - Negrito: *texto* (UM asterisco apenas — nunca **)
 - Itálico: _texto_
@@ -320,59 +321,111 @@ ${customInstructions ? `\n📝 INSTRUÇÕES ADICIONAIS:\n${customInstructions}` 
     // Normalize formatting for WhatsApp: convert markdown ** to single * (WhatsApp bold)
     replyText = replyText.replace(/\*\*([^*\n]+)\*\*/g, "*$1*");
 
-    // Send the reply via whatsapp-cloud-send
-    const sendBody: any = {
-      phone: lead.phone,
-      lead_id: lead.id,
-      message: replyText,
-    };
-    if (account_id) sendBody.account_id = account_id;
+    // Split reply into human-like message chunks
+    const splitIntoChunks = (text: string): string[] => {
+      const cleaned = text.trim();
+      if (!cleaned) return [];
 
-    const sendRes = await fetch(`${supabaseUrl}/functions/v1/whatsapp-cloud-send`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${supabaseKey}`,
-      },
-      body: JSON.stringify(sendBody),
-    });
+      // Split by paragraph breaks or explicit "||" separator from the model
+      const explicit = cleaned.split(/\n{2,}|\s*\|\|\s*/g).map((s) => s.trim()).filter(Boolean);
 
-    if (!sendRes.ok) {
-      const errText = await sendRes.text();
-      console.error("Failed to send AI reply:", sendRes.status, errText);
-      let parsed: any = null;
-      try { parsed = JSON.parse(errText); } catch { /* not json */ }
-      const waCode = parsed?.wa_error?.code;
-      const friendly = parsed?.error || "Failed to send reply";
+      const chunks: string[] = [];
+      for (const part of explicit) {
+        const sentences = part
+          .split(/(?<=[.!?…])\s+|\n+/g)
+          .map((s) => s.trim())
+          .filter(Boolean);
 
-      // Token expired / session invalid → mark account as disconnected so we stop retrying
-      if (waCode === 190 && account_id) {
-        await supabase
-          .from("whatsapp_accounts")
-          .update({ updated_at: new Date().toISOString() })
-          .eq("id", account_id);
+        let buffer = "";
+        for (const s of sentences) {
+          const candidate = buffer ? `${buffer} ${s}` : s;
+          if (candidate.length <= 140) {
+            buffer = candidate;
+          } else {
+            if (buffer) chunks.push(buffer);
+            buffer = s;
+          }
+        }
+        if (buffer) chunks.push(buffer);
       }
 
-      return new Response(
-        JSON.stringify({
+      // Cap at 5 chunks to avoid spammy bursts
+      return chunks.slice(0, 5);
+    };
+
+    const chunks = splitIntoChunks(replyText);
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+    // Human typing pace: ~55ms/char + jitter, clamped to feel natural
+    const typingDelay = (text: string, isFirst: boolean) => {
+      const base = isFirst ? 900 : 500;
+      const perChar = 55;
+      const jitter = Math.floor(Math.random() * 700);
+      return Math.min(7000, base + text.length * perChar + jitter);
+    };
+
+    let lastError: any = null;
+    let sentCount = 0;
+
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      await sleep(typingDelay(chunk, i === 0));
+
+      const sendBody: any = {
+        phone: lead.phone,
+        lead_id: lead.id,
+        message: chunk,
+      };
+      if (account_id) sendBody.account_id = account_id;
+
+      const sendRes = await fetch(`${supabaseUrl}/functions/v1/whatsapp-cloud-send`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${supabaseKey}`,
+        },
+        body: JSON.stringify(sendBody),
+      });
+
+      if (!sendRes.ok) {
+        const errText = await sendRes.text();
+        console.error("Failed to send AI reply chunk:", sendRes.status, errText);
+        let parsed: any = null;
+        try { parsed = JSON.parse(errText); } catch { /* not json */ }
+        const waCode = parsed?.wa_error?.code;
+        const friendly = parsed?.error || "Failed to send reply";
+
+        if (waCode === 190 && account_id) {
+          await supabase
+            .from("whatsapp_accounts")
+            .update({ updated_at: new Date().toISOString() })
+            .eq("id", account_id);
+        }
+
+        lastError = {
           ok: false,
           skipped: waCode === 190 ? "token_expired" : "send_failed",
           error: friendly,
           wa_error: parsed?.wa_error,
-        }),
-        {
-          // Return 200 so the client doesn't see a generic 500.
-          // The `skipped`/`error` fields tell the UI what happened.
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+          sent_chunks: sentCount,
+        };
+        break;
+      }
+
+      await sendRes.text();
+      sentCount++;
     }
 
-    await sendRes.text();
-    console.log("AI auto-reply sent to lead:", lead.id, "message:", replyText.substring(0, 100));
+    if (lastError) {
+      return new Response(JSON.stringify(lastError), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-    return new Response(JSON.stringify({ ok: true, reply: replyText }), {
+    console.log("AI auto-reply sent to lead:", lead.id, "chunks:", sentCount);
+
+    return new Response(JSON.stringify({ ok: true, chunks: sentCount, reply: replyText }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
