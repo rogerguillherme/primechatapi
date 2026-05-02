@@ -340,10 +340,33 @@ ${customInstructions ? `\n📝 INSTRUÇÕES ADICIONAIS:\n${customInstructions}` 
     if (!sendRes.ok) {
       const errText = await sendRes.text();
       console.error("Failed to send AI reply:", sendRes.status, errText);
-      return new Response(JSON.stringify({ error: "Failed to send reply" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      let parsed: any = null;
+      try { parsed = JSON.parse(errText); } catch { /* not json */ }
+      const waCode = parsed?.wa_error?.code;
+      const friendly = parsed?.error || "Failed to send reply";
+
+      // Token expired / session invalid → mark account as disconnected so we stop retrying
+      if (waCode === 190 && account_id) {
+        await supabase
+          .from("whatsapp_accounts")
+          .update({ updated_at: new Date().toISOString() })
+          .eq("id", account_id);
+      }
+
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          skipped: waCode === 190 ? "token_expired" : "send_failed",
+          error: friendly,
+          wa_error: parsed?.wa_error,
+        }),
+        {
+          // Return 200 so the client doesn't see a generic 500.
+          // The `skipped`/`error` fields tell the UI what happened.
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     await sendRes.text();
