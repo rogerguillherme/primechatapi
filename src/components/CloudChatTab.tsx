@@ -67,6 +67,7 @@ export function CloudChatTab() {
   const [filterAccountId, setFilterAccountId] = useState<string | null>(null);
   const [filterLabelIds, setFilterLabelIds] = useState<Set<string>>(new Set());
   const [showLabelFilter, setShowLabelFilter] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
