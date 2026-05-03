@@ -48,6 +48,15 @@ export function BulkBroadcastDialog({ open, onOpenChange, accountId, accountName
     queryKey: ["bulk-leads", accountId],
     enabled: open && !!accountId,
     queryFn: async () => {
+      // Descobre o dono da conta para evitar vazamento de leads de outros tenants
+      const { data: acc, error: accErr } = await supabase
+        .from("whatsapp_accounts")
+        .select("user_id")
+        .eq("id", accountId)
+        .maybeSingle();
+      if (accErr) throw accErr;
+      if (!acc?.user_id) return [];
+
       // Pega lead_ids únicos que têm mensagem nesta conta
       const { data: msgs, error } = await supabase
         .from("chat_messages")
@@ -58,15 +67,16 @@ export function BulkBroadcastDialog({ open, onOpenChange, accountId, accountName
       const ids = Array.from(new Set((msgs || []).map((m: any) => m.lead_id).filter(Boolean)));
       if (ids.length === 0) return [];
 
-      // Busca dados dos leads em chunks (in() tem limite prático)
+      // Busca SOMENTE leads pertencentes ao mesmo dono da conta
       const out: any[] = [];
       const chunk = 500;
       for (let i = 0; i < ids.length; i += chunk) {
         const slice = ids.slice(i, i + chunk);
         const { data } = await supabase
           .from("leads")
-          .select("id, name, phone, photo_url")
-          .in("id", slice);
+          .select("id, name, phone, photo_url, user_id")
+          .in("id", slice)
+          .eq("user_id", acc.user_id);
         if (data) out.push(...data);
       }
       return out.sort((a, b) => (a.name || "").localeCompare(b.name || ""));

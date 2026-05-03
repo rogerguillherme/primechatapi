@@ -71,8 +71,10 @@ Deno.serve(async (req) => {
       if (!acc) return json({ error: "Conta não encontrada" }, 404);
       account = acc;
 
+      // Garante que apenas leads do mesmo dono da conta sejam enviados
       const { data: ls } = await supabase
-        .from("leads").select("id, name, phone").in("id", jobRow.lead_ids);
+        .from("leads").select("id, name, phone, user_id")
+        .in("id", jobRow.lead_ids).eq("user_id", account.user_id);
       const leadMap = new Map((ls || []).map((l: any) => [l.id, l]));
       leads = jobRow.lead_ids.map((id: string) => leadMap.get(id)).filter(Boolean);
 
