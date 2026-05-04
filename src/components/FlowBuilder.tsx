@@ -649,8 +649,9 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
       const visited = new Set<string>();
       const queue: { nodeId: string; parentNodeId: string | null; sourceHandle?: string | null }[] = [];
 
-      // Start from trigger's children
+      // Start from trigger's children → these are the only entry points
       const triggerChildren = adjList.get("trigger") || [];
+      const entryNodeIds = new Set<string>(triggerChildren.map((c) => c.target));
       triggerChildren.forEach((c) => queue.push({ nodeId: c.target, parentNodeId: null, sourceHandle: null }));
 
       let order = 0;
@@ -683,7 +684,7 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
         children.forEach((c) => queue.push({ nodeId: c.target, parentNodeId: nodeId, sourceHandle: c.sourceHandle }));
       }
 
-      // Add unconnected nodes
+      // Add unconnected nodes (preserved as orphans — saved but not executed)
       stepNodes.forEach((n) => {
         if (!visited.has(n.id)) {
           entries.push({ node: n, parentNodeId: null, triggerValue: (n.data.trigger_value as string) || null, order: order++ });
@@ -729,6 +730,8 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
         delay_minutes: (e.node.data.delay_minutes as number) || 0,
         trigger_value: e.triggerValue,
         parent_step_id: e.parentNodeId ? persistedIdByNodeId.get(e.parentNodeId) || null : null,
+        // Marks an entry point (direct child of trigger). Orphans stay false → preserved but skipped at runtime.
+        is_entry: entryNodeIds.has(String(e.node.id)),
         buttons: (e.node.type === "interactive_buttons" || e.node.type === "cta_url") ? (e.node.data.buttons as any) || [] : [],
         timeout_minutes: (e.node.data.timeout_minutes as number) || null,
         ai_agent_id: e.node.type === "ai_agent" ? (e.node.data.agent_id as string) || null : null,
@@ -748,12 +751,21 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
       if (stepsError) throw stepsError;
 
       const persistedStepIds = stepsToInsert.map((s) => s.id);
-      const { error: cleanupError } = await supabase
-        .from("flow_steps")
-        .delete()
-        .eq("flow_id", flowId!)
-        .not("id", "in", `(${persistedStepIds.join(",")})`);
-      if (cleanupError) throw cleanupError;
+      // Guard: only run cleanup if we have IDs to keep, otherwise we'd build invalid SQL `()`
+      if (persistedStepIds.length > 0) {
+        const { error: cleanupError } = await supabase
+          .from("flow_steps")
+          .delete()
+          .eq("flow_id", flowId!)
+          .not("id", "in", `(${persistedStepIds.join(",")})`);
+        if (cleanupError) throw cleanupError;
+      } else {
+        const { error: cleanupError } = await supabase
+          .from("flow_steps")
+          .delete()
+          .eq("flow_id", flowId!);
+        if (cleanupError) throw cleanupError;
+      }
     },
     onSuccess: () => {
       clearFlowDraft(draftKey);

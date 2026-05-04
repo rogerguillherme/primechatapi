@@ -160,14 +160,20 @@ async function triggerMatchingFlows(
       }
     }
 
+    // Apenas passos marcados como entry (filhos diretos do trigger no canvas).
+    // Nós soltos ficam salvos no banco mas não disparam execução.
     const { data: firstStep } = await admin
       .from("flow_steps")
       .select("id")
       .eq("flow_id", flow.id)
+      .eq("is_entry", true)
       .order("step_order", { ascending: true })
       .limit(1)
       .maybeSingle();
-    if (!firstStep) continue;
+    if (!firstStep) {
+      console.log(`Flow ${flow.id} has no entry step (all orphans); skipping.`);
+      continue;
+    }
 
     await admin.from("flow_executions").insert({
       flow_id: flow.id,
