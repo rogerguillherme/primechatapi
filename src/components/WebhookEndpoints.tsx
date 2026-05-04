@@ -61,6 +61,18 @@ export function WebhookEndpoints({ onCreateFlow, onSelectFlow }: {
     enabled: !!user,
   });
 
+  const { data: accounts } = useQuery({
+    queryKey: ["whatsapp-accounts-for-webhooks"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("whatsapp_accounts")
+        .select("id, name, phone_number_id, provider")
+        .order("created_at");
+      return data || [];
+    },
+    enabled: !!user,
+  });
+
   const { data: endpoints, isLoading } = useQuery({
     queryKey: ["webhook-endpoints"],
     queryFn: async () => {
