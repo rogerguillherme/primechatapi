@@ -665,6 +665,7 @@ export type Database = {
           file_name: string | null
           flow_id: string
           id: string
+          is_entry: boolean
           max_interactions: number | null
           media_type: string | null
           media_url: string | null
@@ -688,6 +689,7 @@ export type Database = {
           file_name?: string | null
           flow_id: string
           id?: string
+          is_entry?: boolean
           max_interactions?: number | null
           media_type?: string | null
           media_url?: string | null
@@ -711,6 +713,7 @@ export type Database = {
           file_name?: string | null
           flow_id?: string
           id?: string
+          is_entry?: boolean
           max_interactions?: number | null
           media_type?: string | null
           media_url?: string | null
