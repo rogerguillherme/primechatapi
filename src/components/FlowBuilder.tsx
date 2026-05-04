@@ -649,8 +649,9 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
       const visited = new Set<string>();
       const queue: { nodeId: string; parentNodeId: string | null; sourceHandle?: string | null }[] = [];
 
-      // Start from trigger's children
+      // Start from trigger's children → these are the only entry points
       const triggerChildren = adjList.get("trigger") || [];
+      const entryNodeIds = new Set<string>(triggerChildren.map((c) => c.target));
       triggerChildren.forEach((c) => queue.push({ nodeId: c.target, parentNodeId: null, sourceHandle: null }));
 
       let order = 0;
@@ -683,7 +684,7 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
         children.forEach((c) => queue.push({ nodeId: c.target, parentNodeId: nodeId, sourceHandle: c.sourceHandle }));
       }
 
-      // Add unconnected nodes
+      // Add unconnected nodes (preserved as orphans — saved but not executed)
       stepNodes.forEach((n) => {
         if (!visited.has(n.id)) {
           entries.push({ node: n, parentNodeId: null, triggerValue: (n.data.trigger_value as string) || null, order: order++ });
