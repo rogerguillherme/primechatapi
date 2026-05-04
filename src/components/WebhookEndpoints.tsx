@@ -100,18 +100,32 @@ export function WebhookEndpoints({ onCreateFlow, onSelectFlow }: {
     enabled: !!user,
   });
 
-  const handleCreateEndpoint = async (eventType: string) => {
+  const handleCreateEndpoint = async (eventType: string, accountId?: string) => {
     if (!user) return;
     try {
       const { error } = await supabase.from("webhook_endpoints").insert({
         user_id: user.id,
         event_type: eventType,
+        account_id: accountId || null,
       });
       if (error) throw error;
       toast.success("Webhook criado com sucesso!");
       queryClient.invalidateQueries({ queryKey: ["webhook-endpoints"] });
     } catch (err: any) {
       toast.error(err.message || "Erro ao criar webhook");
+    }
+  };
+
+  const handleChangeAccount = async (id: string, accountId: string | null) => {
+    const { error } = await supabase
+      .from("webhook_endpoints")
+      .update({ account_id: accountId })
+      .eq("id", id);
+    if (error) {
+      toast.error("Erro ao vincular conta");
+    } else {
+      toast.success("Conta vinculada ao webhook");
+      queryClient.invalidateQueries({ queryKey: ["webhook-endpoints"] });
     }
   };
 
