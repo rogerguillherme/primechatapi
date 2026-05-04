@@ -30,14 +30,36 @@ Deno.serve(async (req) => {
     const limit = Math.min(Number(body.limit ?? 200), 500);
 
     // Get evolution account
-    let q = admin.from("whatsapp_accounts")
-      .select("id, business_account_id, phone_number_id, api_key, access_token")
-      .eq("user_id", userId)
-      .eq("provider", "evolution");
-    if (accountId) q = q.eq("id", accountId);
-    else q = q.eq("is_default", true);
-    const { data: accounts } = await q.limit(1);
-    const account = accounts?.[0];
+    let account: any = null;
+    if (accountId) {
+      const { data } = await admin.from("whatsapp_accounts")
+        .select("id, business_account_id, phone_number_id, api_key, access_token")
+        .eq("user_id", userId)
+        .eq("provider", "evolution")
+        .eq("id", accountId)
+        .maybeSingle();
+      account = data;
+    } else {
+      // Try default first, then fall back to any Evolution account
+      const { data: def } = await admin.from("whatsapp_accounts")
+        .select("id, business_account_id, phone_number_id, api_key, access_token")
+        .eq("user_id", userId)
+        .eq("provider", "evolution")
+        .eq("is_default", true)
+        .maybeSingle();
+      if (def) {
+        account = def;
+      } else {
+        const { data: any1 } = await admin.from("whatsapp_accounts")
+          .select("id, business_account_id, phone_number_id, api_key, access_token")
+          .eq("user_id", userId)
+          .eq("provider", "evolution")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        account = any1;
+      }
+    }
     if (!account) return json({ error: "Conta Evolution não encontrada" }, 404);
 
     const evoServer = (account.business_account_id || "").replace(/\/+$/, "");
