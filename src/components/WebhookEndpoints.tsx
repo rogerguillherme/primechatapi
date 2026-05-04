@@ -305,6 +305,22 @@ export function WebhookEndpoints({ onCreateFlow, onSelectFlow }: {
                   <div className="flex items-center gap-2">
                     {endpoint ? (
                       <>
+                        <Select
+                          value={endpoint.account_id || "none"}
+                          onValueChange={(v) => handleChangeAccount(endpoint.id, v === "none" ? null : v)}
+                        >
+                          <SelectTrigger className="h-8 w-[180px] text-xs">
+                            <SelectValue placeholder="Vincular conta" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Sem vínculo (qualquer)</SelectItem>
+                            {(accounts || []).map((acc: any) => (
+                              <SelectItem key={acc.id} value={acc.id}>
+                                {acc.name} {acc.phone_number_id ? `· ${acc.phone_number_id}` : ""}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <Switch
                           checked={endpoint.is_active}
                           onCheckedChange={() => handleToggle(endpoint.id, endpoint.is_active)}
