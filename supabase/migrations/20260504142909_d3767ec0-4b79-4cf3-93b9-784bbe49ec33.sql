@@ -1,0 +1,1 @@
+ALTER TABLE public.webhook_endpoints ADD COLUMN IF NOT EXISTS account_id uuid REFERENCES public.whatsapp_accounts(id) ON DELETE SET NULL;
