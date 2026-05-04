@@ -406,20 +406,8 @@ async function advanceToNextStep(
       }
       nextStep = childSteps[0];
     }
-  } else {
-    const { data: nextSteps } = await supabase
-      .from("flow_steps")
-      .select("*")
-      .eq("flow_id", exec.flow_id)
-      .gt("step_order", currentStep.step_order)
-      .is("parent_step_id", null)
-      .order("step_order")
-      .limit(1);
-
-    if (nextSteps && nextSteps.length > 0) {
-      nextStep = nextSteps[0];
-    }
   }
+  // Sem filhos diretos = fim do ramo. Nós soltos (sem parent vindo deste) NÃO executam.
 
   if (!nextStep) {
     await supabase.from("flow_executions").update({
