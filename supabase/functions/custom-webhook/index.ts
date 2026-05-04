@@ -125,17 +125,40 @@ async function triggerMatchingFlows(
 
   if (!matchingFlows || matchingFlows.length === 0) return 0;
 
+  const orderId = (meta?.order_id as string | undefined) || null;
+  const dedupeWindowStart = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
   let started = 0;
   for (const flow of matchingFlows) {
-    // Skip if there's already a running execution for this lead+flow
-    const { data: running } = await admin
+    // 1) Skip if there's already an in-flight execution for this lead+flow
+    const { data: inFlight } = await admin
       .from("flow_executions")
       .select("id")
       .eq("flow_id", flow.id)
       .eq("lead_id", leadId)
-      .in("status", ["running", "waiting_reply", "scheduled"])
+      .in("status", ["running", "waiting_reply", "scheduled", "waiting_delay", "waiting_no_response"])
       .maybeSingle();
-    if (running) continue;
+    if (inFlight) {
+      console.log(`Skip flow ${flow.id} for lead ${leadId}: already in-flight (${inFlight.id})`);
+      continue;
+    }
+
+    // 2) Skip if same order_id was already processed in last 24h (provider retry)
+    if (orderId) {
+      const { data: dupOrder } = await admin
+        .from("flow_executions")
+        .select("id")
+        .eq("flow_id", flow.id)
+        .eq("lead_id", leadId)
+        .eq("metadata->>order_id", orderId)
+        .gte("started_at", dedupeWindowStart)
+        .limit(1)
+        .maybeSingle();
+      if (dupOrder) {
+        console.log(`Skip flow ${flow.id} for lead ${leadId}: order ${orderId} already processed (${dupOrder.id})`);
+        continue;
+      }
+    }
 
     const { data: firstStep } = await admin
       .from("flow_steps")
@@ -155,7 +178,7 @@ async function triggerMatchingFlows(
       metadata: { trigger: triggerType, ...meta },
     });
     started++;
-    console.log(`Flow ${flow.id} triggered for lead ${leadId} (${triggerType})`);
+    console.log(`Flow ${flow.id} triggered for lead ${leadId} (${triggerType}, order=${orderId ?? "-"})`);
   }
 
   if (started > 0) {
