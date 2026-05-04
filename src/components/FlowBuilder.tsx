@@ -454,10 +454,23 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
       const allNodes = [triggerNode, ...stepNodes];
       const allEdges: Edge[] = [];
 
-      // Build edges from parent_step_id relationships
+      // Build edges from persisted relationships. New saves use `is_entry` to mark only
+      // nodes connected to the trigger; parentless non-entry nodes are preserved as loose modules.
       const rootSteps = steps.filter((s: any) => !s.parent_step_id);
-      if (rootSteps.length > 0) {
-        // Connect trigger to the first root step
+      const entrySteps = steps.filter((s: any) => s.is_entry === true);
+      const hasExplicitEntryMarkers = entrySteps.length > 0;
+
+      if (hasExplicitEntryMarkers) {
+        entrySteps.forEach((step: any) => {
+          allEdges.push({
+            id: `e-trigger-${step.id}`,
+            source: "trigger",
+            target: step.id,
+            ...defaultEdgeOptions,
+          });
+        });
+      } else if (rootSteps.length > 0) {
+        // Backwards compatibility for flows saved before `is_entry` existed.
         allEdges.push({
           id: `e-trigger-${rootSteps[0].id}`,
           source: "trigger",
@@ -492,18 +505,20 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
         }
       }
 
-      // For root steps without parent, connect linearly (backwards compat)
-      for (let i = 0; i < rootSteps.length - 1; i++) {
-        const existing = allEdges.find(
-          (e) => e.source === rootSteps[i].id && e.target === rootSteps[i + 1].id
-        );
-        if (!existing) {
-          allEdges.push({
-            id: `e-${rootSteps[i].id}-${rootSteps[i + 1].id}`,
-            source: rootSteps[i].id,
-            target: rootSteps[i + 1].id,
-            ...defaultEdgeOptions,
-          });
+      // Only infer old linear chains when there are no explicit entry markers.
+      if (!hasExplicitEntryMarkers) {
+        for (let i = 0; i < rootSteps.length - 1; i++) {
+          const existing = allEdges.find(
+            (e) => e.source === rootSteps[i].id && e.target === rootSteps[i + 1].id
+          );
+          if (!existing) {
+            allEdges.push({
+              id: `e-${rootSteps[i].id}-${rootSteps[i + 1].id}`,
+              source: rootSteps[i].id,
+              target: rootSteps[i + 1].id,
+              ...defaultEdgeOptions,
+            });
+          }
         }
       }
 
