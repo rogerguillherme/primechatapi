@@ -299,6 +299,8 @@ Deno.serve(async (req) => {
             amount: info.amount,
             product_name: info.productName,
             source: "custom_webhook",
+            // Lock outbound delivery to the WhatsApp account bound to this webhook
+            account_id: (endpoint as any).account_id || undefined,
           },
         );
       } else {
