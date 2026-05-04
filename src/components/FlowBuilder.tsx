@@ -653,7 +653,20 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
         adjList.set(e.source, list);
       });
 
-      // BFS from trigger to assign order and parent relationships
+      // Build a parent map from ALL step→step edges so disconnected sub-chains keep their links.
+      // Trigger→step edges define entry points but never become parent_step_id.
+      const triggerChildren = adjList.get("trigger") || [];
+      const entryNodeIds = new Set<string>(triggerChildren.map((c) => c.target));
+
+      const parentByChild = new Map<string, { parentId: string; sourceHandle?: string | null }>();
+      edges.forEach((e) => {
+        if (e.source === "trigger") return;
+        if (!parentByChild.has(e.target)) {
+          parentByChild.set(e.target, { parentId: e.source, sourceHandle: e.sourceHandle });
+        }
+      });
+
+      // BFS from trigger to assign step_order to reachable nodes first
       type StepEntry = {
         node: Node;
         parentNodeId: string | null;
@@ -662,47 +675,61 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
       };
       const entries: StepEntry[] = [];
       const visited = new Set<string>();
-      const queue: { nodeId: string; parentNodeId: string | null; sourceHandle?: string | null }[] = [];
-
-      // Start from trigger's children → these are the only entry points
-      const triggerChildren = adjList.get("trigger") || [];
-      const entryNodeIds = new Set<string>(triggerChildren.map((c) => c.target));
-      triggerChildren.forEach((c) => queue.push({ nodeId: c.target, parentNodeId: null, sourceHandle: null }));
+      const queue: string[] = [];
+      triggerChildren.forEach((c) => queue.push(c.target));
 
       let order = 0;
-      while (queue.length > 0) {
-        const { nodeId, parentNodeId, sourceHandle } = queue.shift()!;
-        if (visited.has(nodeId)) continue;
+      const pushEntry = (nodeId: string) => {
+        if (visited.has(nodeId)) return;
         visited.add(nodeId);
-
         const node = stepNodes.find((n) => n.id === nodeId);
-        if (!node) continue;
+        if (!node) return;
 
-        // Determine trigger_value: from sourceHandle (button index) or from node data
+        const parentInfo = parentByChild.get(nodeId);
+        const parentNodeId = parentInfo?.parentId ?? null;
+        const sourceHandle = parentInfo?.sourceHandle ?? null;
+
         let triggerValue = (node.data.trigger_value as string) || null;
         if (sourceHandle && parentNodeId) {
-          // Find parent node to get button title
           const parentNode = stepNodes.find((n) => n.id === parentNodeId);
           if (parentNode?.type === "interactive_buttons" && sourceHandle.startsWith("btn-")) {
             const btnIdx = parseInt(sourceHandle.replace("btn-", ""));
             const buttons = (parentNode.data.buttons as any[]) || [];
-            if (buttons[btnIdx]) {
-              triggerValue = buttons[btnIdx].title || null;
-            }
+            if (buttons[btnIdx]) triggerValue = buttons[btnIdx].title || null;
           }
         }
 
         entries.push({ node, parentNodeId, triggerValue, order: order++ });
 
-        // Queue children
+        // Queue downstream children (preserves chain ordering)
         const children = adjList.get(nodeId) || [];
-        children.forEach((c) => queue.push({ nodeId: c.target, parentNodeId: nodeId, sourceHandle: c.sourceHandle }));
+        children.forEach((c) => queue.push(c.target));
+      };
+
+      while (queue.length > 0) {
+        const nodeId = queue.shift()!;
+        pushEntry(nodeId);
       }
 
-      // Add unconnected nodes (preserved as orphans — saved but not executed)
+      // Add disconnected sub-chains: walk from any unvisited "root" (no parent edge) downwards
+      stepNodes.forEach((n) => {
+        if (visited.has(n.id)) return;
+        if (!parentByChild.has(n.id)) {
+          // root of an orphan chain — BFS its descendants too
+          const localQueue: string[] = [n.id];
+          while (localQueue.length > 0) {
+            const id = localQueue.shift()!;
+            pushEntry(id);
+            const children = adjList.get(id) || [];
+            children.forEach((c) => localQueue.push(c.target));
+          }
+        }
+      });
+
+      // Any remaining unvisited (cycles or unreachable) — add standalone
       stepNodes.forEach((n) => {
         if (!visited.has(n.id)) {
-          entries.push({ node: n, parentNodeId: null, triggerValue: (n.data.trigger_value as string) || null, order: order++ });
+          pushEntry(n.id);
         }
       });
 
