@@ -160,18 +160,18 @@ async function triggerMatchingFlows(
       }
     }
 
-    // Apenas raízes conectadas ao trigger (parent NULL = ramo conectado durante o save).
-    // Nós soltos no canvas ficam salvos mas não disparam.
+    // Apenas passos marcados como entry (filhos diretos do trigger no canvas).
+    // Nós soltos ficam salvos no banco mas não disparam execução.
     const { data: firstStep } = await admin
       .from("flow_steps")
       .select("id")
       .eq("flow_id", flow.id)
-      .is("parent_step_id", null)
+      .eq("is_entry", true)
       .order("step_order", { ascending: true })
       .limit(1)
       .maybeSingle();
     if (!firstStep) {
-      console.log(`Flow ${flow.id} has no connected root step; skipping.`);
+      console.log(`Flow ${flow.id} has no entry step (all orphans); skipping.`);
       continue;
     }
 
