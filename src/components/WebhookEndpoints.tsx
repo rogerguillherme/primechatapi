@@ -22,6 +22,7 @@ import { ptBR } from "date-fns/locale";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const EVENT_TYPES = [
   { value: "carrinho_abandonado", label: "Carrinho Abandonado", icon: ShoppingCart, color: "text-amber-500" },
@@ -61,6 +62,18 @@ export function WebhookEndpoints({ onCreateFlow, onSelectFlow }: {
     enabled: !!user,
   });
 
+  const { data: accounts } = useQuery({
+    queryKey: ["whatsapp-accounts-for-webhooks"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("whatsapp_accounts")
+        .select("id, name, phone_number_id, provider")
+        .order("created_at");
+      return data || [];
+    },
+    enabled: !!user,
+  });
+
   const { data: endpoints, isLoading } = useQuery({
     queryKey: ["webhook-endpoints"],
     queryFn: async () => {
@@ -88,18 +101,32 @@ export function WebhookEndpoints({ onCreateFlow, onSelectFlow }: {
     enabled: !!user,
   });
 
-  const handleCreateEndpoint = async (eventType: string) => {
+  const handleCreateEndpoint = async (eventType: string, accountId?: string) => {
     if (!user) return;
     try {
       const { error } = await supabase.from("webhook_endpoints").insert({
         user_id: user.id,
         event_type: eventType,
+        account_id: accountId || null,
       });
       if (error) throw error;
       toast.success("Webhook criado com sucesso!");
       queryClient.invalidateQueries({ queryKey: ["webhook-endpoints"] });
     } catch (err: any) {
       toast.error(err.message || "Erro ao criar webhook");
+    }
+  };
+
+  const handleChangeAccount = async (id: string, accountId: string | null) => {
+    const { error } = await supabase
+      .from("webhook_endpoints")
+      .update({ account_id: accountId })
+      .eq("id", id);
+    if (error) {
+      toast.error("Erro ao vincular conta");
+    } else {
+      toast.success("Conta vinculada ao webhook");
+      queryClient.invalidateQueries({ queryKey: ["webhook-endpoints"] });
     }
   };
 
@@ -278,6 +305,22 @@ export function WebhookEndpoints({ onCreateFlow, onSelectFlow }: {
                   <div className="flex items-center gap-2">
                     {endpoint ? (
                       <>
+                        <Select
+                          value={endpoint.account_id || "none"}
+                          onValueChange={(v) => handleChangeAccount(endpoint.id, v === "none" ? null : v)}
+                        >
+                          <SelectTrigger className="h-8 w-[180px] text-xs">
+                            <SelectValue placeholder="Vincular conta" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Sem vínculo (qualquer)</SelectItem>
+                            {(accounts || []).map((acc: any) => (
+                              <SelectItem key={acc.id} value={acc.id}>
+                                {acc.name} {acc.phone_number_id ? `· ${acc.phone_number_id}` : ""}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <Switch
                           checked={endpoint.is_active}
                           onCheckedChange={() => handleToggle(endpoint.id, endpoint.is_active)}

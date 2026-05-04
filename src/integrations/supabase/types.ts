@@ -1569,6 +1569,7 @@ export type Database = {
       }
       webhook_endpoints: {
         Row: {
+          account_id: string | null
           created_at: string
           event_type: string
           id: string
@@ -1578,6 +1579,7 @@ export type Database = {
           webhook_token: string
         }
         Insert: {
+          account_id?: string | null
           created_at?: string
           event_type: string
           id?: string
@@ -1587,6 +1589,7 @@ export type Database = {
           webhook_token?: string
         }
         Update: {
+          account_id?: string | null
           created_at?: string
           event_type?: string
           id?: string
@@ -1595,7 +1598,15 @@ export type Database = {
           user_id?: string
           webhook_token?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "webhook_endpoints_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       webhook_events: {
         Row: {
