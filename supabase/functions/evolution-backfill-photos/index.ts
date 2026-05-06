@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
         account = any1;
       }
     }
-    if (!account) return json({ error: "Conta Evolution não encontrada" }, 404);
+    if (!account) return json({ ok: true, scanned: 0, updated: 0, skipped: "no_evolution_account" });
 
     const evoServer = (account.business_account_id || "").replace(/\/+$/, "");
     const evoKey = account.api_key || account.access_token;
