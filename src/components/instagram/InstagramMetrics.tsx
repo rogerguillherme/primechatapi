@@ -243,6 +243,19 @@ export function InstagramMetrics() {
   const [selectedPost, setSelectedPost] = useState<any>(null);
   const canAccessPro = hasAccess("pro");
 
+  const connectionQuery = useQuery({
+    queryKey: ["instagram-connection-exists", user?.id],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("instagram_connections" as any)
+        .select("id", { count: "exact", head: true })
+        .eq("status", "connected");
+      return (count || 0) > 0;
+    },
+    enabled: !!user,
+  });
+  const hasConnection = !!connectionQuery.data;
+
   const { data, isLoading, error } = useQuery({
     queryKey: ["instagram-data", user?.id],
     queryFn: async () => {
@@ -251,7 +264,7 @@ export function InstagramMetrics() {
       if (data?.error) throw new Error(data.error);
       return data;
     },
-    enabled: !!user,
+    enabled: !!user && hasConnection,
     staleTime: 60_000,
     refetchInterval: 5 * 60_000,
   });
