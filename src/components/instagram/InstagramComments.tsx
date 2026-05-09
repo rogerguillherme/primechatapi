@@ -73,12 +73,6 @@ export function InstagramComments() {
   const [replyText, setReplyText] = useState("");
   const [filter, setFilter] = useState<CommentFilter>("all");
 
-  const mediaQuery = useQuery({
-    queryKey: ["ig-comments-media"],
-    queryFn: () => callApi("list").then((d) => d.media as MediaItem[]),
-    refetchInterval: 60_000,
-  });
-
   const connectionQuery = useQuery({
     queryKey: ["ig-connection-username"],
     queryFn: async () => {
@@ -89,8 +83,17 @@ export function InstagramComments() {
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-      return (data?.instagram_username || "").toLowerCase();
+      return { username: (data?.instagram_username || "").toLowerCase(), connected: !!data };
     },
+  });
+
+  const hasConnection = !!connectionQuery.data?.connected;
+
+  const mediaQuery = useQuery({
+    queryKey: ["ig-comments-media"],
+    queryFn: () => callApi("list").then((d) => d.media as MediaItem[]),
+    refetchInterval: 60_000,
+    enabled: hasConnection,
   });
 
   const commentsQuery = useQuery({
