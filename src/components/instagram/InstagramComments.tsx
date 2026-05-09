@@ -177,6 +177,33 @@ export function InstagramComments() {
               Responda, oculte e modere comentários dos seus posts
             </p>
           </div>
+        </div>
+      </div>
+      {!connectionQuery.isLoading && !hasConnection && (
+        <div className="flex-1 flex items-center justify-center p-6">
+          <Card className="max-w-md">
+            <CardContent className="pt-6 text-center space-y-2">
+              <MessageCircle className="h-8 w-8 mx-auto text-muted-foreground" />
+              <p className="font-medium">Nenhuma conta Instagram conectada</p>
+              <p className="text-sm text-muted-foreground">
+                Conecte sua conta Instagram na aba Configuração para gerenciar comentários.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+      {hasConnection && (
+      <>
+      {/* Header stats + body */}
+      <div className="px-6 pt-4 pb-4 border-b border-border/50">
+        <div className="flex items-center justify-end mb-3">
+          <div className="flex items-center gap-2">
+          <div>
+            <h1 className="text-2xl font-display font-bold">Comentários</h1>
+            <p className="text-sm text-muted-foreground">
+              Responda, oculte e modere comentários dos seus posts
+            </p>
+          </div>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
