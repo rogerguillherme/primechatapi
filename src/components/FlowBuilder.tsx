@@ -622,15 +622,16 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
 
   useEffect(() => {
     if (!isLoaded) return;
-
+    const now = new Date();
     writeFlowDraft(draftKey, {
       version: 1,
       name,
       description,
       nodes,
       edges,
-      savedAt: new Date().toISOString(),
+      savedAt: now.toISOString(),
     });
+    setDraftSavedAt(now);
   }, [draftKey, name, description, nodes, edges, isLoaded]);
 
   const saveMutation = useMutation({
