@@ -113,9 +113,29 @@ Deno.serve(async (req) => {
 });
 
 async function finalizeConnection(adminClient: any, userId: string, userAccessToken: string, selectedIgUserId: string) {
+  // Trocar por token long-lived (60 dias) — necessário para reuso futuro ao adicionar outras contas
+  let longLivedUserToken = userAccessToken;
+  let userTokenExpiresAt: string | null = null;
+  try {
+    const metaAppId = Deno.env.get("META_APP_ID")!;
+    const metaAppSecret = Deno.env.get("META_APP_SECRET")!;
+    const ll = await fetch(
+      `${GRAPH}/oauth/access_token?grant_type=fb_exchange_token&client_id=${metaAppId}&client_secret=${metaAppSecret}&fb_exchange_token=${userAccessToken}`
+    );
+    const llData = await ll.json();
+    if (ll.ok && llData.access_token) {
+      longLivedUserToken = llData.access_token;
+      if (llData.expires_in) {
+        userTokenExpiresAt = new Date(Date.now() + Number(llData.expires_in) * 1000).toISOString();
+      }
+    }
+  } catch (e) {
+    console.warn("Long-lived token exchange failed, using short-lived:", e);
+  }
+
   // Re-buscar páginas com este token e localizar a conta selecionada
   const pagesRes = await fetch(
-    `${GRAPH}/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,profile_picture_url,followers_count}&access_token=${userAccessToken}`
+    `${GRAPH}/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,profile_picture_url,followers_count}&access_token=${longLivedUserToken}`
   );
   const pagesData = await pagesRes.json();
 
@@ -137,14 +157,13 @@ async function finalizeConnection(adminClient: any, userId: string, userAccessTo
   let pageAccessToken = pageInfo.access_token;
   if (!pageAccessToken) {
     const pageTokenRes = await fetch(
-      `${GRAPH}/${pageInfo.id}?fields=access_token&access_token=${userAccessToken}`
+      `${GRAPH}/${pageInfo.id}?fields=access_token&access_token=${longLivedUserToken}`
     );
     const pageTokenData = await pageTokenRes.json();
-    pageAccessToken = pageTokenData.access_token || userAccessToken;
+    pageAccessToken = pageTokenData.access_token || longLivedUserToken;
   }
 
   // Marcar conexões anteriores deste user para a MESMA conta IG como substituídas
-  // (evita duplicatas connected/disconnected antigas)
   await adminClient
     .from("instagram_connections")
     .delete()
@@ -159,6 +178,8 @@ async function finalizeConnection(adminClient: any, userId: string, userAccessTo
     page_id: pageInfo.id,
     page_name: pageInfo.name,
     access_token: pageAccessToken,
+    user_access_token: longLivedUserToken,
+    user_token_expires_at: userTokenExpiresAt,
     status: "connected",
   });
 

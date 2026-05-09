@@ -10,6 +10,8 @@ import { toast } from "sonner";
 import { InstagramDiagnostics } from "./InstagramDiagnostics";
 import { InstagramWebhookMonitor } from "./InstagramWebhookMonitor";
 import { InstagramSetupWizard } from "./InstagramSetupWizard";
+import { InstagramAddAccountDialog } from "./InstagramAddAccountDialog";
+import { Plus } from "lucide-react";
 
 const REDIRECT_URI = "https://primechatapi.lovable.app/auth/instagram/callback";
 
@@ -31,6 +33,7 @@ export function InstagramSettings() {
   const queryClient = useQueryClient();
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSubscribing, setIsSubscribing] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
 
   const handleSubscribeWebhook = async () => {
     setIsSubscribing(true);
@@ -129,6 +132,9 @@ export function InstagramSettings() {
                   <Badge className="bg-green-500/10 text-green-600 border-green-500/20">
                     <CheckCircle2 className="h-3 w-3 mr-1" /> Conectado
                   </Badge>
+                  <Button variant="outline" size="sm" onClick={() => setAddOpen(true)}>
+                    <Plus className="h-4 w-4 mr-1" /> Adicionar outra conta
+                  </Button>
                   <Button variant="outline" size="sm" onClick={handleSubscribeWebhook} disabled={isSubscribing}>
                     {isSubscribing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Webhook className="h-4 w-4 mr-1" />}
                     Ativar Webhooks
@@ -150,6 +156,35 @@ export function InstagramSettings() {
               )}
             </div>
           </div>
+
+          <InstagramAddAccountDialog
+            open={addOpen}
+            onOpenChange={setAddOpen}
+            onReauthRequested={() => { setAddOpen(false); handleConnect(); }}
+          />
+
+          {connections && connections.filter(c => c.status === "connected").length > 1 && (
+            <div className="mt-6">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
+                Contas conectadas ({connections.filter(c => c.status === "connected").length})
+              </p>
+              <div className="space-y-2">
+                {connections.filter(c => c.status === "connected").map((c) => (
+                  <div key={c.id} className="flex items-center justify-between rounded-lg border bg-card p-3">
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">@{c.instagram_username || c.instagram_user_id}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        Página: {c.page_name || "—"} · IG ID: <span className="font-mono">{c.instagram_user_id}</span>
+                      </p>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => handleDisconnect(c.id)}>
+                      <Unplug className="h-3 w-3 mr-1" /> Desconectar
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {activeConnection && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
