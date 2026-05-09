@@ -170,13 +170,22 @@ export function InstagramChat() {
     },
   });
 
-  // Capture sync warning from initial mount sync
+  // Capture sync warning from initial mount sync (only if a connection exists)
   useEffect(() => {
-    callApi("sync")
-      .then((d: any) => {
-        if (d?.ok === false) setSyncWarning(d.message);
-      })
-      .catch((e: Error) => setSyncWarning(e.message));
+    (async () => {
+      const { count } = await supabase
+        .from("instagram_connections")
+        .select("id", { count: "exact", head: true });
+      if (!count) {
+        setSyncWarning("Nenhuma conta Instagram vinculada. Conecte sua conta na aba Configurações.");
+        return;
+      }
+      callApi("sync")
+        .then((d: any) => {
+          if (d?.ok === false) setSyncWarning(d.message);
+        })
+        .catch((e: Error) => setSyncWarning(e.message));
+    })();
   }, []);
 
   const filtered = (convQuery.data || []).filter((c) => {
