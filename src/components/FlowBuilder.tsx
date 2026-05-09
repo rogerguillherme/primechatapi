@@ -527,7 +527,12 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
       setIsLoaded(true);
       return steps;
     },
-    enabled: !!flow && !hydratedFromDraft,
+    enabled: !!flow && !hydratedFromDraft && !isLoaded,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    staleTime: Infinity,
+    gcTime: Infinity,
   });
 
   useEffect(() => {
