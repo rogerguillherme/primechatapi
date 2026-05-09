@@ -78,16 +78,47 @@ Deno.serve(async (req) => {
           : null;
 
         if (!executionAccountId) {
-          const { data: recentLeadMessage } = await supabase
+          // Prefer the last OUTBOUND account used for this lead (the number that
+          // initiated/continued the conversation), to avoid mixing numbers when
+          // the lead replied to a different account in the past.
+          const { data: recentOutbound } = await supabase
             .from("chat_messages")
             .select("account_id")
             .eq("lead_id", lead.id)
+            .eq("direction", "outbound")
             .not("account_id", "is", null)
             .order("created_at", { ascending: false })
             .limit(1)
             .maybeSingle();
 
-          executionAccountId = recentLeadMessage?.account_id || null;
+          executionAccountId = recentOutbound?.account_id || null;
+
+          if (!executionAccountId) {
+            // Fallback: user's default WhatsApp account
+            const { data: flowRow } = await supabase
+              .from("flows").select("user_id").eq("id", exec.flow_id).maybeSingle();
+            if (flowRow?.user_id) {
+              const { data: defaultAcc } = await supabase
+                .from("whatsapp_accounts")
+                .select("id")
+                .eq("user_id", flowRow.user_id)
+                .order("is_default", { ascending: false })
+                .order("created_at", { ascending: true })
+                .limit(1)
+                .maybeSingle();
+              executionAccountId = defaultAcc?.id || null;
+            }
+          }
+        }
+
+        // Persist the resolved account on the execution so subsequent steps
+        // never drift to a different number.
+        if (executionAccountId && exec.metadata?.account_id !== executionAccountId) {
+          await supabase.from("flow_executions").update({
+            metadata: { ...(exec.metadata || {}), account_id: executionAccountId },
+            updated_at: new Date().toISOString(),
+          }).eq("id", exec.id);
+          exec.metadata = { ...(exec.metadata || {}), account_id: executionAccountId };
         }
 
         if (currentStep.step_type === "no_response" || exec.status === "waiting_no_response") {
