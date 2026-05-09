@@ -861,6 +861,11 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
             )}
           </Button>
         )}
+        {draftSavedAt && (
+          <span className="text-[11px] text-muted-foreground hidden md:inline">
+            Rascunho salvo {draftSavedAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+          </span>
+        )}
         <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} size="sm" className="gap-1.5">
           <Save size={14} />
           {saveMutation.isPending ? "Salvando..." : "Salvar"}
