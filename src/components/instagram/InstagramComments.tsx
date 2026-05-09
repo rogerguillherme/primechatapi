@@ -166,6 +166,22 @@ export function InstagramComments() {
   const totalComments = mediaQuery.data?.reduce((s, m) => s + (m.comments_count || 0), 0) || 0;
   const totalLikes = mediaQuery.data?.reduce((s, m) => s + (m.like_count || 0), 0) || 0;
 
+  if (!connectionQuery.isLoading && !hasConnection) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-6">
+        <Card className="max-w-md">
+          <CardContent className="pt-6 text-center space-y-2">
+            <MessageCircle className="h-8 w-8 mx-auto text-muted-foreground" />
+            <p className="font-medium">Nenhuma conta Instagram conectada</p>
+            <p className="text-sm text-muted-foreground">
+              Conecte sua conta Instagram na aba Configuração para gerenciar comentários.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -177,26 +193,6 @@ export function InstagramComments() {
               Responda, oculte e modere comentários dos seus posts
             </p>
           </div>
-        </div>
-      </div>
-      {!connectionQuery.isLoading && !hasConnection && (
-        <div className="flex-1 flex items-center justify-center p-6">
-          <Card className="max-w-md">
-            <CardContent className="pt-6 text-center space-y-2">
-              <MessageCircle className="h-8 w-8 mx-auto text-muted-foreground" />
-              <p className="font-medium">Nenhuma conta Instagram conectada</p>
-              <p className="text-sm text-muted-foreground">
-                Conecte sua conta Instagram na aba Configuração para gerenciar comentários.
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-      {hasConnection && (
-      <>
-      {/* Header stats + body */}
-      <div className="px-6 pt-4 pb-4 border-b border-border/50">
-        <div className="flex items-center justify-end mb-3">
           <div className="flex items-center gap-2">
           <div>
             <h1 className="text-2xl font-display font-bold">Comentários</h1>
