@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Instagram, Plug, Unplug, Loader2, CheckCircle2, ExternalLink, Webhook } from "lucide-react";
 import { toast } from "sonner";
 import { InstagramDiagnostics } from "./InstagramDiagnostics";
+import { InstagramWebhookMonitor } from "./InstagramWebhookMonitor";
+import { InstagramSetupWizard } from "./InstagramSetupWizard";
 
 const REDIRECT_URI = "https://primechatapi.lovable.app/auth/instagram/callback";
 
@@ -103,6 +105,8 @@ export function InstagramSettings() {
         </p>
       </div>
 
+      <InstagramSetupWizard />
+
       <Card className="border-purple-500/20 bg-gradient-to-r from-purple-500/5 via-pink-500/5 to-transparent">
         <CardContent className="pt-6">
           <div className="flex items-center justify-between flex-wrap gap-4">
@@ -167,6 +171,7 @@ export function InstagramSettings() {
       </Card>
 
       {activeConnection && <InstagramDiagnostics />}
+      {activeConnection && <InstagramWebhookMonitor />}
 
       <Card>
         <CardHeader>

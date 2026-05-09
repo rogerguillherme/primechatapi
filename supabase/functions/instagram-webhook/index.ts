@@ -36,8 +36,36 @@ Deno.serve(async (req) => {
       console.log("IG webhook received:", JSON.stringify(body).substring(0, 800));
 
       const adminClient = createClient(supabaseUrl, serviceRoleKey);
+      const isReprocess = req.headers.get("x-reprocess-event-id");
 
       for (const entry of body.entry || []) {
+        // Determinar event_type para o log
+        let eventType = "unknown";
+        if (entry.changes?.some((c: any) => c.field === "comments")) eventType = "comment";
+        else if (entry.changes?.some((c: any) => c.field === "messages")) eventType = "message";
+        else if (entry.messaging?.some((m: any) => m.postback)) eventType = "postback";
+        else if (entry.messaging?.length) eventType = "message";
+
+        // Log event before processing (skip if this is a reprocess to avoid duplication)
+        let eventLogId: string | null = null;
+        if (!isReprocess) {
+          const { data: logged } = await adminClient
+            .from("instagram_webhook_events")
+            .insert({
+              entry_id: String(entry.id || ""),
+              event_type: eventType,
+              payload: { entry, object: body.object },
+              processed: false,
+              attempts: 1,
+            })
+            .select("id")
+            .single();
+          eventLogId = logged?.id || null;
+        } else {
+          eventLogId = isReprocess;
+        }
+
+        try {
         const entryId = String(entry.id || "");
         const candidateIds = new Set<string>([
           entryId,
@@ -63,9 +91,24 @@ Deno.serve(async (req) => {
 
         if (!conn) {
           console.log(`No connection found for IG webhook. candidates=${ids.join(",")} — check if account was ever linked.`);
+          if (eventLogId) {
+            await adminClient.from("instagram_webhook_events").update({
+              processed: true,
+              processed_at: new Date().toISOString(),
+              error: `No connection found (candidates=${ids.join(",")})`,
+            }).eq("id", eventLogId);
+          }
           continue;
         }
         console.log(`Matched connection @${conn.instagram_username} (status=${conn.status})`);
+
+        // Enrich event log with connection info
+        if (eventLogId) {
+          await adminClient.from("instagram_webhook_events").update({
+            user_id: conn.user_id,
+            connection_id: conn.id,
+          }).eq("id", eventLogId);
+        }
 
         const resolvedConn = await enrichConnectionForMessaging(conn);
 
@@ -91,6 +134,23 @@ Deno.serve(async (req) => {
           }
           if (msg.message?.text && msg.sender?.id !== resolvedConn.instagram_user_id) {
             await handleDM(adminClient, resolvedConn, msg, agent);
+          }
+        }
+
+        if (eventLogId) {
+          await adminClient.from("instagram_webhook_events").update({
+            processed: true,
+            processed_at: new Date().toISOString(),
+            error: null,
+          }).eq("id", eventLogId);
+        }
+        } catch (entryErr) {
+          console.error("Entry processing error:", entryErr);
+          if (eventLogId) {
+            await adminClient.from("instagram_webhook_events").update({
+              processed: false,
+              error: (entryErr as Error).message || String(entryErr),
+            }).eq("id", eventLogId);
           }
         }
       }

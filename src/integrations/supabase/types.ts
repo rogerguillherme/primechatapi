@@ -1030,6 +1030,48 @@ export type Database = {
           },
         ]
       }
+      instagram_webhook_events: {
+        Row: {
+          attempts: number
+          connection_id: string | null
+          entry_id: string | null
+          error: string | null
+          event_type: string
+          id: string
+          payload: Json
+          processed: boolean
+          processed_at: string | null
+          received_at: string
+          user_id: string | null
+        }
+        Insert: {
+          attempts?: number
+          connection_id?: string | null
+          entry_id?: string | null
+          error?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          processed?: boolean
+          processed_at?: string | null
+          received_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          attempts?: number
+          connection_id?: string | null
+          entry_id?: string | null
+          error?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          processed?: boolean
+          processed_at?: string | null
+          received_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       items: {
         Row: {
           created_at: string
