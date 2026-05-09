@@ -91,9 +91,24 @@ Deno.serve(async (req) => {
 
         if (!conn) {
           console.log(`No connection found for IG webhook. candidates=${ids.join(",")} — check if account was ever linked.`);
+          if (eventLogId) {
+            await adminClient.from("instagram_webhook_events").update({
+              processed: true,
+              processed_at: new Date().toISOString(),
+              error: `No connection found (candidates=${ids.join(",")})`,
+            }).eq("id", eventLogId);
+          }
           continue;
         }
         console.log(`Matched connection @${conn.instagram_username} (status=${conn.status})`);
+
+        // Enrich event log with connection info
+        if (eventLogId) {
+          await adminClient.from("instagram_webhook_events").update({
+            user_id: conn.user_id,
+            connection_id: conn.id,
+          }).eq("id", eventLogId);
+        }
 
         const resolvedConn = await enrichConnectionForMessaging(conn);
 
@@ -119,6 +134,23 @@ Deno.serve(async (req) => {
           }
           if (msg.message?.text && msg.sender?.id !== resolvedConn.instagram_user_id) {
             await handleDM(adminClient, resolvedConn, msg, agent);
+          }
+        }
+
+        if (eventLogId) {
+          await adminClient.from("instagram_webhook_events").update({
+            processed: true,
+            processed_at: new Date().toISOString(),
+            error: null,
+          }).eq("id", eventLogId);
+        }
+        } catch (entryErr) {
+          console.error("Entry processing error:", entryErr);
+          if (eventLogId) {
+            await adminClient.from("instagram_webhook_events").update({
+              processed: false,
+              error: (entryErr as Error).message || String(entryErr),
+            }).eq("id", eventLogId);
           }
         }
       }
