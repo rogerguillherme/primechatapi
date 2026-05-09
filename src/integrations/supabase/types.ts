@@ -907,7 +907,9 @@ export type Database = {
           page_name: string | null
           status: string
           updated_at: string
+          user_access_token: string | null
           user_id: string
+          user_token_expires_at: string | null
         }
         Insert: {
           access_token: string
@@ -919,7 +921,9 @@ export type Database = {
           page_name?: string | null
           status?: string
           updated_at?: string
+          user_access_token?: string | null
           user_id: string
+          user_token_expires_at?: string | null
         }
         Update: {
           access_token?: string
@@ -931,7 +935,9 @@ export type Database = {
           page_name?: string | null
           status?: string
           updated_at?: string
+          user_access_token?: string | null
           user_id?: string
+          user_token_expires_at?: string | null
         }
         Relationships: []
       }
