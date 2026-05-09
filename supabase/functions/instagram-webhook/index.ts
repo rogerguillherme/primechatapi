@@ -486,6 +486,7 @@ async function persistInboundDM(adminClient: any, conn: any, senderId: string, i
     const { data: existing } = await adminClient
       .from("instagram_conversations")
       .select("id, unread_count")
+      .eq("user_id", conn.user_id)
       .eq("ig_user_id", conn.instagram_user_id)
       .eq("participant_id", senderId)
       .maybeSingle();
