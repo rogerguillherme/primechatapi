@@ -106,7 +106,7 @@ export function InstagramComments() {
     refetchInterval: 30_000,
   });
 
-  const ownUsername = connectionQuery.data || "";
+  const ownUsername = connectionQuery.data?.username || "";
   const isReplied = (c: CommentItem) => {
     const replies = Array.isArray(c.replies) ? c.replies : c.replies?.data || [];
     return replies.some((r) => (r.username || "").toLowerCase() === ownUsername);
