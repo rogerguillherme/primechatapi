@@ -73,12 +73,6 @@ export function InstagramComments() {
   const [replyText, setReplyText] = useState("");
   const [filter, setFilter] = useState<CommentFilter>("all");
 
-  const mediaQuery = useQuery({
-    queryKey: ["ig-comments-media"],
-    queryFn: () => callApi("list").then((d) => d.media as MediaItem[]),
-    refetchInterval: 60_000,
-  });
-
   const connectionQuery = useQuery({
     queryKey: ["ig-connection-username"],
     queryFn: async () => {
@@ -89,8 +83,17 @@ export function InstagramComments() {
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-      return (data?.instagram_username || "").toLowerCase();
+      return { username: (data?.instagram_username || "").toLowerCase(), connected: !!data };
     },
+  });
+
+  const hasConnection = !!connectionQuery.data?.connected;
+
+  const mediaQuery = useQuery({
+    queryKey: ["ig-comments-media"],
+    queryFn: () => callApi("list").then((d) => d.media as MediaItem[]),
+    refetchInterval: 60_000,
+    enabled: hasConnection,
   });
 
   const commentsQuery = useQuery({
@@ -99,11 +102,11 @@ export function InstagramComments() {
       callApi("list", { query: { media_id: selectedMedia!.id } }).then(
         (d) => d.comments as CommentItem[]
       ),
-    enabled: !!selectedMedia,
+    enabled: hasConnection && !!selectedMedia,
     refetchInterval: 30_000,
   });
 
-  const ownUsername = connectionQuery.data || "";
+  const ownUsername = connectionQuery.data?.username || "";
   const isReplied = (c: CommentItem) => {
     const replies = Array.isArray(c.replies) ? c.replies : c.replies?.data || [];
     return replies.some((r) => (r.username || "").toLowerCase() === ownUsername);
@@ -162,6 +165,22 @@ export function InstagramComments() {
 
   const totalComments = mediaQuery.data?.reduce((s, m) => s + (m.comments_count || 0), 0) || 0;
   const totalLikes = mediaQuery.data?.reduce((s, m) => s + (m.like_count || 0), 0) || 0;
+
+  if (!connectionQuery.isLoading && !hasConnection) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-6">
+        <Card className="max-w-md">
+          <CardContent className="pt-6 text-center space-y-2">
+            <MessageCircle className="h-8 w-8 mx-auto text-muted-foreground" />
+            <p className="font-medium">Nenhuma conta Instagram conectada</p>
+            <p className="text-sm text-muted-foreground">
+              Conecte sua conta Instagram na aba Configuração para gerenciar comentários.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full">
