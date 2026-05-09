@@ -873,7 +873,7 @@ async function advanceExecution(execution: any, currentStep: any, lead: any, sup
 
   if (childSteps && childSteps.length > 0) {
     if (childSteps.length === 1) {
-      await processFlowStep(childSteps[0], execution, lead, supabase);
+      await processFlowStep(childSteps[0], execution, lead, supabase, execution.metadata?.account_id || null);
       return;
     }
     const hasConditionalBranches = childSteps.some((step: any) => step.step_type === "condition");
@@ -886,7 +886,7 @@ async function advanceExecution(execution: any, currentStep: any, lead: any, sup
       return;
     }
     // Default: take first child
-    await processFlowStep(childSteps[0], execution, lead, supabase);
+    await processFlowStep(childSteps[0], execution, lead, supabase, execution.metadata?.account_id || null);
     return;
   }
 
@@ -905,7 +905,7 @@ async function advanceExecution(execution: any, currentStep: any, lead: any, sup
     return;
   }
 
-  await processFlowStep(nextSteps[0], execution, lead, supabase);
+  await processFlowStep(nextSteps[0], execution, lead, supabase, execution.metadata?.account_id || null);
 }
 
 async function triggerFlowProcessor(supabaseUrl: string, supabaseKey: string) {
