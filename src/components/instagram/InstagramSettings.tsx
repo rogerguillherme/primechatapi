@@ -33,6 +33,7 @@ export function InstagramSettings() {
   const queryClient = useQueryClient();
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSubscribing, setIsSubscribing] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
 
   const handleSubscribeWebhook = async () => {
     setIsSubscribing(true);
