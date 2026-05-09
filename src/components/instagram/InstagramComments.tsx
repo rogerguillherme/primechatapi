@@ -194,13 +194,6 @@ export function InstagramComments() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-          <div>
-            <h1 className="text-2xl font-display font-bold">Comentários</h1>
-            <p className="text-sm text-muted-foreground">
-              Responda, oculte e modere comentários dos seus posts
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
