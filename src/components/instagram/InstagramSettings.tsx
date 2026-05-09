@@ -10,6 +10,8 @@ import { toast } from "sonner";
 import { InstagramDiagnostics } from "./InstagramDiagnostics";
 import { InstagramWebhookMonitor } from "./InstagramWebhookMonitor";
 import { InstagramSetupWizard } from "./InstagramSetupWizard";
+import { InstagramAddAccountDialog } from "./InstagramAddAccountDialog";
+import { Plus } from "lucide-react";
 
 const REDIRECT_URI = "https://primechatapi.lovable.app/auth/instagram/callback";
 
