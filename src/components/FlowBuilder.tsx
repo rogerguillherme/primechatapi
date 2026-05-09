@@ -395,6 +395,7 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
   const [hydratedFromDraft, setHydratedFromDraft] = useState(Boolean(initialDraft));
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settings, setSettings] = useState<FlowSettings>(DEFAULT_FLOW_SETTINGS);
+  const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(initialDraft ? new Date(initialDraft.savedAt) : null);
 
   const flowKind: FlowKind = (flow?.flow_kind as FlowKind) || initialKind || "api";
   const isWhatsAppFlow = flowKind === "whatsapp";
@@ -621,15 +622,16 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
 
   useEffect(() => {
     if (!isLoaded) return;
-
+    const now = new Date();
     writeFlowDraft(draftKey, {
       version: 1,
       name,
       description,
       nodes,
       edges,
-      savedAt: new Date().toISOString(),
+      savedAt: now.toISOString(),
     });
+    setDraftSavedAt(now);
   }, [draftKey, name, description, nodes, edges, isLoaded]);
 
   const saveMutation = useMutation({
@@ -858,6 +860,11 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
               <span className="ml-1 h-1.5 w-1.5 rounded-full bg-primary" />
             )}
           </Button>
+        )}
+        {draftSavedAt && (
+          <span className="text-[11px] text-muted-foreground hidden md:inline">
+            Rascunho salvo {draftSavedAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+          </span>
         )}
         <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} size="sm" className="gap-1.5">
           <Save size={14} />
