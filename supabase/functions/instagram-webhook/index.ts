@@ -80,16 +80,23 @@ Deno.serve(async (req) => {
         const ids = Array.from(candidateIds).filter(Boolean);
         console.log(`IG webhook entry.id=${entryId} candidates=${ids.join(",")}`);
 
-        const { data: connections } = await adminClient
+        const { data: connectionsAll } = await adminClient
           .from("instagram_connections")
           .select("id, user_id, access_token, instagram_user_id, page_id, instagram_username, status")
           .or(`page_id.in.(${ids.join(",")}),instagram_user_id.in.(${ids.join(",")})`)
           .order("status", { ascending: true }) // 'connected' before 'disconnected'
           .order("updated_at", { ascending: false });
 
-        const conn = connections?.[0] || null;
+        // Tenant isolation: keep at most one connection per user_id (prefer connected/most recent),
+        // and process each tenant independently. If two tenants linked the same IG/Page,
+        // both legitimately receive their OWN copy of the event (their own automations, DMs, logs).
+        const byTenant = new Map<string, any>();
+        for (const c of connectionsAll || []) {
+          if (!byTenant.has(c.user_id)) byTenant.set(c.user_id, c);
+        }
+        const tenantConns = Array.from(byTenant.values());
 
-        if (!conn) {
+        if (!tenantConns.length) {
           console.log(`No connection found for IG webhook. candidates=${ids.join(",")} — check if account was ever linked.`);
           if (eventLogId) {
             await adminClient.from("instagram_webhook_events").update({
@@ -100,48 +107,56 @@ Deno.serve(async (req) => {
           }
           continue;
         }
-        console.log(`Matched connection @${conn.instagram_username} (status=${conn.status})`);
 
-        // Enrich event log with connection info
+        if (tenantConns.length > 1) {
+          console.warn(`IG webhook matched ${tenantConns.length} tenants for candidates=${ids.join(",")} — fanning out (isolated per user_id).`);
+        }
+
+        let anyError: string | null = null;
+        for (const conn of tenantConns) {
+          try {
+            console.log(`Matched connection @${conn.instagram_username} user=${conn.user_id} (status=${conn.status})`);
+
+            // Enrich event log with connection info (best-effort; first tenant wins on the row)
+            if (eventLogId && tenantConns.length === 1) {
+              await adminClient.from("instagram_webhook_events").update({
+                user_id: conn.user_id,
+                connection_id: conn.id,
+              }).eq("id", eventLogId);
+            }
+
+            const resolvedConn = await enrichConnectionForMessaging(conn);
+            const agent = await getActiveAgent(adminClient, resolvedConn.user_id);
+
+            for (const change of entry.changes || []) {
+              if (change.field === "comments") {
+                await handleComment(adminClient, resolvedConn, change.value, agent);
+              }
+              if (change.field === "messages" && change.value?.message?.text && change.value?.sender?.id !== resolvedConn.instagram_user_id) {
+                await handleDM(adminClient, resolvedConn, change.value, agent);
+              }
+            }
+
+            for (const msg of entry.messaging || []) {
+              if (msg.postback?.payload && msg.sender?.id !== resolvedConn.instagram_user_id) {
+                await handlePostback(adminClient, resolvedConn, msg);
+                continue;
+              }
+              if (msg.message?.text && msg.sender?.id !== resolvedConn.instagram_user_id) {
+                await handleDM(adminClient, resolvedConn, msg, agent);
+              }
+            }
+          } catch (perTenantErr) {
+            anyError = (perTenantErr as Error).message || String(perTenantErr);
+            console.error(`Per-tenant processing failed for user=${conn.user_id}:`, perTenantErr);
+          }
+        }
+
         if (eventLogId) {
           await adminClient.from("instagram_webhook_events").update({
-            user_id: conn.user_id,
-            connection_id: conn.id,
-          }).eq("id", eventLogId);
-        }
-
-        const resolvedConn = await enrichConnectionForMessaging(conn);
-
-        // Load AI Agent (if active) once per entry
-        const agent = await getActiveAgent(adminClient, resolvedConn.user_id);
-
-        // Comments via changes[].field=comments
-        for (const change of entry.changes || []) {
-          if (change.field === "comments") {
-            await handleComment(adminClient, resolvedConn, change.value, agent);
-          }
-          if (change.field === "messages" && change.value?.message?.text && change.value?.sender?.id !== resolvedConn.instagram_user_id) {
-            await handleDM(adminClient, resolvedConn, change.value, agent);
-          }
-        }
-
-        // Direct messages via messaging[] (inclui postbacks de botões)
-        for (const msg of entry.messaging || []) {
-          // Postback: clique em botão (action="reply")
-          if (msg.postback?.payload && msg.sender?.id !== resolvedConn.instagram_user_id) {
-            await handlePostback(adminClient, resolvedConn, msg);
-            continue;
-          }
-          if (msg.message?.text && msg.sender?.id !== resolvedConn.instagram_user_id) {
-            await handleDM(adminClient, resolvedConn, msg, agent);
-          }
-        }
-
-        if (eventLogId) {
-          await adminClient.from("instagram_webhook_events").update({
-            processed: true,
+            processed: !anyError,
             processed_at: new Date().toISOString(),
-            error: null,
+            error: anyError,
           }).eq("id", eventLogId);
         }
         } catch (entryErr) {
