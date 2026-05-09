@@ -654,7 +654,7 @@ Deno.serve(async (req) => {
                 .limit(1);
 
               if (condChildren && condChildren.length > 0) {
-                await processFlowStep(condChildren[0], exec, lead, supabase);
+                await processFlowStep(condChildren[0], exec, lead, supabase, resolvedAccountId);
               } else {
                 console.log("Condition matched but has no child step:", matchedStep.id, "exec:", exec.id);
                 await supabase.from("flow_executions").update({
@@ -663,7 +663,7 @@ Deno.serve(async (req) => {
                 }).eq("id", exec.id);
               }
             } else {
-              await processFlowStep(matchedStep, exec, lead, supabase);
+              await processFlowStep(matchedStep, exec, lead, supabase, resolvedAccountId);
             }
           } else {
             console.log("No matching branch for button payload:", buttonPayload, "exec:", exec.id);
@@ -742,19 +742,21 @@ async function downloadCloudMedia(
   }
 }
 
-async function processFlowStep(step: any, execution: any, lead: any, supabase: any) {
+async function processFlowStep(step: any, execution: any, lead: any, supabase: any, fallbackAccountId?: string | null) {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-  // Resolve account_id from the default WhatsApp account
-  const { data: defaultAccount } = await supabase
-    .from("whatsapp_accounts")
-    .select("id")
-    .eq("is_default", true)
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  const accountId = defaultAccount?.id || null;
+  const accountId = typeof execution.metadata?.account_id === "string" && execution.metadata.account_id
+    ? execution.metadata.account_id
+    : fallbackAccountId || null;
+
+  if (accountId && execution.metadata?.account_id !== accountId) {
+    execution.metadata = { ...(execution.metadata || {}), account_id: accountId };
+    await supabase.from("flow_executions").update({
+      metadata: execution.metadata,
+      updated_at: new Date().toISOString(),
+    }).eq("id", execution.id);
+  }
 
   if (step.step_type === "message" || step.step_type === "cta_url" || step.step_type === "interactive_buttons") {
     const body: any = { phone: lead.phone || lead.name, lead_id: lead.id };
