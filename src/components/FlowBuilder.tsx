@@ -395,6 +395,7 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
   const [hydratedFromDraft, setHydratedFromDraft] = useState(Boolean(initialDraft));
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settings, setSettings] = useState<FlowSettings>(DEFAULT_FLOW_SETTINGS);
+  const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(initialDraft ? new Date(initialDraft.savedAt) : null);
 
   const flowKind: FlowKind = (flow?.flow_kind as FlowKind) || initialKind || "api";
   const isWhatsAppFlow = flowKind === "whatsapp";
