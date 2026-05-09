@@ -102,7 +102,7 @@ export function InstagramComments() {
       callApi("list", { query: { media_id: selectedMedia!.id } }).then(
         (d) => d.comments as CommentItem[]
       ),
-    enabled: !!selectedMedia,
+    enabled: hasConnection && !!selectedMedia,
     refetchInterval: 30_000,
   });
 
