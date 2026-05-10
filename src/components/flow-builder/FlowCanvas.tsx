@@ -148,9 +148,19 @@ export function FlowCanvas({
   const addNode = useCallback(
     (type: InsertableStepType) => {
       const id = crypto.randomUUID();
-      const lastNode = nodes.length > 0 ? nodes[nodes.length - 1] : null;
-      const x = lastNode ? (lastNode.position?.x || 0) + 350 : 350;
-      const y = lastNode ? lastNode.position?.y || 200 : 200;
+
+      // If a node is selected, insert AFTER it (splitting any outgoing edge).
+      // Otherwise, append at the end as before.
+      const anchorNode = selectedNodeId
+        ? nodes.find((n) => n.id === selectedNodeId) ?? null
+        : nodes.length > 0
+          ? nodes[nodes.length - 1]
+          : null;
+
+      const anchorX = anchorNode?.position?.x ?? 0;
+      const anchorY = anchorNode?.position?.y ?? 200;
+      const x = anchorNode ? anchorX + 350 : 350;
+      const y = anchorY;
 
       const newNode: Node = {
         id,
@@ -161,18 +171,45 @@ export function FlowCanvas({
 
       setNodes((nds) => [...nds, newNode]);
 
-      // Auto-connect to last node
-      if (lastNode) {
+      if (!anchorNode) {
+        setSelectedNodeId(id);
+        return;
+      }
+
+      // If the anchor has outgoing edges, splice the new node into the first one
+      // so we don't always jump to the end of the flow.
+      const outgoing = edges.find((e) => e.source === anchorNode.id);
+
+      if (outgoing && selectedNodeId) {
+        const firstEdge: Edge = {
+          id: `e-${anchorNode.id}-${id}`,
+          source: anchorNode.id,
+          target: id,
+          sourceHandle: outgoing.sourceHandle,
+          ...defaultEdgeOptions,
+          ...(outgoing.label ? { label: outgoing.label } : {}),
+        };
+        const secondEdge: Edge = {
+          id: `e-${id}-${outgoing.target}`,
+          source: id,
+          target: outgoing.target,
+          targetHandle: outgoing.targetHandle,
+          ...defaultEdgeOptions,
+        };
+        setEdges((eds) => [...eds.filter((e) => e.id !== outgoing.id), firstEdge, secondEdge]);
+      } else {
         const newEdge: Edge = {
-          id: `e-${lastNode.id}-${id}`,
-          source: lastNode.id,
+          id: `e-${anchorNode.id}-${id}`,
+          source: anchorNode.id,
           target: id,
           ...defaultEdgeOptions,
         };
         setEdges((eds) => [...eds, newEdge]);
       }
+
+      setSelectedNodeId(id);
     },
-    [nodes, setNodes, setEdges]
+    [nodes, edges, selectedNodeId, setNodes, setEdges]
   );
 
   const insertNodeOnEdge = useCallback(
