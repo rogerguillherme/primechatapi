@@ -339,31 +339,22 @@ async function sendStepMessage(
   const body: any = { phone: lead.phone, lead_id: lead.id };
   if (accountId) body.account_id = accountId;
 
-  const firstName = (lead.name || "").split(" ")[0];
-  const codigo = metadata?.codigo || "";
+  const vars = buildVars(lead, metadata);
+  const firstName = vars.nome;
   let expectedLogContent: string | null = null;
 
   if (step.step_type === "cta_url") {
     const buttons = Array.isArray(step.buttons) ? step.buttons : [];
     const ctaBtn = buttons[0];
-    const msgText = (step.custom_message || "Acesse o link abaixo:")
-      .replace(/\{nome\}/g, firstName)
-      .replace(/\{codigo\}/g, codigo)
-      .replace(/\{\{\d+\}\}/g, firstName);
-
+    const msgText = interpolate(step.custom_message || "Acesse o link abaixo:", vars);
     body.message = msgText;
     expectedLogContent = `🔗 ${msgText}`;
-
     if (ctaBtn?.url) {
       body.cta_url = { display_text: ctaBtn.title || "Acessar", url: ctaBtn.url };
     }
   } else if (step.step_type === "interactive_buttons") {
     const buttons = Array.isArray(step.buttons) ? step.buttons : [];
-    const msgText = (step.custom_message || "Escolha uma opção:")
-      .replace(/\{nome\}/g, firstName)
-      .replace(/\{codigo\}/g, codigo)
-      .replace(/\{\{\d+\}\}/g, firstName);
-
+    const msgText = interpolate(step.custom_message || "Escolha uma opção:", vars);
     body.message = msgText;
     body.interactive_buttons = buttons;
     expectedLogContent = `🔘 ${msgText}`;
@@ -380,10 +371,7 @@ async function sendStepMessage(
       const rawParams = (template.template_params || []) as any[];
       body.template_params = rawParams.map((p: any) => {
         const text = typeof p === "string" ? p : p?.text || "";
-        const resolved = text
-          .replace(/\{nome\}/g, firstName)
-          .replace(/\{codigo\}/g, codigo)
-          .replace(/\{\{\d+\}\}/g, firstName);
+        const resolved = interpolate(text, vars);
         return { type: "text", text: resolved || firstName };
       });
       expectedLogContent = template.content || `📋 Template: ${template.template_name}`;
@@ -392,10 +380,7 @@ async function sendStepMessage(
       expectedLogContent = template.content;
     }
   } else if (step.custom_message) {
-    body.message = step.custom_message
-      .replace(/\{nome\}/g, firstName)
-      .replace(/\{codigo\}/g, codigo)
-      .replace(/\{\{\d+\}\}/g, firstName);
+    body.message = interpolate(step.custom_message, vars);
     expectedLogContent = body.message;
   }
 
