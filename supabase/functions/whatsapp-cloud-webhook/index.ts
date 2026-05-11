@@ -6,6 +6,47 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+function formatCurrency(v: any): string {
+  const n = typeof v === "number" ? v : parseFloat(String(v ?? "").replace(",", "."));
+  if (!isFinite(n)) return String(v ?? "");
+  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function buildVars(lead: any, metadata: any): Record<string, string> {
+  const md = metadata || {};
+  const fullName = (lead?.name || "").trim();
+  const firstName = fullName.split(" ")[0] || "";
+  const phone = lead?.phone || "";
+  const amount = md.amount ?? md.value ?? md.price;
+  const product = md.product_name ?? md.product ?? md.produto ?? "";
+  const orderId = md.order_id ?? md.orderId ?? md.pedido ?? "";
+  const codigo = md.codigo ?? md.code ?? "";
+  const email = lead?.email ?? md.email ?? "";
+  const vars: Record<string, string> = {
+    nome: firstName, name: firstName, primeiro_nome: firstName,
+    nome_completo: fullName, full_name: fullName,
+    telefone: phone, phone: phone, email: String(email || ""),
+    codigo: String(codigo || ""), code: String(codigo || ""),
+    produto: String(product || ""), product: String(product || ""), product_name: String(product || ""),
+    pedido: String(orderId || ""), order_id: String(orderId || ""),
+    valor: amount != null ? formatCurrency(amount) : "",
+    preco: amount != null ? formatCurrency(amount) : "",
+    amount: amount != null ? formatCurrency(amount) : "",
+    price: amount != null ? formatCurrency(amount) : "",
+  };
+  for (const [k, v] of Object.entries(md)) {
+    if (vars[k] === undefined && v != null && typeof v !== "object") vars[k] = String(v);
+  }
+  return vars;
+}
+
+function interpolate(text: string, vars: Record<string, string>): string {
+  if (!text) return text;
+  return text
+    .replace(/\{(\w+)\}/g, (_m, k) => (vars[k] !== undefined ? vars[k] : `{${k}}`))
+    .replace(/\{\{(\d+)\}\}/g, () => vars.nome || "");
+}
+
 function normalizePhone(phone: string): string {
   const digits = phone.replace(/\D/g, "");
   if (digits.startsWith("55")) return digits;
@@ -762,24 +803,19 @@ async function processFlowStep(step: any, execution: any, lead: any, supabase: a
     const body: any = { phone: lead.phone || lead.name, lead_id: lead.id };
     if (accountId) body.account_id = accountId;
 
+    const vars = buildVars(lead, execution.metadata);
+    const firstName = vars.nome;
+
     if (step.step_type === "cta_url") {
       const buttons = Array.isArray(step.buttons) ? step.buttons : [];
       const ctaBtn = buttons[0];
-      const codigo = execution.metadata?.codigo || "";
-      const msgText = (step.custom_message || "Acesse o link abaixo:")
-        .replace(/\{nome\}/g, (lead.name || "").split(" ")[0])
-        .replace(/\{codigo\}/g, codigo);
-      body.message = msgText;
+      body.message = interpolate(step.custom_message || "Acesse o link abaixo:", vars);
       if (ctaBtn?.url) {
         body.cta_url = { display_text: ctaBtn.title || "Acessar", url: ctaBtn.url };
       }
     } else if (step.step_type === "interactive_buttons") {
       const buttons = Array.isArray(step.buttons) ? step.buttons : [];
-      const codigo = execution.metadata?.codigo || "";
-      const msgText = (step.custom_message || "Escolha uma opção:")
-        .replace(/\{nome\}/g, (lead.name || "").split(" ")[0])
-        .replace(/\{codigo\}/g, codigo);
-      body.message = msgText;
+      body.message = interpolate(step.custom_message || "Escolha uma opção:", vars);
       body.interactive_buttons = buttons;
     } else if (step.template_id) {
       const { data: template } = await supabase
@@ -791,25 +827,17 @@ async function processFlowStep(step: any, execution: any, lead: any, supabase: a
       if (template?.template_name) {
         body.template_name = template.template_name;
         body.template_language = template.template_language || "pt_BR";
-        const codigo = execution.metadata?.codigo || "";
-        const firstName = (lead.name || "").split(" ")[0];
         const rawParams = (template.template_params || []) as any[];
         body.template_params = rawParams.map((p: any) => {
           const text = typeof p === "string" ? p : p?.text || "";
-          const resolved = text
-            .replace(/\{nome\}/g, firstName)
-            .replace(/\{codigo\}/g, codigo)
-            .replace(/\{\{\d+\}\}/g, firstName);
+          const resolved = interpolate(text, vars);
           return { type: "text", text: resolved || firstName };
         });
       } else if (template) {
         body.message = template.content;
       }
     } else if (step.custom_message) {
-      const codigo = execution.metadata?.codigo || "";
-      body.message = step.custom_message
-        .replace(/\{nome\}/g, (lead.name || "").split(" ")[0])
-        .replace(/\{codigo\}/g, codigo);
+      body.message = interpolate(step.custom_message, vars);
     }
 
     // Only send if there's something to send
