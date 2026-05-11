@@ -5,7 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Instagram, Plug, Unplug, Loader2, CheckCircle2, ExternalLink, Webhook } from "lucide-react";
+import { Instagram, Plug, Unplug, Loader2, CheckCircle2, ExternalLink, Webhook, Copy, Eye, EyeOff } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { InstagramDiagnostics } from "./InstagramDiagnostics";
 import { InstagramWebhookMonitor } from "./InstagramWebhookMonitor";
@@ -205,6 +206,8 @@ export function InstagramSettings() {
         </CardContent>
       </Card>
 
+      <WebhookConfigCard />
+
       {activeConnection && <InstagramDiagnostics />}
       {activeConnection && <InstagramWebhookMonitor />}
 
@@ -225,5 +228,96 @@ export function InstagramSettings() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function WebhookConfigCard() {
+  const [loading, setLoading] = useState(false);
+  const [data, setData] = useState<{ callback_url: string; verify_token: string; configured: boolean } | null>(null);
+  const [reveal, setReveal] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const { data: res, error } = await supabase.functions.invoke("instagram-webhook-config");
+      if (error) throw error;
+      if ((res as any)?.error) throw new Error((res as any).error);
+      setData(res as any);
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao carregar configuração");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const copy = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success(`${label} copiado`);
+    } catch {
+      toast.error("Não foi possível copiar");
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Webhook className="h-4 w-4" /> Configuração do Webhook (Meta App)
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-sm text-muted-foreground">
+          Use estes valores no painel da Meta em <strong>Instagram → Configurar webhooks</strong>.
+        </p>
+
+        {!data ? (
+          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+            {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Eye className="h-4 w-4 mr-2" />}
+            Carregar verify token
+          </Button>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs uppercase tracking-wide text-muted-foreground">URL de callback</label>
+              <div className="flex gap-2 mt-1">
+                <Input readOnly value={data.callback_url} className="font-mono text-xs" />
+                <Button variant="outline" size="icon" onClick={() => copy(data.callback_url, "URL")}>
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            <div>
+              <label className="text-xs uppercase tracking-wide text-muted-foreground">Verify token</label>
+              <div className="flex gap-2 mt-1">
+                <Input
+                  readOnly
+                  type={reveal ? "text" : "password"}
+                  value={data.verify_token || ""}
+                  placeholder={data.configured ? "" : "Não configurado"}
+                  className="font-mono text-xs"
+                />
+                <Button variant="outline" size="icon" onClick={() => setReveal((v) => !v)}>
+                  {reveal ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => copy(data.verify_token, "Verify token")}
+                  disabled={!data.verify_token}
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+              {!data.configured && (
+                <p className="text-xs text-destructive mt-1">
+                  Secret INSTAGRAM_VERIFY_TOKEN não está configurado no backend.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
