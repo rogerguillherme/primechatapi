@@ -206,6 +206,8 @@ export function InstagramSettings() {
         </CardContent>
       </Card>
 
+      <WebhookConfigCard />
+
       {activeConnection && <InstagramDiagnostics />}
       {activeConnection && <InstagramWebhookMonitor />}
 
