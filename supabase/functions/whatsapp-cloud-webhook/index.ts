@@ -803,24 +803,19 @@ async function processFlowStep(step: any, execution: any, lead: any, supabase: a
     const body: any = { phone: lead.phone || lead.name, lead_id: lead.id };
     if (accountId) body.account_id = accountId;
 
+    const vars = buildVars(lead, execution.metadata);
+    const firstName = vars.nome;
+
     if (step.step_type === "cta_url") {
       const buttons = Array.isArray(step.buttons) ? step.buttons : [];
       const ctaBtn = buttons[0];
-      const codigo = execution.metadata?.codigo || "";
-      const msgText = (step.custom_message || "Acesse o link abaixo:")
-        .replace(/\{nome\}/g, (lead.name || "").split(" ")[0])
-        .replace(/\{codigo\}/g, codigo);
-      body.message = msgText;
+      body.message = interpolate(step.custom_message || "Acesse o link abaixo:", vars);
       if (ctaBtn?.url) {
         body.cta_url = { display_text: ctaBtn.title || "Acessar", url: ctaBtn.url };
       }
     } else if (step.step_type === "interactive_buttons") {
       const buttons = Array.isArray(step.buttons) ? step.buttons : [];
-      const codigo = execution.metadata?.codigo || "";
-      const msgText = (step.custom_message || "Escolha uma opção:")
-        .replace(/\{nome\}/g, (lead.name || "").split(" ")[0])
-        .replace(/\{codigo\}/g, codigo);
-      body.message = msgText;
+      body.message = interpolate(step.custom_message || "Escolha uma opção:", vars);
       body.interactive_buttons = buttons;
     } else if (step.template_id) {
       const { data: template } = await supabase
@@ -832,25 +827,17 @@ async function processFlowStep(step: any, execution: any, lead: any, supabase: a
       if (template?.template_name) {
         body.template_name = template.template_name;
         body.template_language = template.template_language || "pt_BR";
-        const codigo = execution.metadata?.codigo || "";
-        const firstName = (lead.name || "").split(" ")[0];
         const rawParams = (template.template_params || []) as any[];
         body.template_params = rawParams.map((p: any) => {
           const text = typeof p === "string" ? p : p?.text || "";
-          const resolved = text
-            .replace(/\{nome\}/g, firstName)
-            .replace(/\{codigo\}/g, codigo)
-            .replace(/\{\{\d+\}\}/g, firstName);
+          const resolved = interpolate(text, vars);
           return { type: "text", text: resolved || firstName };
         });
       } else if (template) {
         body.message = template.content;
       }
     } else if (step.custom_message) {
-      const codigo = execution.metadata?.codigo || "";
-      body.message = step.custom_message
-        .replace(/\{nome\}/g, (lead.name || "").split(" ")[0])
-        .replace(/\{codigo\}/g, codigo);
+      body.message = interpolate(step.custom_message, vars);
     }
 
     // Only send if there's something to send
