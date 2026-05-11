@@ -6,6 +6,47 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+function formatCurrency(v: any): string {
+  const n = typeof v === "number" ? v : parseFloat(String(v ?? "").replace(",", "."));
+  if (!isFinite(n)) return String(v ?? "");
+  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function buildVars(lead: any, metadata: any): Record<string, string> {
+  const md = metadata || {};
+  const fullName = (lead?.name || "").trim();
+  const firstName = fullName.split(" ")[0] || "";
+  const phone = lead?.phone || "";
+  const amount = md.amount ?? md.value ?? md.price;
+  const product = md.product_name ?? md.product ?? md.produto ?? "";
+  const orderId = md.order_id ?? md.orderId ?? md.pedido ?? "";
+  const codigo = md.codigo ?? md.code ?? "";
+  const email = lead?.email ?? md.email ?? "";
+  const vars: Record<string, string> = {
+    nome: firstName, name: firstName, primeiro_nome: firstName,
+    nome_completo: fullName, full_name: fullName,
+    telefone: phone, phone: phone, email: String(email || ""),
+    codigo: String(codigo || ""), code: String(codigo || ""),
+    produto: String(product || ""), product: String(product || ""), product_name: String(product || ""),
+    pedido: String(orderId || ""), order_id: String(orderId || ""),
+    valor: amount != null ? formatCurrency(amount) : "",
+    preco: amount != null ? formatCurrency(amount) : "",
+    amount: amount != null ? formatCurrency(amount) : "",
+    price: amount != null ? formatCurrency(amount) : "",
+  };
+  for (const [k, v] of Object.entries(md)) {
+    if (vars[k] === undefined && v != null && typeof v !== "object") vars[k] = String(v);
+  }
+  return vars;
+}
+
+function interpolate(text: string, vars: Record<string, string>): string {
+  if (!text) return text;
+  return text
+    .replace(/\{(\w+)\}/g, (_m, k) => (vars[k] !== undefined ? vars[k] : `{${k}}`))
+    .replace(/\{\{(\d+)\}\}/g, () => vars.nome || "");
+}
+
 function normalizePhone(phone: string): string {
   const digits = phone.replace(/\D/g, "");
   if (digits.startsWith("55")) return digits;
