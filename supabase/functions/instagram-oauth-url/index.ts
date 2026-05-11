@@ -55,6 +55,8 @@ Deno.serve(async (req) => {
         "instagram_manage_insights",
         "pages_show_list",
         "pages_read_engagement",
+        "pages_manage_metadata",
+        "pages_messaging",
         "business_management",
       ].join(",")
     );
