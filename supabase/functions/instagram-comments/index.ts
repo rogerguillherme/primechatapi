@@ -31,8 +31,7 @@ Deno.serve(async (req) => {
       .from("instagram_connections")
       .select("*")
       .eq("user_id", user.id)
-      .eq("status", "connected")
-      .order("created_at", { ascending: false })
+      .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
