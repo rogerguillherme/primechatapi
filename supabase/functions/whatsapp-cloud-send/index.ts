@@ -36,69 +36,72 @@ function withUniqueSignature(text: string | null | undefined): string {
   return base + uniqueZeroWidthSuffix();
 }
 
-async function getAccountCredentials(supabase: any, accountId?: string) {
-  const baseSelect = "id, phone_number_id, access_token, business_account_id, provider, api_key";
+async function getAccountCredentials(supabase: any, accountId?: string, userId?: string) {
+  // Multi-WABA: account_id is REQUIRED. No is_default / first / env fallbacks.
+  if (!accountId) {
+    const err: any = new Error("account_id_required");
+    err.code = "account_id_required";
+    throw err;
+  }
 
-  if (accountId) {
-    const { data, error } = await supabase
+  const baseSelect =
+    "id, user_id, phone_number_id, access_token, business_account_id, provider, api_key, token_validity";
+  const { data, error } = await supabase
+    .from("whatsapp_accounts")
+    .select(baseSelect)
+    .eq("id", accountId)
+    .maybeSingle();
+  if (error) throw new Error(`Failed to fetch account: ${error.message}`);
+  if (!data) {
+    const err: any = new Error("account_not_found");
+    err.code = "account_not_found";
+    throw err;
+  }
+
+  // Defense-in-depth: confirm caller owns the account.
+  if (userId && data.user_id && data.user_id !== userId) {
+    const err: any = new Error("account_forbidden");
+    err.code = "account_forbidden";
+    throw err;
+  }
+
+  return {
+    accountId: data.id,
+    userId: data.user_id,
+    phoneNumberId: data.phone_number_id,
+    accessToken: data.access_token,
+    businessAccountId: data.business_account_id,
+    provider: (data.provider as string) || "meta_cloud",
+    apiKey: data.api_key as string | null,
+    tokenValidity: (data.token_validity as string) || "unknown",
+  };
+}
+
+async function markTokenInvalid(
+  supabase: any,
+  accountId: string,
+  userId: string | null,
+  metaCode: number | string,
+  message: string,
+) {
+  try {
+    const validity = String(metaCode) === "190" ? "expired" : "revoked";
+    await supabase
       .from("whatsapp_accounts")
-      .select(baseSelect)
-      .eq("id", accountId)
-      .maybeSingle();
-    if (error) throw new Error(`Failed to fetch account: ${error.message}`);
-    if (data) {
-      return {
-        accountId: data.id,
-        phoneNumberId: data.phone_number_id,
-        accessToken: data.access_token,
-        businessAccountId: data.business_account_id,
-        provider: (data.provider as string) || "meta_cloud",
-        apiKey: data.api_key as string | null,
-      };
+      .update({ token_validity: validity, token_checked_at: new Date().toISOString() })
+      .eq("id", accountId);
+    if (userId) {
+      await supabase.from("whatsapp_account_audit").insert({
+        account_id: accountId,
+        user_id: userId,
+        event: "token_check",
+        status: "error",
+        details: { meta_code: metaCode, message },
+      });
     }
+  } catch (e) {
+    console.error("markTokenInvalid failed", e);
   }
-
-  // Fallback: try default account from DB
-  const { data: defaultAcc } = await supabase
-    .from("whatsapp_accounts")
-    .select(baseSelect)
-    .eq("is_default", true)
-    .maybeSingle();
-  if (defaultAcc) {
-    return {
-      accountId: defaultAcc.id,
-      phoneNumberId: defaultAcc.phone_number_id,
-      accessToken: defaultAcc.access_token,
-      businessAccountId: defaultAcc.business_account_id,
-      provider: (defaultAcc.provider as string) || "meta_cloud",
-      apiKey: defaultAcc.api_key as string | null,
-    };
-  }
-
-  // Fallback: try first account
-  const { data: firstAcc } = await supabase
-    .from("whatsapp_accounts")
-    .select(baseSelect)
-    .order("created_at")
-    .limit(1)
-    .maybeSingle();
-  if (firstAcc) {
-    return {
-      accountId: firstAcc.id,
-      phoneNumberId: firstAcc.phone_number_id,
-      accessToken: firstAcc.access_token,
-      businessAccountId: firstAcc.business_account_id,
-      provider: (firstAcc.provider as string) || "meta_cloud",
-      apiKey: firstAcc.api_key as string | null,
-    };
-  }
-
-  // Final fallback: env vars (always meta_cloud)
-  const phoneNumberId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID");
-  const accessToken = Deno.env.get("WHATSAPP_ACCESS_TOKEN");
-  if (phoneNumberId && accessToken) return { phoneNumberId, accessToken, provider: "meta_cloud", apiKey: null };
-
-  throw new Error("No WhatsApp account configured");
 }
 
 async function ensureWebhookSubscription(accessToken: string, businessAccountId?: string | null) {
