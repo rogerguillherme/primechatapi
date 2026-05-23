@@ -203,25 +203,43 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Authenticate caller to enforce account ownership (defense-in-depth).
+    let callerUserId: string | undefined;
+    const authHeader = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
+    if (authHeader.toLowerCase().startsWith("bearer ")) {
+      try {
+        const jwt = authHeader.replace(/^Bearer\s+/i, "").trim();
+        const { data: claims } = await supabase.auth.getClaims(jwt);
+        callerUserId = claims?.claims?.sub;
+      } catch (_) { /* ignore — server-to-server calls use service role */ }
+    }
+
+    let credentials;
+    try {
+      credentials = await getAccountCredentials(supabase, account_id, callerUserId);
+    } catch (err: any) {
+      const code = err?.code || "account_error";
+      const status = code === "account_id_required" ? 400 : code === "account_forbidden" ? 403 : 404;
+      return new Response(
+        JSON.stringify({ error: code, message: err?.message || code }),
+        { status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
     const {
       accountId: resolvedAccountId,
+      userId: accountUserId,
       phoneNumberId: PHONE_NUMBER_ID,
       accessToken: ACCESS_TOKEN,
       businessAccountId,
       provider,
       apiKey: D360_API_KEY,
-    } = await getAccountCredentials(supabase, account_id);
+    } = credentials;
 
-    const effectiveAccessToken = provider === "meta_cloud"
-      ? await getEffectiveMetaToken(supabase, ACCESS_TOKEN, businessAccountId)
-      : ACCESS_TOKEN;
+    // Per-account token only. No global meta_connections lookup, no env fallback.
+    const effectiveAccessToken = ACCESS_TOKEN;
 
     const isD360 = provider === "d360";
     const isEvolution = provider === "evolution";
-
-    if (!isD360 && !isEvolution) {
-      await ensureWebhookSubscription(effectiveAccessToken, businessAccountId);
-    }
 
     const cleanPhone = phone.replace(/\D/g, "");
 
