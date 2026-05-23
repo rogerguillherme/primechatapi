@@ -48,6 +48,7 @@ export default function MetaConnect() {
   const [expandedWaba, setExpandedWaba] = useState<string | null>(null);
   const [registeringPhoneId, setRegisteringPhoneId] = useState<string | null>(null);
   const [registrationPin, setRegistrationPin] = useState("123456");
+  const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
 
   const { data: connections, isLoading } = useQuery({
     queryKey: ["meta-connections"],
@@ -62,15 +63,22 @@ export default function MetaConnect() {
     enabled: !!session,
   });
   const activeConnection = connections?.find((c: any) => c.status === "connected");
+  const selectedConnection = connections?.find((c: any) => c.id === selectedConnectionId) || activeConnection;
+
+  useEffect(() => {
+    if (!selectedConnectionId && activeConnection?.id) setSelectedConnectionId(activeConnection.id);
+  }, [activeConnection?.id, selectedConnectionId]);
 
   const { data: metaData, isLoading: isLoadingMeta, refetch: refetchMeta } = useQuery({
     queryKey: ["meta-wabas"],
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke("meta-list-numbers");
+        const { data, error } = await supabase.functions.invoke("meta-list-numbers", {
+          body: { connection_id: selectedConnection?.id },
+        });
       if (error) throw error;
       return data?.wabas || [];
     },
-    enabled: !!activeConnection,
+    enabled: !!selectedConnection,
   });
 
   const { data: registeredAccounts } = useQuery({
