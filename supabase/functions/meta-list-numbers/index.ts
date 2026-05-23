@@ -105,6 +105,29 @@ Deno.serve(async (req) => {
     const wabas: any[] = [];
 
     for (const wabaId of allWabaIds) {
+      const tokenMapping = {
+        user_id: user.id,
+        meta_access_token: accessToken,
+        phone_number_id: connection.phone_number_id || "fb:unknown",
+        phone_number: connection.phone_number || "Conta Meta",
+        waba_id: wabaId,
+        status: "connected",
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data: existingMapping } = await adminClient
+        .from("meta_connections")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("waba_id", wabaId)
+        .maybeSingle();
+
+      if (existingMapping) {
+        await adminClient.from("meta_connections").update(tokenMapping).eq("id", existingMapping.id);
+      } else {
+        await adminClient.from("meta_connections").insert(tokenMapping);
+      }
+
       // Get WABA details
       const wabaRes = await fetch(
         `https://graph.facebook.com/v19.0/${wabaId}?fields=id,name,currency,timezone_id,message_template_namespace,account_review_status,on_behalf_of_business_info,primary_funding_id&access_token=${accessToken}`
@@ -124,6 +147,7 @@ Deno.serve(async (req) => {
       const { data: existingAccounts } = await adminClient
         .from("whatsapp_accounts")
         .select("phone_number_id")
+        .eq("user_id", user.id)
         .in("phone_number_id", phoneNumberIds.length > 0 ? phoneNumberIds : ["__none__"]);
 
       const registeredIds = new Set((existingAccounts || []).map((a: any) => a.phone_number_id));
