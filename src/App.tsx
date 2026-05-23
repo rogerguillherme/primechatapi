@@ -14,6 +14,7 @@ import InstagramCallbackPage from "./pages/InstagramCallback";
 import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
 import LandingPage from "./pages/LandingPage";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 import AdminUsers from "./pages/AdminUsers";
 import { Loader2 } from "lucide-react";
 import { BroadcastProgressFloat } from "@/components/BroadcastProgressFloat";
