@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
 
     const { data: account } = await adminClient
       .from("whatsapp_accounts")
-      .select("id, access_token")
+      .select("id, access_token, business_account_id")
       .eq("phone_number_id", phoneNumberId)
       .eq("user_id", user.id)
       .maybeSingle();
@@ -81,8 +81,9 @@ Deno.serve(async (req) => {
       .from("meta_connections")
       .select("meta_access_token")
       .eq("user_id", user.id)
+      .eq("waba_id", account.business_account_id || "")
       .eq("status", "connected")
-      .order("created_at", { ascending: false })
+      .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
