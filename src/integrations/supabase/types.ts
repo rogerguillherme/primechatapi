@@ -1618,6 +1618,36 @@ export type Database = {
         }
         Relationships: []
       }
+      webhook_debug: {
+        Row: {
+          created_at: string
+          headers: Json | null
+          id: string
+          notes: string | null
+          parsed: Json | null
+          raw_body: string | null
+          source: string
+        }
+        Insert: {
+          created_at?: string
+          headers?: Json | null
+          id?: string
+          notes?: string | null
+          parsed?: Json | null
+          raw_body?: string | null
+          source?: string
+        }
+        Update: {
+          created_at?: string
+          headers?: Json | null
+          id?: string
+          notes?: string | null
+          parsed?: Json | null
+          raw_body?: string | null
+          source?: string
+        }
+        Relationships: []
+      }
       webhook_endpoints: {
         Row: {
           account_id: string | null
