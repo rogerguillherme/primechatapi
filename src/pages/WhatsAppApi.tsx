@@ -1616,7 +1616,8 @@ export default function WhatsAppApi() {
       const configId = (startData as any)?.config_id as string;
       if (!state || !configId) throw new Error("Resposta inválida do servidor");
 
-      // 2) Listener da sessionInfo enviada pelo iframe da Meta (opcional/diagnóstico)
+      // 2) Listener da sessionInfo enviada pelo iframe da Meta — guarda waba_id + phone_number_id
+      let sessionInfo: any = null;
       const sessionInfoHandler = (event: MessageEvent) => {
         if (typeof event.origin !== "string") return;
         if (!event.origin.endsWith("facebook.com")) return;
@@ -1624,6 +1625,7 @@ export default function WhatsAppApi() {
           const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
           if (data?.type === "WA_EMBEDDED_SIGNUP") {
             console.log("[ES] session info:", data);
+            sessionInfo = data?.data ?? data;
           }
         } catch {
           /* ignore */
@@ -1631,7 +1633,7 @@ export default function WhatsAppApi() {
       };
       window.addEventListener("message", sessionInfoHandler);
 
-      // 3) Abre o popup do Embedded Signup
+      // 3) Abre o popup do Embedded Signup — exatamente como a documentação da Meta indica
       FB.login(
         async (response: any) => {
           window.removeEventListener("message", sessionInfoHandler);
@@ -1643,7 +1645,15 @@ export default function WhatsAppApi() {
           try {
             const { data, error } = await supabase.functions.invoke(
               "whatsapp-embedded-signup-callback",
-              { body: { code, state } },
+              {
+                body: {
+                  code,
+                  state,
+                  waba_id: sessionInfo?.waba_id ?? null,
+                  phone_number_id: sessionInfo?.phone_number_id ?? null,
+                  session_info: sessionInfo ?? null,
+                },
+              },
             );
             if (error) throw error;
             if ((data as any)?.error) throw new Error((data as any).error);
@@ -1658,12 +1668,7 @@ export default function WhatsAppApi() {
           config_id: configId,
           response_type: "code",
           override_default_response_type: true,
-          extras: {
-            setup: {},
-            featureType: "whatsapp_business_app_onboarding",
-            sessionInfoVersion: "3",
-            version: "v4",
-          },
+          extras: { version: "v4" },
         },
       );
     } catch (err: any) {
