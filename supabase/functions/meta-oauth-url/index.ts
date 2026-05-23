@@ -56,8 +56,9 @@ Deno.serve(async (req) => {
     const oauthUrl = new URL("https://www.facebook.com/v19.0/dialog/oauth");
     oauthUrl.searchParams.set("client_id", metaAppId);
     oauthUrl.searchParams.set("redirect_uri", redirect_uri);
-    oauthUrl.searchParams.set("scope", "whatsapp_business_management,whatsapp_business_messaging");
+    oauthUrl.searchParams.set("scope", "whatsapp_business_management,whatsapp_business_messaging,business_management");
     oauthUrl.searchParams.set("response_type", "code");
+    oauthUrl.searchParams.set("auth_type", "rerequest");
 
     return new Response(
       JSON.stringify({ oauth_url: oauthUrl.toString() }),
