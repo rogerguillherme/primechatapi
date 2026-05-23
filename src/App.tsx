@@ -78,6 +78,14 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/auth/meta/whatsapp/callback"
+        element={
+          <ProtectedRoute>
+            <WhatsAppEmbeddedSignupCallback />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/auth/instagram/callback"
         element={
           <ProtectedRoute>
