@@ -2127,8 +2127,11 @@ export default function WhatsAppApi() {
                     <DropdownMenuItem onClick={() => { resetForm(); setProvider("meta_cloud"); setIsAddingAccount(true); }} className="gap-2">
                       <Key size={14} /> Meta Cloud (manual)
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleEmbeddedSignup} className="gap-2 font-medium text-primary">
+                      <ExternalLink size={14} /> Conectar via Embedded Signup (oficial Meta)
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={handleMetaOAuth} className="gap-2">
-                      <ExternalLink size={14} /> Conectar via Meta OAuth
+                      <ExternalLink size={14} /> Conectar via Meta OAuth (legado)
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => { resetForm(); setProvider("d360"); setIsAddingAccount(true); }} className="gap-2">
                       <MessageCircle size={14} /> 360dialog
