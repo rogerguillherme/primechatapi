@@ -24,20 +24,27 @@ Deno.serve(async (req) => {
     const { data: { user }, error: userErr } = await admin.auth.getUser(token);
     if (userErr || !user) return json({ error: "Unauthorized" }, 401);
 
-    const { redirect_origin } = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({}));
+    const { redirect_origin, mode } = body as { redirect_origin?: string; mode?: string };
     const origin = typeof redirect_origin === "string" && redirect_origin.startsWith("http")
       ? redirect_origin
       : "https://primechatapi.lovable.app";
 
     const state = crypto.randomUUID();
     const redirectUri = `${origin}/auth/meta/whatsapp/callback`;
+    const isSdk = mode === "sdk";
 
     await admin.from("whatsapp_onboarding_sessions").insert({
       user_id: user.id,
       state,
       status: "pending",
-      metadata: { redirect_uri: redirectUri, origin },
+      metadata: { redirect_uri: isSdk ? "" : redirectUri, origin, mode: isSdk ? "sdk" : "redirect" },
     });
+
+    if (isSdk) {
+      // JS SDK flow — client calls FB.login directly; no redirect URL needed
+      return json({ state, mode: "sdk", app_id: appId, config_id: configId });
+    }
 
     const extras = encodeURIComponent(JSON.stringify({
       version: "v4",
