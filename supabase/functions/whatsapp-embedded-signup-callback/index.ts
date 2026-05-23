@@ -42,15 +42,21 @@ Deno.serve(async (req) => {
       return json({ error: "Sessão já utilizada", already: true }, 409);
     }
 
-    const redirectUri = (session.metadata as any)?.redirect_uri;
-    if (!redirectUri) return json({ error: "redirect_uri ausente na sessão" }, 400);
+    const sessionMode = (session.metadata as any)?.mode || "redirect";
+    const redirectUri = (session.metadata as any)?.redirect_uri ?? "";
+    if (sessionMode === "redirect" && !redirectUri) {
+      return json({ error: "redirect_uri ausente na sessão" }, 400);
+    }
 
     // Exchange code → business integration system user token (permanent)
-    const tokenUrl = `${GRAPH}/oauth/access_token`
+    // For JS SDK (popup) flow, redirect_uri must NOT be passed.
+    let tokenUrl = `${GRAPH}/oauth/access_token`
       + `?client_id=${encodeURIComponent(appId)}`
       + `&client_secret=${encodeURIComponent(appSecret)}`
-      + `&redirect_uri=${encodeURIComponent(redirectUri)}`
       + `&code=${encodeURIComponent(code)}`;
+    if (sessionMode !== "sdk" && redirectUri) {
+      tokenUrl += `&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    }
 
     const tokenRes = await fetch(tokenUrl);
     const tokenData = await tokenRes.json();

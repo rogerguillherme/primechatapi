@@ -1599,14 +1599,73 @@ export default function WhatsAppApi() {
 
   const handleEmbeddedSignup = async () => {
     try {
-      const { data, error } = await supabase.functions.invoke("whatsapp-embedded-signup-start", {
-        body: { redirect_origin: window.location.origin },
-      });
-      if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
-      const url = (data as any)?.url;
-      if (!url) throw new Error("URL de Embedded Signup não retornada");
-      window.location.href = url;
+      const FB = (window as any).FB;
+      if (!FB || typeof FB.login !== "function") {
+        toast.error("SDK do Facebook ainda não carregou. Aguarde alguns segundos e tente novamente.");
+        return;
+      }
+
+      // 1) Cria sessão SDK no backend (gera state e marca mode:'sdk')
+      const { data: startData, error: startErr } = await supabase.functions.invoke(
+        "whatsapp-embedded-signup-start",
+        { body: { mode: "sdk", redirect_origin: window.location.origin } },
+      );
+      if (startErr) throw startErr;
+      if ((startData as any)?.error) throw new Error((startData as any).error);
+      const state = (startData as any)?.state as string;
+      const configId = (startData as any)?.config_id as string;
+      if (!state || !configId) throw new Error("Resposta inválida do servidor");
+
+      // 2) Listener da sessionInfo enviada pelo iframe da Meta (opcional/diagnóstico)
+      const sessionInfoHandler = (event: MessageEvent) => {
+        if (typeof event.origin !== "string") return;
+        if (!event.origin.endsWith("facebook.com")) return;
+        try {
+          const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+          if (data?.type === "WA_EMBEDDED_SIGNUP") {
+            console.log("[ES] session info:", data);
+          }
+        } catch {
+          /* ignore */
+        }
+      };
+      window.addEventListener("message", sessionInfoHandler);
+
+      // 3) Abre o popup do Embedded Signup
+      FB.login(
+        async (response: any) => {
+          window.removeEventListener("message", sessionInfoHandler);
+          const code = response?.authResponse?.code;
+          if (!code) {
+            toast.error("Embedded Signup cancelado ou sem código de autorização.");
+            return;
+          }
+          try {
+            const { data, error } = await supabase.functions.invoke(
+              "whatsapp-embedded-signup-callback",
+              { body: { code, state } },
+            );
+            if (error) throw error;
+            if ((data as any)?.error) throw new Error((data as any).error);
+            const provisioned = (data as any)?.provisioned ?? [];
+            toast.success(`Conexão concluída! ${provisioned.length} número(s) provisionado(s).`);
+            queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
+          } catch (err: any) {
+            toast.error(`Erro ao finalizar conexão: ${err.message}`);
+          }
+        },
+        {
+          config_id: configId,
+          response_type: "code",
+          override_default_response_type: true,
+          extras: {
+            setup: {},
+            featureType: "whatsapp_business_app_onboarding",
+            sessionInfoVersion: "3",
+            version: "v4",
+          },
+        },
+      );
     } catch (err: any) {
       toast.error(`Erro ao iniciar Embedded Signup: ${err.message}`);
     }
