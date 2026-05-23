@@ -1,170 +1,94 @@
-# Refatoração arquitetural: Instagram/FB vs WhatsApp Cloud API
+# Refatoração multi-WABA com OAuth legado
 
-Objetivo: eliminar a arquitetura híbrida atual (tokens manuais, OAuth do Facebook reusado para WhatsApp, fallback `is_default`) e separar o produto em **dois módulos independentes** que compartilham apenas o app Meta `2203903780421152` (Prime).
+Objetivo: manter o fluxo OAuth tradicional (sem Embedded Signup) e blindar o backend para operar com várias contas WhatsApp Cloud isoladas entre si, sem nenhum fallback global de token.
 
----
+## 1. Esquema do banco
 
-## 1. Separação de módulos
+Migration única adicionando ao `whatsapp_accounts`:
 
-### Módulo Instagram / Facebook (mantém OAuth)
-- Fluxo atual de `meta-oauth-url` + `meta-oauth-callback` permanece, **mas passa a ser exclusivo de Instagram/Facebook**.
-- Mantém: Pages API, IG Graph API, comentários, live comments, DMs, automações, multi-conta.
-- Tabelas: `instagram_connections`, `instagram_conversations`, `instagram_messages`, `instagram_webhook_events`, `meta_connections` (apenas linhas com `phone_number_id = 'fb:*'`).
-- Edge functions afetadas: `instagram-*`, `meta-oauth-url`, `meta-oauth-callback`, `instagram-webhook`.
-- Renomear conceitualmente `meta_connections` → uso "Facebook login" (sem mudar nome da tabela para evitar churn).
+- `meta_user_id text` — identificador FB do dono do token (de `/me`)
+- `webhook_subscribed boolean default false`
+- `webhook_subscribed_at timestamptz`
+- `webhook_last_check_at timestamptz`
+- `webhook_last_status text` — `ok`, `not_subscribed`, `error:*`
+- `token_validity text default 'unknown'` — `valid`, `expired`, `invalid_app`, `revoked`, `unknown`
+- `token_app_id text` — `app_id` retornado por `debug_token` (proof of ownership)
+- `token_checked_at timestamptz`
 
-### Módulo WhatsApp Cloud API (somente Embedded Signup)
-- **Remover** qualquer caminho que crie/atualize `whatsapp_accounts` a partir de token manual ou OAuth genérico do Facebook.
-- Único caminho de onboarding: **Embedded Signup oficial** (`fb.login` com `config_id`, escopo `whatsapp_business_management,whatsapp_business_messaging,business_management`, response `code`, exchange server-side → `business_integration_system_user_access_token`).
-- Edge functions novas/reescritas:
-  - `whatsapp-embedded-signup-callback` (exchange code → token de sistema permanente, sem fallback).
-  - `whatsapp-provision-number` (chama `/{waba_id}/phone_numbers`, registra `phone_number_id`, define two-step PIN, faz `POST /{waba_id}/subscribed_apps`).
-  - `whatsapp-cloud-health` já existe → torna-se a fonte única de verdade do diagnóstico.
-- Edge functions descontinuadas / bloqueadas:
-  - `whatsapp-register-phone` (manual) → marcar como deprecated, retornar 410 fora do fluxo Embedded Signup.
-  - Qualquer entrada manual de `access_token` no UI de "Adicionar conta WhatsApp" → removida.
+Nova tabela `whatsapp_account_audit` (id, account_id FK→whatsapp_accounts, user_id, event, status, details jsonb, created_at). Eventos: `oauth_provisioned`, `subscribed_apps`, `webhook_check`, `token_check`, `app_ownership_check`. RLS: dono lê o próprio, service_role gerencia.
 
----
+## 2. OAuth callback (`meta-oauth-callback`)
 
-## 2. Schema / migrações
+Reescrito para fazer todo o provisionamento multi-WABA:
 
-Migração nova:
+1. Troca `code` por `access_token` (System User permanente via OAuth).
+2. `GET /me` → `meta_user_id`, nome.
+3. `GET /debug_token` → `app_id`, `granular_scopes`. Valida que `app_id === META_APP_ID` (proof of ownership) — senão grava `app_ownership_check` falho e retorna erro.
+4. Descobre WABAs: `target_ids` de `whatsapp_business_management` + fallback `/{business_id}/owned_whatsapp_business_accounts`.
+5. Para cada WABA:
+   - `GET /{waba}?fields=id,name,owner_business_info,on_behalf_of_business_info` → `business_id`.
+   - `POST /{waba}/subscribed_apps` com `Authorization: Bearer <token>` da própria conta. Grava `webhook_subscribed`, `webhook_subscribed_at`, `webhook_last_status`. Audita `subscribed_apps`.
+   - `GET /{waba}/phone_numbers` → para cada telefone faz upsert em `whatsapp_accounts` por `phone_number_id` único, gravando `access_token`, `token_type='system_user'`, `waba_id`, `business_id`, `phone_number_id`, `app_id`, `meta_user_id`, `token_app_id`, `token_validity='valid'`, `token_checked_at`, `webhook_subscribed`.
+   - Audita `oauth_provisioned` por conta.
+6. Mantém `meta_connections` apenas como registro do login (não usado em runtime).
+7. Retorna `provisioned: [{ account_id, waba_id, phone_number_id, phone_number, subscribed }]`.
 
-- `whatsapp_accounts`
-  - adicionar colunas: `app_id TEXT NOT NULL`, `business_id TEXT`, `onboarding_method TEXT CHECK (onboarding_method IN ('embedded_signup','legacy'))`, `token_type TEXT` (`system_user` | `legacy`), `provisioned_at TIMESTAMPTZ`, `last_health_at TIMESTAMPTZ`, `last_health_status TEXT`.
-  - **unique constraints**: `UNIQUE(phone_number_id)` global, `UNIQUE(user_id, business_account_id, phone_number_id)`.
-  - remover semântica de `is_default` para roteamento de inbound (mantido só como preferência de UI default no envio).
+`meta-list-numbers` permanece para a tela de seleção, mas o provisionamento real passa a acontecer no callback.
 
-- Nova tabela `whatsapp_onboarding_sessions` (state, code_verifier, user_id, status, created_at) para o Embedded Signup.
+## 3. Webhook (`whatsapp-cloud-webhook`)
 
-- Nova tabela `whatsapp_dead_letter` (webhook inbound que não casou com nenhuma conta): `phone_number_id`, `waba_id`, `payload`, `reason`, `created_at`. RLS admin-only.
+Resolução **estrita** por `value.metadata.phone_number_id`:
 
-- Nova tabela `whatsapp_audit_log` (eventos de mudança de token, reprovisionamento, healthcheck fail).
+- Sem `phone_number_id` → 200 com `{ ignored: 'missing_phone_number_id' }` (não derruba a Meta).
+- Sem conta correspondente → grava `webhook_debug` + 200 com `{ ignored: 'unknown_phone_number_id' }`.
+- Removido fallback `is_default` e `Deno.env.WHATSAPP_ACCESS_TOKEN`.
+- Todas as chamadas Graph (baixar mídia, marcar como lida, etc.) usam o token da conta resolvida.
+- `resolvedAccountId` e `resolvedUserId` deixam de ser opcionais — todas as inserções (`chat_messages`, `leads`, `message_logs`) usam esse `user_id` para respeitar o isolamento multi-tenant.
 
-- Backfill: marcar todas as `whatsapp_accounts` existentes como `onboarding_method='legacy'` e `last_health_status='pending_migration'`.
+## 4. Envio (`whatsapp-cloud-send`)
 
-## 3. Resolução multi-conta (inbound)
+- `account_id` torna-se **obrigatório** para `provider='meta_cloud'`. Sem ele → 400 `account_id_required`.
+- Removidos os fallbacks `is_default`, "primeira conta", e `Deno.env.WHATSAPP_ACCESS_TOKEN`.
+- Valida que `account.user_id === user.id` antes de enviar (defesa em profundidade além da RLS).
+- Erros 190/200/10 da Meta marcam `token_validity='expired'`/`revoked` na conta e auditam `token_check`.
 
-Reescrever `whatsapp-cloud-webhook`:
+## 5. Saúde periódica e on-demand
+
+- `whatsapp-cloud-health` passa a popular `webhook_last_check_at`, `webhook_last_status`, `token_validity`, `token_checked_at` e `token_app_id` em cada execução. Audita `webhook_check`, `token_check`, `app_ownership_check`.
+- Nova função `whatsapp-resubscribe` (botão no UI) que chama `POST /{waba}/subscribed_apps` com o token da conta selecionada e atualiza os mesmos campos.
+
+## 6. Remoção do token global
+
+Auditadas e atualizadas todas as referências a `WHATSAPP_ACCESS_TOKEN`:
+
+- `whatsapp-cloud-webhook` (linha 448) — removido.
+- `whatsapp-cloud-send` (linha 98) — removido.
+- `whatsapp-cloud-health` — apenas usado para comparar metadados do app (`META_APP_ID|META_APP_SECRET`), não para enviar.
+
+O secret continua existindo mas nenhum caminho de runtime depende dele.
+
+## 7. UI mínima
+
+Em `WhatsAppApi.tsx`:
+
+- Após OAuth, exibir toast com `provisioned.length` números e invalidar `whatsapp-accounts`.
+- Badge por conta: `webhook_subscribed`, `token_validity`, último check. Botão "Reinscrever webhook".
+- Selecionar conta passa a ser obrigatório antes de enviar (já é hoje no broadcast, reforçado em ações soltas).
+
+## Arquivos tocados
 
 ```
-para cada change em entry[].changes[]:
-  metadata.phone_number_id  → chave primária de resolução
-  fallback: entry.id (waba_id) + display_phone_number
-  SE nenhuma whatsapp_accounts casar:
-    grava em whatsapp_dead_letter com reason='unmapped_phone_number_id'
-    responde 200 (não reentregar)
-  SE casar mas account.onboarding_method='legacy':
-    grava em whatsapp_audit_log reason='legacy_account_inbound'
-    continua processando (não bloqueia produção)
+supabase/migrations/<novo>.sql               (+ campos + tabela auditoria + RLS)
+supabase/functions/meta-oauth-callback/index.ts        (reescrita)
+supabase/functions/whatsapp-cloud-webhook/index.ts     (resolução estrita)
+supabase/functions/whatsapp-cloud-send/index.ts        (account_id obrigatório)
+supabase/functions/whatsapp-cloud-health/index.ts      (popula auditoria)
+supabase/functions/whatsapp-resubscribe/index.ts       (nova)
+src/pages/WhatsAppApi.tsx                              (toast + badges + botão)
 ```
 
-Remover qualquer `is_default` ou "primeira conta do user" no caminho de inbound.
+## Fora de escopo
 
-## 4. Auditoria automática de tokens / WABAs
-
-Nova edge function `whatsapp-fleet-audit` (cron diário via pg_cron) que para cada `whatsapp_accounts`:
-
-1. `GET /debug_token` → `app_id`, `is_valid`, `expires_at`, `scopes`, `type` (`SYSTEM` vs `USER`).
-2. `GET /{waba_id}?fields=id,owner_business_info,on_behalf_of_business_info`.
-3. `GET /{waba_id}/subscribed_apps` → confere se `META_APP_ID` está presente.
-4. `GET /{phone_number_id}?fields=verified_name,code_verification_status,quality_rating,platform_type,is_on_biz_app,certificate`.
-5. Grava resultado em `whatsapp_audit_log` + atualiza `last_health_status`.
-
-Detecta:
-- token de app diferente do Prime → `flag: wrong_app`
-- app desativado (`OAuthException 200`) → `flag: app_deactivated`
-- WABA órfã (sem `owner_business_info`) → `flag: orphan_waba`
-- `subscribed_apps` sem Prime → `flag: subscription_missing`
-- token expirado / próximo do vencimento → `flag: token_expiring`
-- `platform_type != CLOUD_API` ou `is_on_biz_app=true` → `flag: coexistence`
-- `onboarding_method='legacy'` → `flag: needs_migration`
-
-## 5. Healthcheck on-demand
-- `whatsapp-cloud-health` atual fica como entrypoint por conta (já implementado).
-- UI: aba "Saúde" em cada `whatsapp_accounts` mostra último resultado do fleet audit + botão "Re-executar agora".
-- Banner global: se qualquer conta do user tem flag crítica (`app_deactivated`, `subscription_missing`, `coexistence`), CTA "Reconectar via Embedded Signup".
-
-## 6. Migração de contas legadas
-- Wizard novo `WhatsAppMigrationDialog`:
-  1. Lista contas com `onboarding_method='legacy'`.
-  2. Mostra diagnóstico (fleet audit).
-  3. Botão "Migrar via Embedded Signup" → abre fluxo oficial; após sucesso, faz match por `phone_number_id` e **atualiza in-place** (preserva `id`, `user_id`, automações, templates, mensagens, broadcasts).
-  4. Se o usuário escolher número diferente, oferece "vincular automações da conta antiga ao novo `phone_number_id`".
-- Não deletar a conta antiga até o usuário confirmar; apenas marcar `status='superseded'`.
-- Tokens legados ficam armazenados criptografados em `whatsapp_audit_log` para forense e nunca mais são usados em runtime.
-
-## 7. UI
-
-- Página `WhatsAppApi.tsx`:
-  - Remover formulário "Adicionar conta manualmente (token + phone_number_id)".
-  - Substituir por um único CTA: **"Conectar WhatsApp via Meta (Embedded Signup)"**.
-  - Mostrar badge por conta: `Embedded Signup` (verde) ou `Legado — migração necessária` (âmbar).
-- Instagram permanece como está (`MetaConnect.tsx`, `InstagramSetupWizard.tsx`).
-- Adicionar página/aba `Frota & Saúde` (admin) listando todas as contas + flags do fleet audit.
-
-## 8. Configuração Meta (fora do código, instruções para o usuário)
-- Criar **Embedded Signup configuration** no app Prime → gerar `config_id`.
-- Adicionar produtos no app: WhatsApp + Facebook Login for Business + Instagram (já tem).
-- Confirmar Advanced Access para `whatsapp_business_messaging`, `whatsapp_business_management`, `business_management`.
-- Adicionar `https://primechatapi.lovable.app/auth/meta/whatsapp/callback` aos Valid OAuth Redirect URIs.
-
-## 9. Segredos adicionais
-- `META_EMBEDDED_SIGNUP_CONFIG_ID` (novo, via `add_secret`).
-- Reaproveita `META_APP_ID`, `META_APP_SECRET`.
-- `WHATSAPP_ACCESS_TOKEN` global passa a ser **apenas fallback de audit**, nunca usado para envio em produção.
-
----
-
-## Detalhes técnicos
-
-### Embedded Signup — exchange
-```
-POST https://graph.facebook.com/v21.0/oauth/access_token
-  client_id=META_APP_ID
-  client_secret=META_APP_SECRET
-  code=<code do FB.login>
-→ { access_token } (business integration system user token, permanente)
-```
-Depois:
-```
-GET /debug_token?input_token=<token>&access_token=<app_token>
-→ data.granular_scopes (lista de waba_ids/business_ids autorizados)
-```
-Para cada `waba_id` autorizado: `GET /{waba_id}/phone_numbers` → cria 1 `whatsapp_accounts` por número.
-
-### Subscribed apps
-```
-POST /{waba_id}/subscribed_apps  (Authorization: Bearer <system_user_token>)
-GET  /{waba_id}/subscribed_apps  → assert META_APP_ID presente
-```
-
-### Webhook resolution SQL
-```sql
-SELECT id, user_id, access_token, onboarding_method
-FROM whatsapp_accounts
-WHERE phone_number_id = $1
-LIMIT 1;
-```
-Sem fallback. Dead-letter se vazio.
-
----
-
-## Ordem de execução proposta
-
-1. Migração schema (colunas novas + tabelas `whatsapp_onboarding_sessions`, `whatsapp_dead_letter`, `whatsapp_audit_log` + unique constraints + backfill `onboarding_method='legacy'`).
-2. Edge functions: `whatsapp-embedded-signup-start`, `whatsapp-embedded-signup-callback`, `whatsapp-provision-number`, `whatsapp-fleet-audit`. Atualizar `whatsapp-cloud-webhook` (resolução estrita + dead letter).
-3. Cron pg_cron diário para `whatsapp-fleet-audit`.
-4. Pedir `META_EMBEDDED_SIGNUP_CONFIG_ID` via `add_secret`.
-5. UI: remover entrada manual, novo CTA Embedded Signup, badges, página de saúde, wizard de migração.
-6. Deprecar `whatsapp-register-phone` (410) e remover botões correspondentes.
-7. Documentação curta in-app explicando a separação Instagram (OAuth) vs WhatsApp (Embedded Signup).
-
-## Riscos / pontos de confirmação
-
-- **Quebra de contas existentes durante migração**: mitigado por `status='superseded'` em vez de delete; automações continuam ligadas pelo `phone_number_id`.
-- **Embedded Signup exige Business Verification do cliente final**: avisar no wizard antes de iniciar.
-- **Cron pg_cron**: precisa `pg_cron` + `pg_net` habilitados (já são em Lovable Cloud).
-- **Confirmar que você tem o `config_id` do Embedded Signup criado no app Prime** — sem isso o fluxo não roda.
-
-Posso começar pela etapa 1 (migração de schema) assim que aprovar; ou se preferir, começo pelas edge functions do Embedded Signup primeiro para validar o fluxo end-to-end com 1 número antes de tocar no resto.
+- Embedded Signup (mantido desativado, código preservado mas botão pode ficar oculto).
+- Refresh automático de token (System User OAuth já é permanente; só marcamos `invalid` quando a Meta devolve 190).
+- Multi-app (META_APP_ID continua único por instalação).

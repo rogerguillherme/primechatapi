@@ -1760,6 +1760,44 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_account_audit: {
+        Row: {
+          account_id: string | null
+          created_at: string
+          details: Json
+          event: string
+          id: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          account_id?: string | null
+          created_at?: string
+          details?: Json
+          event: string
+          id?: string
+          status: string
+          user_id: string
+        }
+        Update: {
+          account_id?: string | null
+          created_at?: string
+          details?: Json
+          event?: string
+          id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_account_audit_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_accounts: {
         Row: {
           access_token: string
@@ -1772,14 +1810,22 @@ export type Database = {
           is_default: boolean
           last_health_at: string | null
           last_health_status: string | null
+          meta_user_id: string | null
           name: string
           onboarding_method: string | null
           phone_number_id: string
           provider: string
           provisioned_at: string | null
+          token_app_id: string | null
+          token_checked_at: string | null
           token_type: string | null
+          token_validity: string
           updated_at: string
           user_id: string | null
+          webhook_last_check_at: string | null
+          webhook_last_status: string | null
+          webhook_subscribed: boolean
+          webhook_subscribed_at: string | null
         }
         Insert: {
           access_token: string
@@ -1792,14 +1838,22 @@ export type Database = {
           is_default?: boolean
           last_health_at?: string | null
           last_health_status?: string | null
+          meta_user_id?: string | null
           name: string
           onboarding_method?: string | null
           phone_number_id: string
           provider?: string
           provisioned_at?: string | null
+          token_app_id?: string | null
+          token_checked_at?: string | null
           token_type?: string | null
+          token_validity?: string
           updated_at?: string
           user_id?: string | null
+          webhook_last_check_at?: string | null
+          webhook_last_status?: string | null
+          webhook_subscribed?: boolean
+          webhook_subscribed_at?: string | null
         }
         Update: {
           access_token?: string
@@ -1812,14 +1866,22 @@ export type Database = {
           is_default?: boolean
           last_health_at?: string | null
           last_health_status?: string | null
+          meta_user_id?: string | null
           name?: string
           onboarding_method?: string | null
           phone_number_id?: string
           provider?: string
           provisioned_at?: string | null
+          token_app_id?: string | null
+          token_checked_at?: string | null
           token_type?: string | null
+          token_validity?: string
           updated_at?: string
           user_id?: string | null
+          webhook_last_check_at?: string | null
+          webhook_last_status?: string | null
+          webhook_subscribed?: boolean
+          webhook_subscribed_at?: string | null
         }
         Relationships: []
       }
