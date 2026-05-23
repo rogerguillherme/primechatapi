@@ -29,6 +29,20 @@
 
   <body>
     <div id="root"></div>
+    <!-- Facebook SDK for Embedded Signup (WhatsApp Cloud) -->
+    <script>
+      window.fbAsyncInit = function() {
+        // eslint-disable-next-line no-undef
+        FB.init({
+          appId: '2203903780421152',
+          autoLogAppEvents: true,
+          xfbml: true,
+          version: 'v25.0'
+        });
+      };
+    </script>
+    <script async defer crossorigin="anonymous"
+      src="https://connect.facebook.net/en_US/sdk.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
