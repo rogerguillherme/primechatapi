@@ -134,7 +134,53 @@ Deno.serve(async (req) => {
       );
     }
 
-    return new Response(JSON.stringify({ success: true, data: registerData }), {
+    // Auto-subscribe Meta App to the WABA so inbound webhooks start flowing
+    let subscribeResult: any = null;
+    if (account.business_account_id) {
+      try {
+        const subUrl = `https://graph.facebook.com/v21.0/${account.business_account_id}/subscribed_apps`;
+        const subRes = await fetch(subUrl, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        const subText = await subRes.text();
+        let subData: any;
+        try { subData = JSON.parse(subText); } catch { subData = { raw: subText }; }
+
+        // Confirm via GET
+        let listData: any = null;
+        try {
+          const listRes = await fetch(
+            `https://graph.facebook.com/v21.0/${account.business_account_id}/subscribed_apps?access_token=${encodeURIComponent(accessToken)}`,
+          );
+          listData = await listRes.json();
+        } catch (_) { /* ignore */ }
+
+        subscribeResult = {
+          waba_id: account.business_account_id,
+          phone_number_id: phoneNumberId,
+          app_id_env: Deno.env.get("META_APP_ID") || null,
+          http_status: subRes.status,
+          response: subData,
+          subscribed_apps: listData,
+          success: subData?.success === true,
+        };
+        console.log("=== AUTO SUBSCRIBE AFTER REGISTER ===", JSON.stringify(subscribeResult));
+
+        try {
+          await adminClient.from("webhook_debug").insert({
+            source: "whatsapp-register-phone:auto-subscribe",
+            parsed: subscribeResult,
+            notes: subscribeResult.success ? "ok" : "subscribe failed",
+          });
+        } catch (_) { /* ignore */ }
+      } catch (e) {
+        console.error("auto-subscribe failed:", e);
+        subscribeResult = { error: e instanceof Error ? e.message : String(e) };
+      }
+    }
+
+    return new Response(JSON.stringify({ success: true, data: registerData, subscribe: subscribeResult }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
