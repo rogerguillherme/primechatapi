@@ -1,0 +1,1 @@
+UPDATE public.whatsapp_accounts SET access_token = 'EAAfUcFXzfiABRswwGr2asN9D8194wiat9xKyFUrz6xAZAgC1o1qrAZBPd00WGNIvzdwdLRxVBKHNj0uca3692RlAk8UFEML5vaE10SXtc4VuCQDO6P996H8C2ApZCE13lwtBWeMmZBnPvm6dN7Y86utvRkZCZAI9u5kEEUxu3ZAbgZAfd1GbDupPKWa1XoRdoWTpdAZDZD', updated_at = now() WHERE id = '35fd4b1c-9b9b-4b65-8ce4-48ccbf896d9e';
