@@ -98,6 +98,7 @@ function AppRoutes() {
         }
       />
       <Route path="/site" element={<LandingPage />} />
+      <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
