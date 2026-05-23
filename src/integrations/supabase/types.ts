@@ -1764,41 +1764,155 @@ export type Database = {
         Row: {
           access_token: string
           api_key: string | null
+          app_id: string | null
           business_account_id: string | null
+          business_id: string | null
           created_at: string
           id: string
           is_default: boolean
+          last_health_at: string | null
+          last_health_status: string | null
           name: string
+          onboarding_method: string | null
           phone_number_id: string
           provider: string
+          provisioned_at: string | null
+          token_type: string | null
           updated_at: string
           user_id: string | null
         }
         Insert: {
           access_token: string
           api_key?: string | null
+          app_id?: string | null
           business_account_id?: string | null
+          business_id?: string | null
           created_at?: string
           id?: string
           is_default?: boolean
+          last_health_at?: string | null
+          last_health_status?: string | null
           name: string
+          onboarding_method?: string | null
           phone_number_id: string
           provider?: string
+          provisioned_at?: string | null
+          token_type?: string | null
           updated_at?: string
           user_id?: string | null
         }
         Update: {
           access_token?: string
           api_key?: string | null
+          app_id?: string | null
           business_account_id?: string | null
+          business_id?: string | null
           created_at?: string
           id?: string
           is_default?: boolean
+          last_health_at?: string | null
+          last_health_status?: string | null
           name?: string
+          onboarding_method?: string | null
           phone_number_id?: string
           provider?: string
+          provisioned_at?: string | null
+          token_type?: string | null
           updated_at?: string
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      whatsapp_audit_log: {
+        Row: {
+          account_id: string | null
+          created_at: string
+          details: Json
+          event: string
+          flags: string[]
+          id: string
+          user_id: string | null
+        }
+        Insert: {
+          account_id?: string | null
+          created_at?: string
+          details?: Json
+          event: string
+          flags?: string[]
+          id?: string
+          user_id?: string | null
+        }
+        Update: {
+          account_id?: string | null
+          created_at?: string
+          details?: Json
+          event?: string
+          flags?: string[]
+          id?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      whatsapp_dead_letter: {
+        Row: {
+          created_at: string
+          display_phone_number: string | null
+          id: string
+          payload: Json
+          phone_number_id: string | null
+          reason: string
+          waba_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          display_phone_number?: string | null
+          id?: string
+          payload?: Json
+          phone_number_id?: string | null
+          reason: string
+          waba_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          display_phone_number?: string | null
+          id?: string
+          payload?: Json
+          phone_number_id?: string | null
+          reason?: string
+          waba_id?: string | null
+        }
+        Relationships: []
+      }
+      whatsapp_onboarding_sessions: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          id: string
+          metadata: Json
+          state: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          state: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          state?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
