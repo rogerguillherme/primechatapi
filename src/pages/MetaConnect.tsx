@@ -324,11 +324,11 @@ export default function MetaConnect() {
 
           {activeConnection && (
             <div className="mt-4 space-y-4">
-              {(connections || []).filter((c: any) => c.status === "connected").length > 1 && (
+              {connectedFacebookConnections.length > 1 && (
                 <div>
                   <p className="text-sm font-medium mb-2">Conta Facebook ativa</p>
                   <div className="flex flex-wrap gap-2">
-                    {(connections || []).filter((c: any) => c.status === "connected").map((conn: any) => (
+                    {connectedFacebookConnections.map((conn: any) => (
                       <Button
                         key={conn.id}
                         type="button"
