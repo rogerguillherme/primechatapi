@@ -1597,6 +1597,21 @@ export default function WhatsAppApi() {
     }
   };
 
+  const handleEmbeddedSignup = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke("whatsapp-embedded-signup-start", {
+        body: { redirect_origin: window.location.origin },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      const url = (data as any)?.url;
+      if (!url) throw new Error("URL de Embedded Signup não retornada");
+      window.location.href = url;
+    } catch (err: any) {
+      toast.error(`Erro ao iniciar Embedded Signup: ${err.message}`);
+    }
+  };
+
   const startEditing = (account: any) => {
     setEditingAccount(account);
     setAccountName(account.name);
@@ -2112,8 +2127,11 @@ export default function WhatsAppApi() {
                     <DropdownMenuItem onClick={() => { resetForm(); setProvider("meta_cloud"); setIsAddingAccount(true); }} className="gap-2">
                       <Key size={14} /> Meta Cloud (manual)
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleEmbeddedSignup} className="gap-2 font-medium text-primary">
+                      <ExternalLink size={14} /> Conectar via Embedded Signup (oficial Meta)
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={handleMetaOAuth} className="gap-2">
-                      <ExternalLink size={14} /> Conectar via Meta OAuth
+                      <ExternalLink size={14} /> Conectar via Meta OAuth (legado)
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => { resetForm(); setProvider("d360"); setIsAddingAccount(true); }} className="gap-2">
                       <MessageCircle size={14} /> 360dialog

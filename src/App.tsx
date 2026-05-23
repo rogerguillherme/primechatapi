@@ -9,6 +9,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { PlatformProvider } from "@/contexts/PlatformContext";
 import WhatsAppApi from "./pages/WhatsAppApi";
 import MetaConnect from "./pages/MetaConnect";
+import WhatsAppEmbeddedSignupCallback from "./pages/WhatsAppEmbeddedSignupCallback";
 import InstagramDashboard from "./pages/InstagramDashboard";
 import InstagramCallbackPage from "./pages/InstagramCallback";
 import NotFound from "./pages/NotFound";
@@ -73,6 +74,14 @@ function AppRoutes() {
                 <MetaConnect />
               </main>
             </div>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/auth/meta/whatsapp/callback"
+        element={
+          <ProtectedRoute>
+            <WhatsAppEmbeddedSignupCallback />
           </ProtectedRoute>
         }
       />
