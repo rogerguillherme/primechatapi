@@ -117,6 +117,21 @@ async function ensureWebhookSubscription(accessToken: string, businessAccountId?
   }
 }
 
+async function getEffectiveMetaToken(supabase: any, accessToken: string, businessAccountId?: string | null) {
+  if (!businessAccountId) return accessToken;
+
+  const { data: metaConn } = await supabase
+    .from("meta_connections")
+    .select("meta_access_token")
+    .eq("waba_id", businessAccountId)
+    .eq("status", "connected")
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return metaConn?.meta_access_token || accessToken;
+}
+
 async function getTemplateRecord(supabase: any, templateName: string, accountId?: string) {
   const { data: templates, error } = await supabase
     .from("chat_templates")
@@ -194,11 +209,15 @@ Deno.serve(async (req) => {
       apiKey: D360_API_KEY,
     } = await getAccountCredentials(supabase, account_id);
 
+    const effectiveAccessToken = provider === "meta_cloud"
+      ? await getEffectiveMetaToken(supabase, ACCESS_TOKEN, businessAccountId)
+      : ACCESS_TOKEN;
+
     const isD360 = provider === "d360";
     const isEvolution = provider === "evolution";
 
     if (!isD360 && !isEvolution) {
-      await ensureWebhookSubscription(ACCESS_TOKEN, businessAccountId);
+      await ensureWebhookSubscription(effectiveAccessToken, businessAccountId);
     }
 
     const cleanPhone = phone.replace(/\D/g, "");
@@ -531,7 +550,7 @@ Deno.serve(async (req) => {
       }
       requestHeaders["D360-API-KEY"] = D360_API_KEY;
     } else {
-      requestHeaders["Authorization"] = `Bearer ${ACCESS_TOKEN}`;
+      requestHeaders["Authorization"] = `Bearer ${effectiveAccessToken}`;
     }
 
     const waRes = await fetch(apiUrl, {

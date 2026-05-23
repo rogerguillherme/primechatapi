@@ -59,28 +59,35 @@ Deno.serve(async (req) => {
 
     const accessToken = tokenData.access_token;
 
-    // Save connection with just the token — user will pick WABA/number via UI
+    const meRes = await fetch(
+      `https://graph.facebook.com/v19.0/me?fields=id,name&access_token=${encodeURIComponent(accessToken)}`
+    );
+    const meData = await meRes.json().catch(() => ({}));
+    const facebookUserId = meData?.id || "unknown";
+    const facebookName = meData?.name || "Conta Meta";
+
+    // Keep one connection per Facebook login instead of replacing the active token.
     const { data: existing } = await adminClient
       .from("meta_connections")
       .select("id")
       .eq("user_id", userId)
-      .eq("status", "connected")
+      .eq("phone_number_id", `fb:${facebookUserId}`)
       .maybeSingle();
 
+    const connectionPayload = {
+      user_id: userId,
+      meta_access_token: accessToken,
+      phone_number_id: `fb:${facebookUserId}`,
+      phone_number: facebookName,
+      waba_id: "",
+      status: "connected",
+      updated_at: new Date().toISOString(),
+    };
+
     if (existing) {
-      await adminClient
-        .from("meta_connections")
-        .update({
-          meta_access_token: accessToken,
-          status: "connected",
-        })
-        .eq("id", existing.id);
+      await adminClient.from("meta_connections").update(connectionPayload).eq("id", existing.id);
     } else {
-      await adminClient.from("meta_connections").insert({
-        user_id: userId,
-        meta_access_token: accessToken,
-        status: "connected",
-      });
+      await adminClient.from("meta_connections").insert(connectionPayload);
     }
 
     return new Response(

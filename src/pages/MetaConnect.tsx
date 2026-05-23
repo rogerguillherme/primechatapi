@@ -48,6 +48,7 @@ export default function MetaConnect() {
   const [expandedWaba, setExpandedWaba] = useState<string | null>(null);
   const [registeringPhoneId, setRegisteringPhoneId] = useState<string | null>(null);
   const [registrationPin, setRegistrationPin] = useState("123456");
+  const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
 
   const { data: connections, isLoading } = useQuery({
     queryKey: ["meta-connections"],
@@ -62,15 +63,26 @@ export default function MetaConnect() {
     enabled: !!session,
   });
   const activeConnection = connections?.find((c: any) => c.status === "connected");
+  const selectedConnection = connections?.find((c: any) => c.id === selectedConnectionId) || activeConnection;
+  const connectedFacebookConnections = (connections || []).filter((conn: any, index: number, list: any[]) =>
+    conn.status === "connected" &&
+    index === list.findIndex((item: any) => item.status === "connected" && item.phone_number_id === conn.phone_number_id)
+  );
+
+  useEffect(() => {
+    if (!selectedConnectionId && activeConnection?.id) setSelectedConnectionId(activeConnection.id);
+  }, [activeConnection?.id, selectedConnectionId]);
 
   const { data: metaData, isLoading: isLoadingMeta, refetch: refetchMeta } = useQuery({
-    queryKey: ["meta-wabas"],
+    queryKey: ["meta-wabas", selectedConnection?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke("meta-list-numbers");
+        const { data, error } = await supabase.functions.invoke("meta-list-numbers", {
+          body: { connection_id: selectedConnection?.id },
+        });
       if (error) throw error;
       return data?.wabas || [];
     },
-    enabled: !!activeConnection,
+    enabled: !!selectedConnection,
   });
 
   const { data: registeredAccounts } = useQuery({
@@ -148,7 +160,7 @@ export default function MetaConnect() {
   };
 
   const handleAddNumber = async (waba: any, phone: any) => {
-    if (!activeConnection || !user) {
+    if (!selectedConnection || !user) {
       toast.error("Sessão expirada. Faça login novamente.");
       return;
     }
@@ -175,12 +187,14 @@ export default function MetaConnect() {
         name: phone.verified_name || phone.display_phone_number || "WhatsApp",
         phone_number_id: phone.id,
         business_account_id: waba.id,
-        access_token: activeConnection.meta_access_token,
+        access_token: selectedConnection.meta_access_token,
         is_default: !existingAccounts || existingAccounts.length === 0,
       });
 
       if (error) throw error;
+      await supabase.from("meta_connections").update({ waba_id: waba.id }).eq("id", selectedConnection.id);
       toast.success(`Número ${phone.display_phone_number} adicionado!`);
+      queryClient.invalidateQueries({ queryKey: ["meta-connections"] });
       queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
       queryClient.invalidateQueries({ queryKey: ["meta-wabas"] });
 
@@ -294,6 +308,9 @@ export default function MetaConnect() {
                   <Button variant="destructive" size="sm" onClick={() => handleDisconnect(activeConnection.id)}>
                     <Unplug className="h-4 w-4 mr-1" /> Desconectar
                   </Button>
+                  <Button onClick={handleConnect} variant="outline" size="sm" className="gap-1">
+                    <Plus className="h-4 w-4" /> Outro Facebook/BM
+                  </Button>
                 </>
               ) : (
                 <Button onClick={handleConnect} className="gap-2">
@@ -306,7 +323,25 @@ export default function MetaConnect() {
           </div>
 
           {activeConnection && (
-            <div className="mt-4">
+            <div className="mt-4 space-y-4">
+              {connectedFacebookConnections.length > 1 && (
+                <div>
+                  <p className="text-sm font-medium mb-2">Conta Facebook ativa</p>
+                  <div className="flex flex-wrap gap-2">
+                    {connectedFacebookConnections.map((conn: any) => (
+                      <Button
+                        key={conn.id}
+                        type="button"
+                        variant={selectedConnection?.id === conn.id ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSelectedConnectionId(conn.id)}
+                      >
+                        {conn.phone_number || conn.phone_number_id || "Conta Meta"}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <p className="text-sm font-medium mb-2">Enviar teste</p>
               <div className="flex gap-2">
                 <Input placeholder="Telefone (ex: 5511999998888)" value={testPhone} onChange={(e) => setTestPhone(e.target.value)} className="max-w-[200px]" />
