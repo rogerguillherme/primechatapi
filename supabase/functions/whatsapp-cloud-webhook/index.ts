@@ -156,8 +156,83 @@ Deno.serve(async (req) => {
 
   // ── POST: Incoming messages ──
   try {
-    const payload = await req.json();
+    // ============ RAW CAPTURE (before any parsing) ============
+    const rawHeaders: Record<string, string> = {};
+    req.headers.forEach((v, k) => { rawHeaders[k] = v; });
+    const rawBody = await req.text();
+    console.log("=== RAW WEBHOOK HEADERS ===", JSON.stringify(rawHeaders));
+    console.log("=== RAW WEBHOOK BODY ===", rawBody);
+    console.log("=== RAW WEBHOOK BODY LENGTH ===", rawBody.length);
+
+    let payload: any = null;
+    let parseError: string | null = null;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch (e: any) {
+      parseError = e?.message || String(e);
+      console.error("=== JSON PARSE FAILED ===", parseError);
+    }
+    console.log("=== PARSED PAYLOAD ===", JSON.stringify(payload));
+
+    // Persist raw debug always (best-effort)
+    try {
+      const dbgUrl = Deno.env.get("SUPABASE_URL")!;
+      const dbgKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const dbg = createClient(dbgUrl, dbgKey);
+      // Pre-classify message types for quick inspection
+      const entries = payload?.entry || [];
+      const changes = entries.flatMap((e: any) => e?.changes || []);
+      const values = changes.map((c: any) => c?.value).filter(Boolean);
+      const msgs = values.flatMap((v: any) => v?.messages || []);
+      const statuses = values.flatMap((v: any) => v?.statuses || []);
+      const msgSummary = msgs.map((m: any) => ({
+        type: m?.type,
+        id: m?.id,
+        from: m?.from,
+        interactive_type: m?.interactive?.type,
+        button_reply_id: m?.interactive?.button_reply?.id,
+        button_reply_title: m?.interactive?.button_reply?.title,
+        list_reply_id: m?.interactive?.list_reply?.id,
+        list_reply_title: m?.interactive?.list_reply?.title,
+        button_payload: m?.button?.payload,
+        button_text: m?.button?.text,
+        context_id: m?.context?.id,
+        text_body: m?.text?.body,
+      }));
+      console.log("=== MESSAGE SUMMARY ===", JSON.stringify(msgSummary));
+      console.log("=== STATUS COUNT ===", statuses.length);
+
+      const phoneNumberId = values[0]?.metadata?.phone_number_id || null;
+      const knownTypes = new Set(["text","image","audio","video","document","sticker","interactive","button","location","contacts","reaction","order","system","unsupported"]);
+      const unknownTypes = msgs.filter((m: any) => !knownTypes.has(m?.type)).map((m: any) => m?.type);
+
+      await dbg.from("webhook_debug").insert({
+        source: "whatsapp-cloud-webhook",
+        headers: rawHeaders,
+        raw_body: rawBody,
+        parsed: payload,
+        notes: JSON.stringify({
+          parseError,
+          phone_number_id: phoneNumberId,
+          message_count: msgs.length,
+          status_count: statuses.length,
+          message_summary: msgSummary,
+          unknown_types: unknownTypes,
+        }),
+      });
+    } catch (dbgErr) {
+      console.error("Failed to persist webhook_debug:", dbgErr);
+    }
+
+    if (!payload) {
+      return new Response(
+        JSON.stringify({ ok: false, error: "invalid_json", detail: parseError }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     console.log("WhatsApp Cloud webhook received:", JSON.stringify(payload));
+
 
     // Some Evolution instances can be pointed at this legacy webhook URL.
     // Forward those payloads to the Evolution handler so replies continue flows correctly.
