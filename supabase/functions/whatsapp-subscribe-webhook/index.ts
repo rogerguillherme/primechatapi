@@ -65,11 +65,22 @@ Deno.serve(async (req) => {
       }
 
       try {
+        const { data: metaConn } = await adminClient
+          .from("meta_connections")
+          .select("meta_access_token")
+          .eq("user_id", user.id)
+          .eq("waba_id", acc.business_account_id)
+          .eq("status", "connected")
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const effectiveToken = metaConn?.meta_access_token || acc.access_token;
+
         // 1) Subscribe app to WABA  → receive webhook events
         const subUrl = `https://graph.facebook.com/v21.0/${acc.business_account_id}/subscribed_apps`;
         const subRes = await fetch(subUrl, {
           method: "POST",
-          headers: { Authorization: `Bearer ${acc.access_token}` },
+          headers: { Authorization: `Bearer ${effectiveToken}` },
         });
         const subText = await subRes.text();
         let subData: any;
