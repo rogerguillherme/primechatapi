@@ -727,6 +727,11 @@ Deno.serve(async (req) => {
           .eq("lead_id", lead.id)
           .eq("status", "waiting_reply");
 
+        console.log("[G] flows encontrados aguardando reply:", (executions || []).length, "lead=", lead.id);
+        if (!executions || executions.length === 0) {
+          console.log("[I] discard_reason: no_waiting_flow lead=", lead.id);
+        }
+
         for (const exec of executions || []) {
           const currentStepId = exec.current_step_id;
           const candidateTriggers = Array.from(new Set([
@@ -783,7 +788,7 @@ Deno.serve(async (req) => {
             }
           }
 
-          console.log("Flow reply resolution:", JSON.stringify({
+          console.log("[F] trigger resolvido:", JSON.stringify({
             executionId: exec.id,
             currentStepId,
             candidateTriggers,
@@ -802,19 +807,21 @@ Deno.serve(async (req) => {
                 .limit(1);
 
               if (condChildren && condChildren.length > 0) {
+                console.log("[H] execução continuada via condition child step=", condChildren[0].id, "exec=", exec.id);
                 await processFlowStep(condChildren[0], exec, lead, supabase, resolvedAccountId);
               } else {
-                console.log("Condition matched but has no child step:", matchedStep.id, "exec:", exec.id);
+                console.log("[I] discard_reason: condition_no_child step=", matchedStep.id, "exec=", exec.id);
                 await supabase.from("flow_executions").update({
                   status: "completed",
                   updated_at: new Date().toISOString(),
                 }).eq("id", exec.id);
               }
             } else {
+              console.log("[H] execução continuada step=", matchedStep.id, "type=", matchedStep.step_type, "exec=", exec.id);
               await processFlowStep(matchedStep, exec, lead, supabase, resolvedAccountId);
             }
           } else {
-            console.log("No matching branch for button payload:", buttonPayload, "exec:", exec.id);
+            console.log("[I] discard_reason: no_matching_branch button=", buttonPayload, "text=", text, "exec=", exec.id);
             await supabase.from("flow_executions").update({
               status: "waiting_reply",
               updated_at: new Date().toISOString(),
