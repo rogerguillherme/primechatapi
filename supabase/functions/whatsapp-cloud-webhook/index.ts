@@ -550,7 +550,29 @@ Deno.serve(async (req) => {
         console.log("Quick reply received:", buttonPayload);
       }
 
-      if (!text && !mediaUrl) continue;
+      const parserResult = {
+        wamid: messageId,
+        from: rawPhone,
+        type: msg.type,
+        interactive_type: msg.interactive?.type || null,
+        text,
+        mediaType,
+        buttonPayload,
+        buttonTitle,
+        timestamp,
+      };
+      console.log("[D] parser executado:", JSON.stringify(parserResult));
+      console.log("[E] tipo detectado:", msg.type, buttonPayload ? `(button=${buttonPayload})` : "");
+      await supabase.from("webhook_debug").insert({
+        source: "whatsapp-cloud-webhook:parser",
+        notes: JSON.stringify({ stage: "parser_result", account_id: resolvedAccountId, user_id: resolvedUserId, parser_result: parserResult }),
+        parsed: { msg, parser_result: parserResult },
+      }).catch(() => {});
+
+      if (!text && !mediaUrl) {
+        console.log("[I] discard_reason: empty_text_and_media wamid=", messageId);
+        continue;
+      }
 
       const cleanPhone = normalizePhone(rawPhone);
       const phoneVariants = brazilianPhoneVariants(rawPhone);
