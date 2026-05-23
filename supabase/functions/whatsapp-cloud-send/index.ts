@@ -610,6 +610,9 @@ Deno.serve(async (req) => {
       } else if (isAuthError) {
         const loggedOutHint = errorSubcode === 467 ? " A sessão da Meta expirou." : "";
         friendlyMsg = `O token da conta WhatsApp expirou.${loggedOutHint} Reconecte a conta na tela de configurações.`;
+        if (resolvedAccountId) {
+          await markTokenInvalid(supabase, resolvedAccountId, accountUserId, errorCode, metaMsg);
+        }
       } else if (isOutsideWindow) {
         friendlyMsg = `Esse contato está fora da janela de 24h e só pode receber templates aprovados (não mensagens livres).`;
       } else if (isInvalidPhone) {
