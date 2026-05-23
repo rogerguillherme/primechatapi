@@ -422,14 +422,16 @@ Deno.serve(async (req) => {
     // STRICT account resolution by metadata.phone_number_id.
     // No global token fallback. No "first/default account" fallback.
     const incomingPhoneNumberId = value.metadata?.phone_number_id || "";
+    console.log("[B] phone_number_id extraído:", incomingPhoneNumberId);
     if (!incomingPhoneNumberId) {
+      console.warn("[I] discard_reason: missing_phone_number_id");
       await supabase.from("webhook_debug").insert({
         source: "whatsapp-cloud-webhook",
-        notes: "missing_phone_number_id_in_value_metadata",
+        notes: JSON.stringify({ discard_reason: "missing_phone_number_id" }),
         parsed: { value },
       }).catch(() => {});
       return new Response(
-        JSON.stringify({ ok: true, ignored: "missing_phone_number_id" }),
+        JSON.stringify({ ok: true, ignored: "missing_phone_number_id", discard_reason: "missing_phone_number_id" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -439,22 +441,25 @@ Deno.serve(async (req) => {
       .eq("phone_number_id", incomingPhoneNumberId)
       .maybeSingle();
     if (!matchedAccount || !matchedAccount.access_token) {
+      console.warn("[I] discard_reason: account_not_found phone_number_id=", incomingPhoneNumberId);
       await supabase.from("webhook_debug").insert({
         source: "whatsapp-cloud-webhook",
-        notes: "unknown_phone_number_id",
+        notes: JSON.stringify({ discard_reason: "account_not_found", phone_number_id: incomingPhoneNumberId }),
         parsed: { phone_number_id: incomingPhoneNumberId, value },
       }).catch(() => {});
       return new Response(
-        JSON.stringify({ ok: true, ignored: "unknown_phone_number_id", phone_number_id: incomingPhoneNumberId }),
+        JSON.stringify({ ok: true, ignored: "account_not_found", discard_reason: "account_not_found", phone_number_id: incomingPhoneNumberId }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
     const ACCESS_TOKEN: string = matchedAccount.access_token;
     const resolvedAccountId: string = matchedAccount.id;
     const resolvedUserId: string = matchedAccount.user_id;
+    console.log("[C] conta encontrada:", JSON.stringify({ account_id: resolvedAccountId, user_id: resolvedUserId }));
 
     const messages = value.messages;
     if (!messages || messages.length === 0) {
+      console.log("[I] discard_reason: no_messages (status_update only =", hasStatuses, ")");
       return new Response(
         JSON.stringify({ ok: true, type: hasStatuses ? "status_update" : "no_messages" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
