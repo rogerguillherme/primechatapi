@@ -1597,6 +1597,21 @@ export default function WhatsAppApi() {
     }
   };
 
+  const handleEmbeddedSignup = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke("whatsapp-embedded-signup-start", {
+        body: { redirect_origin: window.location.origin },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      const url = (data as any)?.url;
+      if (!url) throw new Error("URL de Embedded Signup não retornada");
+      window.location.href = url;
+    } catch (err: any) {
+      toast.error(`Erro ao iniciar Embedded Signup: ${err.message}`);
+    }
+  };
+
   const startEditing = (account: any) => {
     setEditingAccount(account);
     setAccountName(account.name);
