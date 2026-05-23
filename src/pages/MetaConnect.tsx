@@ -303,6 +303,9 @@ export default function MetaConnect() {
                   <Button variant="destructive" size="sm" onClick={() => handleDisconnect(activeConnection.id)}>
                     <Unplug className="h-4 w-4 mr-1" /> Desconectar
                   </Button>
+                  <Button onClick={handleConnect} variant="outline" size="sm" className="gap-1">
+                    <Plus className="h-4 w-4" /> Outro Facebook/BM
+                  </Button>
                 </>
               ) : (
                 <Button onClick={handleConnect} className="gap-2">
@@ -315,7 +318,25 @@ export default function MetaConnect() {
           </div>
 
           {activeConnection && (
-            <div className="mt-4">
+            <div className="mt-4 space-y-4">
+              {(connections || []).filter((c: any) => c.status === "connected").length > 1 && (
+                <div>
+                  <p className="text-sm font-medium mb-2">Conta Facebook ativa</p>
+                  <div className="flex flex-wrap gap-2">
+                    {(connections || []).filter((c: any) => c.status === "connected").map((conn: any) => (
+                      <Button
+                        key={conn.id}
+                        type="button"
+                        variant={selectedConnection?.id === conn.id ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSelectedConnectionId(conn.id)}
+                      >
+                        {conn.phone_number || conn.phone_number_id || "Conta Meta"}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <p className="text-sm font-medium mb-2">Enviar teste</p>
               <div className="flex gap-2">
                 <Input placeholder="Telefone (ex: 5511999998888)" value={testPhone} onChange={(e) => setTestPhone(e.target.value)} className="max-w-[200px]" />
