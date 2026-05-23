@@ -156,7 +156,7 @@ export default function MetaConnect() {
   };
 
   const handleAddNumber = async (waba: any, phone: any) => {
-    if (!activeConnection || !user) {
+    if (!selectedConnection || !user) {
       toast.error("Sessão expirada. Faça login novamente.");
       return;
     }
@@ -183,11 +183,12 @@ export default function MetaConnect() {
         name: phone.verified_name || phone.display_phone_number || "WhatsApp",
         phone_number_id: phone.id,
         business_account_id: waba.id,
-        access_token: activeConnection.meta_access_token,
+        access_token: selectedConnection.meta_access_token,
         is_default: !existingAccounts || existingAccounts.length === 0,
       });
 
       if (error) throw error;
+      await supabase.from("meta_connections").update({ waba_id: waba.id }).eq("id", selectedConnection.id);
       toast.success(`Número ${phone.display_phone_number} adicionado!`);
       queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
       queryClient.invalidateQueries({ queryKey: ["meta-wabas"] });
