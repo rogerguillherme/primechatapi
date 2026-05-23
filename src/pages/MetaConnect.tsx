@@ -64,13 +64,17 @@ export default function MetaConnect() {
   });
   const activeConnection = connections?.find((c: any) => c.status === "connected");
   const selectedConnection = connections?.find((c: any) => c.id === selectedConnectionId) || activeConnection;
+  const connectedFacebookConnections = (connections || []).filter((conn: any, index: number, list: any[]) =>
+    conn.status === "connected" &&
+    index === list.findIndex((item: any) => item.status === "connected" && item.phone_number_id === conn.phone_number_id)
+  );
 
   useEffect(() => {
     if (!selectedConnectionId && activeConnection?.id) setSelectedConnectionId(activeConnection.id);
   }, [activeConnection?.id, selectedConnectionId]);
 
   const { data: metaData, isLoading: isLoadingMeta, refetch: refetchMeta } = useQuery({
-    queryKey: ["meta-wabas"],
+    queryKey: ["meta-wabas", selectedConnection?.id],
     queryFn: async () => {
         const { data, error } = await supabase.functions.invoke("meta-list-numbers", {
           body: { connection_id: selectedConnection?.id },
@@ -190,6 +194,7 @@ export default function MetaConnect() {
       if (error) throw error;
       await supabase.from("meta_connections").update({ waba_id: waba.id }).eq("id", selectedConnection.id);
       toast.success(`Número ${phone.display_phone_number} adicionado!`);
+      queryClient.invalidateQueries({ queryKey: ["meta-connections"] });
       queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
       queryClient.invalidateQueries({ queryKey: ["meta-wabas"] });
 
