@@ -139,7 +139,7 @@ Deno.serve(async (req) => {
         await supabase.from("whatsapp_account_audit").insert({
           account_id: acc.id,
           user_id: acc.user_id,
-          check_type: "waba_audit",
+          event: "waba_audit",
           status: row.verdict,
           details: row,
         });
