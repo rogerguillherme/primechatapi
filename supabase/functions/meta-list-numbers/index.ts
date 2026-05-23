@@ -36,13 +36,22 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get user's active meta connection to use the access token
-    const { data: connection } = await adminClient
+    let body: any = {};
+    try { body = await req.json(); } catch { body = {}; }
+
+    // Get the selected Meta connection; fallback to the latest active connection.
+    let connQuery = adminClient
       .from("meta_connections")
       .select("*")
       .eq("user_id", user.id)
-      .eq("status", "connected")
-      .order("created_at", { ascending: false })
+      .eq("status", "connected");
+
+    if (body?.connection_id) {
+      connQuery = connQuery.eq("id", body.connection_id);
+    }
+
+    const { data: connection } = await connQuery
+      .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
