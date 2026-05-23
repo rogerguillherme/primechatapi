@@ -160,9 +160,9 @@ Deno.serve(async (req) => {
     const rawHeaders: Record<string, string> = {};
     req.headers.forEach((v, k) => { rawHeaders[k] = v; });
     const rawBody = await req.text();
-    console.log("=== RAW WEBHOOK HEADERS ===", JSON.stringify(rawHeaders));
-    console.log("=== RAW WEBHOOK BODY ===", rawBody);
-    console.log("=== RAW WEBHOOK BODY LENGTH ===", rawBody.length);
+    console.log("RAW WEBHOOK HEADERS:", JSON.stringify(rawHeaders));
+    console.log("RAW WEBHOOK:", rawBody);
+    console.log("RAW WEBHOOK LENGTH:", rawBody.length);
 
     let payload: any = null;
     let parseError: string | null = null;
@@ -170,9 +170,9 @@ Deno.serve(async (req) => {
       payload = JSON.parse(rawBody);
     } catch (e: any) {
       parseError = e?.message || String(e);
-      console.error("=== JSON PARSE FAILED ===", parseError);
+      console.error("[A] JSON PARSE FAILED:", parseError);
     }
-    console.log("=== PARSED PAYLOAD ===", JSON.stringify(payload));
+    console.log("[A] payload recebido:", JSON.stringify(payload));
 
     // Persist raw debug always (best-effort)
     try {
