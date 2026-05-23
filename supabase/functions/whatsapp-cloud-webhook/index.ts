@@ -419,34 +419,39 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Resolve access token: try matching account by phone_number_id, then default, then env var
+    // STRICT account resolution by metadata.phone_number_id.
+    // No global token fallback. No "first/default account" fallback.
     const incomingPhoneNumberId = value.metadata?.phone_number_id || "";
-    let ACCESS_TOKEN: string | undefined;
-    let resolvedAccountId: string | null = null;
-    let resolvedUserId: string | null = null;
-    if (incomingPhoneNumberId) {
-      const { data: matchedAccount } = await supabase
-        .from("whatsapp_accounts")
-        .select("id, access_token, user_id")
-        .eq("phone_number_id", incomingPhoneNumberId)
-        .maybeSingle();
-      if (matchedAccount) {
-        ACCESS_TOKEN = matchedAccount.access_token;
-        resolvedAccountId = matchedAccount.id;
-        resolvedUserId = matchedAccount.user_id;
-      }
+    if (!incomingPhoneNumberId) {
+      await supabase.from("webhook_debug").insert({
+        source: "whatsapp-cloud-webhook",
+        notes: "missing_phone_number_id_in_value_metadata",
+        parsed: { value },
+      }).catch(() => {});
+      return new Response(
+        JSON.stringify({ ok: true, ignored: "missing_phone_number_id" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
-    if (!ACCESS_TOKEN) {
-      const { data: defaultAccount } = await supabase
-        .from("whatsapp_accounts")
-        .select("access_token")
-        .eq("is_default", true)
-        .maybeSingle();
-      if (defaultAccount) ACCESS_TOKEN = defaultAccount.access_token;
+    const { data: matchedAccount } = await supabase
+      .from("whatsapp_accounts")
+      .select("id, access_token, user_id, business_account_id")
+      .eq("phone_number_id", incomingPhoneNumberId)
+      .maybeSingle();
+    if (!matchedAccount || !matchedAccount.access_token) {
+      await supabase.from("webhook_debug").insert({
+        source: "whatsapp-cloud-webhook",
+        notes: "unknown_phone_number_id",
+        parsed: { phone_number_id: incomingPhoneNumberId, value },
+      }).catch(() => {});
+      return new Response(
+        JSON.stringify({ ok: true, ignored: "unknown_phone_number_id", phone_number_id: incomingPhoneNumberId }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
-    if (!ACCESS_TOKEN) {
-      ACCESS_TOKEN = Deno.env.get("WHATSAPP_ACCESS_TOKEN");
-    }
+    const ACCESS_TOKEN: string = matchedAccount.access_token;
+    const resolvedAccountId: string = matchedAccount.id;
+    const resolvedUserId: string = matchedAccount.user_id;
 
     const messages = value.messages;
     if (!messages || messages.length === 0) {

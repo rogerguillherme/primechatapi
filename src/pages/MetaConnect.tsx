@@ -120,9 +120,16 @@ export default function MetaConnect() {
             throw new Error(errorPayload?.error || error.message || "Erro ao conectar WhatsApp");
           }
           if (data?.error) throw new Error(data.error);
-          toast.success("Conta Meta conectada! Agora selecione uma BM e número abaixo.");
+          const provisioned = (data as any)?.provisioned ?? [];
+          const wabaCount = ((data as any)?.wabas ?? []).length;
+          if (provisioned.length > 0) {
+            toast.success(`Conta Meta conectada! ${provisioned.length} número(s) provisionado(s) em ${wabaCount} WABA(s).`);
+          } else {
+            toast.success("Conta Meta conectada! Nenhum número encontrado — verifique permissões na BM.");
+          }
           queryClient.invalidateQueries({ queryKey: ["meta-connections"] });
           queryClient.invalidateQueries({ queryKey: ["meta-wabas"] });
+          queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
         } catch (err: any) {
           console.error("OAuth callback error:", err);
           toast.error(err.message || "Erro ao conectar WhatsApp");
