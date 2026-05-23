@@ -7,19 +7,19 @@ const corsHeaders = {
 };
 
 /**
- * Comprehensive WhatsApp Cloud API health & architecture audit.
+ * Auditoria arquitetural COMPLETA do WhatsApp Cloud API.
  *
- * For each WhatsApp account belonging to the caller, returns:
- *   - Phone provisioning (platform_type, throughput, verification, name status, quality)
- *   - WABA → phone_numbers listing (to detect partial migration / hybrid)
- *   - subscribed_apps (which Meta app actually receives inbound webhooks)
- *   - debug_token (which app owns the access token used by send & subscribe)
- *   - Webhook callback config on the app (configured URL + subscribed fields)
- *   - last inbound webhook seen in webhook_debug table
- *   - hybrid detection verdict
- *   - actionable diagnosis
- *
- * Body: { account_id?: string } - audits all accounts if omitted
+ * Para cada conta WhatsApp do usuário, retorna:
+ *  - Token forensics (debug_token → app_id, type=USER|SYSTEM|PAGE, scopes, expires_at)
+ *  - Conexão Meta armazenada (meta_connections row → indica fluxo OAuth)
+ *  - WABA details (owner_business_info, on_behalf_of_business_info, primary_funding_id)
+ *  - WABA → phone_numbers (platform_type, certificate, account_mode, code_verification_status, throughput)
+ *  - subscribed_apps (qual app recebe inbound)
+ *  - Webhook do App (callback_url, fields ativos)
+ *  - Último webhook real recebido + contagem 24h
+ *  - Heurística de onboarding: Embedded Signup vs OAuth vs System User vs Manual
+ *  - Detecção de coexistência (Business App / On-Premise / outro app Meta)
+ *  - Diagnóstico final inbound
  */
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -39,12 +39,13 @@ Deno.serve(async (req) => {
 
     const envAppId = Deno.env.get("META_APP_ID") || "";
     const envAppSecret = Deno.env.get("META_APP_SECRET") || "";
+    const envSystemUserToken = Deno.env.get("META_SYSTEM_USER_TOKEN") || "";
     const envVerifyToken = Deno.env.get("WHATSAPP_VERIFY_TOKEN") || "";
     const webhookCallbackUrl = `${supabaseUrl}/functions/v1/whatsapp-cloud-webhook`;
 
     let q = admin
       .from("whatsapp_accounts")
-      .select("id, name, business_account_id, phone_number_id, access_token, user_id")
+      .select("id, name, business_account_id, phone_number_id, access_token, user_id, created_at, updated_at")
       .eq("user_id", user.id);
     if (accountId) q = q.eq("id", accountId);
 
@@ -56,52 +57,77 @@ Deno.serve(async (req) => {
 
     for (const acc of accounts) {
       const findings: string[] = [];
-      const verdict = {
-        cloud_api_pure: false as boolean | "unknown",
-        business_app_active: "unknown" as boolean | "unknown",
-        hybrid_suspected: false,
-        app_owner_match: "unknown" as boolean | "unknown",
-        inbound_likely_working: "unknown" as boolean | "unknown",
-      };
 
-      // ---- 1) Resolve best token (OAuth user token preferred)
+      // ---- 1) meta_connections (rastro do OAuth)
       const { data: metaConn } = await admin
         .from("meta_connections")
-        .select("meta_access_token")
+        .select("id, meta_access_token, waba_id, phone_number_id, phone_number, status, created_at, updated_at")
         .eq("user_id", user.id)
         .eq("waba_id", acc.business_account_id || "")
-        .eq("status", "connected")
         .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-      const accessToken = metaConn?.meta_access_token || acc.access_token;
-      const tokenSource = metaConn?.meta_access_token ? "oauth_user_token" : "account_token";
 
-      // ---- 2) debug_token → identify app owning the token
-      let tokenAppId: string | null = null;
-      let tokenScopes: string[] = [];
-      let tokenType: string | null = null;
-      let tokenValid: boolean | null = null;
-      let tokenExpiresAt: number | null = null;
+      const accessToken = metaConn?.meta_access_token || acc.access_token;
+      const tokenSource = metaConn?.meta_access_token
+        ? "oauth_user_token (meta_connections)"
+        : "stored_account_token (whatsapp_accounts)";
+
+      // ---- 2) debug_token → identificação real do token
+      let tokenInfo: any = null;
       if (envAppId && envAppSecret && accessToken) {
         try {
           const r = await fetch(
             `https://graph.facebook.com/v21.0/debug_token?input_token=${encodeURIComponent(accessToken)}&access_token=${encodeURIComponent(`${envAppId}|${envAppSecret}`)}`,
           );
-          const d = await r.json();
-          tokenAppId = d?.data?.app_id ?? null;
-          tokenScopes = d?.data?.scopes ?? [];
-          tokenType = d?.data?.type ?? null;
-          tokenValid = !!d?.data?.is_valid;
-          tokenExpiresAt = d?.data?.expires_at ?? null;
+          tokenInfo = (await r.json())?.data ?? null;
+        } catch (_) { /* ignore */ }
+      }
+      const tokenType = tokenInfo?.type ?? null;
+      const tokenAppId = tokenInfo?.app_id ?? null;
+      const tokenScopes: string[] = tokenInfo?.scopes ?? [];
+      const tokenExpires: number | null = tokenInfo?.expires_at ?? null;
+      const tokenIsValid: boolean = !!tokenInfo?.is_valid;
+      const tokenIsPermanent = tokenExpires === 0;
+
+      // Classificação do token
+      let tokenClass = "UNKNOWN";
+      if (tokenType === "SYSTEM") tokenClass = "SYSTEM_USER_TOKEN";
+      else if (tokenType === "USER" && tokenIsPermanent) tokenClass = "USER_PERMANENT_TOKEN";
+      else if (tokenType === "USER") tokenClass = "USER_ACCESS_TOKEN (curto/longo prazo)";
+      else if (tokenType === "PAGE") tokenClass = "PAGE_TOKEN";
+      else if (tokenType === "APP") tokenClass = "APP_TOKEN";
+
+      // ---- 3) System User token (paralelo) para comparar inbound ownership
+      let systemUserTokenInfo: any = null;
+      if (envSystemUserToken && envAppId && envAppSecret) {
+        try {
+          const r = await fetch(
+            `https://graph.facebook.com/v21.0/debug_token?input_token=${encodeURIComponent(envSystemUserToken)}&access_token=${encodeURIComponent(`${envAppId}|${envAppSecret}`)}`,
+          );
+          systemUserTokenInfo = (await r.json())?.data ?? null;
         } catch (_) { /* ignore */ }
       }
 
-      // ---- 3) GET /{PHONE_NUMBER_ID}
+      // ---- 4) WABA detalhada (owner_business_info, on_behalf_of, funding)
+      let wabaDetails: any = null;
+      if (acc.business_account_id && accessToken) {
+        try {
+          const fields = "id,name,currency,timezone_id,message_template_namespace,owner_business_info,on_behalf_of_business_info,primary_funding_id,business_verification_status,country,ownership_type,account_review_status,health_status";
+          const r = await fetch(
+            `https://graph.facebook.com/v21.0/${acc.business_account_id}?fields=${fields}&access_token=${encodeURIComponent(accessToken)}`,
+          );
+          wabaDetails = await r.json();
+        } catch (e: any) {
+          wabaDetails = { error: e?.message };
+        }
+      }
+
+      // ---- 5) Phone details (com certificate = sinal de Embedded Signup completo)
       let phoneInfo: any = null;
       if (acc.phone_number_id && accessToken) {
         try {
-          const fields = "display_phone_number,verified_name,quality_rating,platform_type,throughput,code_verification_status,name_status,status,messaging_limit_tier,is_official_business_account,certificate";
+          const fields = "id,display_phone_number,verified_name,quality_rating,platform_type,throughput,code_verification_status,name_status,status,messaging_limit_tier,is_official_business_account,certificate,account_mode,is_pin_enabled,eligibility_for_api_business_global_search,is_on_biz_app";
           const r = await fetch(
             `https://graph.facebook.com/v21.0/${acc.phone_number_id}?fields=${fields}&access_token=${encodeURIComponent(accessToken)}`,
           );
@@ -111,11 +137,11 @@ Deno.serve(async (req) => {
         }
       }
 
-      // ---- 4) GET /{WABA_ID}/phone_numbers
+      // ---- 6) WABA → phone_numbers (todos números)
       let wabaPhones: any = null;
       if (acc.business_account_id && accessToken) {
         try {
-          const fields = "display_phone_number,verified_name,quality_rating,platform_type,throughput,code_verification_status,name_status,status,id";
+          const fields = "id,display_phone_number,verified_name,quality_rating,platform_type,throughput,code_verification_status,name_status,status,certificate,account_mode";
           const r = await fetch(
             `https://graph.facebook.com/v21.0/${acc.business_account_id}/phone_numbers?fields=${fields}&access_token=${encodeURIComponent(accessToken)}`,
           );
@@ -125,7 +151,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      // ---- 5) GET /{WABA_ID}/subscribed_apps
+      // ---- 7) subscribed_apps
       let subscribedApps: any = null;
       let subscribedAppIds: string[] = [];
       if (acc.business_account_id && accessToken) {
@@ -142,7 +168,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      // ---- 6) GET app webhook config (subscriptions on the App)
+      // ---- 8) App webhook subscriptions
       let appSubscriptions: any = null;
       if (envAppId && envAppSecret) {
         try {
@@ -160,7 +186,20 @@ Deno.serve(async (req) => {
       const callbackActive: boolean | null = whatsappSub?.active ?? null;
       const callbackMatches = configuredCallbackUrl ? configuredCallbackUrl === webhookCallbackUrl : null;
 
-      // ---- 7) Last inbound webhook from debug table
+      // ---- 9) App details (mode: Live vs Development)
+      let appInfo: any = null;
+      if (envAppId && envAppSecret) {
+        try {
+          const r = await fetch(
+            `https://graph.facebook.com/v21.0/${envAppId}?fields=id,name,namespace,app_type,link,category&access_token=${encodeURIComponent(`${envAppId}|${envAppSecret}`)}`,
+          );
+          appInfo = await r.json();
+        } catch (e: any) {
+          appInfo = { error: e?.message };
+        }
+      }
+
+      // ---- 10) Inbound real
       const { data: lastInbound } = await admin
         .from("webhook_debug")
         .select("created_at, parsed, notes")
@@ -175,86 +214,107 @@ Deno.serve(async (req) => {
         .eq("source", "whatsapp-cloud-webhook")
         .gte("created_at", new Date(Date.now() - 24 * 3600 * 1000).toISOString());
 
-      // ---- 8) Verdict & diagnosis
+      // ====== HEURÍSTICA DE ONBOARDING ======
+      // Embedded Signup completo => owner_business_info presente + phone.certificate presente + token USER permanente
+      // OAuth only (sem ES) => meta_connections existe, token USER, mas phone.certificate AUSENTE ou WABA on_behalf_of_business_info ausente
+      // System User => token type SYSTEM
+      // Manual => token armazenado em whatsapp_accounts.access_token sem meta_connections
+      const hasCertificate = !!phoneInfo?.certificate;
+      const hasOwnerBiz = !!wabaDetails?.owner_business_info?.id;
+      const hasOnBehalf = !!wabaDetails?.on_behalf_of_business_info?.id;
+      const hasFunding = !!wabaDetails?.primary_funding_id;
+
+      let onboardingMethod = "INDETERMINADO";
+      const onboardingEvidence: string[] = [];
+
+      if (tokenType === "SYSTEM") {
+        onboardingMethod = "SYSTEM_USER (BSP / manual)";
+        onboardingEvidence.push("Token type=SYSTEM");
+      } else if (tokenType === "USER" && hasCertificate && hasOnBehalf && hasFunding) {
+        onboardingMethod = "EMBEDDED_SIGNUP (oficial Cloud API)";
+        onboardingEvidence.push("Token USER + phone.certificate presente + on_behalf_of_business_info + primary_funding_id");
+      } else if (tokenType === "USER" && metaConn) {
+        onboardingMethod = "OAUTH_ONLY (sem Embedded Signup completo)";
+        onboardingEvidence.push("meta_connections existe, mas faltam sinais de ES");
+        if (!hasCertificate) onboardingEvidence.push("❌ phone.certificate AUSENTE — número não foi provisionado via ES");
+        if (!hasOnBehalf) onboardingEvidence.push("❌ on_behalf_of_business_info AUSENTE — WABA não foi criada via ES no fluxo do app");
+        if (!hasFunding) onboardingEvidence.push("❌ primary_funding_id AUSENTE — sem linha de crédito vinculada ao app");
+      } else if (!metaConn && acc.access_token) {
+        onboardingMethod = "MANUAL_TOKEN (token colado manualmente)";
+        onboardingEvidence.push("Sem registro em meta_connections, token armazenado direto em whatsapp_accounts");
+      }
+
+      // ====== COEXISTÊNCIA ======
+      const coexistenceFlags: string[] = [];
       const platformType: string | null = phoneInfo?.platform_type ?? null;
-      const codeVerif: string | null = phoneInfo?.code_verification_status ?? null;
-      const nameStatus: string | null = phoneInfo?.name_status ?? null;
       const throughputLevel: string | null = phoneInfo?.throughput?.level ?? null;
+      const accountMode: string | null = phoneInfo?.account_mode ?? null;
+      const isOnBizApp: boolean | null = phoneInfo?.is_on_biz_app ?? null;
 
-      if (platformType === "CLOUD_API") {
-        verdict.cloud_api_pure = true;
-      } else if (platformType === "ON_PREMISE" || platformType === "OBA") {
-        verdict.cloud_api_pure = false;
-        verdict.hybrid_suspected = true;
-        findings.push(`platform_type=${platformType} — número NÃO está em Cloud API pura`);
-      } else if (platformType == null) {
-        verdict.cloud_api_pure = "unknown";
-        findings.push("platform_type ausente — número pode não estar totalmente provisionado");
+      if (platformType && platformType !== "CLOUD_API") {
+        coexistenceFlags.push(`platform_type=${platformType} (esperado CLOUD_API) — número em ${platformType === "ON_PREMISE" ? "On-Premise API" : platformType}`);
       }
-
+      if (isOnBizApp === true) {
+        coexistenceFlags.push("is_on_biz_app=true → COEXISTÊNCIA com WhatsApp Business App no celular (inbound vai para o celular, não para Cloud)");
+      }
       if (throughputLevel === "NOT_APPLICABLE") {
-        verdict.hybrid_suspected = true;
-        findings.push("throughput=NOT_APPLICABLE — número não está roteando via Cloud API");
+        coexistenceFlags.push("throughput=NOT_APPLICABLE → número não está roteando via Cloud API");
+      }
+      if (accountMode && accountMode !== "LIVE") {
+        coexistenceFlags.push(`account_mode=${accountMode} (esperado LIVE) — provisionamento incompleto`);
       }
 
-      if (codeVerif && codeVerif !== "VERIFIED" && codeVerif !== "EXPIRED") {
-        findings.push(`code_verification_status=${codeVerif} — número não verificado para Cloud API`);
-      }
-
-      // App owner check
+      // ====== APP OWNERSHIP ======
       const expectedAppId = String(envAppId || tokenAppId || "");
-      if (expectedAppId && subscribedAppIds.length) {
-        verdict.app_owner_match = subscribedAppIds.includes(expectedAppId);
-        if (!verdict.app_owner_match) {
-          findings.push(
-            `App ${expectedAppId} NÃO está em subscribed_apps da WABA. Apps inscritos: ${subscribedAppIds.join(", ") || "nenhum"}. Inbound vai para OUTRO app.`,
-          );
-        }
-      } else if (expectedAppId && !subscribedAppIds.length) {
-        verdict.app_owner_match = false;
-        findings.push("Nenhum app inscrito na WABA — inbound não tem destino. Rode subscribe.");
-      }
+      const appPresent = subscribedAppIds.includes(expectedAppId);
+      const appOwnerMatch = expectedAppId && subscribedAppIds.length ? appPresent : "unknown" as boolean | "unknown";
 
       if (envAppId && tokenAppId && envAppId !== String(tokenAppId)) {
-        findings.push(
-          `Token pertence ao app ${tokenAppId} mas META_APP_ID=${envAppId}. Mismatch entre app OAuth e app webhook.`,
-        );
+        findings.push(`⚠️ Token pertence ao app ${tokenAppId} mas META_APP_ID=${envAppId}. Mismatch entre app OAuth e app webhook.`);
       }
-
+      if (expectedAppId && subscribedAppIds.length && !appPresent) {
+        findings.push(`❌ App ${expectedAppId} NÃO inscrito na WABA. Apps presentes: ${subscribedAppIds.join(", ") || "nenhum"}. Inbound vai para outro app.`);
+      }
+      if (!subscribedAppIds.length) {
+        findings.push("❌ Nenhum app inscrito na WABA via subscribed_apps.");
+      }
       if (!subscribedFields.includes("messages")) {
-        findings.push("Campo `messages` NÃO está inscrito no webhook do App.");
+        findings.push("❌ Field `messages` NÃO inscrito no webhook do App.");
       }
       if (callbackMatches === false) {
-        findings.push(`Callback URL configurada (${configuredCallbackUrl}) NÃO bate com a esperada (${webhookCallbackUrl}).`);
+        findings.push(`❌ Callback URL configurada (${configuredCallbackUrl}) ≠ esperada (${webhookCallbackUrl}).`);
       }
       if (callbackActive === false) {
-        findings.push("Webhook do App está INATIVO no painel da Meta.");
+        findings.push("❌ Webhook do App INATIVO no painel.");
       }
-
-      // Hybrid heuristic: outbound works (you can send) but no inbound in 24h + suspicious flags
       if ((webhookCount24h ?? 0) === 0) {
-        findings.push("Nenhum webhook inbound recebido nas últimas 24h.");
+        findings.push("⚠️ Zero webhooks inbound em 24h.");
+      }
+      if (!tokenIsValid) {
+        findings.push("❌ Access token inválido (debug_token.is_valid=false).");
       }
 
-      verdict.inbound_likely_working =
-        verdict.cloud_api_pure === true &&
-        verdict.app_owner_match === true &&
-        subscribedFields.includes("messages") &&
-        (callbackMatches !== false) &&
-        callbackActive !== false;
+      // ====== DIAGNÓSTICO FINAL ======
+      let rootCause = "INDETERMINADO";
+      const why: string[] = [];
 
-      // Root-cause hypothesis
-      let rootCause = "indeterminado";
-      if (verdict.hybrid_suspected) {
-        rootCause = "Número parcialmente migrado / não está em Cloud API pura (provavelmente ainda registrado no WhatsApp Business App).";
-      } else if (verdict.app_owner_match === false) {
-        rootCause = "App OAuth ≠ App inscrito na WABA. Inbound chega em outro app.";
+      if (coexistenceFlags.length) {
+        rootCause = "COEXISTÊNCIA com WhatsApp Business App ou número não em Cloud API pura";
+        why.push(...coexistenceFlags);
+        why.push("→ Outbound funciona (API aceita), inbound vai para o celular/On-Premise");
+      } else if (onboardingMethod.startsWith("OAUTH_ONLY")) {
+        rootCause = "ONBOARDING INCOMPLETO — número conectado via OAuth comum, NÃO via Embedded Signup oficial";
+        why.push("Sem phone.certificate / on_behalf_of_business_info / primary_funding_id, a Meta não trata o número como provisionado pelo app Prime");
+        why.push("Outbound funciona porque o token tem whatsapp_business_messaging, mas inbound só é roteado quando o número é onboardado via Embedded Signup do app proprietário");
+        why.push("→ Refazer onboarding via Embedded Signup (fbq Login + config_id do app Prime) é obrigatório");
+      } else if (appOwnerMatch === false) {
+        rootCause = "App inscrito ≠ App esperado (Prime). Inbound chega em outro app.";
       } else if (!subscribedFields.includes("messages")) {
-        rootCause = "Campo `messages` não inscrito no webhook do App.";
+        rootCause = "Field `messages` ausente no webhook do App.";
       } else if (callbackMatches === false || callbackActive === false) {
-        rootCause = "Webhook do App mal configurado (URL diferente ou inativo).";
-      } else if ((webhookCount24h ?? 0) === 0 && verdict.cloud_api_pure === true && verdict.app_owner_match === true) {
-        rootCause = "Provisionamento Cloud OK e app inscrito, mas zero inbound em 24h — verificar se WhatsApp Business App ainda está logado no celular interceptando mensagens, ou se o número precisa ser reverificado/reregistrado.";
+        rootCause = "Webhook do App mal configurado.";
+      } else if ((webhookCount24h ?? 0) === 0) {
+        rootCause = "Tudo OK no papel, mas inbound zero — verificar Business App no celular e Advanced Access em App Review.";
       }
 
       const report = {
@@ -263,27 +323,76 @@ Deno.serve(async (req) => {
           name: acc.name,
           waba_id: acc.business_account_id,
           phone_number_id: acc.phone_number_id,
+          created_at: acc.created_at,
         },
         env: {
           meta_app_id: envAppId || null,
+          system_user_token_set: !!envSystemUserToken,
           verify_token_set: !!envVerifyToken,
           webhook_callback_url: webhookCallbackUrl,
         },
-        token: {
+        app: appInfo,
+        meta_connection: metaConn
+          ? {
+              exists: true,
+              created_at: metaConn.created_at,
+              updated_at: metaConn.updated_at,
+              waba_id: metaConn.waba_id,
+              phone_number_id: metaConn.phone_number_id,
+              status: metaConn.status,
+            }
+          : { exists: false },
+        token_used: {
           source: tokenSource,
+          classification: tokenClass,
           app_id: tokenAppId,
           type: tokenType,
-          valid: tokenValid,
-          expires_at: tokenExpiresAt,
+          is_valid: tokenIsValid,
+          is_permanent: tokenIsPermanent,
+          expires_at: tokenExpires,
           scopes: tokenScopes,
+          has_whatsapp_business_messaging: tokenScopes.includes("whatsapp_business_messaging"),
+          has_whatsapp_business_management: tokenScopes.includes("whatsapp_business_management"),
+        },
+        system_user_token: systemUserTokenInfo
+          ? {
+              app_id: systemUserTokenInfo.app_id,
+              type: systemUserTokenInfo.type,
+              is_valid: systemUserTokenInfo.is_valid,
+              scopes: systemUserTokenInfo.scopes,
+            }
+          : null,
+        waba: wabaDetails,
+        waba_ownership_signals: {
+          owner_business_info: wabaDetails?.owner_business_info ?? null,
+          on_behalf_of_business_info: wabaDetails?.on_behalf_of_business_info ?? null,
+          primary_funding_id: wabaDetails?.primary_funding_id ?? null,
+          ownership_type: wabaDetails?.ownership_type ?? null,
+          business_verification_status: wabaDetails?.business_verification_status ?? null,
+          health_status: wabaDetails?.health_status ?? null,
+          has_owner: hasOwnerBiz,
+          has_on_behalf: hasOnBehalf,
+          has_funding: hasFunding,
         },
         phone: phoneInfo,
+        phone_provisioning_signals: {
+          platform_type: platformType,
+          throughput_level: throughputLevel,
+          account_mode: accountMode,
+          code_verification_status: phoneInfo?.code_verification_status ?? null,
+          name_status: phoneInfo?.name_status ?? null,
+          has_certificate: hasCertificate,
+          is_pin_enabled: phoneInfo?.is_pin_enabled ?? null,
+          is_on_biz_app: isOnBizApp,
+          quality_rating: phoneInfo?.quality_rating ?? null,
+          messaging_limit_tier: phoneInfo?.messaging_limit_tier ?? null,
+        },
         waba_phone_numbers: wabaPhones,
         subscribed_apps: {
           raw: subscribedApps,
           app_ids: subscribedAppIds,
           expected_app_id: expectedAppId,
-          app_present: subscribedAppIds.includes(expectedAppId),
+          app_present: appPresent,
         },
         app_webhook: {
           configured_callback_url: configuredCallbackUrl,
@@ -297,9 +406,14 @@ Deno.serve(async (req) => {
           last_payload_summary: lastInbound?.parsed ?? null,
           received_24h_count: webhookCount24h ?? 0,
         },
-        verdict,
+        onboarding_diagnosis: {
+          method: onboardingMethod,
+          evidence: onboardingEvidence,
+        },
+        coexistence_flags: coexistenceFlags,
         findings,
-        root_cause_hypothesis: rootCause,
+        root_cause: rootCause,
+        why,
       };
 
       console.log(`=== HEALTH ${acc.name} ===`, JSON.stringify(report));
