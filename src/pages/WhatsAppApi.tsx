@@ -2286,6 +2286,27 @@ export default function WhatsAppApi() {
                                 >
                                   <Plug size={14} /> Reativar Webhook
                                 </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={async () => {
+                                    const t = toast.loading("Auditando Cloud API...");
+                                    try {
+                                      const { data, error } = await supabase.functions.invoke(
+                                        "whatsapp-cloud-health",
+                                        { body: { account_id: account.id } },
+                                      );
+                                      if (error) throw error;
+                                      const r = data?.accounts?.[0];
+                                      console.log("[whatsapp-cloud-health]", r);
+                                      const msg = r?.root_cause_hypothesis || "Auditoria concluída — veja console";
+                                      toast.success(msg, { id: t, duration: 10000 });
+                                    } catch (e: any) {
+                                      toast.error(e.message, { id: t });
+                                    }
+                                  }}
+                                  className="gap-2"
+                                >
+                                  <Plug size={14} /> Auditar Cloud API (Healthcheck)
+                                </DropdownMenuItem>
                                 <DropdownMenuSeparator />
 
                                 <DropdownMenuItem onClick={() => handleDeleteAccount(account.id)} className="gap-2 text-destructive focus:text-destructive">
