@@ -234,25 +234,36 @@ Deno.serve(async (req) => {
     console.log("WhatsApp Cloud webhook received:", JSON.stringify(payload));
 
 
-    // Some Evolution instances can be pointed at this legacy webhook URL.
-    // Forward those payloads to the Evolution handler so replies continue flows correctly.
-    if (typeof payload?.event === "string" && (payload.instance || payload.instanceName) && payload.data) {
-      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-      const forwardRes = await fetch(`${supabaseUrl}/functions/v1/evolution-webhook`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${supabaseKey}`,
-        },
-        body: JSON.stringify(payload),
-      });
-      const forwardText = await forwardRes.text();
-      return new Response(forwardText || JSON.stringify({ ok: forwardRes.ok, forwarded: "evolution" }), {
-        status: forwardRes.status,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    // ============ STRICT SOURCE GUARD ============
+    // Only Meta WhatsApp Cloud payloads (object === "whatsapp_business_account") are accepted.
+    // Evolution / Z-API / qualquer outro provider devem usar seus próprios endpoints.
+    if (payload?.object !== "whatsapp_business_account") {
+      const detectedSource = typeof payload?.event === "string" && (payload?.instance || payload?.instanceName)
+        ? "evolution"
+        : payload?.object || "unknown";
+      console.warn("[GUARD] invalid_source:", detectedSource, "object=", payload?.object);
+      try {
+        const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+        await sb.from("webhook_debug").insert({
+          source: "whatsapp-cloud-webhook:rejected",
+          headers: rawHeaders,
+          raw_body: rawBody,
+          parsed: payload,
+          notes: JSON.stringify({
+            reject_reason: "invalid_source",
+            detected_source: detectedSource,
+            object: payload?.object || null,
+            event: payload?.event || null,
+            instance: payload?.instance || payload?.instanceName || null,
+          }),
+        });
+      } catch (e) { console.error("Failed to persist invalid_source debug:", e); }
+      return new Response(
+        JSON.stringify({ ok: true, ignored: true, reject_reason: "invalid_source", detected_source: detectedSource }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
+
 
     const changeValues = (payload.entry || [])
       .flatMap((entry: any) => entry?.changes || [])

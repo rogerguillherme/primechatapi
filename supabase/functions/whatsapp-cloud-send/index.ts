@@ -559,6 +559,9 @@ Deno.serve(async (req) => {
       delete body.messaging_product;
     }
 
+    // ===== OUTBOUND FINGERPRINT (auditoria multi-WABA) =====
+    const tokenFp = effectiveAccessToken ? `${effectiveAccessToken.slice(0, 6)}…${effectiveAccessToken.slice(-4)} len=${effectiveAccessToken.length}` : "none";
+    console.log(`[OUTBOUND] account_id=${account_id || resolvedAccountId} phone_number_id=${PHONE_NUMBER_ID} waba_id=${businessAccountId} token_fp=${tokenFp} provider=${isD360 ? "d360" : "meta_cloud"} api=${apiUrl}`);
     console.log(`WhatsApp ${isD360 ? "360dialog" : "Cloud"} API request:`, JSON.stringify(body));
 
     const requestHeaders: Record<string, string> = { "Content-Type": "application/json" };
