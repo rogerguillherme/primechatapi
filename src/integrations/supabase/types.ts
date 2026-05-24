@@ -1618,6 +1618,36 @@ export type Database = {
         }
         Relationships: []
       }
+      webhook_debug: {
+        Row: {
+          created_at: string
+          headers: Json | null
+          id: string
+          notes: string | null
+          parsed: Json | null
+          raw_body: string | null
+          source: string
+        }
+        Insert: {
+          created_at?: string
+          headers?: Json | null
+          id?: string
+          notes?: string | null
+          parsed?: Json | null
+          raw_body?: string | null
+          source?: string
+        }
+        Update: {
+          created_at?: string
+          headers?: Json | null
+          id?: string
+          notes?: string | null
+          parsed?: Json | null
+          raw_body?: string | null
+          source?: string
+        }
+        Relationships: []
+      }
       webhook_endpoints: {
         Row: {
           account_id: string | null
@@ -1730,45 +1760,221 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_account_audit: {
+        Row: {
+          account_id: string | null
+          created_at: string
+          details: Json
+          event: string
+          id: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          account_id?: string | null
+          created_at?: string
+          details?: Json
+          event: string
+          id?: string
+          status: string
+          user_id: string
+        }
+        Update: {
+          account_id?: string | null
+          created_at?: string
+          details?: Json
+          event?: string
+          id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_account_audit_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_accounts: {
         Row: {
           access_token: string
           api_key: string | null
+          app_id: string | null
           business_account_id: string | null
+          business_id: string | null
           created_at: string
           id: string
           is_default: boolean
+          last_health_at: string | null
+          last_health_status: string | null
+          meta_user_id: string | null
           name: string
+          onboarding_method: string | null
           phone_number_id: string
           provider: string
+          provisioned_at: string | null
+          token_app_id: string | null
+          token_checked_at: string | null
+          token_type: string | null
+          token_validity: string
           updated_at: string
           user_id: string | null
+          webhook_last_check_at: string | null
+          webhook_last_status: string | null
+          webhook_subscribed: boolean
+          webhook_subscribed_at: string | null
         }
         Insert: {
           access_token: string
           api_key?: string | null
+          app_id?: string | null
           business_account_id?: string | null
+          business_id?: string | null
           created_at?: string
           id?: string
           is_default?: boolean
+          last_health_at?: string | null
+          last_health_status?: string | null
+          meta_user_id?: string | null
           name: string
+          onboarding_method?: string | null
           phone_number_id: string
           provider?: string
+          provisioned_at?: string | null
+          token_app_id?: string | null
+          token_checked_at?: string | null
+          token_type?: string | null
+          token_validity?: string
           updated_at?: string
           user_id?: string | null
+          webhook_last_check_at?: string | null
+          webhook_last_status?: string | null
+          webhook_subscribed?: boolean
+          webhook_subscribed_at?: string | null
         }
         Update: {
           access_token?: string
           api_key?: string | null
+          app_id?: string | null
           business_account_id?: string | null
+          business_id?: string | null
           created_at?: string
           id?: string
           is_default?: boolean
+          last_health_at?: string | null
+          last_health_status?: string | null
+          meta_user_id?: string | null
           name?: string
+          onboarding_method?: string | null
           phone_number_id?: string
           provider?: string
+          provisioned_at?: string | null
+          token_app_id?: string | null
+          token_checked_at?: string | null
+          token_type?: string | null
+          token_validity?: string
           updated_at?: string
           user_id?: string | null
+          webhook_last_check_at?: string | null
+          webhook_last_status?: string | null
+          webhook_subscribed?: boolean
+          webhook_subscribed_at?: string | null
+        }
+        Relationships: []
+      }
+      whatsapp_audit_log: {
+        Row: {
+          account_id: string | null
+          created_at: string
+          details: Json
+          event: string
+          flags: string[]
+          id: string
+          user_id: string | null
+        }
+        Insert: {
+          account_id?: string | null
+          created_at?: string
+          details?: Json
+          event: string
+          flags?: string[]
+          id?: string
+          user_id?: string | null
+        }
+        Update: {
+          account_id?: string | null
+          created_at?: string
+          details?: Json
+          event?: string
+          flags?: string[]
+          id?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      whatsapp_dead_letter: {
+        Row: {
+          created_at: string
+          display_phone_number: string | null
+          id: string
+          payload: Json
+          phone_number_id: string | null
+          reason: string
+          waba_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          display_phone_number?: string | null
+          id?: string
+          payload?: Json
+          phone_number_id?: string | null
+          reason: string
+          waba_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          display_phone_number?: string | null
+          id?: string
+          payload?: Json
+          phone_number_id?: string | null
+          reason?: string
+          waba_id?: string | null
+        }
+        Relationships: []
+      }
+      whatsapp_onboarding_sessions: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          id: string
+          metadata: Json
+          state: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          state: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          state?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }

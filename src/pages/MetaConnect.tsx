@@ -179,7 +179,15 @@ export default function MetaConnect() {
         is_default: !existingAccounts || existingAccounts.length === 0,
       });
 
-      if (error) throw error;
+      if (error) {
+        if ((error as any).code === "23505" || /duplicate key|unique constraint/i.test(error.message)) {
+          toast.error(
+            "Este número já está vinculado a outra conta neste sistema. Remova-o da conta anterior antes de adicioná-lo aqui.",
+          );
+          return;
+        }
+        throw error;
+      }
       toast.success(`Número ${phone.display_phone_number} adicionado!`);
       queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
       queryClient.invalidateQueries({ queryKey: ["meta-wabas"] });
