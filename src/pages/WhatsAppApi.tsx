@@ -850,11 +850,12 @@ function BroadcastTab() {
             phone: row.telefone.length <= 11 ? `55${row.telefone}` : row.telefone,
             name: row.nome || `Contato ${row.telefone.slice(-4)}`,
             origin: "csv_import" as const,
+            user_id: user?.id,
           }));
           
           const { data: upserted, error: upsertErr } = await supabase
             .from("leads")
-            .upsert(upsertRows, { onConflict: "phone", ignoreDuplicates: false })
+            .upsert(upsertRows, { onConflict: "phone,user_id", ignoreDuplicates: false })
             .select("id, phone");
           
           if (upsertErr) {
