@@ -96,14 +96,14 @@ export function NodeEditPanel({ node, templates, onUpdate, onClose, variationEna
             {!data.template_id && (
               <div className="space-y-2">
                 <Label className="text-xs">
-                  {data.media_url ? "Legenda da imagem (opcional)" : "Mensagem"}
+                  {data.media_url && data.media_type !== "document" ? "Legenda (opcional)" : "Mensagem"}
                 </Label>
                 <textarea
                   value={(data.custom_message as string) || ""}
                   onChange={(e) => onUpdate({ custom_message: e.target.value })}
                   placeholder={
-                    data.media_url
-                      ? "Texto que aparecerá abaixo da imagem..."
+                    data.media_url && data.media_type !== "document"
+                      ? "Texto que aparecerá abaixo da mídia..."
                       : "Digite a mensagem... (use {nome} para personalizar)"
                   }
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm min-h-[80px] resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
