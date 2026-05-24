@@ -840,9 +840,10 @@ async function processFlowStep(step: any, execution: any, lead: any, supabase: a
       body.message = interpolate(step.custom_message, vars);
     }
 
-    // Only send if there's something to send
+    // Only send if there's something to send — if empty, skip and advance to next step
     if (!body.message && !body.template_name && !body.interactive_buttons && !body.cta_url) {
-      console.error("processFlowStep: nothing to send for step:", step.id);
+      console.warn("processFlowStep: empty step, skipping and advancing:", step.id);
+      await advanceExecution(execution, step, lead, supabase);
       return;
     }
 
