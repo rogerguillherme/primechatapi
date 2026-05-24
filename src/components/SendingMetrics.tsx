@@ -301,6 +301,8 @@ export function SendingMetrics() {
             failed: group.failed + group.cancelled,
             leadIds: group.leadIds,
             type: "flow",
+            flowId: group.flowId,
+            date: group.date,
           });
         }
       }
