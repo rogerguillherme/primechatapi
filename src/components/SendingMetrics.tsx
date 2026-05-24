@@ -530,3 +530,93 @@ function DispatchItem({ group, isExpanded, onToggle }: {
     </div>
   );
 }
+
+/* ── Export error leads as CSV ── */
+function ExportErrorsButton({ group }: { group: BroadcastGroup }) {
+  const [loading, setLoading] = useState(false);
+
+  const handleExport = async () => {
+    setLoading(true);
+    try {
+      let rows: { name: string; phone: string; error: string }[] = [];
+
+      if (group.type === "flow" && group.flowId && group.date) {
+        const [y, m, d] = group.date.split("-").map(Number);
+        const start = new Date(y, m - 1, d, 0, 0, 0).toISOString();
+        const end = new Date(y, m - 1, d, 23, 59, 59, 999).toISOString();
+        const { data: execs } = await supabase
+          .from("flow_executions")
+          .select("lead_id, status, metadata")
+          .eq("flow_id", group.flowId)
+          .gte("started_at", start)
+          .lte("started_at", end)
+          .in("status", ["failed", "cancelled"]);
+
+        const leadIds = [...new Set((execs || []).map((e) => e.lead_id))];
+        const leadMap = new Map<string, { name: string; phone: string }>();
+        for (let i = 0; i < leadIds.length; i += 100) {
+          const batch = leadIds.slice(i, i + 100);
+          const { data } = await supabase.from("leads").select("id, name, phone").in("id", batch);
+          (data || []).forEach((l) => leadMap.set(l.id, { name: l.name, phone: l.phone }));
+        }
+        rows = (execs || []).map((e) => {
+          const lead = leadMap.get(e.lead_id);
+          const meta = (e.metadata || {}) as any;
+          return {
+            name: lead?.name || "",
+            phone: lead?.phone || "",
+            error: e.status === "cancelled" ? (meta.cancel_reason || "Cancelado") : (meta.last_error || meta.error || "Falhou"),
+          };
+        });
+      } else {
+        // broadcast
+        const { data: logs } = await supabase
+          .from("message_logs")
+          .select("phone, lead_id, error_message, error_code")
+          .eq("job_id", group.key)
+          .eq("status", "failed");
+
+        const leadIds = [...new Set((logs || []).map((l) => l.lead_id).filter(Boolean) as string[])];
+        const leadMap = new Map<string, string>();
+        for (let i = 0; i < leadIds.length; i += 100) {
+          const batch = leadIds.slice(i, i + 100);
+          const { data } = await supabase.from("leads").select("id, name").in("id", batch);
+          (data || []).forEach((l) => leadMap.set(l.id, l.name));
+        }
+        rows = (logs || []).map((l) => ({
+          name: (l.lead_id && leadMap.get(l.lead_id)) || "",
+          phone: l.phone || "",
+          error: [l.error_code, l.error_message].filter(Boolean).join(" — ") || "Falhou",
+        }));
+      }
+
+      if (rows.length === 0) {
+        alert("Nenhum erro detalhado encontrado.");
+        return;
+      }
+
+      const escape = (v: string) => `"${String(v).replace(/"/g, '""')}"`;
+      const csv = [
+        ["Nome", "Telefone", "Erro"].map(escape).join(","),
+        ...rows.map((r) => [r.name, r.phone, r.error].map(escape).join(",")),
+      ].join("\n");
+
+      const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `erros-${group.key}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Button variant="outline" size="sm" className="gap-1.5" onClick={handleExport} disabled={loading}>
+      {loading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+      Exportar erros ({group.failed})
+    </Button>
+  );
+}
