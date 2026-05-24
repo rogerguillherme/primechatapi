@@ -1181,6 +1181,7 @@ export type Database = {
           id: string
           last_inbound_at: string | null
           last_outbound_at: string | null
+          metadata: Json
           name: string
           origin: string | null
           phone: string
@@ -1200,6 +1201,7 @@ export type Database = {
           id?: string
           last_inbound_at?: string | null
           last_outbound_at?: string | null
+          metadata?: Json
           name: string
           origin?: string | null
           phone: string
@@ -1219,6 +1221,7 @@ export type Database = {
           id?: string
           last_inbound_at?: string | null
           last_outbound_at?: string | null
+          metadata?: Json
           name?: string
           origin?: string | null
           phone?: string

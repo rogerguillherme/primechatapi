@@ -35,6 +35,17 @@ interface ImportedContact {
   name: string;
   phone: string;
   email?: string;
+  metadata?: Record<string, string>;
+}
+
+// Slugify column name to a safe variable key, e.g. "Valor do Pedido" -> "valor_do_pedido"
+function slugifyVar(input: string): string {
+  return String(input)
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 40) || "var";
 }
 
 export function ContactImporter() {
@@ -58,7 +69,11 @@ export function ContactImporter() {
   const [newPhone, setNewPhone] = useState("");
   const [newEmail, setNewEmail] = useState("");
 
+  // Custom variable names per column (when mapping = "variable")
+  const [variableNames, setVariableNames] = useState<Record<string, string>>({});
+
   const normalizePhone = (raw: any): string => String(raw ?? "").replace(/\D/g, "");
+
 
   const rawToPhone = (value: any): string => {
     if (value === null || value === undefined || value === "") return "";
@@ -79,7 +94,7 @@ export function ContactImporter() {
       } else if (/email|e-mail/.test(lower)) {
         mapping[col] = "email";
       } else {
-        mapping[col] = "ignore";
+        mapping[col] = "variable";
       }
     }
     return mapping;
@@ -138,9 +153,15 @@ export function ContactImporter() {
   const openColumnMap = (rows: Record<string, any>[]) => {
     if (rows.length === 0) { toast.error("Arquivo sem dados."); return; }
     const cols = Object.keys(rows[0]);
+    const mapping = autoDetectMapping(cols);
+    const varNames: Record<string, string> = {};
+    for (const col of cols) {
+      if (mapping[col] === "variable") varNames[col] = slugifyVar(col);
+    }
     setSheetColumns(cols);
     setSheetRows(rows);
-    setColumnMapping(autoDetectMapping(cols));
+    setColumnMapping(mapping);
+    setVariableNames(varNames);
     setColumnMapOpen(true);
   };
 
@@ -148,7 +169,17 @@ export function ContactImporter() {
     const phoneCol = Object.entries(columnMapping).find(([, v]) => v === "phone")?.[0];
     const nameCol = Object.entries(columnMapping).find(([, v]) => v === "name")?.[0];
     const emailCol = Object.entries(columnMapping).find(([, v]) => v === "email")?.[0];
+    const variableCols = Object.entries(columnMapping).filter(([, v]) => v === "variable").map(([k]) => k);
     if (!phoneCol) { toast.error("Selecione a coluna de Telefone."); return; }
+
+    // Validate variable names
+    const usedKeys = new Set<string>();
+    for (const col of variableCols) {
+      const key = slugifyVar(variableNames[col] || col);
+      if (!key) { toast.error(`Defina um nome de variável para "${col}".`); return; }
+      if (usedKeys.has(key)) { toast.error(`Variável duplicada: {${key}}.`); return; }
+      usedKeys.add(key);
+    }
 
     const newContacts: ImportedContact[] = [];
     for (const row of sheetRows) {
@@ -156,7 +187,13 @@ export function ContactImporter() {
       if (phone.length < 10) continue;
       const name = nameCol ? String(row[nameCol] ?? "").trim() || `Contato ${phone.slice(-4)}` : `Contato ${phone.slice(-4)}`;
       const email = emailCol ? String(row[emailCol] ?? "").trim() : undefined;
-      newContacts.push({ name, phone, email: email || undefined });
+      const metadata: Record<string, string> = {};
+      for (const col of variableCols) {
+        const key = slugifyVar(variableNames[col] || col);
+        const val = String(row[col] ?? "").trim();
+        if (val) metadata[key] = val;
+      }
+      newContacts.push({ name, phone, email: email || undefined, metadata: Object.keys(metadata).length ? metadata : undefined });
     }
 
     setColumnMapOpen(false);
@@ -198,6 +235,7 @@ export function ContactImporter() {
         email: c.email || null,
         origin: "import_list",
         user_id: user?.id,
+        metadata: c.metadata && Object.keys(c.metadata).length ? c.metadata : {},
       }));
 
       const BATCH = 50;
@@ -236,6 +274,7 @@ export function ContactImporter() {
     { value: "phone", label: "📞 Telefone" },
     { value: "name", label: "👤 Nome" },
     { value: "email", label: "📧 Email" },
+    { value: "variable", label: "🔤 Variável personalizada" },
   ];
 
   return (
@@ -397,10 +436,15 @@ export function ContactImporter() {
                           </p>
                         )}
                       </td>
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2 space-y-1">
                         <Select
                           value={columnMapping[col] ?? "ignore"}
-                          onValueChange={(val) => setColumnMapping((prev) => ({ ...prev, [col]: val }))}
+                          onValueChange={(val) => {
+                            setColumnMapping((prev) => ({ ...prev, [col]: val }));
+                            if (val === "variable" && !variableNames[col]) {
+                              setVariableNames((prev) => ({ ...prev, [col]: slugifyVar(col) }));
+                            }
+                          }}
                         >
                           <SelectTrigger className="h-8 text-xs">
                             <SelectValue />
@@ -411,6 +455,18 @@ export function ContactImporter() {
                             ))}
                           </SelectContent>
                         </Select>
+                        {columnMapping[col] === "variable" && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-muted-foreground">{"{"}</span>
+                            <Input
+                              value={variableNames[col] ?? ""}
+                              onChange={(e) => setVariableNames((prev) => ({ ...prev, [col]: e.target.value.replace(/[^a-zA-Z0-9_]/g, "_").toLowerCase() }))}
+                              placeholder="nome_variavel"
+                              className="h-6 text-[10px] px-1"
+                            />
+                            <span className="text-[10px] text-muted-foreground">{"}"}</span>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}
