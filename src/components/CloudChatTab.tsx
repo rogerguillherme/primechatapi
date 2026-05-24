@@ -454,11 +454,14 @@ export function CloudChatTab() {
   const filteredLeads = useMemo(() => {
     if (!leads) return [];
     const s = search.toLowerCase();
+    const seen = new Set<string>();
     return leads.filter((l) => {
       if (activeTab === "erro") {
         if (!failedLeadIds?.has(l.id)) return false;
-      } else if (l.chat_status !== activeTab) {
-        return false;
+      } else {
+        // Exclude leads with failed messages from all other tabs — they live in "Erro"
+        if (failedLeadIds?.has(l.id)) return false;
+        if (l.chat_status !== activeTab) return false;
       }
       if (s && !l.name.toLowerCase().includes(s) && !l.phone.includes(s) && !l.email?.toLowerCase().includes(s)) return false;
       if (filterAccountId && !leadAccountMap?.get(filterAccountId)?.has(l.id)) return false;
@@ -469,6 +472,10 @@ export function CloudChatTab() {
           if (!leadLbls.has(lid)) return false;
         }
       }
+      // Dedupe by phone (leads list is ordered by recency upstream)
+      const key = (l.phone || "").replace(/\D/g, "") || l.id;
+      if (seen.has(key)) return false;
+      seen.add(key);
       return true;
     });
   }, [leads, search, activeTab, filterAccountId, leadAccountMap, filterLabelIds, leadLabelsMap, failedLeadIds]);
@@ -476,8 +483,16 @@ export function CloudChatTab() {
   const tabCounts = useMemo(() => {
     if (!leads) return {} as Record<string, number>;
     const counts: Record<string, number> = {};
-    for (const l of leads) counts[l.chat_status] = (counts[l.chat_status] || 0) + 1;
-    counts["erro"] = failedLeadIds?.size || 0;
+    const seenByTab: Record<string, Set<string>> = {};
+    for (const l of leads) {
+      const tab = failedLeadIds?.has(l.id) ? "erro" : l.chat_status;
+      if (!tab) continue;
+      const key = (l.phone || "").replace(/\D/g, "") || l.id;
+      if (!seenByTab[tab]) seenByTab[tab] = new Set();
+      if (seenByTab[tab].has(key)) continue;
+      seenByTab[tab].add(key);
+      counts[tab] = (counts[tab] || 0) + 1;
+    }
     return counts;
   }, [leads, failedLeadIds]);
 
