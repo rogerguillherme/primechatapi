@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { X, Plus, Trash2, Upload, Image as ImageIcon, Loader2, FileText } from "lucide-react";
+import { X, Plus, Trash2, Upload, Image as ImageIcon, Loader2, FileText, Video as VideoIcon } from "lucide-react";
 import { useAiAgents } from "@/hooks/use-ai-agents";
 import { useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -85,16 +85,25 @@ export function NodeEditPanel({ node, templates, onUpdate, onClose, variationEna
               />
             )}
             {!data.template_id && (
+              <VideoUploadField
+                mediaUrl={(data.media_url as string) || null}
+                mediaType={(data.media_type as string) || null}
+                onChange={(url) =>
+                  onUpdate({ media_url: url, media_type: url ? "video" : null })
+                }
+              />
+            )}
+            {!data.template_id && (
               <div className="space-y-2">
                 <Label className="text-xs">
-                  {data.media_url ? "Legenda da imagem (opcional)" : "Mensagem"}
+                  {data.media_url && data.media_type !== "document" ? "Legenda (opcional)" : "Mensagem"}
                 </Label>
                 <textarea
                   value={(data.custom_message as string) || ""}
                   onChange={(e) => onUpdate({ custom_message: e.target.value })}
                   placeholder={
-                    data.media_url
-                      ? "Texto que aparecerá abaixo da imagem..."
+                    data.media_url && data.media_type !== "document"
+                      ? "Texto que aparecerá abaixo da mídia..."
                       : "Digite a mensagem... (use {nome} para personalizar)"
                   }
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm min-h-[80px] resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -461,8 +470,8 @@ function ImageUploadField({
     }
   };
 
-  // If a document is already attached, don't render the image uploader (one media per node)
-  if (mediaUrl && mediaType === "document") return null;
+  // If a non-image media is already attached, don't render the image uploader (one media per node)
+  if (mediaUrl && mediaType && mediaType !== "image") return null;
 
   return (
     <div className="space-y-2">
@@ -569,8 +578,8 @@ function DocumentUploadField({
     }
   };
 
-  // If an image is already attached, don't render the document uploader (one media per node)
-  if (mediaUrl && mediaType === "image") return null;
+  // If another media is attached, hide doc uploader
+  if (mediaUrl && mediaType && mediaType !== "document") return null;
 
   const isDocAttached = mediaUrl && mediaType === "document";
 
@@ -655,6 +664,105 @@ function DocumentUploadField({
       {!isDocAttached && (
         <p className="text-[11px] text-muted-foreground">
           Envie um PDF (até 20MB) que será anexado junto à mensagem.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function VideoUploadField({
+  mediaUrl,
+  mediaType,
+  onChange,
+}: {
+  mediaUrl: string | null;
+  mediaType?: string | null;
+  onChange: (url: string | null) => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  // Hide if another media type is attached
+  if (mediaUrl && mediaType && mediaType !== "video") return null;
+
+  const isVideoAttached = mediaUrl && mediaType === "video";
+
+  const handleFile = async (file: File) => {
+    if (!file.type.startsWith("video/")) {
+      toast.error("Selecione um arquivo de vídeo.");
+      return;
+    }
+    if (file.size > 16 * 1024 * 1024) {
+      toast.error("Vídeo muito grande (máximo 16MB pelo WhatsApp).");
+      return;
+    }
+    setUploading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Não autenticado");
+      const ext = file.name.split(".").pop() || "mp4";
+      const path = `${user.id}/flow-video-${crypto.randomUUID()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("chat-media")
+        .upload(path, file, { contentType: file.type || "video/mp4", upsert: false });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path);
+      onChange(pub.publicUrl);
+      toast.success("Vídeo carregado!");
+    } catch (err: any) {
+      toast.error(err.message || "Falha ao enviar vídeo");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs flex items-center gap-1.5">
+        <VideoIcon size={12} /> Vídeo (opcional)
+      </Label>
+      {isVideoAttached ? (
+        <div className="relative rounded-md border border-border overflow-hidden bg-muted/30">
+          <video src={mediaUrl} controls className="w-full max-h-40" />
+          <Button
+            variant="destructive"
+            size="icon"
+            className="absolute top-1 right-1 h-6 w-6"
+            onClick={() => onChange(null)}
+          >
+            <Trash2 size={12} />
+          </Button>
+        </div>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={uploading}
+          onClick={() => fileInputRef.current?.click()}
+          className="w-full gap-2 text-xs h-9 border-dashed"
+        >
+          {uploading ? (
+            <><Loader2 size={12} className="animate-spin" /> Enviando...</>
+          ) : (
+            <><Upload size={12} /> Enviar vídeo</>
+          )}
+        </Button>
+      )}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="video/mp4,video/3gpp,video/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleFile(file);
+          e.target.value = "";
+        }}
+      />
+      {!isVideoAttached && (
+        <p className="text-[11px] text-muted-foreground">
+          MP4 até 16MB. Pode incluir uma legenda no campo de mensagem.
         </p>
       )}
     </div>
