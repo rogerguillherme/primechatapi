@@ -436,10 +436,15 @@ export function ContactImporter() {
                           </p>
                         )}
                       </td>
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2 space-y-1">
                         <Select
                           value={columnMapping[col] ?? "ignore"}
-                          onValueChange={(val) => setColumnMapping((prev) => ({ ...prev, [col]: val }))}
+                          onValueChange={(val) => {
+                            setColumnMapping((prev) => ({ ...prev, [col]: val }));
+                            if (val === "variable" && !variableNames[col]) {
+                              setVariableNames((prev) => ({ ...prev, [col]: slugifyVar(col) }));
+                            }
+                          }}
                         >
                           <SelectTrigger className="h-8 text-xs">
                             <SelectValue />
@@ -450,6 +455,18 @@ export function ContactImporter() {
                             ))}
                           </SelectContent>
                         </Select>
+                        {columnMapping[col] === "variable" && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-muted-foreground">{"{"}</span>
+                            <Input
+                              value={variableNames[col] ?? ""}
+                              onChange={(e) => setVariableNames((prev) => ({ ...prev, [col]: e.target.value.replace(/[^a-zA-Z0-9_]/g, "_").toLowerCase() }))}
+                              placeholder="nome_variavel"
+                              className="h-6 text-[10px] px-1"
+                            />
+                            <span className="text-[10px] text-muted-foreground">{"}"}</span>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}
