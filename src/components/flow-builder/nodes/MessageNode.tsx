@@ -41,6 +41,11 @@ export function MessageNode({ id, data }: { id: string; data: MessageNodeData })
           />
         </div>
       )}
+      {hasVideo && (
+        <div className="bg-black border-b border-border">
+          <video src={data.media_url as string} className="w-full max-h-32 object-cover" muted />
+        </div>
+      )}
       {hasDocument && (
         <div className="bg-muted/40 border-b border-border px-3 py-2 flex items-center gap-2">
           <FileText size={14} className="text-emerald-600" />
@@ -51,7 +56,7 @@ export function MessageNode({ id, data }: { id: string; data: MessageNodeData })
       )}
       <div className="p-3">
         <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap line-clamp-4">
-          {data.custom_message || (hasImage || hasDocument ? "(somente arquivo)" : "Clique para editar a mensagem...")}
+          {data.custom_message || (hasImage || hasDocument || hasVideo ? "(somente arquivo)" : "Clique para editar a mensagem...")}
         </p>
       </div>
       <Handle type="target" position={Position.Left} className="!w-3 !h-3 !bg-emerald-500 !border-2 !border-background" />
