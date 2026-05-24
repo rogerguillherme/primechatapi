@@ -670,28 +670,39 @@ export function CloudChatTab() {
         )}
 
         {/* Tabs */}
-        <div className="px-1.5 py-1.5 border-b border-border">
-          <div className="flex gap-0.5">
-            {CHAT_TABS.map((tab) => (
-              <button
-                key={tab.value}
-                onClick={() => setActiveTab(tab.value)}
-                className={cn(
-                  "flex-1 flex items-center justify-center gap-0.5 px-1 py-1.5 rounded-md text-[10px] font-medium transition-colors",
-                  activeTab === tab.value
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-accent"
-                )}
-              >
-                {tab.icon}
-                <span>{tab.label}</span>
-                {tabCounts[tab.value] ? (
-                  <span className="text-[9px] min-w-[14px] h-3.5 rounded-full flex items-center justify-center px-0.5 bg-muted">
-                    {tabCounts[tab.value]}
-                  </span>
-                ) : null}
-              </button>
-            ))}
+        <div className="px-2 py-2 border-b border-border">
+          <div className="flex gap-1 overflow-x-auto scrollbar-none">
+            {CHAT_TABS.map((tab) => {
+              const isActive = activeTab === tab.value;
+              const isErro = tab.value === "erro";
+              return (
+                <button
+                  key={tab.value}
+                  onClick={() => setActiveTab(tab.value)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border",
+                    isActive
+                      ? isErro
+                        ? "bg-destructive/10 text-destructive border-destructive/30"
+                        : "bg-primary/10 text-primary border-primary/30"
+                      : "text-muted-foreground border-transparent hover:bg-accent hover:text-foreground"
+                  )}
+                >
+                  {tab.icon}
+                  <span>{tab.label}</span>
+                  {tabCounts[tab.value] ? (
+                    <span className={cn(
+                      "text-[10px] min-w-[18px] h-4 rounded-full flex items-center justify-center px-1 font-semibold",
+                      isActive
+                        ? isErro ? "bg-destructive text-destructive-foreground" : "bg-primary text-primary-foreground"
+                        : "bg-muted text-foreground"
+                    )}>
+                      {tabCounts[tab.value]}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
           </div>
         </div>
 
