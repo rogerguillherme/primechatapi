@@ -508,7 +508,7 @@ function QueueItemCard({
       }
 
       const uniqueEntries = Array.from(phoneMap.entries()).map(([phone, name]) => ({
-        phone, name, origin: "xls_import",
+        phone, name, origin: "xls_import", user_id: userId,
       }));
 
       const BATCH = 50;
@@ -516,7 +516,7 @@ function QueueItemCard({
         const batch = uniqueEntries.slice(i, i + BATCH);
         const { data: upserted, error } = await supabase
           .from("leads")
-          .upsert(batch, { onConflict: "phone", ignoreDuplicates: false })
+          .upsert(batch, { onConflict: "phone,user_id", ignoreDuplicates: false })
           .select("id");
         if (error) {
           const phones55 = batch.map((b) => b.phone);
