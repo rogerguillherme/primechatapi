@@ -235,6 +235,7 @@ export function ContactImporter() {
         email: c.email || null,
         origin: "import_list",
         user_id: user?.id,
+        metadata: c.metadata && Object.keys(c.metadata).length ? c.metadata : {},
       }));
 
       const BATCH = 50;
