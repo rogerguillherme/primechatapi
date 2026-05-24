@@ -36,6 +36,8 @@ interface BroadcastGroup {
   failed: number;
   leadIds: string[];
   type?: "broadcast" | "flow";
+  flowId?: string;
+  date?: string;
 }
 
 interface AccountStats {
