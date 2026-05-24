@@ -1,5 +1,5 @@
 import { Handle, Position } from "@xyflow/react";
-import { MessageSquare, Trash2, Image as ImageIcon, FileText } from "lucide-react";
+import { MessageSquare, Trash2, Image as ImageIcon, FileText, Video as VideoIcon } from "lucide-react";
 
 interface MessageNodeData {
   label?: string;
