@@ -787,9 +787,13 @@ async function processFlowStep(step: any, execution: any, lead: any, supabase: a
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-  const accountId = typeof execution.metadata?.account_id === "string" && execution.metadata.account_id
-    ? execution.metadata.account_id
-    : fallbackAccountId || null;
+  // Prefer the account that received the inbound reply (so conversation continues on
+  // the same number the lead is talking to). Fall back to the account stored on the
+  // execution metadata only when we don't know which account received the webhook.
+  const accountId = fallbackAccountId
+    || (typeof execution.metadata?.account_id === "string" && execution.metadata.account_id
+        ? execution.metadata.account_id
+        : null);
 
   if (accountId && execution.metadata?.account_id !== accountId) {
     execution.metadata = { ...(execution.metadata || {}), account_id: accountId };
