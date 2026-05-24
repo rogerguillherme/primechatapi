@@ -148,6 +148,30 @@ export function CloudChatTab() {
     },
   });
 
+  // Lead IDs with at least one failed outbound message
+  const { data: failedLeadIds } = useQuery({
+    queryKey: ["chat-failed-leads"],
+    queryFn: async () => {
+      const set = new Set<string>();
+      const pageSize = 1000;
+      let from = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from("chat_messages")
+          .select("lead_id")
+          .eq("direction", "outbound")
+          .eq("status", "failed")
+          .range(from, from + pageSize - 1);
+        if (error || !data || data.length === 0) break;
+        for (const m of data) set.add(m.lead_id);
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
+      return set;
+    },
+    refetchInterval: 30000,
+  });
+
   // Latest messages
   const { data: latestMessages } = useQuery({
     queryKey: ["chat-latest-messages"],
