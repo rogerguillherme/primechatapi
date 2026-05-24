@@ -178,7 +178,7 @@ async function triggerMatchingFlows(
     await admin.from("flow_executions").insert({
       flow_id: flow.id,
       lead_id: leadId,
-      status: "running",
+      status: "waiting_delay",
       current_step_id: firstStep.id,
       next_action_at: new Date().toISOString(),
       metadata: { trigger: triggerType, ...meta },
