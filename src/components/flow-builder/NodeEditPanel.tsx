@@ -470,8 +470,8 @@ function ImageUploadField({
     }
   };
 
-  // If a document is already attached, don't render the image uploader (one media per node)
-  if (mediaUrl && mediaType === "document") return null;
+  // If a non-image media is already attached, don't render the image uploader (one media per node)
+  if (mediaUrl && mediaType && mediaType !== "image") return null;
 
   return (
     <div className="space-y-2">
