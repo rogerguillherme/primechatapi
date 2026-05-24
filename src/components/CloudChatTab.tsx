@@ -455,7 +455,11 @@ export function CloudChatTab() {
     if (!leads) return [];
     const s = search.toLowerCase();
     return leads.filter((l) => {
-      if (l.chat_status !== activeTab) return false;
+      if (activeTab === "erro") {
+        if (!failedLeadIds?.has(l.id)) return false;
+      } else if (l.chat_status !== activeTab) {
+        return false;
+      }
       if (s && !l.name.toLowerCase().includes(s) && !l.phone.includes(s) && !l.email?.toLowerCase().includes(s)) return false;
       if (filterAccountId && !leadAccountMap?.get(filterAccountId)?.has(l.id)) return false;
       if (filterLabelIds.size > 0) {
@@ -467,14 +471,15 @@ export function CloudChatTab() {
       }
       return true;
     });
-  }, [leads, search, activeTab, filterAccountId, leadAccountMap, filterLabelIds, leadLabelsMap]);
+  }, [leads, search, activeTab, filterAccountId, leadAccountMap, filterLabelIds, leadLabelsMap, failedLeadIds]);
 
   const tabCounts = useMemo(() => {
     if (!leads) return {} as Record<string, number>;
     const counts: Record<string, number> = {};
     for (const l of leads) counts[l.chat_status] = (counts[l.chat_status] || 0) + 1;
+    counts["erro"] = failedLeadIds?.size || 0;
     return counts;
-  }, [leads]);
+  }, [leads, failedLeadIds]);
 
   const sortedLeads = useMemo(() => {
     return [...filteredLeads].sort((a, b) => {
