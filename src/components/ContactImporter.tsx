@@ -153,9 +153,15 @@ export function ContactImporter() {
   const openColumnMap = (rows: Record<string, any>[]) => {
     if (rows.length === 0) { toast.error("Arquivo sem dados."); return; }
     const cols = Object.keys(rows[0]);
+    const mapping = autoDetectMapping(cols);
+    const varNames: Record<string, string> = {};
+    for (const col of cols) {
+      if (mapping[col] === "variable") varNames[col] = slugifyVar(col);
+    }
     setSheetColumns(cols);
     setSheetRows(rows);
-    setColumnMapping(autoDetectMapping(cols));
+    setColumnMapping(mapping);
+    setVariableNames(varNames);
     setColumnMapOpen(true);
   };
 
@@ -163,7 +169,17 @@ export function ContactImporter() {
     const phoneCol = Object.entries(columnMapping).find(([, v]) => v === "phone")?.[0];
     const nameCol = Object.entries(columnMapping).find(([, v]) => v === "name")?.[0];
     const emailCol = Object.entries(columnMapping).find(([, v]) => v === "email")?.[0];
+    const variableCols = Object.entries(columnMapping).filter(([, v]) => v === "variable").map(([k]) => k);
     if (!phoneCol) { toast.error("Selecione a coluna de Telefone."); return; }
+
+    // Validate variable names
+    const usedKeys = new Set<string>();
+    for (const col of variableCols) {
+      const key = slugifyVar(variableNames[col] || col);
+      if (!key) { toast.error(`Defina um nome de variável para "${col}".`); return; }
+      if (usedKeys.has(key)) { toast.error(`Variável duplicada: {${key}}.`); return; }
+      usedKeys.add(key);
+    }
 
     const newContacts: ImportedContact[] = [];
     for (const row of sheetRows) {
@@ -171,7 +187,13 @@ export function ContactImporter() {
       if (phone.length < 10) continue;
       const name = nameCol ? String(row[nameCol] ?? "").trim() || `Contato ${phone.slice(-4)}` : `Contato ${phone.slice(-4)}`;
       const email = emailCol ? String(row[emailCol] ?? "").trim() : undefined;
-      newContacts.push({ name, phone, email: email || undefined });
+      const metadata: Record<string, string> = {};
+      for (const col of variableCols) {
+        const key = slugifyVar(variableNames[col] || col);
+        const val = String(row[col] ?? "").trim();
+        if (val) metadata[key] = val;
+      }
+      newContacts.push({ name, phone, email: email || undefined, metadata: Object.keys(metadata).length ? metadata : undefined });
     }
 
     setColumnMapOpen(false);
