@@ -94,7 +94,7 @@ export function ContactImporter() {
       } else if (/email|e-mail/.test(lower)) {
         mapping[col] = "email";
       } else {
-        mapping[col] = "ignore";
+        mapping[col] = "variable";
       }
     }
     return mapping;
