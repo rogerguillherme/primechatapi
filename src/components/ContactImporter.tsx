@@ -35,6 +35,17 @@ interface ImportedContact {
   name: string;
   phone: string;
   email?: string;
+  metadata?: Record<string, string>;
+}
+
+// Slugify column name to a safe variable key, e.g. "Valor do Pedido" -> "valor_do_pedido"
+function slugifyVar(input: string): string {
+  return String(input)
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 40) || "var";
 }
 
 export function ContactImporter() {
