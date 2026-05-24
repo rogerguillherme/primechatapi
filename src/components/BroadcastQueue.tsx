@@ -399,6 +399,7 @@ export function BroadcastQueue() {
               key={item.id}
               item={item}
               index={index}
+              userId={session?.user.id}
               accounts={accounts}
               templates={templates || []}
               accountTemplates={accountTemplates || []}
@@ -435,6 +436,7 @@ export function BroadcastQueue() {
 interface QueueItemCardProps {
   item: QueueItem;
   index: number;
+  userId?: string;
   accounts: any[];
   templates: any[];
   accountTemplates: { id: string; account_id: string; template_id: string }[];
@@ -450,7 +452,7 @@ interface QueueItemCardProps {
 }
 
 function QueueItemCard({
-  item, index, accounts, templates, accountTemplates, leads,
+  item, index, userId, accounts, templates, accountTemplates, leads,
   isExpanded, onToggleExpand, onUpdate, onRemove, onLoadLastBroadcast, onCancelJob,
   activeJob, disabled,
 }: QueueItemCardProps) {
