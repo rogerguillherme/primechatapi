@@ -24,6 +24,7 @@ export function MessageNode({ id, data }: { id: string; data: MessageNodeData })
         <span className="text-xs font-semibold text-foreground flex-1">Enviar Mensagem</span>
         {hasImage && <ImageIcon size={11} className="text-emerald-600" />}
         {hasDocument && <FileText size={11} className="text-emerald-600" />}
+        {hasVideo && <VideoIcon size={11} className="text-emerald-600" />}
         <button
           onClick={() => data.onDelete?.(id)}
           className="text-muted-foreground hover:text-destructive transition-colors p-0.5"
