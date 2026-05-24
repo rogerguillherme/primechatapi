@@ -1,0 +1,1 @@
+UPDATE public.flow_executions SET status='waiting_delay', next_action_at=now() WHERE flow_id='c2329e86-45da-4881-9838-65e776c20b0b' AND status='running';
