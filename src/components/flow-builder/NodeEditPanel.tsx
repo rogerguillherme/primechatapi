@@ -578,8 +578,8 @@ function DocumentUploadField({
     }
   };
 
-  // If an image is already attached, don't render the document uploader (one media per node)
-  if (mediaUrl && mediaType === "image") return null;
+  // If another media is attached, hide doc uploader
+  if (mediaUrl && mediaType && mediaType !== "document") return null;
 
   const isDocAttached = mediaUrl && mediaType === "document";
 
