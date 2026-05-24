@@ -669,3 +669,102 @@ function DocumentUploadField({
     </div>
   );
 }
+
+function VideoUploadField({
+  mediaUrl,
+  mediaType,
+  onChange,
+}: {
+  mediaUrl: string | null;
+  mediaType?: string | null;
+  onChange: (url: string | null) => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  // Hide if another media type is attached
+  if (mediaUrl && mediaType && mediaType !== "video") return null;
+
+  const isVideoAttached = mediaUrl && mediaType === "video";
+
+  const handleFile = async (file: File) => {
+    if (!file.type.startsWith("video/")) {
+      toast.error("Selecione um arquivo de vídeo.");
+      return;
+    }
+    if (file.size > 16 * 1024 * 1024) {
+      toast.error("Vídeo muito grande (máximo 16MB pelo WhatsApp).");
+      return;
+    }
+    setUploading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Não autenticado");
+      const ext = file.name.split(".").pop() || "mp4";
+      const path = `${user.id}/flow-video-${crypto.randomUUID()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("chat-media")
+        .upload(path, file, { contentType: file.type || "video/mp4", upsert: false });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path);
+      onChange(pub.publicUrl);
+      toast.success("Vídeo carregado!");
+    } catch (err: any) {
+      toast.error(err.message || "Falha ao enviar vídeo");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs flex items-center gap-1.5">
+        <VideoIcon size={12} /> Vídeo (opcional)
+      </Label>
+      {isVideoAttached ? (
+        <div className="relative rounded-md border border-border overflow-hidden bg-muted/30">
+          <video src={mediaUrl} controls className="w-full max-h-40" />
+          <Button
+            variant="destructive"
+            size="icon"
+            className="absolute top-1 right-1 h-6 w-6"
+            onClick={() => onChange(null)}
+          >
+            <Trash2 size={12} />
+          </Button>
+        </div>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={uploading}
+          onClick={() => fileInputRef.current?.click()}
+          className="w-full gap-2 text-xs h-9 border-dashed"
+        >
+          {uploading ? (
+            <><Loader2 size={12} className="animate-spin" /> Enviando...</>
+          ) : (
+            <><Upload size={12} /> Enviar vídeo</>
+          )}
+        </Button>
+      )}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="video/mp4,video/3gpp,video/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleFile(file);
+          e.target.value = "";
+        }}
+      />
+      {!isVideoAttached && (
+        <p className="text-[11px] text-muted-foreground">
+          MP4 até 16MB. Pode incluir uma legenda no campo de mensagem.
+        </p>
+      )}
+    </div>
+  );
+}
