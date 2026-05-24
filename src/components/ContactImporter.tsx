@@ -206,7 +206,7 @@ export function ContactImporter() {
         const batch = entries.slice(i, i + BATCH);
         const { data, error } = await supabase
           .from("leads")
-          .upsert(batch, { onConflict: "phone", ignoreDuplicates: false })
+          .upsert(batch, { onConflict: "phone,user_id", ignoreDuplicates: false })
           .select("id");
         if (error) throw error;
         created += (data?.length || 0);
