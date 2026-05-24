@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Send, CheckCheck, Eye, Inbox, RefreshCw, ChevronDown, ChevronRight, MessageCircle,
-  Loader2, Zap,
+  Loader2, Zap, Download,
 } from "lucide-react";
 import { useState } from "react";
 import { format } from "date-fns";
