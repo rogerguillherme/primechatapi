@@ -14,6 +14,7 @@ interface MessageNodeData {
 export function MessageNode({ id, data }: { id: string; data: MessageNodeData }) {
   const hasImage = data.media_url && data.media_type === "image";
   const hasDocument = data.media_url && data.media_type === "document";
+  const hasVideo = data.media_url && data.media_type === "video";
   return (
     <div className="bg-background border border-border rounded-xl shadow-md min-w-[260px] max-w-[300px] overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 border-b border-border">
