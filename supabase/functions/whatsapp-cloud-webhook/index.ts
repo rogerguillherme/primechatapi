@@ -840,8 +840,15 @@ async function processFlowStep(step: any, execution: any, lead: any, supabase: a
       body.message = interpolate(step.custom_message, vars);
     }
 
+    // Attach media if present (works as media-only or media + caption)
+    if (step.step_type === "message" && step.media_url) {
+      body.media_url = step.media_url;
+      body.media_type = step.media_type || "image";
+      if (step.file_name) body.file_name = step.file_name;
+    }
+
     // Only send if there's something to send — if empty, skip and advance to next step
-    if (!body.message && !body.template_name && !body.interactive_buttons && !body.cta_url) {
+    if (!body.message && !body.template_name && !body.interactive_buttons && !body.cta_url && !body.media_url) {
       console.warn("processFlowStep: empty step, skipping and advancing:", step.id);
       await advanceExecution(execution, step, lead, supabase);
       return;
