@@ -69,7 +69,11 @@ export function ContactImporter() {
   const [newPhone, setNewPhone] = useState("");
   const [newEmail, setNewEmail] = useState("");
 
+  // Custom variable names per column (when mapping = "variable")
+  const [variableNames, setVariableNames] = useState<Record<string, string>>({});
+
   const normalizePhone = (raw: any): string => String(raw ?? "").replace(/\D/g, "");
+
 
   const rawToPhone = (value: any): string => {
     if (value === null || value === undefined || value === "") return "";
