@@ -85,6 +85,15 @@ export function NodeEditPanel({ node, templates, onUpdate, onClose, variationEna
               />
             )}
             {!data.template_id && (
+              <VideoUploadField
+                mediaUrl={(data.media_url as string) || null}
+                mediaType={(data.media_type as string) || null}
+                onChange={(url) =>
+                  onUpdate({ media_url: url, media_type: url ? "video" : null })
+                }
+              />
+            )}
+            {!data.template_id && (
               <div className="space-y-2">
                 <Label className="text-xs">
                   {data.media_url ? "Legenda da imagem (opcional)" : "Mensagem"}
