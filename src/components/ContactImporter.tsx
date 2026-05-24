@@ -274,6 +274,7 @@ export function ContactImporter() {
     { value: "phone", label: "📞 Telefone" },
     { value: "name", label: "👤 Nome" },
     { value: "email", label: "📧 Email" },
+    { value: "variable", label: "🔤 Variável personalizada" },
   ];
 
   return (
