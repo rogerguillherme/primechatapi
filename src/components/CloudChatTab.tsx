@@ -24,7 +24,7 @@ import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 
-type ChatTab = "novos_pedidos" | "aguardando_respostas" | "respondidas" | "reembolso";
+type ChatTab = "novos_pedidos" | "aguardando_respostas" | "respondidas" | "reembolso" | "erro";
 type AiMode = "off" | "all" | "selected";
 
 const CHAT_TABS: { value: ChatTab; label: string; icon: React.ReactNode }[] = [
@@ -32,6 +32,7 @@ const CHAT_TABS: { value: ChatTab; label: string; icon: React.ReactNode }[] = [
   { value: "respondidas", label: "Respondidas", icon: <MessageCircleReply size={14} /> },
   { value: "novos_pedidos", label: "Novos", icon: <ShoppingBag size={14} /> },
   { value: "reembolso", label: "Reembolso", icon: <RotateCcw size={14} /> },
+  { value: "erro", label: "Erro", icon: <AlertCircle size={14} /> },
 ];
 
 function getAvatarColor(name: string) {
@@ -145,6 +146,30 @@ export function CloudChatTab() {
       }
       return map;
     },
+  });
+
+  // Lead IDs with at least one failed outbound message
+  const { data: failedLeadIds } = useQuery({
+    queryKey: ["chat-failed-leads"],
+    queryFn: async () => {
+      const set = new Set<string>();
+      const pageSize = 1000;
+      let from = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from("chat_messages")
+          .select("lead_id")
+          .eq("direction", "outbound")
+          .eq("status", "failed")
+          .range(from, from + pageSize - 1);
+        if (error || !data || data.length === 0) break;
+        for (const m of data) set.add(m.lead_id);
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
+      return set;
+    },
+    refetchInterval: 30000,
   });
 
   // Latest messages
@@ -430,7 +455,11 @@ export function CloudChatTab() {
     if (!leads) return [];
     const s = search.toLowerCase();
     return leads.filter((l) => {
-      if (l.chat_status !== activeTab) return false;
+      if (activeTab === "erro") {
+        if (!failedLeadIds?.has(l.id)) return false;
+      } else if (l.chat_status !== activeTab) {
+        return false;
+      }
       if (s && !l.name.toLowerCase().includes(s) && !l.phone.includes(s) && !l.email?.toLowerCase().includes(s)) return false;
       if (filterAccountId && !leadAccountMap?.get(filterAccountId)?.has(l.id)) return false;
       if (filterLabelIds.size > 0) {
@@ -442,14 +471,15 @@ export function CloudChatTab() {
       }
       return true;
     });
-  }, [leads, search, activeTab, filterAccountId, leadAccountMap, filterLabelIds, leadLabelsMap]);
+  }, [leads, search, activeTab, filterAccountId, leadAccountMap, filterLabelIds, leadLabelsMap, failedLeadIds]);
 
   const tabCounts = useMemo(() => {
     if (!leads) return {} as Record<string, number>;
     const counts: Record<string, number> = {};
     for (const l of leads) counts[l.chat_status] = (counts[l.chat_status] || 0) + 1;
+    counts["erro"] = failedLeadIds?.size || 0;
     return counts;
-  }, [leads]);
+  }, [leads, failedLeadIds]);
 
   const sortedLeads = useMemo(() => {
     return [...filteredLeads].sort((a, b) => {
