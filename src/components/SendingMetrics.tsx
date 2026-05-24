@@ -270,29 +270,33 @@ export function SendingMetrics() {
         const flowNameMap = new Map((flows || []).map(f => [f.id, f.name]));
 
         // Group by flow_id + date
-        const flowGroups = new Map<string, { flowId: string; date: string; leadIds: string[]; completed: number; failed: number; startedAt: string }>();
+        const flowGroups = new Map<string, { flowId: string; date: string; leadIds: string[]; completed: number; failed: number; cancelled: number; startedAt: string }>();
         for (const fe of flowExecs) {
-          const dateKey = fe.started_at.slice(0, 10);
+          // Use local-date key so the calendar date matches the user's timezone
+          const localDate = new Date(fe.started_at);
+          const dateKey = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, "0")}-${String(localDate.getDate()).padStart(2, "0")}`;
           const groupKey = `flow-${fe.flow_id}-${dateKey}`;
-          const existing = flowGroups.get(groupKey) || { flowId: fe.flow_id, date: dateKey, leadIds: [], completed: 0, failed: 0, startedAt: fe.started_at };
+          const existing = flowGroups.get(groupKey) || { flowId: fe.flow_id, date: dateKey, leadIds: [], completed: 0, failed: 0, cancelled: 0, startedAt: fe.started_at };
           existing.leadIds.push(fe.lead_id);
-          if (fe.status === "completed" || fe.status === "waiting_reply") existing.completed++;
-          else if (fe.status === "error") existing.failed++;
-          else existing.completed++; // running = in progress but sent
+          if (fe.status === "failed") existing.failed++;
+          else if (fe.status === "cancelled") existing.cancelled++;
+          else existing.completed++; // completed / waiting_* / running = message sent
           flowGroups.set(groupKey, existing);
         }
 
         for (const [key, group] of flowGroups) {
           const flowName = flowNameMap.get(group.flowId) || "Fluxo";
-          const dateStr = format(new Date(group.date), "dd/MM/yyyy", { locale: ptBR });
+          // Parse as local date to avoid UTC shift (e.g. "2026-05-24" → 23/05 in BRT)
+          const [y, m, d] = group.date.split("-").map(Number);
+          const dateStr = format(new Date(y, m - 1, d), "dd/MM/yyyy", { locale: ptBR });
           groups.push({
             key,
             label: `⚡ ${flowName} — ${dateStr}`,
             total: group.leadIds.length,
-            sent: group.completed + group.failed,
+            sent: group.completed,
             delivered: group.completed,
             read: 0,
-            failed: group.failed,
+            failed: group.failed + group.cancelled,
             leadIds: group.leadIds,
             type: "flow",
           });
