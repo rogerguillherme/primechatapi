@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
 
     const { data: account } = await adminClient
       .from("whatsapp_accounts")
-      .select("id, access_token, business_account_id")
+      .select("id, access_token")
       .eq("phone_number_id", phoneNumberId)
       .eq("user_id", user.id)
       .maybeSingle();
@@ -81,9 +81,8 @@ Deno.serve(async (req) => {
       .from("meta_connections")
       .select("meta_access_token")
       .eq("user_id", user.id)
-      .eq("waba_id", account.business_account_id || "")
       .eq("status", "connected")
-      .order("updated_at", { ascending: false })
+      .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
@@ -134,53 +133,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Auto-subscribe Meta App to the WABA so inbound webhooks start flowing
-    let subscribeResult: any = null;
-    if (account.business_account_id) {
-      try {
-        const subUrl = `https://graph.facebook.com/v21.0/${account.business_account_id}/subscribed_apps`;
-        const subRes = await fetch(subUrl, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        const subText = await subRes.text();
-        let subData: any;
-        try { subData = JSON.parse(subText); } catch { subData = { raw: subText }; }
-
-        // Confirm via GET
-        let listData: any = null;
-        try {
-          const listRes = await fetch(
-            `https://graph.facebook.com/v21.0/${account.business_account_id}/subscribed_apps?access_token=${encodeURIComponent(accessToken)}`,
-          );
-          listData = await listRes.json();
-        } catch (_) { /* ignore */ }
-
-        subscribeResult = {
-          waba_id: account.business_account_id,
-          phone_number_id: phoneNumberId,
-          app_id_env: Deno.env.get("META_APP_ID") || null,
-          http_status: subRes.status,
-          response: subData,
-          subscribed_apps: listData,
-          success: subData?.success === true,
-        };
-        console.log("=== AUTO SUBSCRIBE AFTER REGISTER ===", JSON.stringify(subscribeResult));
-
-        try {
-          await adminClient.from("webhook_debug").insert({
-            source: "whatsapp-register-phone:auto-subscribe",
-            parsed: subscribeResult,
-            notes: subscribeResult.success ? "ok" : "subscribe failed",
-          });
-        } catch (_) { /* ignore */ }
-      } catch (e) {
-        console.error("auto-subscribe failed:", e);
-        subscribeResult = { error: e instanceof Error ? e.message : String(e) };
-      }
-    }
-
-    return new Response(JSON.stringify({ success: true, data: registerData, subscribe: subscribeResult }), {
+    return new Response(JSON.stringify({ success: true, data: registerData }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

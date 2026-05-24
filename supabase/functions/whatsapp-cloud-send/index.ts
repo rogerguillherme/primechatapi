@@ -36,72 +36,69 @@ function withUniqueSignature(text: string | null | undefined): string {
   return base + uniqueZeroWidthSuffix();
 }
 
-async function getAccountCredentials(supabase: any, accountId?: string, userId?: string) {
-  // Multi-WABA: account_id is REQUIRED. No is_default / first / env fallbacks.
-  if (!accountId) {
-    const err: any = new Error("account_id_required");
-    err.code = "account_id_required";
-    throw err;
+async function getAccountCredentials(supabase: any, accountId?: string) {
+  const baseSelect = "id, phone_number_id, access_token, business_account_id, provider, api_key";
+
+  if (accountId) {
+    const { data, error } = await supabase
+      .from("whatsapp_accounts")
+      .select(baseSelect)
+      .eq("id", accountId)
+      .maybeSingle();
+    if (error) throw new Error(`Failed to fetch account: ${error.message}`);
+    if (data) {
+      return {
+        accountId: data.id,
+        phoneNumberId: data.phone_number_id,
+        accessToken: data.access_token,
+        businessAccountId: data.business_account_id,
+        provider: (data.provider as string) || "meta_cloud",
+        apiKey: data.api_key as string | null,
+      };
+    }
   }
 
-  const baseSelect =
-    "id, user_id, phone_number_id, access_token, business_account_id, provider, api_key, token_validity";
-  const { data, error } = await supabase
+  // Fallback: try default account from DB
+  const { data: defaultAcc } = await supabase
     .from("whatsapp_accounts")
     .select(baseSelect)
-    .eq("id", accountId)
+    .eq("is_default", true)
     .maybeSingle();
-  if (error) throw new Error(`Failed to fetch account: ${error.message}`);
-  if (!data) {
-    const err: any = new Error("account_not_found");
-    err.code = "account_not_found";
-    throw err;
+  if (defaultAcc) {
+    return {
+      accountId: defaultAcc.id,
+      phoneNumberId: defaultAcc.phone_number_id,
+      accessToken: defaultAcc.access_token,
+      businessAccountId: defaultAcc.business_account_id,
+      provider: (defaultAcc.provider as string) || "meta_cloud",
+      apiKey: defaultAcc.api_key as string | null,
+    };
   }
 
-  // Defense-in-depth: confirm caller owns the account.
-  if (userId && data.user_id && data.user_id !== userId) {
-    const err: any = new Error("account_forbidden");
-    err.code = "account_forbidden";
-    throw err;
+  // Fallback: try first account
+  const { data: firstAcc } = await supabase
+    .from("whatsapp_accounts")
+    .select(baseSelect)
+    .order("created_at")
+    .limit(1)
+    .maybeSingle();
+  if (firstAcc) {
+    return {
+      accountId: firstAcc.id,
+      phoneNumberId: firstAcc.phone_number_id,
+      accessToken: firstAcc.access_token,
+      businessAccountId: firstAcc.business_account_id,
+      provider: (firstAcc.provider as string) || "meta_cloud",
+      apiKey: firstAcc.api_key as string | null,
+    };
   }
 
-  return {
-    accountId: data.id,
-    userId: data.user_id,
-    phoneNumberId: data.phone_number_id,
-    accessToken: data.access_token,
-    businessAccountId: data.business_account_id,
-    provider: (data.provider as string) || "meta_cloud",
-    apiKey: data.api_key as string | null,
-    tokenValidity: (data.token_validity as string) || "unknown",
-  };
-}
+  // Final fallback: env vars (always meta_cloud)
+  const phoneNumberId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID");
+  const accessToken = Deno.env.get("WHATSAPP_ACCESS_TOKEN");
+  if (phoneNumberId && accessToken) return { phoneNumberId, accessToken, provider: "meta_cloud", apiKey: null };
 
-async function markTokenInvalid(
-  supabase: any,
-  accountId: string,
-  userId: string | null,
-  metaCode: number | string,
-  message: string,
-) {
-  try {
-    const validity = String(metaCode) === "190" ? "expired" : "revoked";
-    await supabase
-      .from("whatsapp_accounts")
-      .update({ token_validity: validity, token_checked_at: new Date().toISOString() })
-      .eq("id", accountId);
-    if (userId) {
-      await supabase.from("whatsapp_account_audit").insert({
-        account_id: accountId,
-        user_id: userId,
-        event: "token_check",
-        status: "error",
-        details: { meta_code: metaCode, message },
-      });
-    }
-  } catch (e) {
-    console.error("markTokenInvalid failed", e);
-  }
+  throw new Error("No WhatsApp account configured");
 }
 
 async function ensureWebhookSubscription(accessToken: string, businessAccountId?: string | null) {
@@ -118,21 +115,6 @@ async function ensureWebhookSubscription(accessToken: string, businessAccountId?
   } catch (error) {
     console.error("Failed to ensure WABA subscription:", error);
   }
-}
-
-async function getEffectiveMetaToken(supabase: any, accessToken: string, businessAccountId?: string | null) {
-  if (!businessAccountId) return accessToken;
-
-  const { data: metaConn } = await supabase
-    .from("meta_connections")
-    .select("meta_access_token")
-    .eq("waba_id", businessAccountId)
-    .eq("status", "connected")
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  return metaConn?.meta_access_token || accessToken;
 }
 
 async function getTemplateRecord(supabase: any, templateName: string, accountId?: string) {
@@ -203,43 +185,21 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Authenticate caller to enforce account ownership (defense-in-depth).
-    let callerUserId: string | undefined;
-    const authHeader = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
-    if (authHeader.toLowerCase().startsWith("bearer ")) {
-      try {
-        const jwt = authHeader.replace(/^Bearer\s+/i, "").trim();
-        const { data: claims } = await supabase.auth.getClaims(jwt);
-        callerUserId = claims?.claims?.sub;
-      } catch (_) { /* ignore — server-to-server calls use service role */ }
-    }
-
-    let credentials;
-    try {
-      credentials = await getAccountCredentials(supabase, account_id, callerUserId);
-    } catch (err: any) {
-      const code = err?.code || "account_error";
-      const status = code === "account_id_required" ? 400 : code === "account_forbidden" ? 403 : 404;
-      return new Response(
-        JSON.stringify({ error: code, message: err?.message || code }),
-        { status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
     const {
       accountId: resolvedAccountId,
-      userId: accountUserId,
       phoneNumberId: PHONE_NUMBER_ID,
       accessToken: ACCESS_TOKEN,
       businessAccountId,
       provider,
       apiKey: D360_API_KEY,
-    } = credentials;
-
-    // Per-account token only. No global meta_connections lookup, no env fallback.
-    const effectiveAccessToken = ACCESS_TOKEN;
+    } = await getAccountCredentials(supabase, account_id);
 
     const isD360 = provider === "d360";
     const isEvolution = provider === "evolution";
+
+    if (!isD360 && !isEvolution) {
+      await ensureWebhookSubscription(ACCESS_TOKEN, businessAccountId);
+    }
 
     const cleanPhone = phone.replace(/\D/g, "");
 
@@ -559,9 +519,6 @@ Deno.serve(async (req) => {
       delete body.messaging_product;
     }
 
-    // ===== OUTBOUND FINGERPRINT (auditoria multi-WABA) =====
-    const tokenFp = effectiveAccessToken ? `${effectiveAccessToken.slice(0, 6)}…${effectiveAccessToken.slice(-4)} len=${effectiveAccessToken.length}` : "none";
-    console.log(`[OUTBOUND] account_id=${account_id || resolvedAccountId} phone_number_id=${PHONE_NUMBER_ID} waba_id=${businessAccountId} token_fp=${tokenFp} provider=${isD360 ? "d360" : "meta_cloud"} api=${apiUrl}`);
     console.log(`WhatsApp ${isD360 ? "360dialog" : "Cloud"} API request:`, JSON.stringify(body));
 
     const requestHeaders: Record<string, string> = { "Content-Type": "application/json" };
@@ -574,7 +531,7 @@ Deno.serve(async (req) => {
       }
       requestHeaders["D360-API-KEY"] = D360_API_KEY;
     } else {
-      requestHeaders["Authorization"] = `Bearer ${effectiveAccessToken}`;
+      requestHeaders["Authorization"] = `Bearer ${ACCESS_TOKEN}`;
     }
 
     const waRes = await fetch(apiUrl, {
@@ -613,9 +570,6 @@ Deno.serve(async (req) => {
       } else if (isAuthError) {
         const loggedOutHint = errorSubcode === 467 ? " A sessão da Meta expirou." : "";
         friendlyMsg = `O token da conta WhatsApp expirou.${loggedOutHint} Reconecte a conta na tela de configurações.`;
-        if (resolvedAccountId) {
-          await markTokenInvalid(supabase, resolvedAccountId, accountUserId, errorCode, metaMsg);
-        }
       } else if (isOutsideWindow) {
         friendlyMsg = `Esse contato está fora da janela de 24h e só pode receber templates aprovados (não mensagens livres).`;
       } else if (isInvalidPhone) {

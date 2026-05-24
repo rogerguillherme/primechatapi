@@ -156,114 +156,28 @@ Deno.serve(async (req) => {
 
   // ── POST: Incoming messages ──
   try {
-    // ============ RAW CAPTURE (before any parsing) ============
-    const rawHeaders: Record<string, string> = {};
-    req.headers.forEach((v, k) => { rawHeaders[k] = v; });
-    const rawBody = await req.text();
-    console.log("RAW WEBHOOK HEADERS:", JSON.stringify(rawHeaders));
-    console.log("RAW WEBHOOK:", rawBody);
-    console.log("RAW WEBHOOK LENGTH:", rawBody.length);
-
-    let payload: any = null;
-    let parseError: string | null = null;
-    try {
-      payload = JSON.parse(rawBody);
-    } catch (e: any) {
-      parseError = e?.message || String(e);
-      console.error("[A] JSON PARSE FAILED:", parseError);
-    }
-    console.log("[A] payload recebido:", JSON.stringify(payload));
-
-    // Persist raw debug always (best-effort)
-    try {
-      const dbgUrl = Deno.env.get("SUPABASE_URL")!;
-      const dbgKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-      const dbg = createClient(dbgUrl, dbgKey);
-      // Pre-classify message types for quick inspection
-      const entries = payload?.entry || [];
-      const changes = entries.flatMap((e: any) => e?.changes || []);
-      const values = changes.map((c: any) => c?.value).filter(Boolean);
-      const msgs = values.flatMap((v: any) => v?.messages || []);
-      const statuses = values.flatMap((v: any) => v?.statuses || []);
-      const msgSummary = msgs.map((m: any) => ({
-        type: m?.type,
-        id: m?.id,
-        from: m?.from,
-        interactive_type: m?.interactive?.type,
-        button_reply_id: m?.interactive?.button_reply?.id,
-        button_reply_title: m?.interactive?.button_reply?.title,
-        list_reply_id: m?.interactive?.list_reply?.id,
-        list_reply_title: m?.interactive?.list_reply?.title,
-        button_payload: m?.button?.payload,
-        button_text: m?.button?.text,
-        context_id: m?.context?.id,
-        text_body: m?.text?.body,
-      }));
-      console.log("=== MESSAGE SUMMARY ===", JSON.stringify(msgSummary));
-      console.log("=== STATUS COUNT ===", statuses.length);
-
-      const phoneNumberId = values[0]?.metadata?.phone_number_id || null;
-      const knownTypes = new Set(["text","image","audio","video","document","sticker","interactive","button","location","contacts","reaction","order","system","unsupported"]);
-      const unknownTypes = msgs.filter((m: any) => !knownTypes.has(m?.type)).map((m: any) => m?.type);
-
-      await dbg.from("webhook_debug").insert({
-        source: "whatsapp-cloud-webhook",
-        headers: rawHeaders,
-        raw_body: rawBody,
-        parsed: payload,
-        notes: JSON.stringify({
-          parseError,
-          phone_number_id: phoneNumberId,
-          message_count: msgs.length,
-          status_count: statuses.length,
-          message_summary: msgSummary,
-          unknown_types: unknownTypes,
-        }),
-      });
-    } catch (dbgErr) {
-      console.error("Failed to persist webhook_debug:", dbgErr);
-    }
-
-    if (!payload) {
-      return new Response(
-        JSON.stringify({ ok: false, error: "invalid_json", detail: parseError }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
+    const payload = await req.json();
     console.log("WhatsApp Cloud webhook received:", JSON.stringify(payload));
 
-
-    // ============ STRICT SOURCE GUARD ============
-    // Only Meta WhatsApp Cloud payloads (object === "whatsapp_business_account") are accepted.
-    // Evolution / Z-API / qualquer outro provider devem usar seus próprios endpoints.
-    if (payload?.object !== "whatsapp_business_account") {
-      const detectedSource = typeof payload?.event === "string" && (payload?.instance || payload?.instanceName)
-        ? "evolution"
-        : payload?.object || "unknown";
-      console.warn("[GUARD] invalid_source:", detectedSource, "object=", payload?.object);
-      try {
-        const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-        await sb.from("webhook_debug").insert({
-          source: "whatsapp-cloud-webhook:rejected",
-          headers: rawHeaders,
-          raw_body: rawBody,
-          parsed: payload,
-          notes: JSON.stringify({
-            reject_reason: "invalid_source",
-            detected_source: detectedSource,
-            object: payload?.object || null,
-            event: payload?.event || null,
-            instance: payload?.instance || payload?.instanceName || null,
-          }),
-        });
-      } catch (e) { console.error("Failed to persist invalid_source debug:", e); }
-      return new Response(
-        JSON.stringify({ ok: true, ignored: true, reject_reason: "invalid_source", detected_source: detectedSource }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+    // Some Evolution instances can be pointed at this legacy webhook URL.
+    // Forward those payloads to the Evolution handler so replies continue flows correctly.
+    if (typeof payload?.event === "string" && (payload.instance || payload.instanceName) && payload.data) {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const forwardRes = await fetch(`${supabaseUrl}/functions/v1/evolution-webhook`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${supabaseKey}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const forwardText = await forwardRes.text();
+      return new Response(forwardText || JSON.stringify({ ok: forwardRes.ok, forwarded: "evolution" }), {
+        status: forwardRes.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
-
 
     const changeValues = (payload.entry || [])
       .flatMap((entry: any) => entry?.changes || [])
@@ -430,47 +344,37 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // STRICT account resolution by metadata.phone_number_id.
-    // No global token fallback. No "first/default account" fallback.
+    // Resolve access token: try matching account by phone_number_id, then default, then env var
     const incomingPhoneNumberId = value.metadata?.phone_number_id || "";
-    console.log("[B] phone_number_id extraído:", incomingPhoneNumberId);
-    if (!incomingPhoneNumberId) {
-      console.warn("[I] discard_reason: missing_phone_number_id");
-      await supabase.from("webhook_debug").insert({
-        source: "whatsapp-cloud-webhook",
-        notes: JSON.stringify({ discard_reason: "missing_phone_number_id" }),
-        parsed: { value },
-      }).catch(() => {});
-      return new Response(
-        JSON.stringify({ ok: true, ignored: "missing_phone_number_id", discard_reason: "missing_phone_number_id" }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+    let ACCESS_TOKEN: string | undefined;
+    let resolvedAccountId: string | null = null;
+    let resolvedUserId: string | null = null;
+    if (incomingPhoneNumberId) {
+      const { data: matchedAccount } = await supabase
+        .from("whatsapp_accounts")
+        .select("id, access_token, user_id")
+        .eq("phone_number_id", incomingPhoneNumberId)
+        .maybeSingle();
+      if (matchedAccount) {
+        ACCESS_TOKEN = matchedAccount.access_token;
+        resolvedAccountId = matchedAccount.id;
+        resolvedUserId = matchedAccount.user_id;
+      }
     }
-    const { data: matchedAccount } = await supabase
-      .from("whatsapp_accounts")
-      .select("id, access_token, user_id, business_account_id")
-      .eq("phone_number_id", incomingPhoneNumberId)
-      .maybeSingle();
-    if (!matchedAccount || !matchedAccount.access_token) {
-      console.warn("[I] discard_reason: account_not_found phone_number_id=", incomingPhoneNumberId);
-      await supabase.from("webhook_debug").insert({
-        source: "whatsapp-cloud-webhook",
-        notes: JSON.stringify({ discard_reason: "account_not_found", phone_number_id: incomingPhoneNumberId }),
-        parsed: { phone_number_id: incomingPhoneNumberId, value },
-      }).catch(() => {});
-      return new Response(
-        JSON.stringify({ ok: true, ignored: "account_not_found", discard_reason: "account_not_found", phone_number_id: incomingPhoneNumberId }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+    if (!ACCESS_TOKEN) {
+      const { data: defaultAccount } = await supabase
+        .from("whatsapp_accounts")
+        .select("access_token")
+        .eq("is_default", true)
+        .maybeSingle();
+      if (defaultAccount) ACCESS_TOKEN = defaultAccount.access_token;
     }
-    const ACCESS_TOKEN: string = matchedAccount.access_token;
-    const resolvedAccountId: string = matchedAccount.id;
-    const resolvedUserId: string = matchedAccount.user_id;
-    console.log("[C] conta encontrada:", JSON.stringify({ account_id: resolvedAccountId, user_id: resolvedUserId }));
+    if (!ACCESS_TOKEN) {
+      ACCESS_TOKEN = Deno.env.get("WHATSAPP_ACCESS_TOKEN");
+    }
 
     const messages = value.messages;
     if (!messages || messages.length === 0) {
-      console.log("[I] discard_reason: no_messages (status_update only =", hasStatuses, ")");
       return new Response(
         JSON.stringify({ ok: true, type: hasStatuses ? "status_update" : "no_messages" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -561,29 +465,7 @@ Deno.serve(async (req) => {
         console.log("Quick reply received:", buttonPayload);
       }
 
-      const parserResult = {
-        wamid: messageId,
-        from: rawPhone,
-        type: msg.type,
-        interactive_type: msg.interactive?.type || null,
-        text,
-        mediaType,
-        buttonPayload,
-        buttonTitle,
-        timestamp,
-      };
-      console.log("[D] parser executado:", JSON.stringify(parserResult));
-      console.log("[E] tipo detectado:", msg.type, buttonPayload ? `(button=${buttonPayload})` : "");
-      await supabase.from("webhook_debug").insert({
-        source: "whatsapp-cloud-webhook:parser",
-        notes: JSON.stringify({ stage: "parser_result", account_id: resolvedAccountId, user_id: resolvedUserId, parser_result: parserResult }),
-        parsed: { msg, parser_result: parserResult },
-      }).catch(() => {});
-
-      if (!text && !mediaUrl) {
-        console.log("[I] discard_reason: empty_text_and_media wamid=", messageId);
-        continue;
-      }
+      if (!text && !mediaUrl) continue;
 
       const cleanPhone = normalizePhone(rawPhone);
       const phoneVariants = brazilianPhoneVariants(rawPhone);
@@ -738,11 +620,6 @@ Deno.serve(async (req) => {
           .eq("lead_id", lead.id)
           .eq("status", "waiting_reply");
 
-        console.log("[G] flows encontrados aguardando reply:", (executions || []).length, "lead=", lead.id);
-        if (!executions || executions.length === 0) {
-          console.log("[I] discard_reason: no_waiting_flow lead=", lead.id);
-        }
-
         for (const exec of executions || []) {
           const currentStepId = exec.current_step_id;
           const candidateTriggers = Array.from(new Set([
@@ -799,7 +676,7 @@ Deno.serve(async (req) => {
             }
           }
 
-          console.log("[F] trigger resolvido:", JSON.stringify({
+          console.log("Flow reply resolution:", JSON.stringify({
             executionId: exec.id,
             currentStepId,
             candidateTriggers,
@@ -818,21 +695,19 @@ Deno.serve(async (req) => {
                 .limit(1);
 
               if (condChildren && condChildren.length > 0) {
-                console.log("[H] execução continuada via condition child step=", condChildren[0].id, "exec=", exec.id);
                 await processFlowStep(condChildren[0], exec, lead, supabase, resolvedAccountId);
               } else {
-                console.log("[I] discard_reason: condition_no_child step=", matchedStep.id, "exec=", exec.id);
+                console.log("Condition matched but has no child step:", matchedStep.id, "exec:", exec.id);
                 await supabase.from("flow_executions").update({
                   status: "completed",
                   updated_at: new Date().toISOString(),
                 }).eq("id", exec.id);
               }
             } else {
-              console.log("[H] execução continuada step=", matchedStep.id, "type=", matchedStep.step_type, "exec=", exec.id);
               await processFlowStep(matchedStep, exec, lead, supabase, resolvedAccountId);
             }
           } else {
-            console.log("[I] discard_reason: no_matching_branch button=", buttonPayload, "text=", text, "exec=", exec.id);
+            console.log("No matching branch for button payload:", buttonPayload, "exec:", exec.id);
             await supabase.from("flow_executions").update({
               status: "waiting_reply",
               updated_at: new Date().toISOString(),

@@ -1597,85 +1597,6 @@ export default function WhatsAppApi() {
     }
   };
 
-  const handleEmbeddedSignup = async () => {
-    try {
-      const FB = (window as any).FB;
-      if (!FB || typeof FB.login !== "function") {
-        toast.error("SDK do Facebook ainda não carregou. Aguarde alguns segundos e tente novamente.");
-        return;
-      }
-
-      // 1) Cria sessão SDK no backend (gera state e marca mode:'sdk')
-      const { data: startData, error: startErr } = await supabase.functions.invoke(
-        "whatsapp-embedded-signup-start",
-        { body: { mode: "sdk", redirect_origin: window.location.origin } },
-      );
-      if (startErr) throw startErr;
-      if ((startData as any)?.error) throw new Error((startData as any).error);
-      const state = (startData as any)?.state as string;
-      const configId = (startData as any)?.config_id as string;
-      if (!state || !configId) throw new Error("Resposta inválida do servidor");
-
-      // 2) Listener da sessionInfo enviada pelo iframe da Meta — guarda waba_id + phone_number_id
-      let sessionInfo: any = null;
-      const sessionInfoHandler = (event: MessageEvent) => {
-        if (typeof event.origin !== "string") return;
-        if (!event.origin.endsWith("facebook.com")) return;
-        try {
-          const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
-          if (data?.type === "WA_EMBEDDED_SIGNUP") {
-            console.log("[ES] session info:", data);
-            sessionInfo = data?.data ?? data;
-          }
-        } catch {
-          /* ignore */
-        }
-      };
-      window.addEventListener("message", sessionInfoHandler);
-
-      // 3) Abre o popup do Embedded Signup — exatamente como a documentação da Meta indica
-      FB.login(
-        async (response: any) => {
-          window.removeEventListener("message", sessionInfoHandler);
-          const code = response?.authResponse?.code;
-          if (!code) {
-            toast.error("Embedded Signup cancelado ou sem código de autorização.");
-            return;
-          }
-          try {
-            const { data, error } = await supabase.functions.invoke(
-              "whatsapp-embedded-signup-callback",
-              {
-                body: {
-                  code,
-                  state,
-                  waba_id: sessionInfo?.waba_id ?? null,
-                  phone_number_id: sessionInfo?.phone_number_id ?? null,
-                  session_info: sessionInfo ?? null,
-                },
-              },
-            );
-            if (error) throw error;
-            if ((data as any)?.error) throw new Error((data as any).error);
-            const provisioned = (data as any)?.provisioned ?? [];
-            toast.success(`Conexão concluída! ${provisioned.length} número(s) provisionado(s).`);
-            queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
-          } catch (err: any) {
-            toast.error(`Erro ao finalizar conexão: ${err.message}`);
-          }
-        },
-        {
-          config_id: configId,
-          response_type: "code",
-          override_default_response_type: true,
-          extras: { version: "v4" },
-        },
-      );
-    } catch (err: any) {
-      toast.error(`Erro ao iniciar Embedded Signup: ${err.message}`);
-    }
-  };
-
   const startEditing = (account: any) => {
     setEditingAccount(account);
     setAccountName(account.name);
@@ -2191,11 +2112,8 @@ export default function WhatsAppApi() {
                     <DropdownMenuItem onClick={() => { resetForm(); setProvider("meta_cloud"); setIsAddingAccount(true); }} className="gap-2">
                       <Key size={14} /> Meta Cloud (manual)
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleEmbeddedSignup} className="gap-2 font-medium text-primary">
-                      <ExternalLink size={14} /> Conectar via Embedded Signup (oficial Meta)
-                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={handleMetaOAuth} className="gap-2">
-                      <ExternalLink size={14} /> Conectar via Meta OAuth (legado)
+                      <ExternalLink size={14} /> Conectar via Meta OAuth
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => { resetForm(); setProvider("d360"); setIsAddingAccount(true); }} className="gap-2">
                       <MessageCircle size={14} /> 360dialog
@@ -2367,27 +2285,6 @@ export default function WhatsAppApi() {
                                   className="gap-2"
                                 >
                                   <Plug size={14} /> Reativar Webhook
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={async () => {
-                                    const t = toast.loading("Auditando Cloud API...");
-                                    try {
-                                      const { data, error } = await supabase.functions.invoke(
-                                        "whatsapp-cloud-health",
-                                        { body: { account_id: account.id } },
-                                      );
-                                      if (error) throw error;
-                                      const r = data?.accounts?.[0];
-                                      console.log("[whatsapp-cloud-health]", r);
-                                      const msg = r?.root_cause_hypothesis || "Auditoria concluída — veja console";
-                                      toast.success(msg, { id: t, duration: 10000 });
-                                    } catch (e: any) {
-                                      toast.error(e.message, { id: t });
-                                    }
-                                  }}
-                                  className="gap-2"
-                                >
-                                  <Plug size={14} /> Auditar Cloud API (Healthcheck)
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
 

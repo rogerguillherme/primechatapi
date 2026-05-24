@@ -194,8 +194,6 @@ Deno.serve(async (req) => {
           .select("meta_access_token")
           .eq("waba_id", acc.business_account_id)
           .eq("status", "connected")
-          .order("updated_at", { ascending: false })
-          .limit(1)
           .maybeSingle();
         if (metaConn?.meta_access_token) accessToken = metaConn.meta_access_token;
       }
