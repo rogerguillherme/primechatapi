@@ -164,8 +164,8 @@ export default function WabaHealthPage() {
             <Card key={acc.id} className="p-5 space-y-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-semibold leading-tight">{acc.display_name || "Conta sem nome"}</p>
-                  <p className="text-xs text-muted-foreground">{acc.phone_number || "—"}</p>
+                  <p className="font-semibold leading-tight">{acc.name || "Conta sem nome"}</p>
+                  <p className="text-xs text-muted-foreground">{acc.phone_number_id || "—"}</p>
                 </div>
                 <span className={cn("text-[11px] font-bold px-2 py-1 rounded", color.className)}>
                   {color.label}
