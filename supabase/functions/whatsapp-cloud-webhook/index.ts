@@ -278,6 +278,67 @@ Deno.serve(async (req) => {
                 logTracking = { ...readFromDeliveredLog, delivered: false, read: true };
               }
             }
+          } else if (status === "failed") {
+            const err = Array.isArray(statusUpdate.errors) ? statusUpdate.errors[0] : null;
+            const errCode = err?.code != null ? String(err.code) : null;
+            const errTitle = err?.title || err?.message || null;
+            const errDetails = err?.error_data?.details || err?.message || null;
+            const classification = classifyMetaError(errCode);
+
+            const finalStatus = classification.severity === "critical" ? "blocked_by_meta" : "failed";
+
+            const { data: failedLog } = await sb
+              .from("message_logs")
+              .update({
+                status: finalStatus,
+                meta_error_code: errCode,
+                meta_error_title: errTitle,
+                meta_error_details: errDetails,
+                block_severity: classification.severity,
+                failed_at: ts,
+              })
+              .eq("wa_message_id", waMessageId)
+              .not("status", "in", '("delivered","read","blocked_by_meta","failed")')
+              .select("job_id, account_id, user_id")
+              .maybeSingle();
+
+            if (failedLog?.job_id) {
+              const { data: jobNow } = await sb
+                .from("broadcast_jobs")
+                .select("error_count")
+                .eq("id", failedLog.job_id)
+                .maybeSingle();
+              if (jobNow) {
+                await sb.from("broadcast_jobs").update({
+                  error_count: (jobNow.error_count || 0) + 1,
+                  updated_at: new Date().toISOString(),
+                }).eq("id", failedLog.job_id);
+              }
+            }
+
+            // Trigger protection for critical/quality errors
+            if (classification.severity !== "info" && (failedLog?.account_id || resolvedAccountId)) {
+              try {
+                await fetch(`${supabaseUrl}/functions/v1/waba-protect-account`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${supabaseKey}`,
+                  },
+                  body: JSON.stringify({
+                    account_id: failedLog?.account_id || resolvedAccountId,
+                    user_id: failedLog?.user_id || resolvedUserId,
+                    reason: classification.reason,
+                    meta_error_code: errCode,
+                    meta_error_title: errTitle,
+                    meta_error_details: errDetails,
+                    severity: classification.severity,
+                  }),
+                });
+              } catch (protectErr) {
+                console.error("Failed to invoke waba-protect-account:", protectErr);
+              }
+            }
           } else {
             await sb
               .from("message_logs")
