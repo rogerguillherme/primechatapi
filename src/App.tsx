@@ -97,6 +97,19 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/whatsapp/health"
+        element={
+          <ProtectedRoute>
+            <div className="min-h-screen flex flex-col">
+              <AppHeader />
+              <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-7xl mx-auto w-full">
+                <WabaHealth />
+              </main>
+            </div>
+          </ProtectedRoute>
+        }
+      />
       <Route path="/site" element={<LandingPage />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
