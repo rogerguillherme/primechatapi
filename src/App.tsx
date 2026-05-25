@@ -15,6 +15,7 @@ import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
 import LandingPage from "./pages/LandingPage";
 import AdminUsers from "./pages/AdminUsers";
+import WabaHealth from "./pages/WabaHealth";
 import { Loader2 } from "lucide-react";
 import { BroadcastProgressFloat } from "@/components/BroadcastProgressFloat";
 
@@ -91,6 +92,19 @@ function AppRoutes() {
               <AppHeader />
               <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-7xl mx-auto w-full">
                 <AdminUsers />
+              </main>
+            </div>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/whatsapp/health"
+        element={
+          <ProtectedRoute>
+            <div className="min-h-screen flex flex-col">
+              <AppHeader />
+              <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-7xl mx-auto w-full">
+                <WabaHealth />
               </main>
             </div>
           </ProtectedRoute>

@@ -118,6 +118,36 @@ async function resolveMatchedFlowStep(
   return branchSteps.find((step: any) => candidateTriggers.includes(normalizeTriggerValue(step.trigger_value))) || null;
 }
 
+// Classifies Meta Cloud API error codes for the WABA protection system.
+// severity: "critical" → pause everything; "warning" → log + alert; "info" → just log.
+function classifyMetaError(code: string | null): { severity: "critical" | "warning" | "info"; reason: string } {
+  if (!code) return { severity: "info", reason: "unknown" };
+  switch (code) {
+    case "131031": // Business Account locked
+    case "368":    // Temporarily blocked for policy violations
+    case "131056": // Pair rate limit hit (severe)
+    case "130472": // User experiments / blocked
+      return { severity: "critical", reason: "waba_locked" };
+    case "131048": // Spam rate limit
+    case "131049": // Per-user marketing limit
+      return { severity: "critical", reason: "spam_restriction" };
+    case "131026": // Message undeliverable (recipient hasn't opted in)
+    case "131047": // Re-engagement message (24h window)
+      return { severity: "warning", reason: "quality_yellow" };
+    case "130429": // Rate limit
+    case "80007":  // Rate limit
+      return { severity: "warning", reason: "rate_limit" };
+    case "131045": // Template paused/disabled
+      return { severity: "warning", reason: "integrity_restriction" };
+    default:
+      if (code.startsWith("132")) return { severity: "warning", reason: "integrity_restriction" };
+      return { severity: "info", reason: "unknown" };
+  }
+}
+
+
+
+
 Deno.serve(async (req) => {
   // CORS preflight
   if (req.method === "OPTIONS") {
@@ -217,10 +247,25 @@ Deno.serve(async (req) => {
     // Handle status updates without skipping message processing when Meta sends both in the same payload
     if (hasStatuses) {
       console.log("Status update received:", JSON.stringify(value.statuses));
-      
+
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
       const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
       const sb = createClient(supabaseUrl, supabaseKey);
+
+      // Pre-resolve account/user from phone_number_id (needed for protection trigger)
+      const _incomingPNId = value.metadata?.phone_number_id || "";
+      let resolvedAccountId: string | null = null;
+      let resolvedUserId: string | null = null;
+      if (_incomingPNId) {
+        const { data: acc } = await sb
+          .from("whatsapp_accounts")
+          .select("id, user_id")
+          .eq("phone_number_id", _incomingPNId)
+          .maybeSingle();
+        if (acc) { resolvedAccountId = acc.id; resolvedUserId = acc.user_id; }
+      }
+
+
       
       for (const statusUpdate of value.statuses) {
         const waMessageId = statusUpdate.id;
@@ -276,6 +321,67 @@ Deno.serve(async (req) => {
 
               if (readFromDeliveredLog) {
                 logTracking = { ...readFromDeliveredLog, delivered: false, read: true };
+              }
+            }
+          } else if (status === "failed") {
+            const err = Array.isArray(statusUpdate.errors) ? statusUpdate.errors[0] : null;
+            const errCode = err?.code != null ? String(err.code) : null;
+            const errTitle = err?.title || err?.message || null;
+            const errDetails = err?.error_data?.details || err?.message || null;
+            const classification = classifyMetaError(errCode);
+
+            const finalStatus = classification.severity === "critical" ? "blocked_by_meta" : "failed";
+
+            const { data: failedLog } = await sb
+              .from("message_logs")
+              .update({
+                status: finalStatus,
+                meta_error_code: errCode,
+                meta_error_title: errTitle,
+                meta_error_details: errDetails,
+                block_severity: classification.severity,
+                failed_at: ts,
+              })
+              .eq("wa_message_id", waMessageId)
+              .not("status", "in", '("delivered","read","blocked_by_meta","failed")')
+              .select("job_id, account_id, user_id")
+              .maybeSingle();
+
+            if (failedLog?.job_id) {
+              const { data: jobNow } = await sb
+                .from("broadcast_jobs")
+                .select("error_count")
+                .eq("id", failedLog.job_id)
+                .maybeSingle();
+              if (jobNow) {
+                await sb.from("broadcast_jobs").update({
+                  error_count: (jobNow.error_count || 0) + 1,
+                  updated_at: new Date().toISOString(),
+                }).eq("id", failedLog.job_id);
+              }
+            }
+
+            // Trigger protection for critical/quality errors
+            if (classification.severity !== "info" && (failedLog?.account_id || resolvedAccountId)) {
+              try {
+                await fetch(`${supabaseUrl}/functions/v1/waba-protect-account`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${supabaseKey}`,
+                  },
+                  body: JSON.stringify({
+                    account_id: failedLog?.account_id || resolvedAccountId,
+                    user_id: failedLog?.user_id || resolvedUserId,
+                    reason: classification.reason,
+                    meta_error_code: errCode,
+                    meta_error_title: errTitle,
+                    meta_error_details: errDetails,
+                    severity: classification.severity,
+                  }),
+                });
+              } catch (protectErr) {
+                console.error("Failed to invoke waba-protect-account:", protectErr);
               }
             }
           } else {

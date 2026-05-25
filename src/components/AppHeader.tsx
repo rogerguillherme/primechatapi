@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/NotificationBell";
 import { GlobalSearch } from "@/components/GlobalSearch";
+import { WabaHealthBanner } from "@/components/WabaHealthBanner";
 
 export function AppHeader() {
   const { user, signOut } = useAuth();
@@ -112,6 +113,7 @@ export function AppHeader() {
           </div>
         </div>
       </div>
+      <WabaHealthBanner />
     </header>
   );
 }

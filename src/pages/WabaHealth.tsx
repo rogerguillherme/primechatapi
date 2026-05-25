@@ -1,0 +1,280 @@
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { Shield, CheckCircle2, AlertTriangle, ShieldAlert, Activity, MessageSquare } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+import { formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale";
+
+type Severity = "critical" | "warning" | "info";
+
+interface Account {
+  id: string;
+  name: string | null;
+  phone_number_id: string | null;
+}
+
+interface Snapshot {
+  account_id: string;
+  quality_rating: string | null;
+  messaging_tier: string | null;
+  messaging_limit: number | null;
+  delivery_rate_24h: number | null;
+  block_rate_24h: number | null;
+  reputation_score: number | null;
+  captured_at: string;
+}
+
+interface Event {
+  id: string;
+  account_id: string;
+  event_title: string;
+  event_message: string | null;
+  severity: Severity;
+  meta_error_code: string | null;
+  created_at: string;
+  resolved_at: string | null;
+}
+
+interface DeliveryStats {
+  account_id: string;
+  delivered: number;
+  blocked: number;
+  failed: number;
+}
+
+function statusColor(quality: string | null, hasCritical: boolean) {
+  if (hasCritical) return { label: "Crítico", className: "bg-destructive text-destructive-foreground" };
+  if (quality === "RED") return { label: "Vermelho", className: "bg-destructive text-destructive-foreground" };
+  if (quality === "YELLOW") return { label: "Amarelo", className: "bg-warning text-warning-foreground" };
+  if (quality === "GREEN") return { label: "Verde", className: "bg-revenue text-white" };
+  return { label: "Desconhecido", className: "bg-muted text-muted-foreground" };
+}
+
+export default function WabaHealthPage() {
+  const { user } = useAuth();
+
+  const { data: accounts = [] } = useQuery({
+    queryKey: ["wa-accounts", user?.id],
+    queryFn: async () => {
+      if (!user) return [] as Account[];
+      const { data } = await supabase
+        .from("whatsapp_accounts")
+        .select("id, name, phone_number_id")
+        .eq("user_id", user.id);
+      return (data || []) as Account[];
+    },
+    enabled: !!user,
+  });
+
+  const { data: snapshots = [] } = useQuery({
+    queryKey: ["waba-snapshots", user?.id],
+    queryFn: async () => {
+      if (!user) return [] as Snapshot[];
+      const { data } = await supabase
+        .from("waba_health_snapshots")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("captured_at", { ascending: false })
+        .limit(50);
+      return (data || []) as Snapshot[];
+    },
+    enabled: !!user,
+    refetchInterval: 60_000,
+  });
+
+  const { data: events = [] } = useQuery({
+    queryKey: ["waba-events-page", user?.id],
+    queryFn: async () => {
+      if (!user) return [] as Event[];
+      const { data } = await supabase
+        .from("waba_health_events")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      return (data || []) as Event[];
+    },
+    enabled: !!user,
+    refetchInterval: 30_000,
+  });
+
+  const { data: deliveryByAccount = [] } = useQuery({
+    queryKey: ["waba-delivery-stats", user?.id],
+    queryFn: async () => {
+      if (!user) return [] as DeliveryStats[];
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { data } = await supabase
+        .from("message_logs")
+        .select("account_id, status")
+        .eq("user_id", user.id)
+        .gte("created_at", since);
+      const map = new Map<string, DeliveryStats>();
+      for (const row of (data || []) as { account_id: string | null; status: string }[]) {
+        const k = row.account_id || "unknown";
+        const cur = map.get(k) || { account_id: k, delivered: 0, blocked: 0, failed: 0 };
+        if (row.status === "delivered" || row.status === "read") cur.delivered++;
+        else if (row.status === "blocked_by_meta") cur.blocked++;
+        else if (row.status === "failed") cur.failed++;
+        map.set(k, cur);
+      }
+      return Array.from(map.values());
+    },
+    enabled: !!user,
+    refetchInterval: 60_000,
+  });
+
+  const latestSnapshotByAccount = new Map<string, Snapshot>();
+  for (const s of snapshots) {
+    if (!latestSnapshotByAccount.has(s.account_id)) latestSnapshotByAccount.set(s.account_id, s);
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-display font-bold flex items-center gap-2">
+          <Shield className="text-primary" size={24} /> Saúde da WABA
+        </h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Monitoramento em tempo real da qualidade, entrega e reputação das suas contas WhatsApp.
+        </p>
+      </div>
+
+      {accounts.length === 0 && (
+        <Card className="p-8 text-center text-muted-foreground">
+          Nenhuma conta WhatsApp conectada.
+        </Card>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {accounts.map((acc) => {
+          const snap = latestSnapshotByAccount.get(acc.id);
+          const stats = deliveryByAccount.find((d) => d.account_id === acc.id) ||
+            { delivered: 0, blocked: 0, failed: 0 } as DeliveryStats;
+          const totalAttempts = stats.delivered + stats.blocked + stats.failed;
+          const deliveryRate = totalAttempts ? Math.round((stats.delivered / totalAttempts) * 100) : null;
+          const blockRate = totalAttempts ? Math.round((stats.blocked / totalAttempts) * 100) : 0;
+          const hasCritical = events.some(
+            (e) => e.account_id === acc.id && e.severity === "critical" && !e.resolved_at,
+          );
+          const color = statusColor(snap?.quality_rating || null, hasCritical);
+
+          return (
+            <Card key={acc.id} className="p-5 space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold leading-tight">{acc.name || "Conta sem nome"}</p>
+                  <p className="text-xs text-muted-foreground">{acc.phone_number_id || "—"}</p>
+                </div>
+                <span className={cn("text-[11px] font-bold px-2 py-1 rounded", color.className)}>
+                  {color.label}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-md bg-muted/40 p-2">
+                  <p className="text-[10px] uppercase text-muted-foreground">Qualidade</p>
+                  <p className="text-sm font-semibold mt-1">{snap?.quality_rating || "—"}</p>
+                </div>
+                <div className="rounded-md bg-muted/40 p-2">
+                  <p className="text-[10px] uppercase text-muted-foreground">Tier</p>
+                  <p className="text-sm font-semibold mt-1">{snap?.messaging_tier || "—"}</p>
+                </div>
+                <div className="rounded-md bg-muted/40 p-2">
+                  <p className="text-[10px] uppercase text-muted-foreground">Limite</p>
+                  <p className="text-sm font-semibold mt-1">{snap?.messaging_limit?.toLocaleString("pt-BR") || "—"}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-md border p-2">
+                  <p className="text-[10px] uppercase text-muted-foreground">Entrega 24h</p>
+                  <p className={cn("text-sm font-semibold mt-1", deliveryRate != null && deliveryRate < 70 && "text-destructive")}>
+                    {deliveryRate != null ? `${deliveryRate}%` : "—"}
+                  </p>
+                </div>
+                <div className="rounded-md border p-2">
+                  <p className="text-[10px] uppercase text-muted-foreground">Bloqueio 24h</p>
+                  <p className={cn("text-sm font-semibold mt-1", blockRate > 5 && "text-destructive")}>
+                    {totalAttempts ? `${blockRate}%` : "—"}
+                  </p>
+                </div>
+                <div className="rounded-md border p-2">
+                  <p className="text-[10px] uppercase text-muted-foreground">Mensagens</p>
+                  <p className="text-sm font-semibold mt-1">{totalAttempts.toLocaleString("pt-BR")}</p>
+                </div>
+              </div>
+
+              {hasCritical && (
+                <div className="rounded-md bg-destructive/10 border border-destructive/30 p-3 text-xs">
+                  <p className="font-semibold flex items-center gap-1 text-destructive">
+                    <ShieldAlert size={14} /> Proteção automática ativa
+                  </p>
+                  <p className="mt-1 text-muted-foreground">
+                    Pausamos campanhas e fluxos desta conta. Acesse o Meta Business Suite → Account Quality
+                    → Solicitar revisão.
+                  </p>
+                </div>
+              )}
+            </Card>
+          );
+        })}
+      </div>
+
+      <Card className="p-5">
+        <h2 className="font-semibold flex items-center gap-2 mb-3">
+          <Activity size={16} /> Histórico de eventos
+        </h2>
+        {events.length === 0 ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground py-6 justify-center">
+            <CheckCircle2 size={16} className="text-revenue" /> Nenhum evento registrado. Tudo operando bem.
+          </div>
+        ) : (
+          <ul className="space-y-2">
+            {events.map((e) => (
+              <li
+                key={e.id}
+                className={cn(
+                  "rounded-md border p-3 text-sm flex items-start gap-3",
+                  e.severity === "critical" && "border-destructive/30 bg-destructive/5",
+                  e.severity === "warning" && "border-warning/40 bg-warning/5",
+                )}
+              >
+                {e.severity === "critical" ? (
+                  <ShieldAlert size={16} className="text-destructive mt-0.5" />
+                ) : (
+                  <AlertTriangle size={16} className="text-warning mt-0.5" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium">{e.event_title}</p>
+                  {e.event_message && (
+                    <p className="text-xs text-muted-foreground mt-0.5">{e.event_message}</p>
+                  )}
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    {formatDistanceToNow(new Date(e.created_at), { addSuffix: true, locale: ptBR })}
+                    {e.meta_error_code && ` · código Meta ${e.meta_error_code}`}
+                    {e.resolved_at && " · resolvido"}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      <Card className="p-5 bg-primary/5 border-primary/20">
+        <h2 className="font-semibold flex items-center gap-2 mb-2">
+          <MessageSquare size={16} /> Recomendações
+        </h2>
+        <ul className="text-sm text-muted-foreground space-y-1 list-disc pl-5">
+          <li>Mantenha respostas rápidas — taxa de resposta alta melhora a qualidade da WABA.</li>
+          <li>Evite enviar mensagens iguais para muitos números em pouco tempo.</li>
+          <li>Use templates da categoria <b>UTILITY</b> sempre que possível.</li>
+          <li>Em caso de bloqueio, abra o Meta Business Suite → Account Quality → Solicitar revisão.</li>
+          <li>Ative o modo de aquecimento (warmup) para números novos.</li>
+        </ul>
+      </Card>
+    </div>
+  );
+}
