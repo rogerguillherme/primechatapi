@@ -206,6 +206,7 @@ export type Database = {
         Row: {
           account_id: string
           account_ids: string[] | null
+          auto_paused_by_system: boolean
           consecutive_errors: number
           created_at: string
           delay_max_seconds: number
@@ -240,6 +241,7 @@ export type Database = {
         Insert: {
           account_id: string
           account_ids?: string[] | null
+          auto_paused_by_system?: boolean
           consecutive_errors?: number
           created_at?: string
           delay_max_seconds?: number
@@ -274,6 +276,7 @@ export type Database = {
         Update: {
           account_id?: string
           account_ids?: string[] | null
+          auto_paused_by_system?: boolean
           consecutive_errors?: number
           created_at?: string
           delay_max_seconds?: number
@@ -759,6 +762,7 @@ export type Database = {
       flows: {
         Row: {
           active: boolean
+          auto_paused_by_system: boolean
           created_at: string
           delay_max_seconds: number
           delay_min_seconds: number
@@ -777,6 +781,7 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          auto_paused_by_system?: boolean
           created_at?: string
           delay_max_seconds?: number
           delay_min_seconds?: number
@@ -795,6 +800,7 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          auto_paused_by_system?: boolean
           created_at?: string
           delay_max_seconds?: number
           delay_min_seconds?: number
@@ -1242,13 +1248,20 @@ export type Database = {
       message_logs: {
         Row: {
           account_id: string | null
+          block_severity: string | null
           created_at: string
+          delivered_at: string | null
           error_code: string | null
           error_message: string | null
+          failed_at: string | null
           id: string
           job_id: string
           lead_id: string | null
+          meta_error_code: string | null
+          meta_error_details: string | null
+          meta_error_title: string | null
           phone: string
+          read_at: string | null
           sent_at: string | null
           status: string
           user_id: string
@@ -1256,13 +1269,20 @@ export type Database = {
         }
         Insert: {
           account_id?: string | null
+          block_severity?: string | null
           created_at?: string
+          delivered_at?: string | null
           error_code?: string | null
           error_message?: string | null
+          failed_at?: string | null
           id?: string
           job_id: string
           lead_id?: string | null
+          meta_error_code?: string | null
+          meta_error_details?: string | null
+          meta_error_title?: string | null
           phone: string
+          read_at?: string | null
           sent_at?: string | null
           status?: string
           user_id: string
@@ -1270,13 +1290,20 @@ export type Database = {
         }
         Update: {
           account_id?: string | null
+          block_severity?: string | null
           created_at?: string
+          delivered_at?: string | null
           error_code?: string | null
           error_message?: string | null
+          failed_at?: string | null
           id?: string
           job_id?: string
           lead_id?: string | null
+          meta_error_code?: string | null
+          meta_error_details?: string | null
+          meta_error_title?: string | null
           phone?: string
+          read_at?: string | null
           sent_at?: string | null
           status?: string
           user_id?: string
@@ -1617,6 +1644,90 @@ export type Database = {
         Update: {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      waba_health_events: {
+        Row: {
+          account_id: string
+          created_at: string
+          event_code: string
+          event_message: string | null
+          event_title: string
+          id: string
+          meta_error_code: string | null
+          metadata: Json
+          resolved_at: string | null
+          severity: string
+          user_id: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          event_code: string
+          event_message?: string | null
+          event_title: string
+          id?: string
+          meta_error_code?: string | null
+          metadata?: Json
+          resolved_at?: string | null
+          severity?: string
+          user_id: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          event_code?: string
+          event_message?: string | null
+          event_title?: string
+          id?: string
+          meta_error_code?: string | null
+          metadata?: Json
+          resolved_at?: string | null
+          severity?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      waba_health_snapshots: {
+        Row: {
+          account_id: string
+          block_rate_24h: number | null
+          captured_at: string
+          delivery_rate_24h: number | null
+          id: string
+          messaging_limit: number | null
+          messaging_tier: string | null
+          quality_rating: string | null
+          raw: Json
+          reputation_score: number | null
+          user_id: string
+        }
+        Insert: {
+          account_id: string
+          block_rate_24h?: number | null
+          captured_at?: string
+          delivery_rate_24h?: number | null
+          id?: string
+          messaging_limit?: number | null
+          messaging_tier?: string | null
+          quality_rating?: string | null
+          raw?: Json
+          reputation_score?: number | null
+          user_id: string
+        }
+        Update: {
+          account_id?: string
+          block_rate_24h?: number | null
+          captured_at?: string
+          delivery_rate_24h?: number | null
+          id?: string
+          messaging_limit?: number | null
+          messaging_tier?: string | null
+          quality_rating?: string | null
+          raw?: Json
+          reputation_score?: number | null
           user_id?: string
         }
         Relationships: []
