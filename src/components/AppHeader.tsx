@@ -113,6 +113,7 @@ export function AppHeader() {
           </div>
         </div>
       </div>
+      <WabaHealthBanner />
     </header>
   );
 }
