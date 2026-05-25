@@ -118,6 +118,33 @@ async function resolveMatchedFlowStep(
   return branchSteps.find((step: any) => candidateTriggers.includes(normalizeTriggerValue(step.trigger_value))) || null;
 }
 
+// Classifies Meta Cloud API error codes for the WABA protection system.
+// severity: "critical" → pause everything; "warning" → log + alert; "info" → just log.
+function classifyMetaError(code: string | null): { severity: "critical" | "warning" | "info"; reason: string } {
+  if (!code) return { severity: "info", reason: "unknown" };
+  switch (code) {
+    case "131031": // Business Account locked
+    case "368":    // Temporarily blocked for policy violations
+    case "131056": // Pair rate limit hit (severe)
+    case "130472": // User experiments / blocked
+      return { severity: "critical", reason: "waba_locked" };
+    case "131048": // Spam rate limit
+    case "131049": // Per-user marketing limit
+      return { severity: "critical", reason: "spam_restriction" };
+    case "131026": // Message undeliverable (recipient hasn't opted in)
+    case "131047": // Re-engagement message (24h window)
+      return { severity: "warning", reason: "quality_yellow" };
+    case "130429": // Rate limit
+    case "80007":  // Rate limit
+      return { severity: "warning", reason: "rate_limit" };
+    case "131045": // Template paused/disabled
+      return { severity: "warning", reason: "integrity_restriction" };
+    default:
+      if (code.startsWith("132")) return { severity: "warning", reason: "integrity_restriction" };
+      return { severity: "info", reason: "unknown" };
+  }
+
+
 Deno.serve(async (req) => {
   // CORS preflight
   if (req.method === "OPTIONS") {
