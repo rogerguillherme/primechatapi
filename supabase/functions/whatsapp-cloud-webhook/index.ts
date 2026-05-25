@@ -217,10 +217,25 @@ Deno.serve(async (req) => {
     // Handle status updates without skipping message processing when Meta sends both in the same payload
     if (hasStatuses) {
       console.log("Status update received:", JSON.stringify(value.statuses));
-      
+
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
       const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
       const sb = createClient(supabaseUrl, supabaseKey);
+
+      // Pre-resolve account/user from phone_number_id (needed for protection trigger)
+      const _incomingPNId = value.metadata?.phone_number_id || "";
+      let resolvedAccountId: string | null = null;
+      let resolvedUserId: string | null = null;
+      if (_incomingPNId) {
+        const { data: acc } = await sb
+          .from("whatsapp_accounts")
+          .select("id, user_id")
+          .eq("phone_number_id", _incomingPNId)
+          .maybeSingle();
+        if (acc) { resolvedAccountId = acc.id; resolvedUserId = acc.user_id; }
+      }
+
+
       
       for (const statusUpdate of value.statuses) {
         const waMessageId = statusUpdate.id;
