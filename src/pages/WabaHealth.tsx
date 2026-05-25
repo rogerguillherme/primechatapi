@@ -61,7 +61,7 @@ export default function WabaHealthPage() {
       if (!user) return [] as Account[];
       const { data } = await supabase
         .from("whatsapp_accounts")
-        .select("id, display_name, phone_number")
+        .select("id, name, phone_number_id")
         .eq("user_id", user.id);
       return (data || []) as Account[];
     },
