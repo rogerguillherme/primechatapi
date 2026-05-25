@@ -11,8 +11,8 @@ type Severity = "critical" | "warning" | "info";
 
 interface Account {
   id: string;
-  display_name: string | null;
-  phone_number: string | null;
+  name: string | null;
+  phone_number_id: string | null;
 }
 
 interface Snapshot {
