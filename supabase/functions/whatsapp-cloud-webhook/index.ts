@@ -143,6 +143,9 @@ function classifyMetaError(code: string | null): { severity: "critical" | "warni
       if (code.startsWith("132")) return { severity: "warning", reason: "integrity_restriction" };
       return { severity: "info", reason: "unknown" };
   }
+}
+
+
 
 
 Deno.serve(async (req) => {
