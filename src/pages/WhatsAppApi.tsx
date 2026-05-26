@@ -477,6 +477,121 @@ function BroadcastTab() {
     },
   });
 
+  // Disparos anteriores para usar como filtro de exclusão
+  const { data: previousJobs = [] } = useQuery({
+    queryKey: ["broadcast-prev-jobs-tab"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("broadcast_jobs")
+        .select("id, template_name, total_leads, created_at")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      return data || [];
+    },
+  });
+
+  const normalizePhoneDigits = (p: string) => (p || "").replace(/\D/g, "");
+
+  const applyExcludeFromJob = async (jobId: string) => {
+    if (!jobId) return;
+    const { data, error } = await supabase
+      .from("broadcast_jobs")
+      .select("lead_ids")
+      .eq("id", jobId)
+      .maybeSingle();
+    if (error || !data) {
+      toast.error("Erro ao carregar disparo");
+      return;
+    }
+    const excludeIds = new Set<string>(data.lead_ids || []);
+    // Build phone tail set for csv mode using leads table
+    let csvExcludedTails = new Set<string>();
+    if (mode === "csv" && excludeIds.size > 0) {
+      const ids = Array.from(excludeIds);
+      const out: string[] = [];
+      const chunk = 500;
+      for (let i = 0; i < ids.length; i += chunk) {
+        const slice = ids.slice(i, i + chunk);
+        const { data: phs } = await supabase.from("leads").select("phone").in("id", slice);
+        if (phs) for (const p of phs) out.push(normalizePhoneDigits(p.phone).slice(-8));
+      }
+      csvExcludedTails = new Set(out);
+    }
+
+    let removed = 0;
+    if (mode === "leads") {
+      setSelectedLeads((prev) => {
+        const next = new Set(prev);
+        for (const id of excludeIds) if (next.delete(id)) removed++;
+        return next;
+      });
+    } else {
+      setCsvSelectedIdxs((prev) => {
+        const next = new Set(prev);
+        for (const idx of Array.from(prev)) {
+          const tail = normalizePhoneDigits(csvRows[idx]?.telefone || "").slice(-8);
+          if (tail && csvExcludedTails.has(tail)) {
+            next.delete(idx);
+            removed++;
+          }
+        }
+        return next;
+      });
+    }
+    toast.success(`${removed} contato(s) removido(s) do disparo`);
+    setExcludeOpen(false);
+    setExcludeJobId("");
+  };
+
+  const applyExcludeFromFile = async (file: File) => {
+    try {
+      const text = await file.text();
+      const lines = text.split(/[\r\n,;]+/);
+      const tails = new Set<string>();
+      for (const line of lines) {
+        const digits = normalizePhoneDigits(line);
+        if (digits.length >= 8) tails.add(digits.slice(-8));
+      }
+      if (tails.size === 0) {
+        toast.error("Nenhum telefone válido encontrado");
+        return;
+      }
+      let removed = 0;
+      if (mode === "leads") {
+        const leadsById = new Map((leads || []).map((l: any) => [l.id, l]));
+        setSelectedLeads((prev) => {
+          const next = new Set(prev);
+          for (const id of Array.from(prev)) {
+            const l: any = leadsById.get(id);
+            const tail = normalizePhoneDigits(l?.phone || "").slice(-8);
+            if (tail && tails.has(tail)) {
+              next.delete(id);
+              removed++;
+            }
+          }
+          return next;
+        });
+      } else {
+        setCsvSelectedIdxs((prev) => {
+          const next = new Set(prev);
+          for (const idx of Array.from(prev)) {
+            const tail = normalizePhoneDigits(csvRows[idx]?.telefone || "").slice(-8);
+            if (tail && tails.has(tail)) {
+              next.delete(idx);
+              removed++;
+            }
+          }
+          return next;
+        });
+      }
+      toast.success(`${removed} contato(s) removido(s) (${tails.size} telefones na lista)`);
+      setExcludeOpen(false);
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao processar arquivo");
+    }
+  };
+
+
   const filteredLeads = useMemo(() => {
     if (!leads) return [];
     const s = search.toLowerCase();
