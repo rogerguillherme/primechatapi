@@ -36,7 +36,10 @@ export function BulkBroadcastDialog({ open, onOpenChange, accountId, accountName
   const [delayMax, setDelayMax] = useState(5);
   const [sending, setSending] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const csvRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [selectedJobId, setSelectedJobId] = useState<string>("");
 
   // Reset state when dialog opens
   useEffect(() => {
