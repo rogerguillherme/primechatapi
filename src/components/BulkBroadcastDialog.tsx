@@ -387,6 +387,77 @@ export function BulkBroadcastDialog({ open, onOpenChange, accountId, accountName
               />
             </div>
 
+            {/* Filtros de exclusão */}
+            <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 text-xs justify-start">
+                  <Filter size={12} className="mr-1" /> Excluir leads de…
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80 p-3" align="start">
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-xs font-semibold">Disparo anterior</Label>
+                    <p className="text-[10px] text-muted-foreground mb-1.5">
+                      Remove contatos que já receberam um disparo selecionado.
+                    </p>
+                    <div className="flex gap-1.5">
+                      <Select value={selectedJobId} onValueChange={setSelectedJobId}>
+                        <SelectTrigger className="h-8 text-xs flex-1">
+                          <SelectValue placeholder="Selecione um disparo..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {previousJobs.length === 0 ? (
+                            <div className="text-xs text-muted-foreground p-2">Nenhum disparo anterior.</div>
+                          ) : (
+                            previousJobs.map((j: any) => (
+                              <SelectItem key={j.id} value={j.id} className="text-xs">
+                                {j.template_name || "Disparo"} • {j.total_leads} • {format(new Date(j.created_at), "dd/MM HH:mm")}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        size="sm"
+                        className="h-8 text-xs"
+                        disabled={!selectedJobId}
+                        onClick={() => excludeFromPreviousJob(selectedJobId)}
+                      >
+                        Aplicar
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-border pt-3">
+                    <Label className="text-xs font-semibold">Lista importada</Label>
+                    <p className="text-[10px] text-muted-foreground mb-1.5">
+                      CSV/TXT com telefones (um por linha). Compara pelos últimos 8 dígitos.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs w-full"
+                      onClick={() => csvRef.current?.click()}
+                    >
+                      <Upload size={12} className="mr-1" /> Enviar arquivo
+                    </Button>
+                    <input
+                      ref={csvRef}
+                      type="file"
+                      accept=".csv,.txt,text/csv,text/plain"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) excludeFromCsv(f);
+                        if (e.target) e.target.value = "";
+                      }}
+                    />
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+
             {search && filtered.length > 0 && (
               <button
                 onClick={excludeAllFiltered}
