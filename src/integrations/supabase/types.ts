@@ -1192,6 +1192,9 @@ export type Database = {
           origin: string | null
           phone: string
           photo_url: string | null
+          unsubscribe_reason: string | null
+          unsubscribed: boolean
+          unsubscribed_at: string | null
           updated_at: string
           user_id: string | null
         }
@@ -1212,6 +1215,9 @@ export type Database = {
           origin?: string | null
           phone: string
           photo_url?: string | null
+          unsubscribe_reason?: string | null
+          unsubscribed?: boolean
+          unsubscribed_at?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -1232,6 +1238,9 @@ export type Database = {
           origin?: string | null
           phone?: string
           photo_url?: string | null
+          unsubscribe_reason?: string | null
+          unsubscribed?: boolean
+          unsubscribed_at?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -1590,6 +1599,42 @@ export type Database = {
           display_name?: string | null
           id?: string
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      unsubscribe_logs: {
+        Row: {
+          account_id: string | null
+          created_at: string
+          id: string
+          keyword_matched: string | null
+          lead_id: string | null
+          phone: string
+          source: string
+          source_message: string | null
+          user_id: string
+        }
+        Insert: {
+          account_id?: string | null
+          created_at?: string
+          id?: string
+          keyword_matched?: string | null
+          lead_id?: string | null
+          phone: string
+          source?: string
+          source_message?: string | null
+          user_id: string
+        }
+        Update: {
+          account_id?: string | null
+          created_at?: string
+          id?: string
+          keyword_matched?: string | null
+          lead_id?: string | null
+          phone?: string
+          source?: string
+          source_message?: string | null
           user_id?: string
         }
         Relationships: []
