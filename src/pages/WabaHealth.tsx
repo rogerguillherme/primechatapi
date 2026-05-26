@@ -285,6 +285,43 @@ export default function WabaHealthPage() {
         )}
       </Card>
 
+      <Card className="p-5">
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <h2 className="font-semibold flex items-center gap-2">
+            <UserMinus size={16} /> Descadastros automáticos
+          </h2>
+          <div className="flex gap-3 text-xs">
+            <div className="text-right">
+              <p className="text-muted-foreground">24h</p>
+              <p className="font-semibold text-base">{unsubscribeStats?.last24h ?? 0}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-muted-foreground">Total</p>
+              <p className="font-semibold text-base">{unsubscribeStats?.total ?? 0}</p>
+            </div>
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground mb-3">
+          Detectamos palavras como <i>sair</i>, <i>parar</i>, <i>cancelar</i>, <i>descadastrar</i> nas respostas e removemos
+          o contato automaticamente das campanhas e fluxos.
+        </p>
+        {(!unsubscribeStats || unsubscribeStats.recent.length === 0) ? (
+          <div className="text-xs text-muted-foreground italic">Nenhum descadastro registrado ainda.</div>
+        ) : (
+          <ul className="space-y-1.5 text-xs">
+            {unsubscribeStats.recent.map((r, i) => (
+              <li key={i} className="flex items-center justify-between border-b border-border/40 pb-1.5 last:border-0">
+                <span className="font-mono">{r.phone}</span>
+                <span className="text-muted-foreground">
+                  "{r.keyword_matched}" · {formatDistanceToNow(new Date(r.created_at), { addSuffix: true, locale: ptBR })}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+
       <Card className="p-5 bg-primary/5 border-primary/20">
         <h2 className="font-semibold flex items-center gap-2 mb-2">
           <MessageSquare size={16} /> Recomendações
