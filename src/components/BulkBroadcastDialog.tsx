@@ -9,9 +9,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Search, X, Image as ImageIcon, Send, Megaphone, Loader2, Trash2 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Search, X, Image as ImageIcon, Send, Megaphone, Loader2, Trash2, Filter, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { format } from "date-fns";
 
 interface BulkBroadcastDialogProps {
   open: boolean;
@@ -33,7 +36,10 @@ export function BulkBroadcastDialog({ open, onOpenChange, accountId, accountName
   const [delayMax, setDelayMax] = useState(5);
   const [sending, setSending] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const csvRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [selectedJobId, setSelectedJobId] = useState<string>("");
 
   // Reset state when dialog opens
   useEffect(() => {
@@ -82,6 +88,88 @@ export function BulkBroadcastDialog({ open, onOpenChange, accountId, accountName
       return out.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     },
   });
+
+  // Disparos anteriores para usar como filtro de exclusão
+  const { data: previousJobs = [] } = useQuery({
+    queryKey: ["bulk-prev-jobs", accountId],
+    enabled: open && !!accountId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("broadcast_jobs")
+        .select("id, template_name, total_leads, created_at, status")
+        .or(`account_id.eq.${accountId},account_ids.cs.{${accountId}}`)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      return data || [];
+    },
+  });
+
+  const excludeFromPreviousJob = async (jobId: string) => {
+    if (!jobId) return;
+    const { data, error } = await supabase
+      .from("broadcast_jobs")
+      .select("lead_ids")
+      .eq("id", jobId)
+      .maybeSingle();
+    if (error || !data) {
+      toast.error("Erro ao carregar disparo");
+      return;
+    }
+    const ids: string[] = data.lead_ids || [];
+    const validIds = new Set(leads.map((l: any) => l.id));
+    let count = 0;
+    setExcludedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (validIds.has(id) && !next.has(id)) {
+          next.add(id);
+          count++;
+        }
+      }
+      return next;
+    });
+    toast.success(`${count} contato(s) excluído(s) deste disparo`);
+    setFilterOpen(false);
+    setSelectedJobId("");
+  };
+
+  const normalizePhone = (p: string) => (p || "").replace(/\D/g, "");
+
+  const excludeFromCsv = async (file: File) => {
+    try {
+      const text = await file.text();
+      // Extract anything that looks like a phone (digits with optional separators)
+      const lines = text.split(/[\r\n,;]+/);
+      const phones = new Set<string>();
+      for (const line of lines) {
+        const digits = normalizePhone(line);
+        if (digits.length >= 8) {
+          // Match by last 8 digits to be resilient to country codes
+          phones.add(digits.slice(-8));
+        }
+      }
+      if (phones.size === 0) {
+        toast.error("Nenhum telefone válido encontrado no arquivo");
+        return;
+      }
+      let count = 0;
+      setExcludedIds((prev) => {
+        const next = new Set(prev);
+        for (const l of leads) {
+          const tail = normalizePhone(l.phone).slice(-8);
+          if (tail && phones.has(tail) && !next.has(l.id)) {
+            next.add(l.id);
+            count++;
+          }
+        }
+        return next;
+      });
+      toast.success(`${count} contato(s) excluído(s) a partir da lista (${phones.size} telefones)`);
+      setFilterOpen(false);
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao processar arquivo");
+    }
+  };
 
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
@@ -298,6 +386,77 @@ export function BulkBroadcastDialog({ open, onOpenChange, accountId, accountName
                 className="pl-7 h-8 text-xs"
               />
             </div>
+
+            {/* Filtros de exclusão */}
+            <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 text-xs justify-start">
+                  <Filter size={12} className="mr-1" /> Excluir leads de…
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80 p-3" align="start">
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-xs font-semibold">Disparo anterior</Label>
+                    <p className="text-[10px] text-muted-foreground mb-1.5">
+                      Remove contatos que já receberam um disparo selecionado.
+                    </p>
+                    <div className="flex gap-1.5">
+                      <Select value={selectedJobId} onValueChange={setSelectedJobId}>
+                        <SelectTrigger className="h-8 text-xs flex-1">
+                          <SelectValue placeholder="Selecione um disparo..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {previousJobs.length === 0 ? (
+                            <div className="text-xs text-muted-foreground p-2">Nenhum disparo anterior.</div>
+                          ) : (
+                            previousJobs.map((j: any) => (
+                              <SelectItem key={j.id} value={j.id} className="text-xs">
+                                {j.template_name || "Disparo"} • {j.total_leads} • {format(new Date(j.created_at), "dd/MM HH:mm")}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        size="sm"
+                        className="h-8 text-xs"
+                        disabled={!selectedJobId}
+                        onClick={() => excludeFromPreviousJob(selectedJobId)}
+                      >
+                        Aplicar
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-border pt-3">
+                    <Label className="text-xs font-semibold">Lista importada</Label>
+                    <p className="text-[10px] text-muted-foreground mb-1.5">
+                      CSV/TXT com telefones (um por linha). Compara pelos últimos 8 dígitos.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs w-full"
+                      onClick={() => csvRef.current?.click()}
+                    >
+                      <Upload size={12} className="mr-1" /> Enviar arquivo
+                    </Button>
+                    <input
+                      ref={csvRef}
+                      type="file"
+                      accept=".csv,.txt,text/csv,text/plain"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) excludeFromCsv(f);
+                        if (e.target) e.target.value = "";
+                      }}
+                    />
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
 
             {search && filtered.length > 0 && (
               <button
