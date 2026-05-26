@@ -126,6 +126,27 @@ export default function WabaHealthPage() {
     refetchInterval: 60_000,
   });
 
+  const { data: unsubscribeStats } = useQuery({
+    queryKey: ["unsubscribe-stats", user?.id],
+    queryFn: async () => {
+      if (!user) return { total: 0, last24h: 0, recent: [] as Array<{ phone: string; keyword_matched: string | null; created_at: string }> };
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const [{ count: total }, { count: last24h }, { data: recent }] = await Promise.all([
+        supabase.from("unsubscribe_logs").select("id", { count: "exact", head: true }).eq("user_id", user.id),
+        supabase.from("unsubscribe_logs").select("id", { count: "exact", head: true }).eq("user_id", user.id).gte("created_at", since),
+        supabase.from("unsubscribe_logs").select("phone, keyword_matched, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(5),
+      ]);
+      return {
+        total: total || 0,
+        last24h: last24h || 0,
+        recent: (recent || []) as Array<{ phone: string; keyword_matched: string | null; created_at: string }>,
+      };
+    },
+    enabled: !!user,
+    refetchInterval: 60_000,
+  });
+
+
   const latestSnapshotByAccount = new Map<string, Snapshot>();
   for (const s of snapshots) {
     if (!latestSnapshotByAccount.has(s.account_id)) latestSnapshotByAccount.set(s.account_id, s);
