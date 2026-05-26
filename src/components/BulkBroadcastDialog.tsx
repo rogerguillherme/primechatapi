@@ -171,7 +171,7 @@ export function BulkBroadcastDialog({ open, onOpenChange, accountId, accountName
     }
   };
 
-
+  const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
     if (!s) return leads;
     return leads.filter((l: any) =>
