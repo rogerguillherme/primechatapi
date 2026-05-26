@@ -89,7 +89,89 @@ export function BulkBroadcastDialog({ open, onOpenChange, accountId, accountName
     },
   });
 
-  const filtered = useMemo(() => {
+  // Disparos anteriores para usar como filtro de exclusão
+  const { data: previousJobs = [] } = useQuery({
+    queryKey: ["bulk-prev-jobs", accountId],
+    enabled: open && !!accountId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("broadcast_jobs")
+        .select("id, template_name, total_leads, created_at, status")
+        .or(`account_id.eq.${accountId},account_ids.cs.{${accountId}}`)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      return data || [];
+    },
+  });
+
+  const excludeFromPreviousJob = async (jobId: string) => {
+    if (!jobId) return;
+    const { data, error } = await supabase
+      .from("broadcast_jobs")
+      .select("lead_ids")
+      .eq("id", jobId)
+      .maybeSingle();
+    if (error || !data) {
+      toast.error("Erro ao carregar disparo");
+      return;
+    }
+    const ids: string[] = data.lead_ids || [];
+    const validIds = new Set(leads.map((l: any) => l.id));
+    let count = 0;
+    setExcludedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (validIds.has(id) && !next.has(id)) {
+          next.add(id);
+          count++;
+        }
+      }
+      return next;
+    });
+    toast.success(`${count} contato(s) excluído(s) deste disparo`);
+    setFilterOpen(false);
+    setSelectedJobId("");
+  };
+
+  const normalizePhone = (p: string) => (p || "").replace(/\D/g, "");
+
+  const excludeFromCsv = async (file: File) => {
+    try {
+      const text = await file.text();
+      // Extract anything that looks like a phone (digits with optional separators)
+      const lines = text.split(/[\r\n,;]+/);
+      const phones = new Set<string>();
+      for (const line of lines) {
+        const digits = normalizePhone(line);
+        if (digits.length >= 8) {
+          // Match by last 8 digits to be resilient to country codes
+          phones.add(digits.slice(-8));
+        }
+      }
+      if (phones.size === 0) {
+        toast.error("Nenhum telefone válido encontrado no arquivo");
+        return;
+      }
+      let count = 0;
+      setExcludedIds((prev) => {
+        const next = new Set(prev);
+        for (const l of leads) {
+          const tail = normalizePhone(l.phone).slice(-8);
+          if (tail && phones.has(tail) && !next.has(l.id)) {
+            next.add(l.id);
+            count++;
+          }
+        }
+        return next;
+      });
+      toast.success(`${count} contato(s) excluído(s) a partir da lista (${phones.size} telefones)`);
+      setFilterOpen(false);
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao processar arquivo");
+    }
+  };
+
+
     const s = search.trim().toLowerCase();
     if (!s) return leads;
     return leads.filter((l: any) =>
