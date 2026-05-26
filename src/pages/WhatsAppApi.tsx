@@ -1186,7 +1186,79 @@ function BroadcastTab() {
         <Button variant="outline" size="sm" onClick={() => setShowAddLead(!showAddLead)}>
           <Users size={14} className="mr-1.5" /> {showAddLead ? "Fechar" : "Adicionar lead"}
         </Button>
+
+        {/* Excluir público antes do disparo */}
+        <Popover open={excludeOpen} onOpenChange={setExcludeOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm">
+              <UserMinus size={14} className="mr-1.5" /> Excluir público
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-96 p-3" align="start">
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs font-semibold mb-1">Remover quem já recebeu um disparo</p>
+                <p className="text-[11px] text-muted-foreground mb-2">
+                  Desmarca da seleção atual quem está em um disparo anterior.
+                </p>
+                <div className="flex gap-1.5">
+                  <Select value={excludeJobId} onValueChange={setExcludeJobId}>
+                    <SelectTrigger className="h-8 text-xs flex-1">
+                      <SelectValue placeholder="Selecione um disparo..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {previousJobs.length === 0 ? (
+                        <div className="text-xs text-muted-foreground p-2">Nenhum disparo anterior.</div>
+                      ) : (
+                        previousJobs.map((j: any) => (
+                          <SelectItem key={j.id} value={j.id} className="text-xs">
+                            {j.template_name || "Disparo"} • {j.total_leads} • {format(new Date(j.created_at), "dd/MM HH:mm")}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    size="sm"
+                    className="h-8 text-xs"
+                    disabled={!excludeJobId}
+                    onClick={() => applyExcludeFromJob(excludeJobId)}
+                  >
+                    Aplicar
+                  </Button>
+                </div>
+              </div>
+
+              <div className="border-t border-border pt-3">
+                <p className="text-xs font-semibold mb-1">Remover por lista importada</p>
+                <p className="text-[11px] text-muted-foreground mb-2">
+                  CSV/TXT com telefones (um por linha). Compara pelos últimos 8 dígitos.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs w-full"
+                  onClick={() => excludeCsvRef.current?.click()}
+                >
+                  <Upload size={12} className="mr-1.5" /> Enviar arquivo
+                </Button>
+                <input
+                  ref={excludeCsvRef}
+                  type="file"
+                  accept=".csv,.txt,text/csv,text/plain"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) applyExcludeFromFile(f);
+                    if (e.target) e.target.value = "";
+                  }}
+                />
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
+
 
       {/* Add lead form */}
       {showAddLead && (
