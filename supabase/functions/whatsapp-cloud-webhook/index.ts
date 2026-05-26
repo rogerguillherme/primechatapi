@@ -643,6 +643,130 @@ Deno.serve(async (req) => {
         account_id: resolvedAccountId,
       });
 
+      // ── AUTO UNSUBSCRIBE ENGINE ──
+      // Detect opt-out keywords in inbound text. If matched: blacklist the lead,
+      // cancel active flow executions, remove from pending broadcasts and optionally
+      // reply with a confirmation. We then SKIP AI auto-reply and tracking below.
+      let unsubscribedThisMessage = false;
+      if (text && lead && resolvedUserId) {
+        try {
+          const normalized = text
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .trim();
+          // Whole-word / phrase match. \b not reliable across accents, so use lookarounds.
+          const UNSUB_REGEX = /(^|[^a-z0-9])(sair|parar|pare|stop|unsubscribe|cancelar|cancela|remover|remove|descadastrar|descadastra|nao quero mais|nao quero|cancelar inscricao|sair da lista|remover da lista)([^a-z0-9]|$)/i;
+          const match = normalized.match(UNSUB_REGEX);
+          if (match) {
+            const keyword = match[2];
+            console.log(`[unsubscribe] keyword "${keyword}" matched for lead ${lead.id}`);
+
+            // 1. Mark lead as unsubscribed (idempotent)
+            const { data: leadRow } = await supabase
+              .from("leads")
+              .select("unsubscribed, phone")
+              .eq("id", lead.id)
+              .maybeSingle();
+
+            if (!leadRow?.unsubscribed) {
+              await supabase
+                .from("leads")
+                .update({
+                  unsubscribed: true,
+                  unsubscribed_at: activityAt,
+                  unsubscribe_reason: `keyword:${keyword}`,
+                })
+                .eq("id", lead.id);
+
+              // 2. Log it
+              await supabase.from("unsubscribe_logs").insert({
+                user_id: resolvedUserId,
+                lead_id: lead.id,
+                phone: lead.phone || cleanPhone,
+                keyword_matched: keyword,
+                source_message: text.slice(0, 500),
+                source: "whatsapp_inbound",
+                account_id: resolvedAccountId,
+              });
+
+              // 3. Add to blacklist (idempotent)
+              await supabase.from("lead_blacklist").insert({
+                user_id: resolvedUserId,
+                lead_id: lead.id,
+                phone: lead.phone || cleanPhone,
+                reason: "unsubscribe_keyword",
+              });
+
+              // 4. Cancel active flow executions for this lead
+              await supabase
+                .from("flow_executions")
+                .update({ status: "cancelled", updated_at: activityAt })
+                .eq("lead_id", lead.id)
+                .in("status", ["running", "waiting_delay", "waiting_no_response"]);
+
+              // 5. Remove lead from pending/paused broadcast jobs
+              const { data: pendingJobs } = await supabase
+                .from("broadcast_jobs")
+                .select("id, lead_ids")
+                .eq("user_id", resolvedUserId)
+                .in("status", ["pending", "paused", "scheduled", "running"]);
+
+              for (const job of (pendingJobs || []) as Array<{ id: string; lead_ids: string[] }>) {
+                if (Array.isArray(job.lead_ids) && job.lead_ids.includes(lead.id)) {
+                  const cleaned = job.lead_ids.filter((id) => id !== lead.id);
+                  await supabase
+                    .from("broadcast_jobs")
+                    .update({ lead_ids: cleaned })
+                    .eq("id", job.id);
+                }
+              }
+
+              // 6. Optional auto-reply
+              try {
+                const { data: settings } = await supabase
+                  .from("app_settings")
+                  .select("key, value")
+                  .in("key", ["unsubscribe_auto_reply_enabled", "unsubscribe_auto_reply_text"]);
+                const settingsMap = new Map(
+                  (settings || []).map((s: { key: string; value: string }) => [s.key, s.value]),
+                );
+                const enabled = (settingsMap.get("unsubscribe_auto_reply_enabled") || "true") === "true";
+                const replyText =
+                  settingsMap.get("unsubscribe_auto_reply_text") || "Você foi removido da lista. 👍";
+
+                if (enabled) {
+                  await fetch(`${supabaseUrl}/functions/v1/whatsapp-cloud-send`, {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      "Authorization": `Bearer ${supabaseKey}`,
+                    },
+                    body: JSON.stringify({
+                      phone: cleanPhone,
+                      message: replyText,
+                      lead_id: lead.id,
+                      account_id: resolvedAccountId,
+                    }),
+                  });
+                }
+              } catch (replyErr) {
+                console.error("[unsubscribe] auto-reply error:", replyErr);
+              }
+            }
+
+            unsubscribedThisMessage = true;
+          }
+        } catch (unsubErr) {
+          console.error("[unsubscribe] detection error:", unsubErr);
+        }
+      }
+
+      if (unsubscribedThisMessage) {
+        // Don't fire AI auto-reply or campaign tracking after opt-out.
+        continue;
+      }
+
       // ── AI AUTO-REPLY: Trigger AI response if enabled ──
       // Only for text messages (not button replies which are handled by flows)
       if (!buttonPayload && text) {

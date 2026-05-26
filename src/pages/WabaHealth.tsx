@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Shield, CheckCircle2, AlertTriangle, ShieldAlert, Activity, MessageSquare } from "lucide-react";
+import { Shield, CheckCircle2, AlertTriangle, ShieldAlert, Activity, MessageSquare, UserMinus } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+
 
 type Severity = "critical" | "warning" | "info";
 
@@ -124,6 +125,27 @@ export default function WabaHealthPage() {
     enabled: !!user,
     refetchInterval: 60_000,
   });
+
+  const { data: unsubscribeStats } = useQuery({
+    queryKey: ["unsubscribe-stats", user?.id],
+    queryFn: async () => {
+      if (!user) return { total: 0, last24h: 0, recent: [] as Array<{ phone: string; keyword_matched: string | null; created_at: string }> };
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const [{ count: total }, { count: last24h }, { data: recent }] = await Promise.all([
+        supabase.from("unsubscribe_logs").select("id", { count: "exact", head: true }).eq("user_id", user.id),
+        supabase.from("unsubscribe_logs").select("id", { count: "exact", head: true }).eq("user_id", user.id).gte("created_at", since),
+        supabase.from("unsubscribe_logs").select("phone, keyword_matched, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(5),
+      ]);
+      return {
+        total: total || 0,
+        last24h: last24h || 0,
+        recent: (recent || []) as Array<{ phone: string; keyword_matched: string | null; created_at: string }>,
+      };
+    },
+    enabled: !!user,
+    refetchInterval: 60_000,
+  });
+
 
   const latestSnapshotByAccount = new Map<string, Snapshot>();
   for (const s of snapshots) {
@@ -262,6 +284,43 @@ export default function WabaHealthPage() {
           </ul>
         )}
       </Card>
+
+      <Card className="p-5">
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <h2 className="font-semibold flex items-center gap-2">
+            <UserMinus size={16} /> Descadastros automáticos
+          </h2>
+          <div className="flex gap-3 text-xs">
+            <div className="text-right">
+              <p className="text-muted-foreground">24h</p>
+              <p className="font-semibold text-base">{unsubscribeStats?.last24h ?? 0}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-muted-foreground">Total</p>
+              <p className="font-semibold text-base">{unsubscribeStats?.total ?? 0}</p>
+            </div>
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground mb-3">
+          Detectamos palavras como <i>sair</i>, <i>parar</i>, <i>cancelar</i>, <i>descadastrar</i> nas respostas e removemos
+          o contato automaticamente das campanhas e fluxos.
+        </p>
+        {(!unsubscribeStats || unsubscribeStats.recent.length === 0) ? (
+          <div className="text-xs text-muted-foreground italic">Nenhum descadastro registrado ainda.</div>
+        ) : (
+          <ul className="space-y-1.5 text-xs">
+            {unsubscribeStats.recent.map((r, i) => (
+              <li key={i} className="flex items-center justify-between border-b border-border/40 pb-1.5 last:border-0">
+                <span className="font-mono">{r.phone}</span>
+                <span className="text-muted-foreground">
+                  "{r.keyword_matched}" · {formatDistanceToNow(new Date(r.created_at), { addSuffix: true, locale: ptBR })}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
 
       <Card className="p-5 bg-primary/5 border-primary/20">
         <h2 className="font-semibold flex items-center gap-2 mb-2">
