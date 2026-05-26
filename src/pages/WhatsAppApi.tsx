@@ -23,6 +23,8 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
   Phone, Key, Link2, Send, CheckCircle2, AlertCircle, Copy, ExternalLink,
@@ -30,7 +32,7 @@ import {
   Truck, Users, ArrowLeft, BarChart3, MoreVertical, Pencil, Trash2, Star,
   KeyRound, ChevronDown, Webhook, LogOut, Plug, Tag, ChevronLeft, ChevronRight,
   Instagram, GitBranch, TrendingUp, Bot, Volume2, Sparkles, DollarSign,
-  QrCode, RefreshCw, Loader2, Smartphone,
+  QrCode, RefreshCw, Loader2, Smartphone, Filter, Upload, UserMinus,
 } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
