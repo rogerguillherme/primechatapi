@@ -9,9 +9,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Search, X, Image as ImageIcon, Send, Megaphone, Loader2, Trash2 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Search, X, Image as ImageIcon, Send, Megaphone, Loader2, Trash2, Filter, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { format } from "date-fns";
 
 interface BulkBroadcastDialogProps {
   open: boolean;
