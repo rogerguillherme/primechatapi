@@ -265,11 +265,17 @@ Deno.serve(async (req) => {
     // Fetch leads with last_inbound_at for 24h window check
     const { data: rawBatchLeads } = await supabase
       .from("leads")
-      .select("id, name, phone, last_inbound_at")
+      .select("id, name, phone, last_inbound_at, unsubscribed")
       .in("id", batchLeadIds);
 
+    // ── UNSUBSCRIBE FILTER ──
+    let batchLeads = (rawBatchLeads || []).filter((l: any) => !l.unsubscribed);
+    const unsubscribedSkipped = (rawBatchLeads?.length || 0) - batchLeads.length;
+    if (unsubscribedSkipped > 0) {
+      console.log(`Skipped ${unsubscribedSkipped} unsubscribed leads in job ${jobId}`);
+    }
+
     // ── BLACKLIST FILTER ──
-    let batchLeads = rawBatchLeads || [];
     let blacklistedSkipped = 0;
     if (batchLeads.length > 0) {
       const phonesToCheck = batchLeads.map((l) => (l.phone || "").replace(/\D/g, ""));
@@ -287,6 +293,7 @@ Deno.serve(async (req) => {
         console.log(`Skipped ${blacklistedSkipped} blacklisted leads in job ${jobId}`);
       }
     }
+
 
     if (!batchLeads || batchLeads.length === 0) {
       const newCursor = cursor + batchSize;
