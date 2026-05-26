@@ -412,6 +412,10 @@ function BroadcastTab() {
   const [newLeadPhone, setNewLeadPhone] = useState("");
   const [isAddingLead, setIsAddingLead] = useState(false);
   const queryClient = useQueryClient();
+  // Exclude audience state
+  const [excludeOpen, setExcludeOpen] = useState(false);
+  const [excludeJobId, setExcludeJobId] = useState<string>("");
+  const excludeCsvRef = useRef<HTMLInputElement>(null);
 
   // Auto-select default account
   useEffect(() => {
