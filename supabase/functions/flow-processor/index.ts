@@ -107,7 +107,7 @@ Deno.serve(async (req) => {
 
         const { data: lead } = await supabase
           .from("leads")
-          .select("id, name, phone")
+          .select("id, name, phone, unsubscribed")
           .eq("id", exec.lead_id)
           .single();
 
@@ -118,6 +118,17 @@ Deno.serve(async (req) => {
           }).eq("id", exec.id);
           continue;
         }
+
+        // Skip & cancel if lead opted out
+        if ((lead as any).unsubscribed) {
+          await supabase.from("flow_executions").update({
+            status: "cancelled",
+            updated_at: new Date().toISOString(),
+            metadata: { ...(exec.metadata || {}), cancel_reason: "lead_unsubscribed" },
+          }).eq("id", exec.id);
+          continue;
+        }
+
 
         const currentStep = exec.current_step;
         if (!currentStep) {
