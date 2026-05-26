@@ -23,6 +23,8 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
   Phone, Key, Link2, Send, CheckCircle2, AlertCircle, Copy, ExternalLink,
@@ -30,7 +32,7 @@ import {
   Truck, Users, ArrowLeft, BarChart3, MoreVertical, Pencil, Trash2, Star,
   KeyRound, ChevronDown, Webhook, LogOut, Plug, Tag, ChevronLeft, ChevronRight,
   Instagram, GitBranch, TrendingUp, Bot, Volume2, Sparkles, DollarSign,
-  QrCode, RefreshCw, Loader2, Smartphone,
+  QrCode, RefreshCw, Loader2, Smartphone, Filter, Upload, UserMinus,
 } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
@@ -410,6 +412,10 @@ function BroadcastTab() {
   const [newLeadPhone, setNewLeadPhone] = useState("");
   const [isAddingLead, setIsAddingLead] = useState(false);
   const queryClient = useQueryClient();
+  // Exclude audience state
+  const [excludeOpen, setExcludeOpen] = useState(false);
+  const [excludeJobId, setExcludeJobId] = useState<string>("");
+  const excludeCsvRef = useRef<HTMLInputElement>(null);
 
   // Auto-select default account
   useEffect(() => {
@@ -470,6 +476,121 @@ function BroadcastTab() {
       return data || [];
     },
   });
+
+  // Disparos anteriores para usar como filtro de exclusão
+  const { data: previousJobs = [] } = useQuery({
+    queryKey: ["broadcast-prev-jobs-tab"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("broadcast_jobs")
+        .select("id, template_name, total_leads, created_at")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      return data || [];
+    },
+  });
+
+  const normalizePhoneDigits = (p: string) => (p || "").replace(/\D/g, "");
+
+  const applyExcludeFromJob = async (jobId: string) => {
+    if (!jobId) return;
+    const { data, error } = await supabase
+      .from("broadcast_jobs")
+      .select("lead_ids")
+      .eq("id", jobId)
+      .maybeSingle();
+    if (error || !data) {
+      toast.error("Erro ao carregar disparo");
+      return;
+    }
+    const excludeIds = new Set<string>(data.lead_ids || []);
+    // Build phone tail set for csv mode using leads table
+    let csvExcludedTails = new Set<string>();
+    if (mode === "csv" && excludeIds.size > 0) {
+      const ids = Array.from(excludeIds);
+      const out: string[] = [];
+      const chunk = 500;
+      for (let i = 0; i < ids.length; i += chunk) {
+        const slice = ids.slice(i, i + chunk);
+        const { data: phs } = await supabase.from("leads").select("phone").in("id", slice);
+        if (phs) for (const p of phs) out.push(normalizePhoneDigits(p.phone).slice(-8));
+      }
+      csvExcludedTails = new Set(out);
+    }
+
+    let removed = 0;
+    if (mode === "leads") {
+      setSelectedLeads((prev) => {
+        const next = new Set(prev);
+        for (const id of excludeIds) if (next.delete(id)) removed++;
+        return next;
+      });
+    } else {
+      setCsvSelectedIdxs((prev) => {
+        const next = new Set(prev);
+        for (const idx of Array.from(prev)) {
+          const tail = normalizePhoneDigits(csvRows[idx]?.telefone || "").slice(-8);
+          if (tail && csvExcludedTails.has(tail)) {
+            next.delete(idx);
+            removed++;
+          }
+        }
+        return next;
+      });
+    }
+    toast.success(`${removed} contato(s) removido(s) do disparo`);
+    setExcludeOpen(false);
+    setExcludeJobId("");
+  };
+
+  const applyExcludeFromFile = async (file: File) => {
+    try {
+      const text = await file.text();
+      const lines = text.split(/[\r\n,;]+/);
+      const tails = new Set<string>();
+      for (const line of lines) {
+        const digits = normalizePhoneDigits(line);
+        if (digits.length >= 8) tails.add(digits.slice(-8));
+      }
+      if (tails.size === 0) {
+        toast.error("Nenhum telefone válido encontrado");
+        return;
+      }
+      let removed = 0;
+      if (mode === "leads") {
+        const leadsById = new Map((leads || []).map((l: any) => [l.id, l]));
+        setSelectedLeads((prev) => {
+          const next = new Set(prev);
+          for (const id of Array.from(prev)) {
+            const l: any = leadsById.get(id);
+            const tail = normalizePhoneDigits(l?.phone || "").slice(-8);
+            if (tail && tails.has(tail)) {
+              next.delete(id);
+              removed++;
+            }
+          }
+          return next;
+        });
+      } else {
+        setCsvSelectedIdxs((prev) => {
+          const next = new Set(prev);
+          for (const idx of Array.from(prev)) {
+            const tail = normalizePhoneDigits(csvRows[idx]?.telefone || "").slice(-8);
+            if (tail && tails.has(tail)) {
+              next.delete(idx);
+              removed++;
+            }
+          }
+          return next;
+        });
+      }
+      toast.success(`${removed} contato(s) removido(s) (${tails.size} telefones na lista)`);
+      setExcludeOpen(false);
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao processar arquivo");
+    }
+  };
+
 
   const filteredLeads = useMemo(() => {
     if (!leads) return [];
@@ -1065,7 +1186,79 @@ function BroadcastTab() {
         <Button variant="outline" size="sm" onClick={() => setShowAddLead(!showAddLead)}>
           <Users size={14} className="mr-1.5" /> {showAddLead ? "Fechar" : "Adicionar lead"}
         </Button>
+
+        {/* Excluir público antes do disparo */}
+        <Popover open={excludeOpen} onOpenChange={setExcludeOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm">
+              <UserMinus size={14} className="mr-1.5" /> Excluir público
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-96 p-3" align="start">
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs font-semibold mb-1">Remover quem já recebeu um disparo</p>
+                <p className="text-[11px] text-muted-foreground mb-2">
+                  Desmarca da seleção atual quem está em um disparo anterior.
+                </p>
+                <div className="flex gap-1.5">
+                  <Select value={excludeJobId} onValueChange={setExcludeJobId}>
+                    <SelectTrigger className="h-8 text-xs flex-1">
+                      <SelectValue placeholder="Selecione um disparo..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {previousJobs.length === 0 ? (
+                        <div className="text-xs text-muted-foreground p-2">Nenhum disparo anterior.</div>
+                      ) : (
+                        previousJobs.map((j: any) => (
+                          <SelectItem key={j.id} value={j.id} className="text-xs">
+                            {j.template_name || "Disparo"} • {j.total_leads} • {format(new Date(j.created_at), "dd/MM HH:mm")}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    size="sm"
+                    className="h-8 text-xs"
+                    disabled={!excludeJobId}
+                    onClick={() => applyExcludeFromJob(excludeJobId)}
+                  >
+                    Aplicar
+                  </Button>
+                </div>
+              </div>
+
+              <div className="border-t border-border pt-3">
+                <p className="text-xs font-semibold mb-1">Remover por lista importada</p>
+                <p className="text-[11px] text-muted-foreground mb-2">
+                  CSV/TXT com telefones (um por linha). Compara pelos últimos 8 dígitos.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs w-full"
+                  onClick={() => excludeCsvRef.current?.click()}
+                >
+                  <Upload size={12} className="mr-1.5" /> Enviar arquivo
+                </Button>
+                <input
+                  ref={excludeCsvRef}
+                  type="file"
+                  accept=".csv,.txt,text/csv,text/plain"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) applyExcludeFromFile(f);
+                    if (e.target) e.target.value = "";
+                  }}
+                />
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
+
 
       {/* Add lead form */}
       {showAddLead && (
