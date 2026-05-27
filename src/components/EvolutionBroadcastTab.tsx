@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,10 +12,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Slider } from "@/components/ui/slider";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ContactImporter } from "@/components/ContactImporter";
 import { toast } from "sonner";
 import {
   Smartphone, GitBranch, MessageSquare, Send, Search, ShieldAlert,
-  Sparkles, Loader2, Users, Image as ImageIcon, Info,
+  Sparkles, Loader2, Users, Image as ImageIcon, Info, Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -48,6 +50,7 @@ function speedLevel(min: number, max: number): {
 
 export function EvolutionBroadcastTab() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [accountId, setAccountId] = useState<string>("");
   const [mode, setMode] = useState<Mode>("message");
   const [flowId, setFlowId] = useState<string>("");
@@ -58,6 +61,7 @@ export function EvolutionBroadcastTab() {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sending, setSending] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const { data: accounts = [] } = useQuery({
     queryKey: ["evolution-accounts", user?.id],
@@ -380,9 +384,14 @@ export function EvolutionBroadcastTab() {
         {/* Leads */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Users size={14}/> Leads ({selected.size}/{filtered.length})
-            </CardTitle>
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Users size={14}/> Leads ({selected.size}/{filtered.length})
+              </CardTitle>
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setImportOpen(true)}>
+                <Upload size={12} className="mr-1"/> Importar lista
+              </Button>
+            </div>
             <div className="relative mt-2">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"/>
               <Input value={search} onChange={(e) => setSearch(e.target.value)}
@@ -473,6 +482,18 @@ export function EvolutionBroadcastTab() {
           Iniciar disparo
         </Button>
       </div>
+
+      <Dialog open={importOpen} onOpenChange={(o) => {
+        setImportOpen(o);
+        if (!o) queryClient.invalidateQueries({ queryKey: ["evolution-broadcast-leads"] });
+      }}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Importar lista de disparo</DialogTitle>
+          </DialogHeader>
+          <ContactImporter />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
