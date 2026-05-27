@@ -384,9 +384,14 @@ export function EvolutionBroadcastTab() {
         {/* Leads */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Users size={14}/> Leads ({selected.size}/{filtered.length})
-            </CardTitle>
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Users size={14}/> Leads ({selected.size}/{filtered.length})
+              </CardTitle>
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setImportOpen(true)}>
+                <Upload size={12} className="mr-1"/> Importar lista
+              </Button>
+            </div>
             <div className="relative mt-2">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"/>
               <Input value={search} onChange={(e) => setSearch(e.target.value)}
