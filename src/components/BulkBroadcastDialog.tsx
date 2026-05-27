@@ -11,10 +11,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, X, Image as ImageIcon, Send, Megaphone, Loader2, Trash2, Filter, Upload } from "lucide-react";
+import { Search, X, Image as ImageIcon, Send, Megaphone, Loader2, Trash2, Filter, Upload, AlertTriangle, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import { analyzeTemplateContent, spamLevelLabel } from "@/lib/spamAnalyzer";
+
 
 interface BulkBroadcastDialogProps {
   open: boolean;
@@ -230,6 +232,20 @@ export function BulkBroadcastDialog({ open, onOpenChange, accountId, accountName
       return;
     }
 
+    // Anti-ban v2 — bloqueio de conteúdo crítico
+    const spam = analyzeTemplateContent(message);
+    if (spam.risk_level === "critical") {
+      toast.error("Conteúdo bloqueado: risco crítico de spam. Revise o texto antes de disparar.");
+      return;
+    }
+    if (spam.risk_level === "high") {
+      const ok = window.confirm(
+        `Atenção: o conteúdo tem alto risco de spam (score ${spam.spam_score}/100).\n\nIsso pode comprometer a reputação do seu número na Meta.\n\nDeseja continuar mesmo assim?`,
+      );
+      if (!ok) return;
+    }
+
+
     const leadIds = leads.filter((l: any) => !excludedIds.has(l.id)).map((l: any) => l.id);
     setSending(true);
     try {
@@ -285,7 +301,36 @@ export function BulkBroadcastDialog({ open, onOpenChange, accountId, accountName
               <p className="text-[10px] text-muted-foreground mt-1">
                 Variáveis: {"{nome}"}, {"{primeiro_nome}"}, {"{telefone}"}
               </p>
+
+              {/* Anti-ban v2 — Spam content score */}
+              {message.trim().length > 0 && (() => {
+                const a = analyzeTemplateContent(message);
+                const tone =
+                  a.risk_level === "critical" ? "border-destructive/60 bg-destructive/10 text-destructive" :
+                  a.risk_level === "high" ? "border-destructive/40 bg-destructive/5 text-destructive" :
+                  a.risk_level === "medium" ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400" :
+                  "border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400";
+                const Icon = a.risk_level === "low" ? ShieldCheck : AlertTriangle;
+                return (
+                  <div className={cn("mt-2 rounded-md border p-2 text-[11px]", tone)}>
+                    <div className="flex items-center gap-2 font-medium">
+                      <Icon size={12} />
+                      <span>Risco de spam: {spamLevelLabel(a.risk_level)} ({a.spam_score}/100)</span>
+                    </div>
+                    {a.warnings.length > 0 && (
+                      <ul className="mt-1 ml-4 list-disc space-y-0.5 opacity-90">
+                        {a.warnings.slice(0, 4).map((w) => (
+                          <li key={w.code}>
+                            {w.label}{w.detail ? ` — ${w.detail}` : ""}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
+
 
             <div>
               <Label className="text-xs">Imagem (opcional)</Label>
