@@ -38,6 +38,11 @@ interface ImportedContact {
   metadata?: Record<string, string>;
 }
 
+interface ContactImporterProps {
+  onImported?: (leadIds: string[]) => void;
+  saveButtonLabel?: string;
+}
+
 // Slugify column name to a safe variable key, e.g. "Valor do Pedido" -> "valor_do_pedido"
 function slugifyVar(input: string): string {
   return String(input)
