@@ -401,10 +401,25 @@ export function EvolutionBroadcastTab() {
                 <Upload size={12} className="mr-1"/> Importar lista
               </Button>
             </div>
-            <div className="relative mt-2">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"/>
-              <Input value={search} onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar nome ou telefone..." className="pl-9 h-9 text-sm"/>
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                type="button"
+                onClick={() => setOnlyTagged((v) => !v)}
+                className={cn(
+                  "text-[11px] px-2 py-1 rounded-md border transition-colors shrink-0",
+                  onlyTagged
+                    ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                    : "border-border bg-muted/40 text-muted-foreground hover:bg-muted"
+                )}
+                title="Mostrar apenas leads importados na aba Disparo WhatsApp"
+              >
+                {onlyTagged ? "✓ " : ""}Tag Disparo WhatsApp ({taggedCount})
+              </button>
+              <div className="relative flex-1">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"/>
+                <Input value={search} onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Buscar nome ou telefone..." className="pl-9 h-9 text-sm"/>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="p-0">
