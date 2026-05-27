@@ -40,6 +40,7 @@ import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { FlowBuilder } from "@/components/FlowBuilder";
 import { TemplateManager } from "@/components/TemplateManager";
+import { EvolutionBroadcastTab } from "@/components/EvolutionBroadcastTab";
 import QRCodeLib from "qrcode";
 
 // Converte o retorno do Evolution em um data-url renderizável.
