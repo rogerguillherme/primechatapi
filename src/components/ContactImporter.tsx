@@ -41,6 +41,7 @@ interface ImportedContact {
 interface ContactImporterProps {
   onImported?: (leadIds: string[]) => void;
   saveButtonLabel?: string;
+  origin?: string;
 }
 
 // Slugify column name to a safe variable key, e.g. "Valor do Pedido" -> "valor_do_pedido"
