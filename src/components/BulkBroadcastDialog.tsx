@@ -302,9 +302,10 @@ export function BulkBroadcastDialog({ open, onOpenChange, accountId, accountName
                 Variáveis: {"{nome}"}, {"{primeiro_nome}"}, {"{telefone}"}
               </p>
 
-              {/* Anti-ban v2 — Spam content score */}
+              {/* Anti-ban v2 — Spam content score + transparência */}
               {message.trim().length > 0 && (() => {
                 const a = analyzeTemplateContent(message);
+                const tips = suggestionsFor(a.warnings);
                 const tone =
                   a.risk_level === "critical" ? "border-destructive/60 bg-destructive/10 text-destructive" :
                   a.risk_level === "high" ? "border-destructive/40 bg-destructive/5 text-destructive" :
@@ -312,20 +313,34 @@ export function BulkBroadcastDialog({ open, onOpenChange, accountId, accountName
                   "border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400";
                 const Icon = a.risk_level === "low" ? ShieldCheck : AlertTriangle;
                 return (
-                  <div className={cn("mt-2 rounded-md border p-2 text-[11px]", tone)}>
+                  <div className={cn("mt-2 rounded-md border p-2 text-[11px] space-y-2", tone)}>
                     <div className="flex items-center gap-2 font-medium">
                       <Icon size={12} />
                       <span>Risco de spam: {spamLevelLabel(a.risk_level)} ({a.spam_score}/100)</span>
                     </div>
                     {a.warnings.length > 0 && (
-                      <ul className="mt-1 ml-4 list-disc space-y-0.5 opacity-90">
-                        {a.warnings.slice(0, 4).map((w) => (
-                          <li key={w.code}>
-                            {w.label}{w.detail ? ` — ${w.detail}` : ""}
-                          </li>
-                        ))}
-                      </ul>
+                      <div>
+                        <p className="font-medium opacity-80">Por que foi marcada:</p>
+                        <ul className="mt-0.5 ml-4 list-disc space-y-0.5 opacity-90">
+                          {a.warnings.slice(0, 5).map((w) => (
+                            <li key={w.code}>
+                              {w.label}{w.detail ? ` — ${w.detail}` : ""} <span className="opacity-60">(+{w.weight})</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     )}
+                    {tips.length > 0 && (
+                      <div>
+                        <p className="font-medium opacity-80">Sugestões de correção:</p>
+                        <ul className="mt-0.5 ml-4 list-disc space-y-0.5 opacity-90">
+                          {tips.slice(0, 4).map((t, i) => <li key={i}>{t}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
                   </div>
                 );
               })()}
