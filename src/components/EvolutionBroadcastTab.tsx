@@ -482,6 +482,18 @@ export function EvolutionBroadcastTab() {
           Iniciar disparo
         </Button>
       </div>
+
+      <Dialog open={importOpen} onOpenChange={(o) => {
+        setImportOpen(o);
+        if (!o) queryClient.invalidateQueries({ queryKey: ["evolution-broadcast-leads"] });
+      }}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Importar lista de disparo</DialogTitle>
+          </DialogHeader>
+          <ContactImporter />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
