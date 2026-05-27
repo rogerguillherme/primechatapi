@@ -175,63 +175,97 @@ Deno.serve(async (req) => {
 
     let riskCheckReason: string | null = null;
     let throughputMultiplier = 1.0;
+    const reasons: string[] = [];
+    const triggeredRules: string[] = [];
+    let spamFeatures: any[] = [];
+    let spamSnapshot: any = null;
+    let historicalMetricsUsed: any = null;
+    let campaignRiskSnapshot: any = null;
 
     if (enforceMode !== "off" && job.template_id) {
       // 1) Template spam score
       const { data: spam } = await supabase
         .from("template_spam_analysis")
-        .select("spam_score, risk_level, warnings")
+        .select("spam_score, risk_level, warnings, analyzed_at")
         .eq("template_id", job.template_id)
         .maybeSingle();
 
       if (spam) {
+        spamSnapshot = { spam_score: spam.spam_score, risk_level: spam.risk_level, analyzed_at: spam.analyzed_at };
+        spamFeatures = Array.isArray(spam.warnings) ? spam.warnings : [];
         if (spam.risk_level === "critical") {
           riskCheckReason = `Conteúdo com risco crítico de spam (score ${spam.spam_score})`;
           throughputMultiplier = 0;
+          reasons.push(riskCheckReason);
+          triggeredRules.push("spam_score_critical");
         } else if (spam.risk_level === "high") {
           throughputMultiplier = Math.min(throughputMultiplier, 0.2);
+          reasons.push(`Template com alto risco de spam (score ${spam.spam_score})`);
+          triggeredRules.push("spam_score_high");
         } else if (spam.risk_level === "medium") {
           throughputMultiplier = Math.min(throughputMultiplier, 0.5);
+          reasons.push(`Template com risco médio de spam (score ${spam.spam_score})`);
+          triggeredRules.push("spam_score_medium");
         }
       }
 
       // 2) Historical campaign risk for this template
-      if (!riskCheckReason) {
-        const { data: history } = await supabase
-          .from("campaign_risk_profiles")
-          .select("risk_level")
-          .contains("template_ids", [job.template_id])
-          .eq("user_id", job.user_id)
-          .order("last_calculated_at", { ascending: false })
-          .limit(5);
+      const { data: history } = await supabase
+        .from("campaign_risk_profiles")
+        .select("risk_level, block_rate, unsubscribe_rate, reply_rate, delivery_rate, last_calculated_at, campaign_id")
+        .contains("template_ids", [job.template_id])
+        .eq("user_id", job.user_id)
+        .order("last_calculated_at", { ascending: false })
+        .limit(5);
 
-        const hist = history ?? [];
-        const hasCritical = hist.some((h) => h.risk_level === "critical");
-        const hasHigh = hist.some((h) => h.risk_level === "high");
-        if (hasCritical) {
-          riskCheckReason = "Histórico crítico em campanhas anteriores deste template";
-          throughputMultiplier = 0;
-        } else if (hasHigh) {
-          throughputMultiplier = Math.min(throughputMultiplier, 0.2);
-        }
+      const hist = history ?? [];
+      if (hist.length > 0) {
+        historicalMetricsUsed = {
+          samples: hist.length,
+          avg_block_rate: hist.reduce((a, h) => a + Number(h.block_rate || 0), 0) / hist.length,
+          avg_unsub_rate: hist.reduce((a, h) => a + Number(h.unsubscribe_rate || 0), 0) / hist.length,
+          avg_delivery_rate: hist.reduce((a, h) => a + Number(h.delivery_rate || 0), 0) / hist.length,
+          risk_levels: hist.map((h) => h.risk_level),
+        };
       }
+      const hasCritical = hist.some((h) => h.risk_level === "critical");
+      const hasHigh = hist.some((h) => h.risk_level === "high");
+      if (!riskCheckReason && hasCritical) {
+        riskCheckReason = "Histórico crítico em campanhas anteriores deste template";
+        throughputMultiplier = 0;
+        reasons.push(riskCheckReason);
+        triggeredRules.push("history_critical");
+      } else if (hasHigh) {
+        throughputMultiplier = Math.min(throughputMultiplier, 0.2);
+        reasons.push("Histórico de risco alto em campanhas anteriores");
+        triggeredRules.push("history_high");
+      }
+      campaignRiskSnapshot = hist[0] ?? null;
     }
 
-    // Log to audit_logs always (so we can review shadow-mode decisions)
-    if (riskCheckReason || throughputMultiplier < 1.0) {
-      await supabase.from("audit_logs").insert({
-        user_id: job.user_id,
-        action: "antiban_v2_risk_check",
-        table_name: "broadcast_jobs",
-        record_id: jobId,
-        details: {
-          enforce_mode: enforceMode,
-          reason: riskCheckReason,
-          throughput_multiplier: throughputMultiplier,
-          template_id: job.template_id,
-        },
-      });
-    }
+    // Audit ALWAYS (passed or flagged) so shadow analytics can compare
+    await supabase.from("audit_logs").insert({
+      user_id: job.user_id,
+      action: "antiban_v2_risk_check",
+      table_name: "broadcast_jobs",
+      record_id: jobId,
+      details: {
+        enforce_mode: enforceMode,
+        passed: !riskCheckReason,
+        flagged: throughputMultiplier < 1.0 || !!riskCheckReason,
+        reason: riskCheckReason,
+        reasons,
+        triggered_rules: triggeredRules,
+        throughput_multiplier: throughputMultiplier,
+        template_id: job.template_id,
+        spam_snapshot: spamSnapshot,
+        spam_features: spamFeatures,
+        historical_metrics_used: historicalMetricsUsed,
+        campaign_risk_snapshot: campaignRiskSnapshot,
+        total_leads: job.total_leads,
+      },
+    });
+
 
     // ENFORCE: bloquear se crítico
     if (enforceMode === "enforce" && riskCheckReason) {
