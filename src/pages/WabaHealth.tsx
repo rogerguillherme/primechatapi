@@ -146,6 +146,105 @@ export default function WabaHealthPage() {
     refetchInterval: 60_000,
   });
 
+  // Anti-Ban v2 — Shadow validation analytics
+  const { data: shadow } = useQuery({
+    queryKey: ["antiban-shadow", user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const [{ data: logs }, { data: profiles }, { data: enforceRow }] = await Promise.all([
+        supabase
+          .from("audit_logs")
+          .select("record_id, details, created_at")
+          .eq("user_id", user.id)
+          .eq("action", "antiban_v2_risk_check")
+          .gte("created_at", since)
+          .order("created_at", { ascending: false })
+          .limit(500),
+        supabase
+          .from("campaign_risk_profiles")
+          .select("campaign_id, risk_level, block_rate, unsubscribe_rate, delivery_rate")
+          .eq("user_id", user.id),
+        supabase.from("app_settings").select("value").eq("key", "antiban_v2_enforce_mode").maybeSingle(),
+      ]);
+
+      const all = logs || [];
+      const flagged = all.filter((l: any) => l.details?.flagged);
+      const passed = all.filter((l: any) => !l.details?.flagged);
+
+      const scores = flagged
+        .map((l: any) => l.details?.spam_snapshot?.spam_score)
+        .filter((s: any) => typeof s === "number");
+      const avgScore = scores.length ? Math.round(scores.reduce((a: number, b: number) => a + b, 0) / scores.length) : 0;
+
+      const profileMap = new Map<string, any>();
+      for (const p of profiles || []) profileMap.set(p.campaign_id, p);
+
+      // Compare flagged campaigns to real outcomes
+      let truePositive = 0;
+      let falsePositive = 0;
+      let trueNegative = 0;
+      let falseNegative = 0;
+      let blockedSum = 0;
+      let unsubSum = 0;
+      let blockedSamples = 0;
+
+      const seen = new Set<string>();
+      for (const l of all) {
+        const cid = l.record_id;
+        if (!cid || seen.has(cid)) continue;
+        seen.add(cid);
+        const p = profileMap.get(cid);
+        if (!p) continue;
+        const realBad = p.risk_level === "high" || p.risk_level === "critical";
+        const flag = (l as any).details?.flagged;
+        if (flag && realBad) truePositive++;
+        else if (flag && !realBad) falsePositive++;
+        else if (!flag && realBad) falseNegative++;
+        else trueNegative++;
+        if (flag) {
+          blockedSum += Number(p.block_rate || 0);
+          unsubSum += Number(p.unsubscribe_rate || 0);
+          blockedSamples++;
+        }
+      }
+
+      const correlationBlock = blockedSamples ? +(blockedSum / blockedSamples).toFixed(2) : 0;
+      const correlationUnsub = blockedSamples ? +(unsubSum / blockedSamples).toFixed(2) : 0;
+      const fpRate = (truePositive + falsePositive) > 0
+        ? Math.round((falsePositive / (truePositive + falsePositive)) * 100)
+        : 0;
+
+      // Top triggered rules
+      const ruleCount: Record<string, number> = {};
+      for (const l of flagged) {
+        const rules = ((l as any).details?.triggered_rules || []) as string[];
+        for (const r of rules) ruleCount[r] = (ruleCount[r] || 0) + 1;
+      }
+      const topRules = Object.entries(ruleCount).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+      return {
+        mode: enforceRow?.value || "shadow",
+        total: all.length,
+        flagged: flagged.length,
+        passed: passed.length,
+        avgScore,
+        truePositive,
+        falsePositive,
+        trueNegative,
+        falseNegative,
+        fpRate,
+        correlationBlock,
+        correlationUnsub,
+        topRules,
+        recent: flagged.slice(0, 5),
+      };
+    },
+    enabled: !!user,
+    refetchInterval: 60_000,
+  });
+
+
 
   const latestSnapshotByAccount = new Map<string, Snapshot>();
   for (const s of snapshots) {
