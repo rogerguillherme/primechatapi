@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Shield, CheckCircle2, AlertTriangle, ShieldAlert, Activity, MessageSquare, UserMinus } from "lucide-react";
+import { Shield, CheckCircle2, AlertTriangle, ShieldAlert, Activity, MessageSquare, UserMinus, FlaskConical } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
