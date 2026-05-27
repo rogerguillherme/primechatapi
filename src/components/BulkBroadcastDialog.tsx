@@ -341,10 +341,8 @@ export function BulkBroadcastDialog({ open, onOpenChange, accountId, accountName
                   </div>
                 );
               })()}
-                  </div>
-                );
-              })()}
             </div>
+
 
 
             <div>
