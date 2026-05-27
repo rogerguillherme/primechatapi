@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,10 +12,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Slider } from "@/components/ui/slider";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ContactImporter } from "@/components/ContactImporter";
 import { toast } from "sonner";
 import {
   Smartphone, GitBranch, MessageSquare, Send, Search, ShieldAlert,
-  Sparkles, Loader2, Users, Image as ImageIcon, Info,
+  Sparkles, Loader2, Users, Image as ImageIcon, Info, Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
