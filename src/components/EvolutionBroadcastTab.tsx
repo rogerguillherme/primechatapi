@@ -62,6 +62,7 @@ export function EvolutionBroadcastTab() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sending, setSending] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [onlyTagged, setOnlyTagged] = useState(false);
 
   const { data: accounts = [] } = useQuery({
     queryKey: ["evolution-accounts", user?.id],
@@ -103,7 +104,7 @@ export function EvolutionBroadcastTab() {
       while (true) {
         const { data, error } = await supabase
           .from("leads")
-          .select("id, name, phone, email, unsubscribed")
+          .select("id, name, phone, email, unsubscribed, origin")
           .order("name")
           .range(from, from + pageSize - 1);
         if (error) throw error;
@@ -118,12 +119,20 @@ export function EvolutionBroadcastTab() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
-    if (!q) return leads;
-    return leads.filter((l: any) =>
-      (l.name || "").toLowerCase().includes(q) ||
-      (l.phone || "").includes(q)
-    );
-  }, [leads, search]);
+    let list = onlyTagged ? leads.filter((l: any) => l.origin === "evolution_import") : leads;
+    if (q) {
+      list = list.filter((l: any) =>
+        (l.name || "").toLowerCase().includes(q) ||
+        (l.phone || "").includes(q)
+      );
+    }
+    return list;
+  }, [leads, search, onlyTagged]);
+
+  const taggedCount = useMemo(
+    () => leads.filter((l: any) => l.origin === "evolution_import").length,
+    [leads]
+  );
 
   const speed = speedLevel(delayMin, delayMax);
   const account = accounts.find((a: any) => a.id === accountId);
@@ -392,10 +401,25 @@ export function EvolutionBroadcastTab() {
                 <Upload size={12} className="mr-1"/> Importar lista
               </Button>
             </div>
-            <div className="relative mt-2">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"/>
-              <Input value={search} onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar nome ou telefone..." className="pl-9 h-9 text-sm"/>
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                type="button"
+                onClick={() => setOnlyTagged((v) => !v)}
+                className={cn(
+                  "text-[11px] px-2 py-1 rounded-md border transition-colors shrink-0",
+                  onlyTagged
+                    ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                    : "border-border bg-muted/40 text-muted-foreground hover:bg-muted"
+                )}
+                title="Mostrar apenas leads importados na aba Disparo WhatsApp"
+              >
+                {onlyTagged ? "✓ " : ""}Tag Disparo WhatsApp ({taggedCount})
+              </button>
+              <div className="relative flex-1">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"/>
+                <Input value={search} onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Buscar nome ou telefone..." className="pl-9 h-9 text-sm"/>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="p-0">
@@ -413,7 +437,14 @@ export function EvolutionBroadcastTab() {
                   )}>
                   <Checkbox checked={selected.has(l.id)} className="pointer-events-none"/>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">{l.name || "(sem nome)"}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-medium truncate">{l.name || "(sem nome)"}</p>
+                      {l.origin === "evolution_import" && (
+                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 shrink-0">
+                          Disparo WhatsApp
+                        </Badge>
+                      )}
+                    </div>
                     <p className="text-[11px] text-muted-foreground font-mono">{l.phone}</p>
                   </div>
                 </button>
@@ -492,12 +523,14 @@ export function EvolutionBroadcastTab() {
             <DialogTitle>Importar lista de disparo</DialogTitle>
           </DialogHeader>
           <ContactImporter
+            origin="evolution_import"
             saveButtonLabel="Salvar e selecionar para disparo"
             onImported={async (ids) => {
               await queryClient.invalidateQueries({ queryKey: ["evolution-broadcast-leads"] });
               setSelected(new Set(ids));
+              setOnlyTagged(true);
               setImportOpen(false);
-              toast.success(`${ids.length} lead(s) importado(s) e selecionado(s) para disparo.`);
+              toast.success(`${ids.length} lead(s) importado(s) com tag "Disparo WhatsApp".`);
             }}
           />
         </DialogContent>

@@ -41,6 +41,7 @@ interface ImportedContact {
 interface ContactImporterProps {
   onImported?: (leadIds: string[]) => void;
   saveButtonLabel?: string;
+  origin?: string;
 }
 
 // Slugify column name to a safe variable key, e.g. "Valor do Pedido" -> "valor_do_pedido"
@@ -53,7 +54,7 @@ function slugifyVar(input: string): string {
     .slice(0, 40) || "var";
 }
 
-export function ContactImporter({ onImported, saveButtonLabel }: ContactImporterProps = {}) {
+export function ContactImporter({ onImported, saveButtonLabel, origin }: ContactImporterProps = {}) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -238,7 +239,7 @@ export function ContactImporter({ onImported, saveButtonLabel }: ContactImporter
         name: c.name,
         phone: c.phone.length <= 11 ? `55${c.phone}` : c.phone,
         email: c.email || null,
-        origin: "import_list",
+        origin: origin || "import_list",
         user_id: user?.id,
         metadata: c.metadata && Object.keys(c.metadata).length ? c.metadata : {},
       }));
