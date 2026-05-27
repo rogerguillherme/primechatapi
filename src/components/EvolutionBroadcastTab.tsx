@@ -119,12 +119,20 @@ export function EvolutionBroadcastTab() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
-    if (!q) return leads;
-    return leads.filter((l: any) =>
-      (l.name || "").toLowerCase().includes(q) ||
-      (l.phone || "").includes(q)
-    );
-  }, [leads, search]);
+    let list = onlyTagged ? leads.filter((l: any) => l.origin === "evolution_import") : leads;
+    if (q) {
+      list = list.filter((l: any) =>
+        (l.name || "").toLowerCase().includes(q) ||
+        (l.phone || "").includes(q)
+      );
+    }
+    return list;
+  }, [leads, search, onlyTagged]);
+
+  const taggedCount = useMemo(
+    () => leads.filter((l: any) => l.origin === "evolution_import").length,
+    [leads]
+  );
 
   const speed = speedLevel(delayMin, delayMax);
   const account = accounts.find((a: any) => a.id === accountId);
