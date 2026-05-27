@@ -491,7 +491,15 @@ export function EvolutionBroadcastTab() {
           <DialogHeader>
             <DialogTitle>Importar lista de disparo</DialogTitle>
           </DialogHeader>
-          <ContactImporter />
+          <ContactImporter
+            saveButtonLabel="Salvar e selecionar para disparo"
+            onImported={async (ids) => {
+              await queryClient.invalidateQueries({ queryKey: ["evolution-broadcast-leads"] });
+              setSelected(new Set(ids));
+              setImportOpen(false);
+              toast.success(`${ids.length} lead(s) importado(s) e selecionado(s) para disparo.`);
+            }}
+          />
         </DialogContent>
       </Dialog>
     </div>

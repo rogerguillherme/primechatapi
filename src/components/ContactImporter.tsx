@@ -38,6 +38,11 @@ interface ImportedContact {
   metadata?: Record<string, string>;
 }
 
+interface ContactImporterProps {
+  onImported?: (leadIds: string[]) => void;
+  saveButtonLabel?: string;
+}
+
 // Slugify column name to a safe variable key, e.g. "Valor do Pedido" -> "valor_do_pedido"
 function slugifyVar(input: string): string {
   return String(input)
@@ -48,7 +53,7 @@ function slugifyVar(input: string): string {
     .slice(0, 40) || "var";
 }
 
-export function ContactImporter() {
+export function ContactImporter({ onImported, saveButtonLabel }: ContactImporterProps = {}) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -239,7 +244,7 @@ export function ContactImporter() {
       }));
 
       const BATCH = 50;
-      let created = 0;
+      const allIds: string[] = [];
       for (let i = 0; i < entries.length; i += BATCH) {
         const batch = entries.slice(i, i + BATCH);
         const { data, error } = await supabase
@@ -247,13 +252,15 @@ export function ContactImporter() {
           .upsert(batch, { onConflict: "phone,user_id", ignoreDuplicates: false })
           .select("id");
         if (error) throw error;
-        created += (data?.length || 0);
+        if (data) allIds.push(...data.map((r: any) => r.id));
       }
 
       queryClient.invalidateQueries({ queryKey: ["broadcast-leads"] });
-      toast.success(`${created} lead(s) salvos no banco de dados!`);
+      queryClient.invalidateQueries({ queryKey: ["evolution-broadcast-leads"] });
+      toast.success(`${allIds.length} lead(s) salvos no banco de dados!`);
       setContacts([]);
       setListName("");
+      onImported?.(allIds);
     } catch (e: any) {
       toast.error(`Erro ao salvar: ${e.message}`);
     } finally {
@@ -402,7 +409,7 @@ export function ContactImporter() {
           {importing ? (
             <><Loader2 size={16} className="animate-spin" /> Salvando...</>
           ) : (
-            <><Download size={16} /> Salvar {contacts.length} contato(s) como leads</>
+            <><Download size={16} /> {saveButtonLabel || `Salvar ${contacts.length} contato(s) como leads`}</>
           )}
         </Button>
       )}
