@@ -239,7 +239,7 @@ export function ContactImporter({ onImported, saveButtonLabel, origin }: Contact
         name: c.name,
         phone: c.phone.length <= 11 ? `55${c.phone}` : c.phone,
         email: c.email || null,
-        origin: "import_list",
+        origin: origin || "import_list",
         user_id: user?.id,
         metadata: c.metadata && Object.keys(c.metadata).length ? c.metadata : {},
       }));
