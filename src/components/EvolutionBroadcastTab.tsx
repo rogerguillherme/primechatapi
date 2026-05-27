@@ -103,7 +103,7 @@ export function EvolutionBroadcastTab() {
       while (true) {
         const { data, error } = await supabase
           .from("leads")
-          .select("id, name, phone, email, unsubscribed")
+          .select("id, name, phone, email, unsubscribed, origin")
           .order("name")
           .range(from, from + pageSize - 1);
         if (error) throw error;
