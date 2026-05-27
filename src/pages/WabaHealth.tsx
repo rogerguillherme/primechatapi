@@ -420,6 +420,96 @@ export default function WabaHealthPage() {
         )}
       </Card>
 
+      {/* Anti-Ban v2 — Shadow validation dashboard */}
+      <Card className="p-5">
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div>
+            <h2 className="font-semibold flex items-center gap-2">
+              <FlaskConical size={16} /> Anti-Ban v2 — Validação Shadow (7d)
+            </h2>
+            <p className="text-xs text-muted-foreground mt-1">
+              Modo atual: <b className="uppercase">{shadow?.mode || "shadow"}</b>. Compara campanhas marcadas pelo sistema
+              com o comportamento real para calibrar thresholds antes de ativar o enforce.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          <div className="rounded-md border border-border p-3">
+            <p className="text-[10px] uppercase text-muted-foreground">Campanhas marcadas</p>
+            <p className="text-xl font-semibold">{shadow?.flagged ?? 0}</p>
+            <p className="text-[10px] text-muted-foreground">de {shadow?.total ?? 0} avaliações</p>
+          </div>
+          <div className="rounded-md border border-border p-3">
+            <p className="text-[10px] uppercase text-muted-foreground">Spam score médio</p>
+            <p className="text-xl font-semibold">{shadow?.avgScore ?? 0}/100</p>
+            <p className="text-[10px] text-muted-foreground">apenas marcadas</p>
+          </div>
+          <div className="rounded-md border border-border p-3">
+            <p className="text-[10px] uppercase text-muted-foreground">Falsos positivos</p>
+            <p className={cn("text-xl font-semibold", (shadow?.fpRate ?? 0) > 30 ? "text-destructive" : "")}>
+              {shadow?.fpRate ?? 0}%
+            </p>
+            <p className="text-[10px] text-muted-foreground">{shadow?.falsePositive ?? 0} casos</p>
+          </div>
+          <div className="rounded-md border border-border p-3">
+            <p className="text-[10px] uppercase text-muted-foreground">Acertos (TP/TN)</p>
+            <p className="text-xl font-semibold">
+              {(shadow?.truePositive ?? 0)}/{(shadow?.trueNegative ?? 0)}
+            </p>
+            <p className="text-[10px] text-muted-foreground">FN: {shadow?.falseNegative ?? 0}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+          <div className="rounded-md border border-border p-3">
+            <p className="text-[10px] uppercase text-muted-foreground">Correlação com block_rate real</p>
+            <p className="text-base font-semibold">{shadow?.correlationBlock ?? 0}%</p>
+            <p className="text-[10px] text-muted-foreground">média de bloqueio entre campanhas marcadas</p>
+          </div>
+          <div className="rounded-md border border-border p-3">
+            <p className="text-[10px] uppercase text-muted-foreground">Correlação com unsubscribe real</p>
+            <p className="text-base font-semibold">{shadow?.correlationUnsub ?? 0}%</p>
+            <p className="text-[10px] text-muted-foreground">média de descadastros entre marcadas</p>
+          </div>
+        </div>
+
+        {shadow?.topRules && shadow.topRules.length > 0 && (
+          <div className="mb-3">
+            <p className="text-xs font-medium mb-1">Regras mais acionadas</p>
+            <div className="flex flex-wrap gap-1.5">
+              {shadow.topRules.map(([r, n]) => (
+                <span key={r} className="text-[10px] bg-muted px-2 py-0.5 rounded-full font-mono">
+                  {r} · {n}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {shadow?.recent && shadow.recent.length > 0 && (
+          <div>
+            <p className="text-xs font-medium mb-1">Últimas decisões</p>
+            <ul className="space-y-1 text-[11px]">
+              {shadow.recent.map((l: any, i: number) => (
+                <li key={i} className="flex items-start justify-between gap-2 border-b border-border/40 pb-1 last:border-0">
+                  <span className="font-mono opacity-70 truncate max-w-[160px]">{l.record_id?.slice(0, 8)}</span>
+                  <span className="flex-1 truncate">{(l.details?.reasons || []).join(" · ") || l.details?.reason || "—"}</span>
+                  <span className="text-muted-foreground whitespace-nowrap">
+                    {formatDistanceToNow(new Date(l.created_at), { addSuffix: true, locale: ptBR })}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <p className="text-[10px] text-muted-foreground mt-3 italic">
+          Use estes números para decidir quando ativar <b>enforce</b>: meta &lt; 15% de falso positivo e correlação de
+          bloqueio &gt; 3% entre campanhas marcadas.
+        </p>
+      </Card>
+
 
       <Card className="p-5 bg-primary/5 border-primary/20">
         <h2 className="font-semibold flex items-center gap-2 mb-2">
