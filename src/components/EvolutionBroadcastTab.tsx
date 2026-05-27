@@ -88,17 +88,27 @@ export function EvolutionBroadcastTab() {
   });
 
   const { data: leads = [] } = useQuery({
-    queryKey: ["leads-min", user?.id],
+    queryKey: ["evolution-broadcast-leads", user?.id],
     enabled: !!user,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("leads")
-        .select("id, name, phone, unsubscribed")
-        .eq("unsubscribed", false)
-        .order("created_at", { ascending: false })
-        .limit(2000);
-      if (error) throw error;
-      return data || [];
+      // Paginação para contornar limite de 1000 do PostgREST e trazer todos os leads
+      // (mesmo conjunto exibido na aba "Disparo API").
+      const pageSize = 1000;
+      let from = 0;
+      const all: any[] = [];
+      while (true) {
+        const { data, error } = await supabase
+          .from("leads")
+          .select("id, name, phone, email, unsubscribed")
+          .order("name")
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        all.push(...data);
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
+      return all;
     },
   });
 
