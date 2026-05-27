@@ -260,6 +260,7 @@ export function ContactImporter({ onImported, saveButtonLabel }: ContactImporter
       toast.success(`${allIds.length} lead(s) salvos no banco de dados!`);
       setContacts([]);
       setListName("");
+      onImported?.(allIds);
     } catch (e: any) {
       toast.error(`Erro ao salvar: ${e.message}`);
     } finally {
