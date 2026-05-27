@@ -50,6 +50,7 @@ function speedLevel(min: number, max: number): {
 
 export function EvolutionBroadcastTab() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [accountId, setAccountId] = useState<string>("");
   const [mode, setMode] = useState<Mode>("message");
   const [flowId, setFlowId] = useState<string>("");
@@ -60,6 +61,7 @@ export function EvolutionBroadcastTab() {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sending, setSending] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const { data: accounts = [] } = useQuery({
     queryKey: ["evolution-accounts", user?.id],
