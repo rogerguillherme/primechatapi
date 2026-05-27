@@ -223,6 +223,8 @@ export type Database = {
           pause_reason: string | null
           read_count: number
           retry_map: Json | null
+          risk_check_passed: boolean
+          risk_check_reason: string | null
           scheduled_at: string | null
           sent_count: number
           shuffle_leads: boolean
@@ -258,6 +260,8 @@ export type Database = {
           pause_reason?: string | null
           read_count?: number
           retry_map?: Json | null
+          risk_check_passed?: boolean
+          risk_check_reason?: string | null
           scheduled_at?: string | null
           sent_count?: number
           shuffle_leads?: boolean
@@ -293,6 +297,8 @@ export type Database = {
           pause_reason?: string | null
           read_count?: number
           retry_map?: Json | null
+          risk_check_passed?: boolean
+          risk_check_reason?: string | null
           scheduled_at?: string | null
           sent_count?: number
           shuffle_leads?: boolean
@@ -369,6 +375,78 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      campaign_risk_profiles: {
+        Row: {
+          block_count: number
+          block_rate: number
+          campaign_id: string
+          created_at: string
+          delivered_count: number
+          delivery_rate: number
+          id: string
+          last_calculated_at: string
+          quality_impact_score: number
+          read_count: number
+          read_rate: number
+          reply_count: number
+          reply_rate: number
+          risk_level: string
+          sent_count: number
+          spam_signal_count: number
+          template_ids: string[]
+          unsubscribe_count: number
+          unsubscribe_rate: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          block_count?: number
+          block_rate?: number
+          campaign_id: string
+          created_at?: string
+          delivered_count?: number
+          delivery_rate?: number
+          id?: string
+          last_calculated_at?: string
+          quality_impact_score?: number
+          read_count?: number
+          read_rate?: number
+          reply_count?: number
+          reply_rate?: number
+          risk_level?: string
+          sent_count?: number
+          spam_signal_count?: number
+          template_ids?: string[]
+          unsubscribe_count?: number
+          unsubscribe_rate?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          block_count?: number
+          block_rate?: number
+          campaign_id?: string
+          created_at?: string
+          delivered_count?: number
+          delivery_rate?: number
+          id?: string
+          last_calculated_at?: string
+          quality_impact_score?: number
+          read_count?: number
+          read_rate?: number
+          reply_count?: number
+          reply_rate?: number
+          risk_level?: string
+          sent_count?: number
+          spam_signal_count?: number
+          template_ids?: string[]
+          unsubscribe_count?: number
+          unsubscribe_rate?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       chat_labels: {
         Row: {
@@ -462,6 +540,8 @@ export type Database = {
           id: string
           meta_status: string | null
           name: string
+          spam_risk_level: string
+          spam_score: number
           template_language: string | null
           template_name: string | null
           template_params: Json | null
@@ -475,6 +555,8 @@ export type Database = {
           id?: string
           meta_status?: string | null
           name: string
+          spam_risk_level?: string
+          spam_score?: number
           template_language?: string | null
           template_name?: string | null
           template_params?: Json | null
@@ -488,6 +570,8 @@ export type Database = {
           id?: string
           meta_status?: string | null
           name?: string
+          spam_risk_level?: string
+          spam_score?: number
           template_language?: string | null
           template_name?: string | null
           template_params?: Json | null
@@ -1600,6 +1684,45 @@ export type Database = {
           id?: string
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      template_spam_analysis: {
+        Row: {
+          analyzed_at: string
+          content_snapshot: string | null
+          created_at: string
+          id: string
+          risk_level: string
+          spam_score: number
+          template_id: string
+          updated_at: string
+          user_id: string
+          warnings: Json
+        }
+        Insert: {
+          analyzed_at?: string
+          content_snapshot?: string | null
+          created_at?: string
+          id?: string
+          risk_level?: string
+          spam_score?: number
+          template_id: string
+          updated_at?: string
+          user_id: string
+          warnings?: Json
+        }
+        Update: {
+          analyzed_at?: string
+          content_snapshot?: string | null
+          created_at?: string
+          id?: string
+          risk_level?: string
+          spam_score?: number
+          template_id?: string
+          updated_at?: string
+          user_id?: string
+          warnings?: Json
         }
         Relationships: []
       }

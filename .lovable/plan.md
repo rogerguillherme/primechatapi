@@ -1,165 +1,104 @@
 
-# Camada Anti-Ban & Reputação Prime — Plano de Implementação
+# Avaliação Anti-Ban v2 — Prime
 
-## Avaliação geral
+## Avaliação do estado atual vs. proposta
 
-O núcleo multi-WABA já é sólido: OAuth, webhooks, queue, warmup, logs, snapshots, delivery tracking e throttling parcial estão em produção. O que falta é a **camada de proteção ativa**: detectar sinais de risco em tempo real e reagir automaticamente antes da Meta punir a conta.
+Base já implementada (Fase 1 do plano anterior + core multi-WABA):
 
-Hoje a plataforma é **reativa** (pausa só quando a Meta já bloqueou via erro 131031). O objetivo é torná-la **preditiva** — agir nos primeiros sinais (queda de quality, spike de unsubscribe, burst suspeito) para nunca chegar no bloqueio.
+- Warmup, delays randômicos, throttling por job, snapshots de qualidade, `waba_health_events`, `waba-protect-account`, auto unsubscribe engine, blacklist, filtro `unsubscribed` no broadcast/flow processor, delivery tracking via `message_logs`.
+- Falta totalmente: memória histórica por campanha, análise de conteúdo, reputação de domínio, freio global, balanceador multi-WABA, recovery progressivo, isolamento por tenant, padrões de warning Meta.
 
-Risco principal hoje: um único tenant agressivo pode degradar a reputação do número e, em multi-tenant, contaminar o ecossistema. Itens 1 (unsubscribe), 2 (rate limiter) e 6 (risk engine) são os que mais mitigam isso.
+Os 9 itens propostos são complementares (não conflitam com nada existente) e cobrem exatamente os pontos cegos que sobram. Recomendo implementar — com 2 ressalvas:
 
-Não vamos quebrar nada existente: tudo é aditivo sobre `broadcast_jobs`, `waba_health_snapshots`, `lead_blacklist` e `whatsapp-cloud-webhook`.
+- **Item 5 (Load Balancer)** já tem semente (`broadcast_jobs.account_ids` + `multi_number`), então é evolução, não rewrite.
+- **Item 8 (Anti-cross-tenant)** parcialmente coberto por `user_plan_limits`; vamos estender, não duplicar.
 
----
-
-## Fase 1 — Compliance crítico (semana 1)
-
-Mais alto impacto/risco, menor complexidade. Bloqueia o pior dano possível.
-
-### 1.1 Auto Unsubscribe Engine
-- Migration: adicionar em `leads`: `unsubscribed boolean`, `unsubscribed_at timestamptz`, `unsubscribe_reason text`.
-- Nova tabela `unsubscribe_logs` (lead_id, user_id, keyword_matched, source_message, created_at).
-- Editar `whatsapp-cloud-webhook`: nas mensagens inbound, normalizar (lowercase + remoção de acento) e rodar regex contra dicionário de keywords (`sair`, `parar`, `stop`, `unsubscribe`, `cancelar`, `remover`, `descadastrar`, `não quero`, `pare`, `cancelar inscrição`, `nao quero mais`).
-- Ao detectar: insert em `lead_blacklist` + `unsubscribe_logs`, marcar lead `unsubscribed=true`, cancelar `flow_executions` ativas do lead, remover lead de `broadcast_jobs.lead_ids` em status `pending`/`paused`.
-- Resposta automática opcional controlada por flag em `app_settings` (default ligado): "Você foi removido da lista. 👍".
-- `broadcast-processor` e `flow-processor`: passar a filtrar `leads.unsubscribed=false` antes de enfileirar envio.
-
-### 1.2 Webhook Status Intelligence (expansão)
-- Já processamos `statuses[].status` para delivered/read/failed. Adicionar tratamento explícito para `warning` e códigos `131048/131049` (spam restriction) e `130429/80007` (rate limit) → criar `waba_health_events` com severity proporcional, sem pausar a conta inteira.
-- Acumular contadores em `waba_health_snapshots` recente: `warning_count_1h`, `throttle_count_1h`.
-
-### 1.3 Pausa preventiva por quality drop
-- Estender `waba-protect-account`: aceitar gatilho `quality_downgrade` (não só bloqueio). Quando snapshot novo registra YELLOW→RED ou block_rate_1h > 10%, pausar apenas `broadcast_jobs` em status `running` (não fluxos), com `pause_reason='auto_quality_protection'` e `auto_paused_by_system=true`.
+Risco principal sem isso: 1 campanha tóxica de 1 tenant degrada WABA inteira, sem aprendizado nem freio automático.
 
 ---
 
-## Fase 2 — Throttling adaptativo & rate limit (semana 2)
+## Plano em 4 fases (incremental, retrocompatível)
 
-### 2.1 Quality Adaptive Throttling no processor
-- Editar `broadcast-processor`: antes de processar batch, buscar snapshot mais recente da conta (cache 60s em memória da function).
-- Aplicar multiplicador no `messages_per_second` efetivo e nos delays:
-  - GREEN → 1.0× (sem alteração)
-  - YELLOW → 0.5× msgs/s, delays +50%
-  - RED → 0.1× msgs/s, delays ×3, marcar job `warmup_recovery=true`
-  - BLOCKED → não envia, marca job `paused`
-- Registrar em `audit_logs` cada degradação aplicada.
+### Fase 1 — Memória e Conteúdo (Semana 1)
+**Foco: aprender com o passado e bloquear conteúdo ruim antes do envio.**
 
-### 2.2 Global Phone Rate Limiter
-- Nova tabela `phone_send_rate_limits` (phone_number_id PK, window_start_second timestamptz, count_last_second int, count_last_minute int, count_last_hour int, updated_at).
-- Função RPC `try_acquire_send_slot(phone_number_id, max_per_second)` que faz UPDATE atômico com `RETURNING` — se ultrapassou, retorna `false` e o processor espera no próximo tick.
-- Throughput máximo por número derivado da fase do warmup + quality rating:
-  - Warmup novo (dia 1-3): 1 msg / 5s
-  - Warmup intermediário (4-7): 1 msg / 2s
-  - Estável GREEN: 3-5/s
-  - RED: 0
-- Não vamos usar Redis (não está na stack); usar o próprio Postgres com `FOR UPDATE SKIP LOCKED` para serializar.
+- **1.1 `campaign_risk_profiles`**: tabela com `campaign_id`, `template_ids[]`, métricas agregadas (delivery/read/reply/unsubscribe/block rate), `spam_signal_count`, `quality_impact_score`, `risk_level`, `last_calculated_at`. Recalculada por edge function `campaign-risk-recalc` (cron 5 min) lendo `message_logs` + `campaign_events` + `unsubscribe_logs`.
+  - Regras: unsub > 5% → high; block > 3% → critical; reply < 1% c/ volume > 1000 → medium.
+  - `broadcast-processor` consulta histórico do template antes de iniciar e: reduz `messages_per_second` (-50% medium / -80% high) ou bloqueia (critical com `pause_reason='critical_risk_profile'`).
 
-> **Nota sobre rate limiting:** estamos implementando aqui rate limiter *de envio externo para a Meta* (proteção da WABA), não rate limiter de API pública do Prime — esse último seguimos sem implementar conforme prática atual.
+- **1.2 `template_spam_analysis` + analisador**: tabela `template_id`, `spam_score 0-100`, `warnings jsonb`, `risk_level`, `analyzed_at`. Analisador puro TS rodando no client (`src/lib/spamAnalyzer.ts`) + edge `template-spam-scan` para reanálise em lote. Heurísticas: ratio caps, ratio emojis, lista de palavras gatilho PT/EN, contagem de links, repetição de domínio, length, CTA agressivo.
+  - `BulkBroadcastDialog`: badge visual (verde/amarelo/vermelho), modal de warning com lista de problemas, bloqueio hard se `score >= 85` (admin pode override).
 
-### 2.3 Health Score real
-- Editar `waba-health-monitor` (a ser criado na Fase 3 ou logo se necessário): persistir `reputation_score` calculado por:
-  ```
-  score = 0.30 * delivery_rate_24h
-        + 0.15 * read_rate_24h
-        + 0.15 * reply_rate_24h
-        + 0.20 * (100 - block_rate_24h * 10)
-        + 0.10 * (100 - failed_rate_24h * 5)
-        + 0.10 * quality_factor   // GREEN=100, YELLOW=60, RED=20
-  ```
-- Faixas: 90-100 excelente, 70-89 saudável, 50-69 atenção, <50 crítico. Mostrar na página `/whatsapp/health`.
+### Fase 2 — Domínio, Freio e Recovery (Semana 2)
 
----
+- **2.1 `domain_reputation`**: extrai domínios de `template_params` + `chat_templates.content` no momento do envio. Agrega `sent_count`, `click_rate` (via `click_tracking_links`), `unsubscribe_rate`, `block_rate`, `spam_score`, `reputation_level`. Cron `domain-reputation-recalc` (10 min). Usado pelo spam analyzer como sinal extra; domínio `blacklisted` → bloqueia broadcast.
 
-## Fase 3 — Inteligência e diversidade (semana 3)
+- **2.2 `system_protection_state` (Global Emergency Brake)**: tabela singleton com `state` (`normal`/`degraded`/`emergency`), `triggered_by`, `triggered_at`, `auto_resume_at`, `metadata`. Edge `system-guardian` (cron 1 min) avalia:
+  - `failed_rate_5min > 15%` global → degraded
+  - `block_spike` (z-score > 3 vs baseline 24h) → emergency
+  - `unsubscribe_spike > 8%/h` global → degraded
+  - webhook 5xx rate > 10% → emergency
+  - Ação `emergency`: UPDATE em `broadcast_jobs` ativos → `paused` + `pause_reason='system_emergency_brake'`; bloqueia inserts via trigger checando o estado; toast/notification para todos admins; audit log.
 
-### 3.1 Cron `waba-health-monitor` (snapshot a cada 2 min)
-- Edge function que itera por todas `whatsapp_accounts` ativas, chama Graph API (`whatsapp-limits`), agrega contadores de `message_logs` últimos 24h e grava `waba_health_snapshots` com health_score.
-- Agendar via `pg_cron` + `pg_net` (SQL via insert tool, não migration, pois contém URL e anon key).
-- Comparar com snapshot anterior: se quality_rating piorou, dispara `waba-protect-account` com `trigger='quality_downgrade'`.
+- **2.3 Progressive Recovery Engine**: novas colunas em `whatsapp_accounts`: `recovery_stage` (0-100), `recovery_started_at`, `recovery_last_success_at`. Cron `recovery-advance` (1h): RED→10%, +24h ok→25%, +24h→50%, +24h→75%, +24h→100%. Qualquer warning durante recovery → volta um estágio. `broadcast-processor` usa `recovery_stage/100` como multiplicador de throughput.
 
-### 3.2 Template Rotation Engine
-- Nova tabela `broadcast_template_variants` (id, job_id, template_id, weight int default 1, language, params jsonb, active bool, sent_count int, last_used_at).
-- UI no `BulkBroadcastDialog`: ao escolher template, permitir adicionar variantes (2-5) com peso.
-- Editar `broadcast-processor`: para cada envio, selecionar variante via amostragem ponderada evitando repetir a última variante usada (anti-repeat). Atualizar `sent_count` e `last_used_at`.
-- Manter `broadcast_jobs.template_id` como fallback quando não há variantes (retrocompat).
+### Fase 3 — Distribuição e Webhook Intel (Semana 3)
 
-### 3.3 Anti-Spam Detection
-- Nova tabela `spam_detection_events` (account_id, user_id, signal_type, severity, details jsonb, created_at).
-- Heurísticas rodadas no cron (a cada 5 min):
-  - Burst: >X msgs em <Y seg pelo mesmo número
-  - Mensagens 100% idênticas para >N destinatários (já temos rotation, então detectamos quem ignorou)
-  - Campanhas com reply_rate <2% e block_rate >5%
-  - Spike de blocks (>3× a média da última semana)
-- Cada evento crítico → `waba_health_events` + notification + possível ação automática.
+- **3.1 Multi-WABA Load Balancer (`waba_distribution_engine`)**: função Postgres `pick_best_account(p_user_id, p_excluded uuid[])` retorna `account_id` com peso = `health_score * (recovery_stage/100) * quality_factor * (1 - active_load)`. `broadcast-processor` quando `multi_number=true` ignora `account_id` fixo do batch e chama `pick_best_account` por mensagem; RED é excluído automaticamente.
+  - Failover: erro 131048/131056/368 → marca conta como degradada por 15min e re-roteia restante do job.
+
+- **3.2 `meta_warning_patterns` + Webhook Intelligence v2**: tabela com `account_id`, `error_code`, `count_1h`, `count_24h`, `trend` (`stable/rising/critical`), `first_seen_at`, `last_seen_at`. `whatsapp-cloud-webhook` insere/incrementa para códigos 131048, 131049, 130429, 80007, 131056, 368. Detecção de tendência: comparação janela 1h vs média 24h. `trend=rising` 2x consecutivos → cria `waba_health_event severity=critical` e dispara recovery downgrade preventivo.
+
+### Fase 4 — Isolamento de Tenant e Observabilidade (Semana 4)
+
+- **4.1 Tenant Isolation**: estender `user_plan_limits` com `tenant_risk_score`, `current_throughput_multiplier`, `burst_credits`, `burst_credits_max`. Cron `tenant-risk-recalc` (15 min) calcula score por tenant agregando `campaign_risk_profiles`. Tenant `risk_score > 70`: `current_throughput_multiplier = 0.3`, bloqueia campanhas > 5k contatos, exige aprovação admin. Aplicado em `broadcast-processor` como último multiplicador (ortogonal aos throttles de qualidade da WABA). Burst credits: token bucket por hora — evita um tenant monopolizar a fila.
+
+- **4.2 Observabilidade `/whatsapp/health` v2**: novas seções no `WabaHealth.tsx`:
+  - Heatmap reputação (grid contas × hora últimas 48h, cor = health_score)
+  - Timeline de degradação (eventos críticos + recovery_stage por conta)
+  - Cards: top 10 campanhas por risk_level, top 10 templates por spam_score, top 10 domínios por block_rate
+  - Recovery tracker (barra de progresso por conta em recovery)
+  - Filtros por conta, período, severidade
 
 ---
 
-## Fase 4 — Multi-tenant safety & observabilidade (semana 4)
+## Detalhes técnicos (resumo)
 
-### 4.1 Risk Engine por Usuário
-- Nova tabela `user_risk_profiles` (user_id PK, risk_tier text [`low`,`medium`,`high`,`restricted`], campaigns_per_day int, send_velocity_max int, spam_ratio numeric, unsubscribe_ratio numeric, block_ratio numeric, failed_ratio numeric, updated_at, reason text).
-- Cron diário recalcula métricas dos últimos 7d por user e ajusta tier.
-- `broadcast-processor` e `BulkBroadcastDialog` consultam tier para aplicar caps:
-  - `low`: limites normais do plano
-  - `medium`: -30% throughput, max 2 campanhas paralelas
-  - `high`: -70% throughput, warmup obrigatório em novos números
-  - `restricted`: bloqueio de novos disparos até revisão admin
-- Notificação ao usuário quando tier muda + página admin para revisão manual.
+**Novas tabelas (todas com GRANT explícito + RLS por `user_id` exceto as globais):**
+- `campaign_risk_profiles` (RLS user_id)
+- `template_spam_analysis` (RLS user_id via `chat_templates`)
+- `domain_reputation` (RLS user_id; uma row por user+domain)
+- `system_protection_state` (singleton, SELECT autenticado, manage só service_role)
+- `meta_warning_patterns` (RLS user_id via `whatsapp_accounts`)
 
-### 4.2 Warmup Automation reforçado
-- Cron diário: para cada `broadcast_jobs` com `warmup_mode=true`, avançar `warmup_day` automaticamente e calcular `warmup_daily_limit` pela curva: 20 → 50 → 100 → 200 → 400 → 800 → 1500 → 3000.
-- Se quality cai durante warmup → segura no dia atual (não avança). Se cai 2 dias seguidos → recua um nível.
-- Forçar `warmup_mode=true` quando criar `whatsapp_accounts` nova (primeiros 7 dias).
+**Novas colunas:**
+- `whatsapp_accounts`: `recovery_stage int default 100`, `recovery_started_at`, `recovery_last_success_at`
+- `user_plan_limits`: `tenant_risk_score`, `current_throughput_multiplier`, `burst_credits`, `burst_credits_max`
+- `chat_templates`: `spam_score` cache + `spam_risk_level`
+- `broadcast_jobs`: `risk_check_passed bool`, `risk_check_reason text`
 
-### 4.3 Dashboards & alertas (`/whatsapp/health` v2)
-- Cards: block rate 24h/7d, unsubscribe rate, reply rate, delivery quality, health score histórico (sparkline), template performance (variantes ordenadas por reply rate).
-- Timeline unificada de `waba_health_events` + `spam_detection_events` + `unsubscribe_logs` agregados.
-- Toast/email (via notifications) para quality downgrade, spike de block (>2σ), spike de unsubscribe (>5% em 1h), failed delivery surge.
+**Novas edge functions:**
+- `campaign-risk-recalc` (cron 5 min)
+- `template-spam-scan` (on-demand + cron diário)
+- `domain-reputation-recalc` (cron 10 min)
+- `system-guardian` (cron 1 min)
+- `recovery-advance` (cron 1h)
+- `tenant-risk-recalc` (cron 15 min)
 
----
+**Mudanças em código existente:**
+- `broadcast-processor`: pipeline de checks (risk profile → spam score → domain rep → recovery stage → tenant multiplier → quality multiplier → load balancer pick) antes de cada envio
+- `whatsapp-cloud-webhook`: incrementar `meta_warning_patterns`
+- `BulkBroadcastDialog`: badge spam + warning modal + bloqueio
+- `WabaHealth.tsx`: novos cards + heatmap (recharts) + filtros
 
-## Resumo técnico das mudanças
+**Fora de escopo:**
+- Rewrite do FlowBuilder
+- ML real para spam (heurística por enquanto; estrutura permite plugar depois)
+- Rate limiting da API pública do Prime
+- Mudança de provider
 
-### Novas tabelas
-`unsubscribe_logs`, `phone_send_rate_limits`, `broadcast_template_variants`, `spam_detection_events`, `user_risk_profiles`.
+**Ordem de execução:** Fase 1 → 2 → 3 → 4. Cada fase é independente; após cada uma, a anterior fica funcional e mensurável no dashboard.
 
-### Colunas adicionadas
-- `leads`: `unsubscribed`, `unsubscribed_at`, `unsubscribe_reason`
-- `waba_health_snapshots`: já tem `reputation_score`, popular via cron
-- `broadcast_jobs`: `warmup_recovery boolean`
+**Compatibilidade:** todos os novos checks têm modo "soft" (apenas loga `audit_logs`) ativável por `app_settings.antiban_v2_enforce_mode` (`off`/`shadow`/`enforce`) — permite rodar 48h em shadow antes de aplicar bloqueios reais.
 
-### Edge functions
-- **Editadas:** `whatsapp-cloud-webhook` (unsubscribe + status intelligence), `broadcast-processor` (throttling adaptativo + rate limiter + rotation), `waba-protect-account` (gatilho `quality_downgrade`), `flow-processor` (filtrar unsubscribed).
-- **Novas:** `waba-health-monitor` (cron 2 min), `spam-detector` (cron 5 min), `risk-profile-recalc` (cron diário), `warmup-advance` (cron diário).
-
-### Frontend
-- `BulkBroadcastDialog`: aba "Variantes de template" (Fase 3).
-- `WabaHealth.tsx`: novos cards (score histórico, template performance, unsubscribe rate, timeline unificada).
-- Banner em `AppHeader` ganha variante "risco de reputação" antes do bloqueio.
-- Página admin `/admin/risk` para revisar usuários `restricted`.
-
-### Cron jobs (via pg_cron + pg_net, agendados com `supabase insert`)
-- `waba-health-monitor` a cada 2 min
-- `spam-detector` a cada 5 min
-- `risk-profile-recalc` diário 03:00 UTC
-- `warmup-advance` diário 00:00 UTC do timezone do user
-
----
-
-## Ordem de execução sugerida
-
-1. **Fase 1** primeiro — compliance é o que protege a Meta de nos punir hoje.
-2. **Fase 2** logo em seguida — throttling adaptativo trava o pior cenário (campanha em RED continua agressiva).
-3. **Fase 3** — diversidade e detecção, depende do monitor rodando.
-4. **Fase 4** — política multi-tenant e observabilidade premium.
-
-Cada fase é entregável independente e não quebra o que já existe.
-
-## Fora deste plano
-- Rate limiting da API pública do Prime (mantido fora conforme prática atual).
-- Reescrita do FlowBuilder.
-- Mudança de provedor (Evolution/Z-API).
-- Sistema de revisão humana via Meta Business Suite (apenas linkamos).
-
-Se aprovar, começo pela **Fase 1.1 (Unsubscribe Engine)** já na próxima iteração.
+Confirma que posso iniciar pela Fase 1 (campaign risk profiles + spam content score)?
