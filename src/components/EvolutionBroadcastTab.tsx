@@ -499,12 +499,14 @@ export function EvolutionBroadcastTab() {
             <DialogTitle>Importar lista de disparo</DialogTitle>
           </DialogHeader>
           <ContactImporter
+            origin="evolution_import"
             saveButtonLabel="Salvar e selecionar para disparo"
             onImported={async (ids) => {
               await queryClient.invalidateQueries({ queryKey: ["evolution-broadcast-leads"] });
               setSelected(new Set(ids));
+              setOnlyTagged(true);
               setImportOpen(false);
-              toast.success(`${ids.length} lead(s) importado(s) e selecionado(s) para disparo.`);
+              toast.success(`${ids.length} lead(s) importado(s) com tag "Disparo WhatsApp".`);
             }}
           />
         </DialogContent>
