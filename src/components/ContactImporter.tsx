@@ -244,7 +244,7 @@ export function ContactImporter({ onImported, saveButtonLabel }: ContactImporter
       }));
 
       const BATCH = 50;
-      let created = 0;
+      const allIds: string[] = [];
       for (let i = 0; i < entries.length; i += BATCH) {
         const batch = entries.slice(i, i + BATCH);
         const { data, error } = await supabase
@@ -252,11 +252,12 @@ export function ContactImporter({ onImported, saveButtonLabel }: ContactImporter
           .upsert(batch, { onConflict: "phone,user_id", ignoreDuplicates: false })
           .select("id");
         if (error) throw error;
-        created += (data?.length || 0);
+        if (data) allIds.push(...data.map((r: any) => r.id));
       }
 
       queryClient.invalidateQueries({ queryKey: ["broadcast-leads"] });
-      toast.success(`${created} lead(s) salvos no banco de dados!`);
+      queryClient.invalidateQueries({ queryKey: ["evolution-broadcast-leads"] });
+      toast.success(`${allIds.length} lead(s) salvos no banco de dados!`);
       setContacts([]);
       setListName("");
     } catch (e: any) {
