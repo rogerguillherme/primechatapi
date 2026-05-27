@@ -192,3 +192,31 @@ export function spamLevelLabel(level: SpamRiskLevel): string {
     default: return "Baixo";
   }
 }
+
+const SUGGESTION_MAP: Record<string, string> = {
+  excess_caps: "Reduza o uso de letras MAIÚSCULAS — escreva como uma pessoa real.",
+  high_caps: "Use caixa alta apenas no nome do produto ou marca, não em frases inteiras.",
+  excess_emojis: "Mantenha no máximo 2-3 emojis por mensagem.",
+  high_emoji_density: "Espalhe os emojis ao longo do texto em vez de agrupá-los.",
+  trigger_words: "Substitua palavras como 'urgente', 'grátis', '100% garantido' por linguagem natural.",
+  many_links: "Use apenas 1 link por mensagem — múltiplos links são vistos como spam pela Meta.",
+  multi_link: "Considere deixar somente 1 link e mover o resto para o site.",
+  domain_repetition: "Não repita o mesmo domínio em vários links — use 1 só.",
+  excess_length: "Reduza o texto para menos de 1024 caracteres; mensagens curtas convertem mais.",
+  aggressive_punctuation: "Evite '!!!' e '???' seguidos — use apenas um ponto de exclamação.",
+  shouting_cta: "Escreva o CTA em caixa normal: 'Clique aqui' em vez de 'CLIQUE AQUI'.",
+};
+
+export function suggestionsFor(warnings: SpamWarning[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const w of warnings) {
+    const s = SUGGESTION_MAP[w.code];
+    if (s && !seen.has(s)) {
+      seen.add(s);
+      out.push(s);
+    }
+  }
+  return out;
+}
+
