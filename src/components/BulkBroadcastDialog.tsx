@@ -232,6 +232,20 @@ export function BulkBroadcastDialog({ open, onOpenChange, accountId, accountName
       return;
     }
 
+    // Anti-ban v2 — bloqueio de conteúdo crítico
+    const spam = analyzeTemplateContent(message);
+    if (spam.risk_level === "critical") {
+      toast.error("Conteúdo bloqueado: risco crítico de spam. Revise o texto antes de disparar.");
+      return;
+    }
+    if (spam.risk_level === "high") {
+      const ok = window.confirm(
+        `Atenção: o conteúdo tem alto risco de spam (score ${spam.spam_score}/100).\n\nIsso pode comprometer a reputação do seu número na Meta.\n\nDeseja continuar mesmo assim?`,
+      );
+      if (!ok) return;
+    }
+
+
     const leadIds = leads.filter((l: any) => !excludedIds.has(l.id)).map((l: any) => l.id);
     setSending(true);
     try {
