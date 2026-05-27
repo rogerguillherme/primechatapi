@@ -15,7 +15,7 @@ import { Search, X, Image as ImageIcon, Send, Megaphone, Loader2, Trash2, Filter
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { analyzeTemplateContent, spamLevelLabel } from "@/lib/spamAnalyzer";
+import { analyzeTemplateContent, spamLevelLabel, suggestionsFor } from "@/lib/spamAnalyzer";
 
 
 interface BulkBroadcastDialogProps {
