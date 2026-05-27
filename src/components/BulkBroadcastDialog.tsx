@@ -11,10 +11,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, X, Image as ImageIcon, Send, Megaphone, Loader2, Trash2, Filter, Upload } from "lucide-react";
+import { Search, X, Image as ImageIcon, Send, Megaphone, Loader2, Trash2, Filter, Upload, AlertTriangle, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import { analyzeTemplateContent, spamLevelLabel } from "@/lib/spamAnalyzer";
+
 
 interface BulkBroadcastDialogProps {
   open: boolean;
