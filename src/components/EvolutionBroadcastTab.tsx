@@ -413,7 +413,14 @@ export function EvolutionBroadcastTab() {
                   )}>
                   <Checkbox checked={selected.has(l.id)} className="pointer-events-none"/>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">{l.name || "(sem nome)"}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-medium truncate">{l.name || "(sem nome)"}</p>
+                      {l.origin === "evolution_import" && (
+                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 shrink-0">
+                          Disparo WhatsApp
+                        </Badge>
+                      )}
+                    </div>
                     <p className="text-[11px] text-muted-foreground font-mono">{l.phone}</p>
                   </div>
                 </button>
