@@ -1174,13 +1174,7 @@ function BroadcastTab() {
         </TabsContent>
 
         <TabsContent value="whatsapp" className="mt-4">
-          <div className="rounded-xl border border-border bg-card p-8 text-center">
-            <MessageCircle size={32} className="mx-auto mb-3 text-muted-foreground" />
-            <h3 className="text-lg font-semibold text-foreground mb-1">Disparo WhatsApp</h3>
-            <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              Disparos via WhatsApp Web (Evolution) em breve nesta aba. Por enquanto, use a aba Disparo API para envios via Cloud API.
-            </p>
-          </div>
+          <EvolutionBroadcastTab />
         </TabsContent>
 
 
