@@ -53,7 +53,7 @@ function slugifyVar(input: string): string {
     .slice(0, 40) || "var";
 }
 
-export function ContactImporter() {
+export function ContactImporter({ onImported, saveButtonLabel }: ContactImporterProps = {}) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
