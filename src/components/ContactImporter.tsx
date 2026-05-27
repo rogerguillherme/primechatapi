@@ -409,7 +409,7 @@ export function ContactImporter({ onImported, saveButtonLabel }: ContactImporter
           {importing ? (
             <><Loader2 size={16} className="animate-spin" /> Salvando...</>
           ) : (
-            <><Download size={16} /> Salvar {contacts.length} contato(s) como leads</>
+            <><Download size={16} /> {saveButtonLabel || `Salvar ${contacts.length} contato(s) como leads`}</>
           )}
         </Button>
       )}
