@@ -164,11 +164,110 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Mark as processing
+    // ── ANTI-BAN v2 — RISK & SPAM PRE-FLIGHT CHECK ──
+    // enforce_mode: off | shadow | enforce
+    const { data: enforceSetting } = await supabase
+      .from("app_settings")
+      .select("value")
+      .eq("key", "antiban_v2_enforce_mode")
+      .maybeSingle();
+    const enforceMode = (enforceSetting?.value || "shadow") as "off" | "shadow" | "enforce";
+
+    let riskCheckReason: string | null = null;
+    let throughputMultiplier = 1.0;
+
+    if (enforceMode !== "off" && job.template_id) {
+      // 1) Template spam score
+      const { data: spam } = await supabase
+        .from("template_spam_analysis")
+        .select("spam_score, risk_level, warnings")
+        .eq("template_id", job.template_id)
+        .maybeSingle();
+
+      if (spam) {
+        if (spam.risk_level === "critical") {
+          riskCheckReason = `Conteúdo com risco crítico de spam (score ${spam.spam_score})`;
+          throughputMultiplier = 0;
+        } else if (spam.risk_level === "high") {
+          throughputMultiplier = Math.min(throughputMultiplier, 0.2);
+        } else if (spam.risk_level === "medium") {
+          throughputMultiplier = Math.min(throughputMultiplier, 0.5);
+        }
+      }
+
+      // 2) Historical campaign risk for this template
+      if (!riskCheckReason) {
+        const { data: history } = await supabase
+          .from("campaign_risk_profiles")
+          .select("risk_level")
+          .contains("template_ids", [job.template_id])
+          .eq("user_id", job.user_id)
+          .order("last_calculated_at", { ascending: false })
+          .limit(5);
+
+        const hist = history ?? [];
+        const hasCritical = hist.some((h) => h.risk_level === "critical");
+        const hasHigh = hist.some((h) => h.risk_level === "high");
+        if (hasCritical) {
+          riskCheckReason = "Histórico crítico em campanhas anteriores deste template";
+          throughputMultiplier = 0;
+        } else if (hasHigh) {
+          throughputMultiplier = Math.min(throughputMultiplier, 0.2);
+        }
+      }
+    }
+
+    // Log to audit_logs always (so we can review shadow-mode decisions)
+    if (riskCheckReason || throughputMultiplier < 1.0) {
+      await supabase.from("audit_logs").insert({
+        user_id: job.user_id,
+        action: "antiban_v2_risk_check",
+        table_name: "broadcast_jobs",
+        record_id: jobId,
+        details: {
+          enforce_mode: enforceMode,
+          reason: riskCheckReason,
+          throughput_multiplier: throughputMultiplier,
+          template_id: job.template_id,
+        },
+      });
+    }
+
+    // ENFORCE: bloquear se crítico
+    if (enforceMode === "enforce" && riskCheckReason) {
+      await supabase
+        .from("broadcast_jobs")
+        .update({
+          status: "paused_by_system",
+          pause_reason: `Anti-ban v2: ${riskCheckReason}`,
+          risk_check_passed: false,
+          risk_check_reason: riskCheckReason,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", jobId);
+      return new Response(
+        JSON.stringify({ error: "Blocked by anti-ban v2", reason: riskCheckReason }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Mark as processing (e aplicar multiplier no enforce mode)
+    const baseRate = job.messages_per_second || 1;
+    const effectiveRate = enforceMode === "enforce"
+      ? Math.max(1, Math.floor(baseRate * throughputMultiplier))
+      : baseRate;
+
     await supabase
       .from("broadcast_jobs")
-      .update({ status: "processing", updated_at: new Date().toISOString() })
+      .update({
+        status: "processing",
+        messages_per_second: effectiveRate,
+        risk_check_passed: !riskCheckReason,
+        risk_check_reason: riskCheckReason,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", jobId);
+
 
     // ── GET ACCOUNT CREDENTIALS ──
     // Support multi-number distribution
