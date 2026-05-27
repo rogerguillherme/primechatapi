@@ -1150,12 +1150,15 @@ function BroadcastTab() {
   return (
     <div className="space-y-6">
       <Tabs defaultValue="queue" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="queue" className="gap-1.5">
             <Send size={14} /> Fila de Disparos
           </TabsTrigger>
           <TabsTrigger value="simple" className="gap-1.5">
-            <MessageCircle size={14} /> Disparo Simples
+            <MessageCircle size={14} /> Disparo API
+          </TabsTrigger>
+          <TabsTrigger value="whatsapp" className="gap-1.5">
+            <MessageCircle size={14} /> Disparo WhatsApp
           </TabsTrigger>
           <TabsTrigger value="import" className="gap-1.5">
             <Users size={14} /> Importar Contatos
@@ -1169,6 +1172,17 @@ function BroadcastTab() {
         <TabsContent value="import" className="mt-4">
           <ContactImporter />
         </TabsContent>
+
+        <TabsContent value="whatsapp" className="mt-4">
+          <div className="rounded-xl border border-border bg-card p-8 text-center">
+            <MessageCircle size={32} className="mx-auto mb-3 text-muted-foreground" />
+            <h3 className="text-lg font-semibold text-foreground mb-1">Disparo WhatsApp</h3>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+              Disparos via WhatsApp Web (Evolution) em breve nesta aba. Por enquanto, use a aba Disparo API para envios via Cloud API.
+            </p>
+          </div>
+        </TabsContent>
+
 
         <TabsContent value="simple" className="mt-4 space-y-6">
 
