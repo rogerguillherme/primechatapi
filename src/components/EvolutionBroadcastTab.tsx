@@ -55,6 +55,8 @@ export function EvolutionBroadcastTab() {
   const [mode, setMode] = useState<Mode>("message");
   const [flowId, setFlowId] = useState<string>("");
   const [message, setMessage] = useState("");
+  const [variations, setVariations] = useState<string[]>([]);
+  const [activeVarIdx, setActiveVarIdx] = useState<number>(-1); // -1 = main, 0+ = variations index
   const [imageUrl, setImageUrl] = useState("");
   const [delayMin, setDelayMin] = useState(12);
   const [delayMax, setDelayMax] = useState(35);
@@ -87,6 +89,21 @@ export function EvolutionBroadcastTab() {
         .from("flows")
         .select("id, name, active, flow_kind, trigger_type")
         .eq("flow_kind", "whatsapp")
+        .order("name");
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  // Templates salvos (chat_templates) para carregar como variação rapidamente.
+  const { data: savedTemplates = [] } = useQuery({
+    queryKey: ["broadcast-saved-templates", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("chat_templates")
+        .select("id, name, content")
+        .eq("user_id", user!.id)
         .order("name");
       if (error) throw error;
       return data || [];
@@ -183,7 +200,38 @@ export function EvolutionBroadcastTab() {
     });
   }
   function insertVar(v: string) {
-    setMessage((m) => m + (m && !m.endsWith(" ") ? " " : "") + v);
+    if (activeVarIdx < 0) {
+      setMessage((m) => m + (m && !m.endsWith(" ") ? " " : "") + v);
+    } else {
+      setVariations((prev) => {
+        const next = [...prev];
+        const cur = next[activeVarIdx] || "";
+        next[activeVarIdx] = cur + (cur && !cur.endsWith(" ") ? " " : "") + v;
+        return next;
+      });
+    }
+  }
+
+  function updateVariation(idx: number, value: string) {
+    setVariations((prev) => {
+      const next = [...prev];
+      next[idx] = value;
+      return next;
+    });
+  }
+  function addVariation() {
+    setVariations((prev) => [...prev, ""]);
+    setActiveVarIdx(variations.length);
+  }
+  function removeVariation(idx: number) {
+    setVariations((prev) => prev.filter((_, i) => i !== idx));
+    setActiveVarIdx(-1);
+  }
+  function loadTemplateInto(idx: number, templateId: string) {
+    const tpl = savedTemplates.find((t: any) => t.id === templateId);
+    if (!tpl) return;
+    if (idx < 0) setMessage(tpl.content || "");
+    else updateVariation(idx, tpl.content || "");
   }
 
   async function startFlowBulk(leadIds: string[]) {
@@ -263,13 +311,16 @@ export function EvolutionBroadcastTab() {
         toast.success(`Fluxo iniciado para ${ok} lead(s)${fail ? `. ${fail} falharam.` : "."}`);
         setSelected(new Set());
       } else {
+        // Coleta variações + mensagem principal (todas não vazias)
+        const allMessages = [message, ...variations].map((m) => m.trim()).filter((m) => m.length > 0);
         // Append zero-width fingerprint so identical bodies still vary at byte level.
-        const finalMessage = `${message}${zeroWidthVariant()}`;
+        const messages = allMessages.map((m) => `${m}${zeroWidthVariant()}`);
         const { data, error } = await supabase.functions.invoke("evolution-bulk-broadcast", {
           body: {
             account_id: accountId,
             lead_ids: leadIds,
-            message: finalMessage,
+            message: messages[0],
+            messages: messages.length > 1 ? messages : undefined,
             image_url: imageUrl.trim() || undefined,
             delay_min: delayMin,
             delay_max: delayMax,
@@ -539,9 +590,74 @@ export function EvolutionBroadcastTab() {
                     </button>
                   ))}
                 </div>
-                <Textarea value={message} onChange={(e) => setMessage(e.target.value)}
-                  placeholder="Olá {primeiro_nome}, tudo bem? ..."
-                  className="min-h-[180px] text-sm font-mono"/>
+                {/* Mensagem principal */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-xs font-semibold">Mensagem principal</Label>
+                    {savedTemplates.length > 0 && (
+                      <Select value="" onValueChange={(v) => loadTemplateInto(-1, v)}>
+                        <SelectTrigger className="h-7 w-44 text-[11px]">
+                          <SelectValue placeholder="Carregar template..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {savedTemplates.map((t: any) => (
+                            <SelectItem key={t.id} value={t.id} className="text-xs">{t.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                  <Textarea
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    onFocus={() => setActiveVarIdx(-1)}
+                    placeholder="Olá {primeiro_nome}, tudo bem? ..."
+                    className={cn("min-h-[140px] text-sm font-mono", activeVarIdx === -1 && "ring-2 ring-primary/40")}
+                  />
+                </div>
+
+                {/* Variações (rotação anti-ban) */}
+                {variations.map((v, idx) => (
+                  <div key={idx} className="space-y-1.5 rounded-md border border-dashed border-primary/30 bg-primary/5 p-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label className="text-xs font-semibold flex items-center gap-1.5">
+                        <Sparkles size={11} className="text-primary" /> Variação {idx + 1}
+                      </Label>
+                      <div className="flex items-center gap-1.5">
+                        {savedTemplates.length > 0 && (
+                          <Select value="" onValueChange={(v) => loadTemplateInto(idx, v)}>
+                            <SelectTrigger className="h-7 w-40 text-[11px]">
+                              <SelectValue placeholder="Carregar template..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {savedTemplates.map((t: any) => (
+                                <SelectItem key={t.id} value={t.id} className="text-xs">{t.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                        <Button
+                          variant="ghost" size="icon" className="h-7 w-7 text-destructive shrink-0"
+                          onClick={() => removeVariation(idx)}
+                        >
+                          ✕
+                        </Button>
+                      </div>
+                    </div>
+                    <Textarea
+                      value={v}
+                      onChange={(e) => updateVariation(idx, e.target.value)}
+                      onFocus={() => setActiveVarIdx(idx)}
+                      placeholder="Escreva uma versão alternativa da mensagem..."
+                      className={cn("min-h-[100px] text-sm font-mono", activeVarIdx === idx && "ring-2 ring-primary/40")}
+                    />
+                  </div>
+                ))}
+
+                <Button type="button" variant="outline" size="sm" onClick={addVariation} className="w-full">
+                  <Sparkles size={12} className="mr-2" /> Adicionar variação de mensagem
+                </Button>
+
                 <div className="space-y-1">
                   <Label className="text-xs flex items-center gap-1.5">
                     <ImageIcon size={12}/> URL de imagem (opcional)
@@ -552,10 +668,12 @@ export function EvolutionBroadcastTab() {
                 <div className="flex items-start gap-2 text-[11px] text-muted-foreground bg-muted/40 rounded-md p-2">
                   <Info size={12} className="mt-0.5 shrink-0"/>
                   <span>
-                    Uma assinatura invisível (zero-width) é adicionada automaticamente a cada envio para variar
-                    o hash da mensagem e reduzir detecção de spam.
+                    {variations.length > 0
+                      ? `Cada lead recebe uma das ${variations.length + 1} versões rotacionando (round-robin). Reduz drasticamente o risco de banimento por repetição.`
+                      : "Uma assinatura invisível (zero-width) é adicionada automaticamente a cada envio para variar o hash da mensagem. Adicione variações para alternar templates entre os leads."}
                   </span>
                 </div>
+
               </>
             ) : (
               <div className="rounded-md border border-border bg-muted/30 p-4 text-sm text-muted-foreground">

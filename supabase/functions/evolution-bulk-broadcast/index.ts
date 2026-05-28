@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
     let leads: any[];
     let account: any;
     let image_url: string | undefined;
-    let messageTpl: string;
+    let messageTpls: string[]; // suporta rotação: cada lead recebe messageTpls[i % messageTpls.length]
     let delay_min: number;
     let delay_max: number;
 
@@ -61,7 +61,11 @@ Deno.serve(async (req) => {
       job = jobRow;
       delay_min = jobRow.delay_min_seconds;
       delay_max = jobRow.delay_max_seconds;
-      messageTpl = jobRow.retry_map?.message || "";
+      // Suporta novo formato (messages: string[]) e legado (message: string)
+      const storedMessages = jobRow.retry_map?.messages;
+      messageTpls = Array.isArray(storedMessages) && storedMessages.length > 0
+        ? storedMessages.map((m: any) => String(m))
+        : [jobRow.retry_map?.message || ""];
       image_url = jobRow.retry_map?.image_url;
 
       const { data: acc } = await supabase
@@ -90,21 +94,27 @@ Deno.serve(async (req) => {
       if (userErr || !user) return json({ error: "Unauthorized" }, 401);
 
       const {
-        account_id, lead_ids, message, image_url: img,
+        account_id, lead_ids, message, messages, image_url: img,
         delay_min: dmin = 5, delay_max: dmax = 5,
       } = body;
       if (!account_id || !Array.isArray(lead_ids) || lead_ids.length === 0) {
         return json({ error: "account_id e lead_ids são obrigatórios" }, 400);
       }
-      if (!message || typeof message !== "string" || message.trim().length === 0) {
-        return json({ error: "message é obrigatória" }, 400);
+      // Normaliza para array
+      const incomingMsgs: string[] = Array.isArray(messages) && messages.length > 0
+        ? messages.map((m: any) => String(m || "")).filter((m: string) => m.trim().length > 0)
+        : (typeof message === "string" && message.trim().length > 0 ? [message] : []);
+      if (incomingMsgs.length === 0) {
+        return json({ error: "message ou messages é obrigatório" }, 400);
       }
-      if (message.length > 4000) return json({ error: "message muito longa (máx 4000)" }, 400);
+      if (incomingMsgs.some((m) => m.length > 4000)) {
+        return json({ error: "mensagem muito longa (máx 4000)" }, 400);
+      }
 
       delay_min = Math.max(0, parseInt(dmin) || 5);
       delay_max = Math.max(delay_min, parseInt(dmax) || 5);
       image_url = img || undefined;
-      messageTpl = message;
+      messageTpls = incomingMsgs;
 
       const { data: acc } = await supabase
         .from("whatsapp_accounts")
@@ -135,7 +145,7 @@ Deno.serve(async (req) => {
           shuffle_leads: true,
           template_name: "bulk_evolution_custom",
           messages_per_second: 0,
-          retry_map: { image_url: image_url || null, message: messageTpl },
+          retry_map: { image_url: image_url || null, messages: messageTpls, message: messageTpls[0] },
         })
         .select("*").single();
       if (jobErr) return json({ error: jobErr.message }, 500);
@@ -183,7 +193,9 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const text = renderTemplate(messageTpl, lead) + zwSig();
+        // Rotação round-robin: cada lead recebe uma das variações
+        const tplForLead = messageTpls[i % messageTpls.length];
+        const text = renderTemplate(tplForLead, lead) + zwSig();
 
         try {
           if (image_url) {
