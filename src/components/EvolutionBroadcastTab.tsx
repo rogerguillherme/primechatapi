@@ -95,6 +95,21 @@ export function EvolutionBroadcastTab() {
     },
   });
 
+  // Templates salvos (chat_templates) para carregar como variação rapidamente.
+  const { data: savedTemplates = [] } = useQuery({
+    queryKey: ["broadcast-saved-templates", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("chat_templates")
+        .select("id, name, content")
+        .eq("user_id", user!.id)
+        .order("name");
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
   const { data: leads = [] } = useQuery({
     queryKey: ["evolution-broadcast-leads", user?.id],
     enabled: !!user,
