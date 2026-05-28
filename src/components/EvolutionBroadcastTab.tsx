@@ -590,9 +590,74 @@ export function EvolutionBroadcastTab() {
                     </button>
                   ))}
                 </div>
-                <Textarea value={message} onChange={(e) => setMessage(e.target.value)}
-                  placeholder="Olá {primeiro_nome}, tudo bem? ..."
-                  className="min-h-[180px] text-sm font-mono"/>
+                {/* Mensagem principal */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-xs font-semibold">Mensagem principal</Label>
+                    {savedTemplates.length > 0 && (
+                      <Select value="" onValueChange={(v) => loadTemplateInto(-1, v)}>
+                        <SelectTrigger className="h-7 w-44 text-[11px]">
+                          <SelectValue placeholder="Carregar template..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {savedTemplates.map((t: any) => (
+                            <SelectItem key={t.id} value={t.id} className="text-xs">{t.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                  <Textarea
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    onFocus={() => setActiveVarIdx(-1)}
+                    placeholder="Olá {primeiro_nome}, tudo bem? ..."
+                    className={cn("min-h-[140px] text-sm font-mono", activeVarIdx === -1 && "ring-2 ring-primary/40")}
+                  />
+                </div>
+
+                {/* Variações (rotação anti-ban) */}
+                {variations.map((v, idx) => (
+                  <div key={idx} className="space-y-1.5 rounded-md border border-dashed border-primary/30 bg-primary/5 p-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label className="text-xs font-semibold flex items-center gap-1.5">
+                        <Sparkles size={11} className="text-primary" /> Variação {idx + 1}
+                      </Label>
+                      <div className="flex items-center gap-1.5">
+                        {savedTemplates.length > 0 && (
+                          <Select value="" onValueChange={(v) => loadTemplateInto(idx, v)}>
+                            <SelectTrigger className="h-7 w-40 text-[11px]">
+                              <SelectValue placeholder="Carregar template..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {savedTemplates.map((t: any) => (
+                                <SelectItem key={t.id} value={t.id} className="text-xs">{t.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                        <Button
+                          variant="ghost" size="icon" className="h-7 w-7 text-destructive shrink-0"
+                          onClick={() => removeVariation(idx)}
+                        >
+                          ✕
+                        </Button>
+                      </div>
+                    </div>
+                    <Textarea
+                      value={v}
+                      onChange={(e) => updateVariation(idx, e.target.value)}
+                      onFocus={() => setActiveVarIdx(idx)}
+                      placeholder="Escreva uma versão alternativa da mensagem..."
+                      className={cn("min-h-[100px] text-sm font-mono", activeVarIdx === idx && "ring-2 ring-primary/40")}
+                    />
+                  </div>
+                ))}
+
+                <Button type="button" variant="outline" size="sm" onClick={addVariation} className="w-full">
+                  <Sparkles size={12} className="mr-2" /> Adicionar variação de mensagem
+                </Button>
+
                 <div className="space-y-1">
                   <Label className="text-xs flex items-center gap-1.5">
                     <ImageIcon size={12}/> URL de imagem (opcional)
@@ -603,10 +668,12 @@ export function EvolutionBroadcastTab() {
                 <div className="flex items-start gap-2 text-[11px] text-muted-foreground bg-muted/40 rounded-md p-2">
                   <Info size={12} className="mt-0.5 shrink-0"/>
                   <span>
-                    Uma assinatura invisível (zero-width) é adicionada automaticamente a cada envio para variar
-                    o hash da mensagem e reduzir detecção de spam.
+                    {variations.length > 0
+                      ? `Cada lead recebe uma das ${variations.length + 1} versões rotacionando (round-robin). Reduz drasticamente o risco de banimento por repetição.`
+                      : "Uma assinatura invisível (zero-width) é adicionada automaticamente a cada envio para variar o hash da mensagem. Adicione variações para alternar templates entre os leads."}
                   </span>
                 </div>
+
               </>
             ) : (
               <div className="rounded-md border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
