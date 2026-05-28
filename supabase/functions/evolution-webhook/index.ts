@@ -111,7 +111,7 @@ async function resolveMatchedFlowStep(
 
   expandedTriggers = Array.from(new Set(expandedTriggers.filter(Boolean)));
 
-  return branchSteps.find((step: any) => expandedTriggers.includes(normalizeTriggerValue(step.trigger_value))) || null;
+  return branchSteps.find((step: any) => stepMatchesTriggers(step, expandedTriggers)) || null;
 }
 
 async function processFlowStep(step: any, execution: any, lead: any, supabase: any, fallbackAccountId?: string | null) {
