@@ -145,7 +145,7 @@ Deno.serve(async (req) => {
           shuffle_leads: true,
           template_name: "bulk_evolution_custom",
           messages_per_second: 0,
-          retry_map: { image_url: image_url || null, message: messageTpl },
+          retry_map: { image_url: image_url || null, messages: messageTpls, message: messageTpls[0] },
         })
         .select("*").single();
       if (jobErr) return json({ error: jobErr.message }, 500);
