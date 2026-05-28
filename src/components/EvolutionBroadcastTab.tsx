@@ -429,7 +429,7 @@ export function EvolutionBroadcastTab() {
                 <Upload size={12} className="mr-1"/> Importar lista
               </Button>
             </div>
-            <div className="flex items-center gap-2 mt-2">
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
               <button
                 type="button"
                 onClick={() => setOnlyTagged((v) => !v)}
@@ -443,7 +443,20 @@ export function EvolutionBroadcastTab() {
               >
                 {onlyTagged ? "✓ " : ""}Tag Disparo WhatsApp ({taggedCount})
               </button>
-              <div className="relative flex-1">
+              <button
+                type="button"
+                onClick={() => setHideAlreadySent((v) => !v)}
+                className={cn(
+                  "text-[11px] px-2 py-1 rounded-md border transition-colors shrink-0",
+                  hideAlreadySent
+                    ? "border-amber-500/50 bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                    : "border-border bg-muted/40 text-muted-foreground hover:bg-muted"
+                )}
+                title="Esconder leads que já receberam algum disparo"
+              >
+                {hideAlreadySent ? "✓ " : ""}Ocultar já disparados ({alreadySentIds.size})
+              </button>
+              <div className="relative flex-1 min-w-[180px]">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"/>
                 <Input value={search} onChange={(e) => setSearch(e.target.value)}
                   placeholder="Buscar nome ou telefone..." className="pl-9 h-9 text-sm"/>
@@ -451,9 +464,28 @@ export function EvolutionBroadcastTab() {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="px-4 py-2 border-b border-border">
+            <div className="px-4 py-2 border-b border-border flex items-center justify-between gap-2 flex-wrap">
               <button onClick={toggleAll} className="text-xs text-primary hover:underline">
                 {selected.size === filtered.length && filtered.length > 0 ? "Desmarcar todos" : "Selecionar todos"}
+              </button>
+              <button
+                onClick={() => {
+                  setSelected((p) => {
+                    const n = new Set(p);
+                    let removed = 0;
+                    for (const id of Array.from(n)) {
+                      if (alreadySentIds.has(id)) { n.delete(id); removed++; }
+                    }
+                    if (removed === 0) toast.info("Nenhum lead selecionado já havia sido disparado.");
+                    else toast.success(`${removed} lead(s) já disparados removidos da seleção.`);
+                    return n;
+                  });
+                }}
+                disabled={selected.size === 0}
+                className="text-xs text-amber-700 dark:text-amber-300 hover:underline disabled:opacity-40 disabled:no-underline disabled:cursor-not-allowed"
+                title="Remove da seleção atual os leads que já receberam algum disparo"
+              >
+                Remover já disparados da seleção
               </button>
             </div>
             <ScrollArea className="h-[340px]">
