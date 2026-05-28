@@ -147,6 +147,7 @@ export function EvolutionBroadcastTab() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     let list = onlyTagged ? leads.filter((l: any) => l.origin === "evolution_import") : leads;
+    if (hideAlreadySent) list = list.filter((l: any) => !alreadySentIds.has(l.id));
     if (q) {
       list = list.filter((l: any) =>
         (l.name || "").toLowerCase().includes(q) ||
@@ -154,7 +155,7 @@ export function EvolutionBroadcastTab() {
       );
     }
     return list;
-  }, [leads, search, onlyTagged]);
+  }, [leads, search, onlyTagged, hideAlreadySent, alreadySentIds]);
 
   const taggedCount = useMemo(
     () => leads.filter((l: any) => l.origin === "evolution_import").length,
