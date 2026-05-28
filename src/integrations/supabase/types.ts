@@ -761,6 +761,7 @@ export type Database = {
           step_order: number
           step_type: string
           template_id: string | null
+          template_variations: Json
           timeout_minutes: number | null
           trigger_value: string | null
         }
@@ -785,6 +786,7 @@ export type Database = {
           step_order?: number
           step_type?: string
           template_id?: string | null
+          template_variations?: Json
           timeout_minutes?: number | null
           trigger_value?: string | null
         }
@@ -809,6 +811,7 @@ export type Database = {
           step_order?: number
           step_type?: string
           template_id?: string | null
+          template_variations?: Json
           timeout_minutes?: number | null
           trigger_value?: string | null
         }

@@ -370,10 +370,16 @@ async function sendStepMessage(
     body.interactive_buttons = buttons;
     expectedLogContent = `🔘 ${msgText}`;
   } else if (step.template_id) {
+    const variants = Array.isArray(step.template_variations) ? step.template_variations.filter((v: any) => typeof v === "string" && v) : [];
+    const pool = [step.template_id, ...variants];
+    const chosenTemplateId = pool[Math.floor(Math.random() * pool.length)];
+    if (variants.length > 0) {
+      console.log("Template rotation:", step.id, "chose", chosenTemplateId, "from pool of", pool.length);
+    }
     const { data: template } = await supabase
       .from("chat_templates")
       .select("*")
-      .eq("id", step.template_id)
+      .eq("id", chosenTemplateId)
       .single();
 
     if (template?.template_name) {
