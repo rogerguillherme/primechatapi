@@ -75,6 +75,20 @@ function normalizeTriggerValue(value: string | null | undefined): string {
   return (value || "").trim().toLowerCase();
 }
 
+function expandStepTriggerValues(value: string | null | undefined): string[] {
+  if (!value) return [];
+  return value
+    .split(/[,\n;|]/)
+    .map((v) => normalizeTriggerValue(v))
+    .filter(Boolean);
+}
+
+function stepMatchesTriggers(step: any, triggers: string[]): boolean {
+  const stepTriggers = expandStepTriggerValues(step?.trigger_value);
+  if (stepTriggers.length === 0) return false;
+  return stepTriggers.some((t) => triggers.includes(t));
+}
+
 async function resolveMatchedFlowStep(
   supabase: any,
   flowId: string,
