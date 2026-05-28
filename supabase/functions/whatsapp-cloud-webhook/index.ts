@@ -865,15 +865,42 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Check for flow executions waiting for user reply
+      // Check for flow executions waiting for user reply.
+      // IMPORTANT: a Brazilian phone can exist as two leads (with/without the 9th digit),
+      // so look up all leads matching any phone variant for this tenant and consider their executions.
       if ((buttonPayload || text) && lead) {
+        let siblingLeadsQuery = supabase
+          .from("leads")
+          .select("id")
+          .or(phoneFilter);
+        if (resolvedUserId) {
+          siblingLeadsQuery = siblingLeadsQuery.eq("user_id", resolvedUserId);
+        }
+        const { data: siblingLeads } = await siblingLeadsQuery;
+        const leadIds = Array.from(new Set([
+          lead.id,
+          ...(siblingLeads || []).map((l: any) => l.id),
+        ]));
+
         const { data: executions } = await supabase
           .from("flow_executions")
-          .select("id, current_step_id, flow_id, metadata")
-          .eq("lead_id", lead.id)
+          .select("id, current_step_id, flow_id, metadata, lead_id")
+          .in("lead_id", leadIds)
           .eq("status", "waiting_reply");
 
         for (const exec of executions || []) {
+          // Resolve the exact lead this execution is tied to (may differ from
+          // `lead` when two leads exist for the same phone — with/without 9th digit).
+          let execLead: any = lead;
+          if (exec.lead_id && exec.lead_id !== lead.id) {
+            const { data: el } = await supabase
+              .from("leads")
+              .select("id, name, phone")
+              .eq("id", exec.lead_id)
+              .maybeSingle();
+            if (el) execLead = el;
+          }
+
           const currentStepId = exec.current_step_id;
           const candidateTriggers = Array.from(new Set([
             normalizeTriggerValue(buttonPayload),
@@ -948,7 +975,7 @@ Deno.serve(async (req) => {
                 .limit(1);
 
               if (condChildren && condChildren.length > 0) {
-                await processFlowStep(condChildren[0], exec, lead, supabase, resolvedAccountId);
+                await processFlowStep(condChildren[0], exec, execLead, supabase, resolvedAccountId);
               } else {
                 console.log("Condition matched but has no child step:", matchedStep.id, "exec:", exec.id);
                 await supabase.from("flow_executions").update({
@@ -957,7 +984,7 @@ Deno.serve(async (req) => {
                 }).eq("id", exec.id);
               }
             } else {
-              await processFlowStep(matchedStep, exec, lead, supabase, resolvedAccountId);
+              await processFlowStep(matchedStep, exec, execLead, supabase, resolvedAccountId);
             }
           } else {
             console.log("No matching branch for button payload:", buttonPayload, "exec:", exec.id);
