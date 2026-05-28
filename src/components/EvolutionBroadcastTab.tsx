@@ -200,7 +200,38 @@ export function EvolutionBroadcastTab() {
     });
   }
   function insertVar(v: string) {
-    setMessage((m) => m + (m && !m.endsWith(" ") ? " " : "") + v);
+    if (activeVarIdx < 0) {
+      setMessage((m) => m + (m && !m.endsWith(" ") ? " " : "") + v);
+    } else {
+      setVariations((prev) => {
+        const next = [...prev];
+        const cur = next[activeVarIdx] || "";
+        next[activeVarIdx] = cur + (cur && !cur.endsWith(" ") ? " " : "") + v;
+        return next;
+      });
+    }
+  }
+
+  function updateVariation(idx: number, value: string) {
+    setVariations((prev) => {
+      const next = [...prev];
+      next[idx] = value;
+      return next;
+    });
+  }
+  function addVariation() {
+    setVariations((prev) => [...prev, ""]);
+    setActiveVarIdx(variations.length);
+  }
+  function removeVariation(idx: number) {
+    setVariations((prev) => prev.filter((_, i) => i !== idx));
+    setActiveVarIdx(-1);
+  }
+  function loadTemplateInto(idx: number, templateId: string) {
+    const tpl = savedTemplates.find((t: any) => t.id === templateId);
+    if (!tpl) return;
+    if (idx < 0) setMessage(tpl.content || "");
+    else updateVariation(idx, tpl.content || "");
   }
 
   async function startFlowBulk(leadIds: string[]) {
