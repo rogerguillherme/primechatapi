@@ -865,12 +865,27 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Check for flow executions waiting for user reply
+      // Check for flow executions waiting for user reply.
+      // IMPORTANT: a Brazilian phone can exist as two leads (with/without the 9th digit),
+      // so look up all leads matching any phone variant for this tenant and consider their executions.
       if ((buttonPayload || text) && lead) {
+        let siblingLeadsQuery = supabase
+          .from("leads")
+          .select("id")
+          .or(phoneFilter);
+        if (resolvedUserId) {
+          siblingLeadsQuery = siblingLeadsQuery.eq("user_id", resolvedUserId);
+        }
+        const { data: siblingLeads } = await siblingLeadsQuery;
+        const leadIds = Array.from(new Set([
+          lead.id,
+          ...(siblingLeads || []).map((l: any) => l.id),
+        ]));
+
         const { data: executions } = await supabase
           .from("flow_executions")
-          .select("id, current_step_id, flow_id, metadata")
-          .eq("lead_id", lead.id)
+          .select("id, current_step_id, flow_id, metadata, lead_id")
+          .in("lead_id", leadIds)
           .eq("status", "waiting_reply");
 
         for (const exec of executions || []) {
