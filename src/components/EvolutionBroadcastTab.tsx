@@ -63,6 +63,7 @@ export function EvolutionBroadcastTab() {
   const [sending, setSending] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [onlyTagged, setOnlyTagged] = useState(false);
+  const [hideAlreadySent, setHideAlreadySent] = useState(false);
 
   const { data: accounts = [] } = useQuery({
     queryKey: ["evolution-accounts", user?.id],
