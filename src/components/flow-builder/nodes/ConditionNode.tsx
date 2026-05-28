@@ -23,10 +23,26 @@ export function ConditionNode({ id, data }: { id: string; data: ConditionNodeDat
         </button>
       </div>
       <div className="p-3">
-        <p className="text-xs text-muted-foreground">Botão clicado:</p>
-        <p className="text-sm font-medium text-foreground mt-0.5">
-          {data.trigger_value || "Não definido"}
-        </p>
+        <p className="text-xs text-muted-foreground">Palavras que ativam:</p>
+        <div className="mt-1 flex flex-wrap gap-1">
+          {(() => {
+            const values = (data.trigger_value || "")
+              .split(/[,\n;|]/)
+              .map((v) => v.trim())
+              .filter(Boolean);
+            if (values.length === 0) {
+              return <span className="text-sm text-foreground">Não definido</span>;
+            }
+            return values.map((v, i) => (
+              <span
+                key={i}
+                className="text-[11px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-700 dark:text-violet-300 border border-violet-500/20"
+              >
+                {v}
+              </span>
+            ));
+          })()}
+        </div>
       </div>
       <Handle type="target" position={Position.Left} className="!w-3 !h-3 !bg-violet-500 !border-2 !border-background" />
       <Handle type="source" position={Position.Right} id="default" className="!w-3 !h-3 !bg-violet-500 !border-2 !border-background" />

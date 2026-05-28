@@ -75,6 +75,20 @@ function normalizeTriggerValue(value: string | null | undefined): string {
   return (value || "").trim().toLowerCase();
 }
 
+function expandStepTriggerValues(value: string | null | undefined): string[] {
+  if (!value) return [];
+  return value
+    .split(/[,\n;|]/)
+    .map((v) => normalizeTriggerValue(v))
+    .filter(Boolean);
+}
+
+function stepMatchesTriggers(step: any, triggers: string[]): boolean {
+  const stepTriggers = expandStepTriggerValues(step?.trigger_value);
+  if (stepTriggers.length === 0) return false;
+  return stepTriggers.some((t) => triggers.includes(t));
+}
+
 async function resolveMatchedFlowStep(
   supabase: any,
   flowId: string,
@@ -115,7 +129,7 @@ async function resolveMatchedFlowStep(
     branchSteps = data || [];
   }
 
-  return branchSteps.find((step: any) => candidateTriggers.includes(normalizeTriggerValue(step.trigger_value))) || null;
+  return branchSteps.find((step: any) => stepMatchesTriggers(step, candidateTriggers)) || null;
 }
 
 // Classifies Meta Cloud API error codes for the WABA protection system.
@@ -874,7 +888,7 @@ Deno.serve(async (req) => {
               .eq("step_type", "condition");
 
             const conditionStep = (conditionSteps || []).find((s: any) =>
-              candidateTriggers.includes(normalizeTriggerValue(s.trigger_value))
+              stepMatchesTriggers(s, candidateTriggers)
             );
 
             if (conditionStep) {

@@ -13,6 +13,20 @@ function normalizeTriggerValue(value: string | null | undefined): string {
   return (value || "").trim().toLowerCase();
 }
 
+function expandStepTriggerValues(value: string | null | undefined): string[] {
+  if (!value) return [];
+  return value
+    .split(/[,\n;|]/)
+    .map((v) => normalizeTriggerValue(v))
+    .filter(Boolean);
+}
+
+function stepMatchesTriggers(step: any, triggers: string[]): boolean {
+  const stepTriggers = expandStepTriggerValues(step?.trigger_value);
+  if (stepTriggers.length === 0) return false;
+  return stepTriggers.some((t) => triggers.includes(t));
+}
+
 function extractParticipantJid(participant: any): string {
   if (!participant) return "";
   if (typeof participant === "string" || typeof participant === "number") return String(participant);
@@ -97,7 +111,7 @@ async function resolveMatchedFlowStep(
 
   expandedTriggers = Array.from(new Set(expandedTriggers.filter(Boolean)));
 
-  return branchSteps.find((step: any) => expandedTriggers.includes(normalizeTriggerValue(step.trigger_value))) || null;
+  return branchSteps.find((step: any) => stepMatchesTriggers(step, expandedTriggers)) || null;
 }
 
 async function processFlowStep(step: any, execution: any, lead: any, supabase: any, fallbackAccountId?: string | null) {
@@ -558,7 +572,7 @@ Deno.serve(async (req) => {
                 .eq("step_type", "condition");
 
               const conditionStep = (conditionSteps || []).find((s: any) =>
-                candidateTriggers.includes(normalizeTriggerValue(s.trigger_value))
+                stepMatchesTriggers(s, candidateTriggers)
               );
 
               if (conditionStep) {
