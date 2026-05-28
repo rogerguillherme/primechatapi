@@ -55,6 +55,8 @@ export function EvolutionBroadcastTab() {
   const [mode, setMode] = useState<Mode>("message");
   const [flowId, setFlowId] = useState<string>("");
   const [message, setMessage] = useState("");
+  const [variations, setVariations] = useState<string[]>([]);
+  const [activeVarIdx, setActiveVarIdx] = useState<number>(-1); // -1 = main, 0+ = variations index
   const [imageUrl, setImageUrl] = useState("");
   const [delayMin, setDelayMin] = useState(12);
   const [delayMax, setDelayMax] = useState(35);
