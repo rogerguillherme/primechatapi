@@ -375,6 +375,68 @@ function AiAgentFields({ data, onUpdate }: { data: Record<string, unknown>; onUp
   );
 }
 
+function TemplateVariationsField({
+  mainTemplateId,
+  variations,
+  templates,
+  onChange,
+}: {
+  mainTemplateId: string;
+  variations: string[];
+  templates: any[];
+  onChange: (v: string[]) => void;
+}) {
+  const available = templates.filter(
+    (t) => t.id !== mainTemplateId && !variations.includes(t.id),
+  );
+  return (
+    <div className="space-y-2 rounded-md border border-dashed border-primary/30 bg-primary/5 p-3">
+      <div className="flex items-center justify-between">
+        <Label className="text-xs">Templates alternativos</Label>
+        <span className="text-[10px] text-muted-foreground">
+          {variations.length} alternativa(s)
+        </span>
+      </div>
+      <p className="text-[11px] text-muted-foreground leading-relaxed">
+        O sistema sorteia entre o template principal e os alternativos a cada envio,
+        reduzindo o risco de banimento por repetição.
+      </p>
+      {variations.map((tid, idx) => {
+        const tpl = templates.find((t) => t.id === tid);
+        return (
+          <div key={tid + idx} className="flex items-center gap-2">
+            <div className="flex-1 truncate rounded-md border border-input bg-background px-2 py-1.5 text-xs">
+              {tpl ? `${tpl.name}${tpl.template_name ? ` (${tpl.template_name})` : ""}` : "(template removido)"}
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-destructive shrink-0"
+              onClick={() => onChange(variations.filter((_, i) => i !== idx))}
+            >
+              <Trash2 size={12} />
+            </Button>
+          </div>
+        );
+      })}
+      {available.length > 0 && (
+        <Select value="" onValueChange={(v) => v && onChange([...variations, v])}>
+          <SelectTrigger className="h-8 text-xs">
+            <SelectValue placeholder="+ Adicionar template alternativo" />
+          </SelectTrigger>
+          <SelectContent>
+            {available.map((t) => (
+              <SelectItem key={t.id} value={t.id}>
+                {t.name} {t.template_name ? `(${t.template_name})` : ""}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+    </div>
+  );
+}
+
 function MessageVariationsField({
   variations,
   onChange,
