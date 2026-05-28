@@ -889,6 +889,18 @@ Deno.serve(async (req) => {
           .eq("status", "waiting_reply");
 
         for (const exec of executions || []) {
+          // Resolve the exact lead this execution is tied to (may differ from
+          // `lead` when two leads exist for the same phone — with/without 9th digit).
+          let execLead: any = lead;
+          if (exec.lead_id && exec.lead_id !== lead.id) {
+            const { data: el } = await supabase
+              .from("leads")
+              .select("id, name, phone")
+              .eq("id", exec.lead_id)
+              .maybeSingle();
+            if (el) execLead = el;
+          }
+
           const currentStepId = exec.current_step_id;
           const candidateTriggers = Array.from(new Set([
             normalizeTriggerValue(buttonPayload),
