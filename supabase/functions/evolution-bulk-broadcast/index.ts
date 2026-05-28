@@ -193,7 +193,9 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const text = renderTemplate(messageTpl, lead) + zwSig();
+        // Rotação round-robin: cada lead recebe uma das variações
+        const tplForLead = messageTpls[i % messageTpls.length];
+        const text = renderTemplate(tplForLead, lead) + zwSig();
 
         try {
           if (image_url) {
