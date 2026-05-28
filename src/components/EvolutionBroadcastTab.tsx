@@ -118,6 +118,32 @@ export function EvolutionBroadcastTab() {
     },
   });
 
+  // IDs de leads que já receberam algum disparo (message_logs) — usado para
+  // filtrar/desselecionar e evitar disparos duplicados ao mesmo contato.
+  const { data: alreadySentIds = new Set<string>() } = useQuery({
+    queryKey: ["evolution-broadcast-already-sent", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const pageSize = 1000;
+      let from = 0;
+      const set = new Set<string>();
+      while (true) {
+        const { data, error } = await supabase
+          .from("message_logs")
+          .select("lead_id")
+          .eq("user_id", user!.id)
+          .not("lead_id", "is", null)
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        for (const r of data) if (r.lead_id) set.add(r.lead_id as string);
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
+      return set;
+    },
+  });
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     let list = onlyTagged ? leads.filter((l: any) => l.origin === "evolution_import") : leads;
