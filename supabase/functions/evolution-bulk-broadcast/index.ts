@@ -61,7 +61,11 @@ Deno.serve(async (req) => {
       job = jobRow;
       delay_min = jobRow.delay_min_seconds;
       delay_max = jobRow.delay_max_seconds;
-      messageTpl = jobRow.retry_map?.message || "";
+      // Suporta novo formato (messages: string[]) e legado (message: string)
+      const storedMessages = jobRow.retry_map?.messages;
+      messageTpls = Array.isArray(storedMessages) && storedMessages.length > 0
+        ? storedMessages.map((m: any) => String(m))
+        : [jobRow.retry_map?.message || ""];
       image_url = jobRow.retry_map?.image_url;
 
       const { data: acc } = await supabase
