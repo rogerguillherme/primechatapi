@@ -788,6 +788,7 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
         ai_prompt: e.node.type === "ai_agent" ? (e.node.data.ai_prompt as string) || null : null,
         max_interactions: e.node.type === "ai_agent" ? (e.node.data.max_interactions as number) || 5 : null,
         message_variations: e.node.type === "message" ? ((e.node.data.message_variations as string[]) || []).filter((s) => s && s.trim()) : [],
+        template_variations: e.node.type === "message" ? ((e.node.data.template_variations as string[]) || []).filter((s) => s && s.trim()) : [],
         delay_min_seconds: (e.node.data.delay_min_seconds as number | null) ?? null,
         delay_max_seconds: (e.node.data.delay_max_seconds as number | null) ?? null,
         media_url: e.node.type === "message" ? ((e.node.data.media_url as string) || null) : null,
