@@ -441,6 +441,7 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
             ai_prompt: s.ai_prompt || "",
             max_interactions: s.max_interactions || 5,
             message_variations: Array.isArray(s.message_variations) ? s.message_variations : [],
+            template_variations: Array.isArray(s.template_variations) ? s.template_variations : [],
             delay_min_seconds: s.delay_min_seconds ?? null,
             delay_max_seconds: s.delay_max_seconds ?? null,
             media_url: s.media_url ?? null,
