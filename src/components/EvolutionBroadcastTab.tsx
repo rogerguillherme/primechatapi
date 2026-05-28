@@ -63,6 +63,7 @@ export function EvolutionBroadcastTab() {
   const [sending, setSending] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [onlyTagged, setOnlyTagged] = useState(false);
+  const [hideAlreadySent, setHideAlreadySent] = useState(false);
 
   const { data: accounts = [] } = useQuery({
     queryKey: ["evolution-accounts", user?.id],
@@ -117,9 +118,36 @@ export function EvolutionBroadcastTab() {
     },
   });
 
+  // IDs de leads que já receberam algum disparo (message_logs) — usado para
+  // filtrar/desselecionar e evitar disparos duplicados ao mesmo contato.
+  const { data: alreadySentIds = new Set<string>() } = useQuery({
+    queryKey: ["evolution-broadcast-already-sent", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const pageSize = 1000;
+      let from = 0;
+      const set = new Set<string>();
+      while (true) {
+        const { data, error } = await supabase
+          .from("message_logs")
+          .select("lead_id")
+          .eq("user_id", user!.id)
+          .not("lead_id", "is", null)
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        for (const r of data) if (r.lead_id) set.add(r.lead_id as string);
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
+      return set;
+    },
+  });
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     let list = onlyTagged ? leads.filter((l: any) => l.origin === "evolution_import") : leads;
+    if (hideAlreadySent) list = list.filter((l: any) => !alreadySentIds.has(l.id));
     if (q) {
       list = list.filter((l: any) =>
         (l.name || "").toLowerCase().includes(q) ||
@@ -127,7 +155,7 @@ export function EvolutionBroadcastTab() {
       );
     }
     return list;
-  }, [leads, search, onlyTagged]);
+  }, [leads, search, onlyTagged, hideAlreadySent, alreadySentIds]);
 
   const taggedCount = useMemo(
     () => leads.filter((l: any) => l.origin === "evolution_import").length,
@@ -401,7 +429,7 @@ export function EvolutionBroadcastTab() {
                 <Upload size={12} className="mr-1"/> Importar lista
               </Button>
             </div>
-            <div className="flex items-center gap-2 mt-2">
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
               <button
                 type="button"
                 onClick={() => setOnlyTagged((v) => !v)}
@@ -415,7 +443,20 @@ export function EvolutionBroadcastTab() {
               >
                 {onlyTagged ? "✓ " : ""}Tag Disparo WhatsApp ({taggedCount})
               </button>
-              <div className="relative flex-1">
+              <button
+                type="button"
+                onClick={() => setHideAlreadySent((v) => !v)}
+                className={cn(
+                  "text-[11px] px-2 py-1 rounded-md border transition-colors shrink-0",
+                  hideAlreadySent
+                    ? "border-amber-500/50 bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                    : "border-border bg-muted/40 text-muted-foreground hover:bg-muted"
+                )}
+                title="Esconder leads que já receberam algum disparo"
+              >
+                {hideAlreadySent ? "✓ " : ""}Ocultar já disparados ({alreadySentIds.size})
+              </button>
+              <div className="relative flex-1 min-w-[180px]">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"/>
                 <Input value={search} onChange={(e) => setSearch(e.target.value)}
                   placeholder="Buscar nome ou telefone..." className="pl-9 h-9 text-sm"/>
@@ -423,9 +464,28 @@ export function EvolutionBroadcastTab() {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="px-4 py-2 border-b border-border">
+            <div className="px-4 py-2 border-b border-border flex items-center justify-between gap-2 flex-wrap">
               <button onClick={toggleAll} className="text-xs text-primary hover:underline">
                 {selected.size === filtered.length && filtered.length > 0 ? "Desmarcar todos" : "Selecionar todos"}
+              </button>
+              <button
+                onClick={() => {
+                  setSelected((p) => {
+                    const n = new Set(p);
+                    let removed = 0;
+                    for (const id of Array.from(n)) {
+                      if (alreadySentIds.has(id)) { n.delete(id); removed++; }
+                    }
+                    if (removed === 0) toast.info("Nenhum lead selecionado já havia sido disparado.");
+                    else toast.success(`${removed} lead(s) já disparados removidos da seleção.`);
+                    return n;
+                  });
+                }}
+                disabled={selected.size === 0}
+                className="text-xs text-amber-700 dark:text-amber-300 hover:underline disabled:opacity-40 disabled:no-underline disabled:cursor-not-allowed"
+                title="Remove da seleção atual os leads que já receberam algum disparo"
+              >
+                Remover já disparados da seleção
               </button>
             </div>
             <ScrollArea className="h-[340px]">
@@ -442,6 +502,11 @@ export function EvolutionBroadcastTab() {
                       {l.origin === "evolution_import" && (
                         <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 shrink-0">
                           Disparo WhatsApp
+                        </Badge>
+                      )}
+                      {alreadySentIds.has(l.id) && (
+                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 shrink-0">
+                          Já disparado
                         </Badge>
                       )}
                     </div>
