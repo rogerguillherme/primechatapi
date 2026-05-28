@@ -94,21 +94,27 @@ Deno.serve(async (req) => {
       if (userErr || !user) return json({ error: "Unauthorized" }, 401);
 
       const {
-        account_id, lead_ids, message, image_url: img,
+        account_id, lead_ids, message, messages, image_url: img,
         delay_min: dmin = 5, delay_max: dmax = 5,
       } = body;
       if (!account_id || !Array.isArray(lead_ids) || lead_ids.length === 0) {
         return json({ error: "account_id e lead_ids são obrigatórios" }, 400);
       }
-      if (!message || typeof message !== "string" || message.trim().length === 0) {
-        return json({ error: "message é obrigatória" }, 400);
+      // Normaliza para array
+      const incomingMsgs: string[] = Array.isArray(messages) && messages.length > 0
+        ? messages.map((m: any) => String(m || "")).filter((m: string) => m.trim().length > 0)
+        : (typeof message === "string" && message.trim().length > 0 ? [message] : []);
+      if (incomingMsgs.length === 0) {
+        return json({ error: "message ou messages é obrigatório" }, 400);
       }
-      if (message.length > 4000) return json({ error: "message muito longa (máx 4000)" }, 400);
+      if (incomingMsgs.some((m) => m.length > 4000)) {
+        return json({ error: "mensagem muito longa (máx 4000)" }, 400);
+      }
 
       delay_min = Math.max(0, parseInt(dmin) || 5);
       delay_max = Math.max(delay_min, parseInt(dmax) || 5);
       image_url = img || undefined;
-      messageTpl = message;
+      messageTpls = incomingMsgs;
 
       const { data: acc } = await supabase
         .from("whatsapp_accounts")
