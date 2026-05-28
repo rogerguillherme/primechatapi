@@ -888,7 +888,7 @@ Deno.serve(async (req) => {
               .eq("step_type", "condition");
 
             const conditionStep = (conditionSteps || []).find((s: any) =>
-              candidateTriggers.includes(normalizeTriggerValue(s.trigger_value))
+              stepMatchesTriggers(s, candidateTriggers)
             );
 
             if (conditionStep) {
