@@ -1,0 +1,1 @@
+ALTER TABLE public.flow_steps ADD COLUMN IF NOT EXISTS template_variations jsonb NOT NULL DEFAULT '[]'::jsonb;
