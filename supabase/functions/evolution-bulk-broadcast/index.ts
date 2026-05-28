@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
     let leads: any[];
     let account: any;
     let image_url: string | undefined;
-    let messageTpl: string;
+    let messageTpls: string[]; // suporta rotação: cada lead recebe messageTpls[i % messageTpls.length]
     let delay_min: number;
     let delay_max: number;
 
