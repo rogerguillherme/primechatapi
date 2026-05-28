@@ -129,7 +129,7 @@ async function resolveMatchedFlowStep(
     branchSteps = data || [];
   }
 
-  return branchSteps.find((step: any) => candidateTriggers.includes(normalizeTriggerValue(step.trigger_value))) || null;
+  return branchSteps.find((step: any) => stepMatchesTriggers(step, candidateTriggers)) || null;
 }
 
 // Classifies Meta Cloud API error codes for the WABA protection system.
