@@ -117,10 +117,13 @@ export function NodeEditPanel({ node, templates, onUpdate, onClose, variationEna
                 onChange={(v) => onUpdate({ message_variations: v })}
               />
             )}
-            {variationEnabled && data.template_id && (
-              <p className="text-[11px] text-muted-foreground rounded-md border border-dashed border-border p-2">
-                Variação automática só funciona em mensagens personalizadas (não em templates Meta).
-              </p>
+            {data.template_id && (
+              <TemplateVariationsField
+                mainTemplateId={data.template_id as string}
+                variations={(data.template_variations as string[]) || []}
+                templates={templates}
+                onChange={(v) => onUpdate({ template_variations: v })}
+              />
             )}
           </>
         )}
