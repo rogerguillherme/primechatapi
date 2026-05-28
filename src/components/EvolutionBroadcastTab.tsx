@@ -504,6 +504,11 @@ export function EvolutionBroadcastTab() {
                           Disparo WhatsApp
                         </Badge>
                       )}
+                      {alreadySentIds.has(l.id) && (
+                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 shrink-0">
+                          Já disparado
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-[11px] text-muted-foreground font-mono">{l.phone}</p>
                   </div>
