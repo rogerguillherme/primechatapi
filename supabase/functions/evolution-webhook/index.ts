@@ -111,7 +111,16 @@ async function resolveMatchedFlowStep(
 
   expandedTriggers = Array.from(new Set(expandedTriggers.filter(Boolean)));
 
-  return branchSteps.find((step: any) => stepMatchesTriggers(step, expandedTriggers)) || null;
+  const matched = branchSteps.find((step: any) => stepMatchesTriggers(step, expandedTriggers));
+  if (matched) return matched;
+
+  // Fallback: if there's only ONE condition branch, treat it as default
+  // so any reply/button click continues the flow.
+  const conditionBranches = branchSteps.filter((s: any) => s.step_type === "condition");
+  if (conditionBranches.length === 1) {
+    return conditionBranches[0];
+  }
+  return null;
 }
 
 async function processFlowStep(step: any, execution: any, lead: any, supabase: any, fallbackAccountId?: string | null) {
