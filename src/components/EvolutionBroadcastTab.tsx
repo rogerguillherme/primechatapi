@@ -311,13 +311,16 @@ export function EvolutionBroadcastTab() {
         toast.success(`Fluxo iniciado para ${ok} lead(s)${fail ? `. ${fail} falharam.` : "."}`);
         setSelected(new Set());
       } else {
+        // Coleta variações + mensagem principal (todas não vazias)
+        const allMessages = [message, ...variations].map((m) => m.trim()).filter((m) => m.length > 0);
         // Append zero-width fingerprint so identical bodies still vary at byte level.
-        const finalMessage = `${message}${zeroWidthVariant()}`;
+        const messages = allMessages.map((m) => `${m}${zeroWidthVariant()}`);
         const { data, error } = await supabase.functions.invoke("evolution-bulk-broadcast", {
           body: {
             account_id: accountId,
             lead_ids: leadIds,
-            message: finalMessage,
+            message: messages[0],
+            messages: messages.length > 1 ? messages : undefined,
             image_url: imageUrl.trim() || undefined,
             delay_min: delayMin,
             delay_max: delayMax,
