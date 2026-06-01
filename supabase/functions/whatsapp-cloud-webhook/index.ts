@@ -1011,7 +1011,7 @@ Deno.serve(async (req) => {
           const candidateTriggers = [normalizeTriggerValue(text)];
           const { data: triggerSteps } = await supabase
             .from("flow_steps")
-            .select("*, flow:flows!inner(id, user_id, active)")
+            .select("*, flows:flows!inner(id, user_id, active)")
             .eq("flows.user_id", resolvedUserId)
             .eq("flows.active", true)
             .is("parent_step_id", null);
