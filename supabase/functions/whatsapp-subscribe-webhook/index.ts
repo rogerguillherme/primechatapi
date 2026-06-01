@@ -86,19 +86,41 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // 2) Update DB flag
+        const { error: updateErr } = await adminClient
+          .from("whatsapp_accounts")
+          .update({ 
+            webhook_subscribed: true,
+            webhook_subscribed_at: new Date().toISOString(),
+            webhook_last_check_at: new Date().toISOString(),
+            webhook_last_status: "success"
+          })
+          .eq("id", acc.id);
+
         results.push({
           account_id: acc.id,
           name: acc.name,
-          ok: true,
+          ok: !updateErr,
           subscribed: subData?.success ?? true,
+          db_updated: !updateErr,
+          update_error: updateErr?.message,
         });
       } catch (e: any) {
+        // ... (existing error handling)
         results.push({
           account_id: acc.id,
           name: acc.name,
           ok: false,
           error: e.message,
         });
+        
+        await adminClient
+          .from("whatsapp_accounts")
+          .update({ 
+            webhook_last_check_at: new Date().toISOString(),
+            webhook_last_status: "error"
+          })
+          .eq("id", acc.id);
       }
     }
 
