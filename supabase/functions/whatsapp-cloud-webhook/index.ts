@@ -1006,6 +1006,34 @@ Deno.serve(async (req) => {
               updated_at: new Date().toISOString(),
             }).eq("id", exec.id);
           }
+        } else if (text && resolvedUserId) {
+          // No active execution, check for new flow trigger keywords
+          const candidateTriggers = [normalizeTriggerValue(text)];
+          const { data: triggerSteps } = await supabase
+            .from("flow_steps")
+            .select("*, flow:flows!inner(id, user_id, active)")
+            .eq("flows.user_id", resolvedUserId)
+            .eq("flows.active", true)
+            .is("parent_step_id", null);
+
+          const matchedTriggerStep = (triggerSteps || []).find(step => stepMatchesTriggers(step, candidateTriggers));
+          if (matchedTriggerStep) {
+            const { data: newExec, error: execErr } = await supabase
+              .from("flow_executions")
+              .insert({
+                flow_id: matchedTriggerStep.flow_id,
+                lead_id: lead.id,
+                status: "running",
+                current_step_id: matchedTriggerStep.id,
+                metadata: { account_id: resolvedAccountId, trigger: "keyword" }
+              })
+              .select()
+              .single();
+
+            if (!execErr && newExec) {
+              await processFlowStep(matchedTriggerStep, newExec, lead, supabase, resolvedAccountId);
+            }
+          }
         }
       }
     }
