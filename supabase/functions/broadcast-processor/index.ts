@@ -80,6 +80,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     const body = await req.json();
+    console.log("broadcast-processor received request:", JSON.stringify(body));
     const { job_id } = body;
 
     let jobId = job_id;
