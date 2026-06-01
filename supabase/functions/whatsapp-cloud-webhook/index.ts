@@ -885,11 +885,23 @@ Deno.serve(async (req) => {
 
         const { data: executions } = await supabase
           .from("flow_executions")
-          .select("id, current_step_id, flow_id, metadata, lead_id")
+          .select("id, current_step_id, flow_id, metadata, lead_id, status, updated_at")
           .in("lead_id", leadIds)
-          .eq("status", "waiting_reply");
+          .in("status", ["waiting_reply", "running"]);
+
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
 
         for (const exec of executions || []) {
+          // If it's 'running', only consider it if it's stuck (updated > 5 mins ago)
+          if (exec.status === "running") {
+            const updatedAt = new Date(exec.updated_at);
+            if (updatedAt > fiveMinutesAgo) {
+              console.log("Skipping 'running' execution (not stuck yet):", exec.id);
+              continue;
+            }
+            console.log("Recovering stuck 'running' execution:", exec.id);
+          }
+
           // Resolve the exact lead this execution is tied to (may differ from
           // `lead` when two leads exist for the same phone — with/without 9th digit).
           let execLead: any = lead;
