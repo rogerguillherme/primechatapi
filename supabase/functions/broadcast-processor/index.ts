@@ -578,6 +578,54 @@ Deno.serve(async (req) => {
           // ── CRITICAL ERROR DETECTION ──
           let logStatus = "error";
 
+          // Erro de PAGAMENTO / elegibilidade — para o disparo imediatamente
+          if (PAYMENT_ISSUE_CODES.has(errorCode)) {
+            logStatus = "payment_issue";
+            await supabase.from("message_logs").insert({
+              job_id: jobId, user_id: job.user_id, lead_id: lead.id,
+              phone: cleanPhone, status: logStatus, error_code: errorCode,
+              meta_error_code: errorCode, error_message: errorMsg,
+              account_id: currentAccount.id,
+            });
+
+            await supabase
+              .from("broadcast_jobs")
+              .update({
+                status: "paused_by_system",
+                pause_reason: `Problema de pagamento/elegibilidade da conta na Meta (code ${errorCode}). Disparo interrompido — configure a forma de pagamento no Business Manager.`,
+                auto_paused_by_system: true,
+                last_error: errorMsg,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", jobId);
+
+            // Notifica via waba-protect-account (pausa flows, cria notificação)
+            try {
+              await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/waba-protect-account`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                },
+                body: JSON.stringify({
+                  account_id: currentAccount.id,
+                  user_id: job.user_id,
+                  reason: "payment_issue",
+                  meta_error_code: errorCode,
+                  meta_error_title: "Problema de pagamento na conta WhatsApp",
+                  meta_error_details: errorMsg,
+                  severity: "critical",
+                }),
+              });
+            } catch (e) {
+              console.error("waba-protect-account call failed:", e);
+            }
+
+            return new Response(JSON.stringify({ message: "Job paused: payment issue", job_id: jobId, error_code: errorCode }), {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+
           if (errorCode === BLOCKED_CODE || errorCode === SPAM_RATE_LIMIT_CODE) {
             // Blocked — stop sending to avoid further damage
             logStatus = "blocked";
