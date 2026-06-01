@@ -111,33 +111,34 @@ async function resolveMatchedFlowStep(
 
   let branchSteps: any[] = [];
 
-  if (currentStep.step_type === "condition" && currentStep.parent_step_id) {
-    const { data } = await supabase
-      .from("flow_steps")
-      .select("*")
-      .eq("flow_id", flowId)
-      .eq("parent_step_id", currentStep.parent_step_id);
+  const { data } = await supabase
+    .from("flow_steps")
+    .select("*")
+    .eq("flow_id", flowId)
+    .eq("parent_step_id", currentStepId);
 
-    branchSteps = data || [];
-  } else {
-    const { data } = await supabase
-      .from("flow_steps")
-      .select("*")
-      .eq("flow_id", flowId)
-      .eq("parent_step_id", currentStepId);
+  branchSteps = data || [];
 
-    branchSteps = data || [];
+  // If the current step IS a condition and we found no children, 
+  // it might be that the user is replying TO a condition step that is waiting.
+  if (branchSteps.length === 0 && currentStep.step_type === "condition") {
+    // In some cases, we might want to check siblings if the flow structure is "flat" 
+    // but here we follow the parent_step_id chain.
   }
 
   const matched = branchSteps.find((step: any) => stepMatchesTriggers(step, candidateTriggers));
   if (matched) return matched;
 
-  // Fallback: if there's only ONE condition branch, treat it as default
-  // so any reply/button click continues the flow.
-  const conditionBranches = branchSteps.filter((s: any) => s.step_type === "condition");
-  if (conditionBranches.length === 1) {
-    return conditionBranches[0];
+  // Fallback: if we are at a condition step and it has exactly one child (that is NOT another condition),
+  // treat it as the next step to execute if no specific trigger matches.
+  if (currentStep.step_type === "condition" && branchSteps.length === 1 && branchSteps[0].step_type !== "condition") {
+    return branchSteps[0];
   }
+
+  // Fallback: if there are multiple children and one has NO trigger_value, it's the default branch
+  const defaultBranch = branchSteps.find(s => !s.trigger_value || s.trigger_value.trim() === "");
+  if (defaultBranch) return defaultBranch;
+
   return null;
 }
 
