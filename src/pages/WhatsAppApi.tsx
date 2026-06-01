@@ -1078,6 +1078,12 @@ function BroadcastTab() {
           }
           processed++;
           setDispatchProgress({ current: processed, total: totalContacts, errors: errorCount, errorDetails: [...errorDetails] });
+          
+          // Adiciona cadência (0.5s a 1.5s) entre disparos manuais para evitar bloqueios por volume instantâneo
+          if (processed < totalContacts) {
+            const sleepMs = 500 + Math.random() * 1000;
+            await new Promise(resolve => setTimeout(resolve, sleepMs));
+          }
         }
       }
     } else {
