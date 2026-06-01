@@ -301,7 +301,7 @@ async function claimExecution(exec: any, supabase: any): Promise<boolean> {
     return false;
   }
 
-  const { data: claimed, error } = await supabase
+  let query = supabase
     .from("flow_executions")
     .update({
       status: "running",
@@ -313,8 +313,15 @@ async function claimExecution(exec: any, supabase: any): Promise<boolean> {
       updated_at: new Date().toISOString(),
     })
     .eq("id", exec.id)
-    .eq("status", exec.status)
-    .eq("current_step_id", exec.current_step_id)
+    .eq("status", exec.status);
+
+  if (exec.current_step_id === null) {
+    query = query.is("current_step_id", null);
+  } else {
+    query = query.eq("current_step_id", exec.current_step_id);
+  }
+
+  const { data: claimed, error } = await query
     .select("id")
     .maybeSingle();
 
