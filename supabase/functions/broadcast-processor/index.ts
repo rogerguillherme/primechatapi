@@ -16,6 +16,15 @@ const INVALID_NUMBER_CODE = "131026";
 const BLOCKED_CODE = "131048";
 const RATE_LIMIT_CODE = "131056";
 const SPAM_RATE_LIMIT_CODE = "131057";
+// Códigos que indicam problema de pagamento/elegibilidade da conta — devem
+// parar o disparo IMEDIATAMENTE (não adianta continuar, todas vão falhar).
+const PAYMENT_ISSUE_CODES = new Set([
+  "131042", // Business eligibility — pagamento/forma de pagamento ausente
+  "131044", // Message undeliverable (frequentemente billing)
+  "131047", // Re-engagement / 24h window — não vamos parar nesse aqui, removido abaixo se necessário
+]);
+// Removemos 131047 pois é janela de 24h por contato e não bloqueia a campanha inteira:
+PAYMENT_ISSUE_CODES.delete("131047");
 
 function shuffleArray<T>(arr: T[]): T[] {
   const shuffled = [...arr];
