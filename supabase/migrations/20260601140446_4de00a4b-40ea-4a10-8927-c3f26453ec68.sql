@@ -1,0 +1,1 @@
+UPDATE flow_executions SET status='cancelled', updated_at=now() WHERE status IN ('running','waiting_delay','waiting_reply') AND updated_at > now() - interval '2 hours';
