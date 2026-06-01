@@ -31,9 +31,7 @@ function varyName(rawName: string | null | undefined): string {
 }
 
 function withUniqueSignature(text: string | null | undefined): string {
-  const base = (text ?? "").toString();
-  // Append invisible zero-width signature so no two messages are byte-identical
-  return base + uniqueZeroWidthSuffix();
+  return (text ?? "").toString();
 }
 
 async function getAccountCredentials(supabase: any, accountId?: string) {
