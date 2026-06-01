@@ -891,120 +891,152 @@ Deno.serve(async (req) => {
 
         const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
 
-        for (const exec of executions || []) {
-          // If it's 'running', only consider it if it's stuck (updated > 5 mins ago)
-          if (exec.status === "running") {
-            const updatedAt = new Date(exec.updated_at);
-            if (updatedAt > fiveMinutesAgo) {
-              console.log("Skipping 'running' execution (not stuck yet):", exec.id);
-              continue;
+        const activeExecutions = executions || [];
+        if (activeExecutions.length > 0) {
+          for (const exec of activeExecutions) {
+            // If it's 'running', only consider it if it's stuck (updated > 5 mins ago)
+            if (exec.status === "running") {
+              const updatedAt = new Date(exec.updated_at);
+              const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+              if (updatedAt > fiveMinutesAgo) {
+                console.log("Skipping 'running' execution (not stuck yet):", exec.id);
+                continue;
+              }
+              console.log("Recovering stuck 'running' execution:", exec.id);
             }
-            console.log("Recovering stuck 'running' execution:", exec.id);
-          }
 
-          // Resolve the exact lead this execution is tied to (may differ from
-          // `lead` when two leads exist for the same phone — with/without 9th digit).
-          let execLead: any = lead;
-          if (exec.lead_id && exec.lead_id !== lead.id) {
-            const { data: el } = await supabase
-              .from("leads")
-              .select("id, name, phone")
-              .eq("id", exec.lead_id)
-              .maybeSingle();
-            if (el) execLead = el;
-          }
+            // Resolve the exact lead this execution is tied to (may differ from
+            // `lead` when two leads exist for the same phone — with/without 9th digit).
+            let execLead: any = lead;
+            if (exec.lead_id && exec.lead_id !== lead.id) {
+              const { data: el } = await supabase
+                .from("leads")
+                .select("id, name, phone")
+                .eq("id", exec.lead_id)
+                .maybeSingle();
+              if (el) execLead = el;
+            }
 
-          const currentStepId = exec.current_step_id;
-          const candidateTriggers = Array.from(new Set([
-            normalizeTriggerValue(buttonPayload),
-            normalizeTriggerValue(buttonTitle),
-            normalizeTriggerValue(text),
-          ].filter(Boolean)));
+            const currentStepId = exec.current_step_id;
+            const candidateTriggers = Array.from(new Set([
+              normalizeTriggerValue(buttonPayload),
+              normalizeTriggerValue(buttonTitle),
+              normalizeTriggerValue(text),
+            ].filter(Boolean)));
 
-          let matchedStep: any = await resolveMatchedFlowStep(
-            supabase,
-            exec.flow_id,
-            currentStepId,
-            candidateTriggers,
-          );
-
-          // Fallback: old linear approach (condition node by trigger_value)
-          if (!matchedStep) {
-            const { data: conditionSteps } = await supabase
-              .from("flow_steps")
-              .select("*")
-              .eq("flow_id", exec.flow_id)
-              .eq("step_type", "condition");
-
-            const conditionStep = (conditionSteps || []).find((s: any) =>
-              stepMatchesTriggers(s, candidateTriggers)
+            let matchedStep: any = await resolveMatchedFlowStep(
+              supabase,
+              exec.flow_id,
+              currentStepId,
+              candidateTriggers,
             );
 
-            if (conditionStep) {
-              // Find child of this condition step
-              const { data: condChildren } = await supabase
+            // Fallback: old linear approach (condition node by trigger_value)
+            if (!matchedStep) {
+              const { data: conditionSteps } = await supabase
                 .from("flow_steps")
                 .select("*")
                 .eq("flow_id", exec.flow_id)
-                .eq("parent_step_id", conditionStep.id)
-                .order("step_order")
-                .limit(1);
+                .eq("step_type", "condition");
 
-              if (condChildren && condChildren.length > 0) {
-                matchedStep = condChildren[0];
-              } else {
-                // Fallback: next by step_order
-                const { data: followingSteps } = await supabase
+              const conditionStep = (conditionSteps || []).find((s: any) =>
+                stepMatchesTriggers(s, candidateTriggers)
+              );
+
+              if (conditionStep) {
+                // Find child of this condition step
+                const { data: condChildren } = await supabase
                   .from("flow_steps")
                   .select("*")
                   .eq("flow_id", exec.flow_id)
-                  .gt("step_order", conditionStep.step_order)
+                  .eq("parent_step_id", conditionStep.id)
                   .order("step_order")
                   .limit(1);
 
-                if (followingSteps && followingSteps.length > 0) {
-                  matchedStep = followingSteps[0];
+                if (condChildren && condChildren.length > 0) {
+                  matchedStep = condChildren[0];
+                } else {
+                  // Fallback: next by step_order
+                  const { data: followingSteps } = await supabase
+                    .from("flow_steps")
+                    .select("*")
+                    .eq("flow_id", exec.flow_id)
+                    .gt("step_order", conditionStep.step_order)
+                    .order("step_order")
+                    .limit(1);
+
+                  if (followingSteps && followingSteps.length > 0) {
+                    matchedStep = followingSteps[0];
+                  }
                 }
               }
             }
-          }
 
-          console.log("Flow reply resolution:", JSON.stringify({
-            executionId: exec.id,
-            currentStepId,
-            candidateTriggers,
-            matchedStepId: matchedStep?.id || null,
-            matchedStepType: matchedStep?.step_type || null,
-          }));
+            console.log("Flow reply resolution:", JSON.stringify({
+              executionId: exec.id,
+              currentStepId,
+              candidateTriggers,
+              matchedStepId: matchedStep?.id || null,
+              matchedStepType: matchedStep?.step_type || null,
+            }));
 
-          if (matchedStep) {
-            if (matchedStep.step_type === "condition") {
-              const { data: condChildren } = await supabase
-                .from("flow_steps")
-                .select("*")
-                .eq("flow_id", exec.flow_id)
-                .eq("parent_step_id", matchedStep.id)
-                .order("step_order")
-                .limit(1);
+            if (matchedStep) {
+              if (matchedStep.step_type === "condition") {
+                const { data: condChildren } = await supabase
+                  .from("flow_steps")
+                  .select("*")
+                  .eq("flow_id", exec.flow_id)
+                  .eq("parent_step_id", matchedStep.id)
+                  .order("step_order")
+                  .limit(1);
 
-              if (condChildren && condChildren.length > 0) {
-                await processFlowStep(condChildren[0], exec, execLead, supabase, resolvedAccountId);
+                if (condChildren && condChildren.length > 0) {
+                  await processFlowStep(condChildren[0], exec, execLead, supabase, resolvedAccountId);
+                } else {
+                  console.log("Condition matched but has no child step:", matchedStep.id, "exec:", exec.id);
+                  await supabase.from("flow_executions").update({
+                    status: "completed",
+                    updated_at: new Date().toISOString(),
+                  }).eq("id", exec.id);
+                }
               } else {
-                console.log("Condition matched but has no child step:", matchedStep.id, "exec:", exec.id);
-                await supabase.from("flow_executions").update({
-                  status: "completed",
-                  updated_at: new Date().toISOString(),
-                }).eq("id", exec.id);
+                await processFlowStep(matchedStep, exec, execLead, supabase, resolvedAccountId);
               }
             } else {
-              await processFlowStep(matchedStep, exec, execLead, supabase, resolvedAccountId);
+              console.log("No matching branch for button payload:", buttonPayload, "exec:", exec.id);
+              await supabase.from("flow_executions").update({
+                status: "waiting_reply",
+                updated_at: new Date().toISOString(),
+              }).eq("id", exec.id);
             }
-          } else {
-            console.log("No matching branch for button payload:", buttonPayload, "exec:", exec.id);
-            await supabase.from("flow_executions").update({
-              status: "waiting_reply",
-              updated_at: new Date().toISOString(),
-            }).eq("id", exec.id);
+          }
+        } else if (text && resolvedUserId) {
+          // No active execution, check for new flow trigger keywords
+          const candidateTriggers = [normalizeTriggerValue(text)];
+          const { data: triggerSteps } = await supabase
+            .from("flow_steps")
+            .select("*, flows:flows!inner(id, user_id, active)")
+            .eq("flows.user_id", resolvedUserId)
+            .eq("flows.active", true)
+            .is("parent_step_id", null);
+
+          const matchedTriggerStep = (triggerSteps || []).find(step => stepMatchesTriggers(step, candidateTriggers));
+          if (matchedTriggerStep) {
+            const { data: newExec, error: execErr } = await supabase
+              .from("flow_executions")
+              .insert({
+                flow_id: matchedTriggerStep.flow_id,
+                lead_id: lead.id,
+                status: "running",
+                current_step_id: matchedTriggerStep.id,
+                metadata: { account_id: resolvedAccountId, trigger: "keyword" }
+              })
+              .select()
+              .single();
+
+            if (!execErr && newExec) {
+              await processFlowStep(matchedTriggerStep, newExec, lead, supabase, resolvedAccountId);
+            }
           }
         }
       }
