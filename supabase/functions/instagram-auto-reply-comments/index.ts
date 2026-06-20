@@ -14,126 +14,239 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const authHeader = req.headers.get("authorization") ?? "";
-    if (!authHeader.toLowerCase().startsWith("bearer ")) return json({ error: "Unauthorized" }, 401);
-    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
     const admin = createClient(supabaseUrl, serviceRoleKey);
-    const { data: { user }, error: userErr } = await admin.auth.getUser(token);
-    if (userErr || !user) return json({ error: "Unauthorized" }, 401);
-
     const body = await req.json().catch(() => ({}));
-    const MAX_POSTS = Math.min(Math.max(body.max_posts ?? 10, 1), 25);
-    const MAX_COMMENTS = Math.min(Math.max(body.max_comments_per_post ?? 25, 1), 50);
+    const maxPosts = Math.min(Math.max(Number(body.max_posts ?? 10), 1), 25);
+    const maxComments = Math.min(Math.max(Number(body.max_comments_per_post ?? 25), 1), 50);
 
-    const { data: connection } = await admin
-      .from("instagram_connections")
-      .select("*")
-      .eq("user_id", user.id)
-      .eq("status", "connected")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const authHeader = req.headers.get("authorization") ?? "";
+    const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
+    const apiKey = req.headers.get("apikey") || "";
+    const isCron = body.cron === true;
 
-    if (!connection) return json({ error: "Nenhuma conta Instagram conectada" }, 404);
+    let connections: any[] = [];
 
-    let pageToken = connection.access_token;
-    if (connection.page_id) {
-      try {
-        const r = await fetch(`${GRAPH}/${connection.page_id}?fields=access_token&access_token=${connection.access_token}`);
-        const d = await r.json();
-        if (r.ok && d.access_token) pageToken = d.access_token;
-      } catch { /* ignore */ }
-    }
-    const conn = { ...connection, access_token: pageToken };
-    const ownUsername = (connection.instagram_username || "").toLowerCase();
-
-    const { data: automations } = await admin
-      .from("instagram_automations")
-      .select("*, instagram_automation_steps(*)")
-      .eq("user_id", user.id)
-      .eq("active", true)
-      .in("trigger_type", ["any_comment", "comment_keyword"]);
-
-    if (!automations || automations.length === 0) {
-      return json({ ok: true, message: "Nenhuma automação ativa", processed: 0 });
-    }
-
-    const mediaUrl = `${GRAPH}/${connection.instagram_user_id}/media?fields=id,caption,timestamp&limit=${MAX_POSTS}&access_token=${pageToken}`;
-    const mr = await fetch(mediaUrl);
-    const md = await mr.json();
-    if (!mr.ok) return json({ error: md?.error?.message || "Erro ao listar posts" }, 500);
-    const mediaList = md.data || [];
-
-    let totalScanned = 0;
-    let totalMatched = 0;
-    let totalSkippedAlreadyReplied = 0;
-    const results: any[] = [];
-
-    for (const media of mediaList) {
-      const cUrl = `${GRAPH}/${media.id}/comments?fields=id,text,username,timestamp,user{id,username},replies{id,username,text}&limit=${MAX_COMMENTS}&access_token=${pageToken}`;
-      const cr = await fetch(cUrl);
-      const cd = await cr.json();
-      if (!cr.ok) continue;
-      const comments = cd.data || [];
-
-      for (const c of comments) {
-        totalScanned++;
-        const replies = c.replies?.data || [];
-        const alreadyReplied = replies.some((r: any) => (r.username || "").toLowerCase() === ownUsername);
-        if (alreadyReplied) {
-          totalSkippedAlreadyReplied++;
-          continue;
-        }
-        if ((c.username || "").toLowerCase() === ownUsername) continue;
-
-        const text = (c.text || "").trim();
-        const lower = text.toLowerCase();
-        const username = c.username || "amigo(a)";
-
-        let matched = false;
-        for (const automation of automations) {
-          let trigger = false;
-          if (automation.trigger_type === "any_comment") trigger = true;
-          else if (automation.trigger_type === "comment_keyword") {
-            const kws: string[] = automation.keywords || [];
-            trigger = kws.some((kw) => lower.includes(kw.toLowerCase().trim()));
-          }
-          if (!trigger) continue;
-
-          matched = true;
-          const stepsResult = await runSteps(automation.instagram_automation_steps || [], conn, {
-            username,
-            text,
-            commentId: c.id,
-            senderId: c.user?.id,
-          });
-          results.push({
-            media_id: media.id,
-            comment_id: c.id,
-            username,
-            automation: automation.name,
-            steps: stepsResult,
-          });
-          break;
-        }
-        if (matched) totalMatched++;
+    if (isCron) {
+      if (!anonKey || (apiKey !== anonKey && bearer !== anonKey)) {
+        return json({ error: "Unauthorized" }, 401);
       }
+      const { data, error } = await admin
+        .from("instagram_connections")
+        .select("*")
+        .eq("status", "connected")
+        .order("updated_at", { ascending: false });
+      if (error) throw error;
+      connections = data || [];
+    } else {
+      if (!authHeader.toLowerCase().startsWith("bearer ")) return json({ error: "Unauthorized" }, 401);
+      const { data: { user }, error: userErr } = await admin.auth.getUser(bearer);
+      if (userErr || !user) return json({ error: "Unauthorized" }, 401);
+
+      const { data, error } = await admin
+        .from("instagram_connections")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("status", "connected")
+        .order("updated_at", { ascending: false });
+      if (error) throw error;
+      connections = data || [];
+    }
+
+    if (connections.length === 0) {
+      return json({ ok: true, message: "Nenhuma conta Instagram conectada", scanned: 0, matched: 0, processed: 0 });
+    }
+
+    const perConnection = [];
+    for (const connection of connections) {
+      perConnection.push(await processConnection(admin, connection, maxPosts, maxComments));
     }
 
     return json({
       ok: true,
-      scanned: totalScanned,
-      matched: totalMatched,
-      skipped_already_replied: totalSkippedAlreadyReplied,
-      posts_checked: mediaList.length,
-      results,
+      connections: perConnection.length,
+      scanned: perConnection.reduce((sum, item) => sum + item.scanned, 0),
+      matched: perConnection.reduce((sum, item) => sum + item.matched, 0),
+      skipped_already_processed: perConnection.reduce((sum, item) => sum + item.skippedAlreadyProcessed, 0),
+      skipped_already_replied: perConnection.reduce((sum, item) => sum + item.skippedAlreadyReplied, 0),
+      posts_checked: perConnection.reduce((sum, item) => sum + item.postsChecked, 0),
+      results: perConnection.flatMap((item) => item.results),
     });
   } catch (error) {
     console.error("instagram-auto-reply-comments error:", error);
     return json({ error: (error as Error).message || "Erro interno" }, 500);
   }
 });
+
+async function processConnection(admin: any, connection: any, maxPosts: number, maxComments: number) {
+  let pageToken = connection.access_token;
+  if (connection.page_id) {
+    try {
+      const r = await fetch(`${GRAPH}/${connection.page_id}?fields=access_token&access_token=${connection.access_token}`);
+      const d = await r.json();
+      if (r.ok && d.access_token) pageToken = d.access_token;
+    } catch { /* keep original token */ }
+  }
+
+  const conn = { ...connection, access_token: pageToken };
+  const ownUsername = (connection.instagram_username || "").toLowerCase();
+
+  const { data: automations, error: automationError } = await admin
+    .from("instagram_automations")
+    .select("*, instagram_automation_steps(*)")
+    .eq("user_id", connection.user_id)
+    .eq("active", true)
+    .in("trigger_type", ["any_comment", "comment_keyword"]);
+  if (automationError) throw automationError;
+
+  if (!automations || automations.length === 0) {
+    return emptyConnectionResult(connection, "Nenhuma automação ativa");
+  }
+
+  const mediaData = await fetchGraphWithFallback(
+    `${GRAPH}/${connection.instagram_user_id}/media?fields=id,caption,timestamp&limit=${maxPosts}`,
+    [pageToken, connection.access_token]
+  );
+  if (!mediaData.ok) {
+    return { ...emptyConnectionResult(connection, mediaData.error || "Erro ao listar posts"), error: mediaData.error };
+  }
+
+  const mediaList = mediaData.data?.data || [];
+  let totalScanned = 0;
+  let totalMatched = 0;
+  let totalSkippedAlreadyReplied = 0;
+  let totalSkippedAlreadyProcessed = 0;
+  const results: any[] = [];
+
+  for (const media of mediaList) {
+    const commentsData = await fetchGraphWithFallback(
+      `${GRAPH}/${media.id}/comments?fields=id,text,username,timestamp,user{id,username},replies{id,username,text}&limit=${maxComments}`,
+      [pageToken, connection.access_token]
+    );
+    if (!commentsData.ok) {
+      results.push({ media_id: media.id, ok: false, error: commentsData.error || "Erro ao listar comentários" });
+      continue;
+    }
+
+    for (const c of commentsData.data?.data || []) {
+      totalScanned++;
+      const text = (c.text || "").trim();
+      if (!c.id || !text) continue;
+      if ((c.username || "").toLowerCase() === ownUsername) continue;
+
+      const replies = c.replies?.data || [];
+      const alreadyReplied = replies.some((r: any) => (r.username || "").toLowerCase() === ownUsername);
+      if (alreadyReplied) {
+        totalSkippedAlreadyReplied++;
+        continue;
+      }
+
+      const lower = text.toLowerCase();
+      const username = c.username || c.user?.username || "amigo(a)";
+
+      for (const automation of automations) {
+        if (!automationMatches(automation, lower)) continue;
+
+        const { data: existingRun } = await admin
+          .from("instagram_comment_automation_runs")
+          .select("id")
+          .eq("user_id", connection.user_id)
+          .eq("comment_id", c.id)
+          .eq("automation_id", automation.id)
+          .maybeSingle();
+
+        if (existingRun) {
+          totalSkippedAlreadyProcessed++;
+          continue;
+        }
+
+        const stepState = { privateReplySent: false };
+        const stepsResult = await runSteps(automation.instagram_automation_steps || [], conn, {
+          username,
+          text,
+          commentId: c.id,
+          senderId: c.user?.id,
+        }, stepState);
+
+        const failed = stepsResult.find((step: any) => step.ok === false);
+        await admin.from("instagram_comment_automation_runs").upsert({
+          user_id: connection.user_id,
+          connection_id: connection.id,
+          automation_id: automation.id,
+          comment_id: c.id,
+          media_id: media.id,
+          commenter_id: c.user?.id || null,
+          commenter_username: username,
+          comment_text: text,
+          status: failed ? "failed" : "processed",
+          step_results: stepsResult,
+          error: failed ? JSON.stringify(failed.response || failed.error || failed).slice(0, 1000) : null,
+          processed_at: new Date().toISOString(),
+        }, { onConflict: "user_id,comment_id,automation_id" });
+
+        totalMatched++;
+        results.push({
+          connection: connection.instagram_username,
+          media_id: media.id,
+          comment_id: c.id,
+          username,
+          automation: automation.name,
+          steps: stepsResult,
+        });
+        break;
+      }
+    }
+  }
+
+  return {
+    connection_id: connection.id,
+    username: connection.instagram_username,
+    scanned: totalScanned,
+    matched: totalMatched,
+    skippedAlreadyProcessed: totalSkippedAlreadyProcessed,
+    skippedAlreadyReplied: totalSkippedAlreadyReplied,
+    postsChecked: mediaList.length,
+    results,
+  };
+}
+
+function emptyConnectionResult(connection: any, message: string) {
+  return {
+    connection_id: connection.id,
+    username: connection.instagram_username,
+    scanned: 0,
+    matched: 0,
+    skippedAlreadyProcessed: 0,
+    skippedAlreadyReplied: 0,
+    postsChecked: 0,
+    results: [{ connection: connection.instagram_username, message }],
+  };
+}
+
+function automationMatches(automation: any, lowerText: string) {
+  if (automation.trigger_type === "any_comment") return true;
+  if (automation.trigger_type === "comment_keyword") {
+    const keywords: string[] = automation.keywords || [];
+    return keywords.some((kw) => lowerText.includes(String(kw).toLowerCase().trim()));
+  }
+  return false;
+}
+
+async function fetchGraphWithFallback(urlWithoutToken: string, tokens: string[]) {
+  const uniqueTokens = [...new Set(tokens.filter(Boolean))];
+  let lastError = "";
+  for (const token of uniqueTokens) {
+    try {
+      const res = await fetch(`${urlWithoutToken}&access_token=${encodeURIComponent(token)}`);
+      const data = await res.json();
+      if (res.ok) return { ok: true, data };
+      lastError = data?.error?.message || JSON.stringify(data);
+    } catch (e) {
+      lastError = (e as Error).message;
+    }
+  }
+  return { ok: false, error: lastError };
+}
 
 function renderMessage(raw: string, ctx: { username: string; text: string }) {
   const variants = (raw || "").split("|||").map((s) => s.trim()).filter(Boolean);
