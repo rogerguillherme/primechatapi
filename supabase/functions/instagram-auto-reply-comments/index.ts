@@ -95,6 +95,7 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
   }
 
   const conn = { ...connection, access_token: pageToken };
+  await ensureWebhookSubscriptions(conn);
   const ownUsername = (connection.instagram_username || "").toLowerCase();
   const now = Date.now();
   const recentCommentWindowMs = 24 * 60 * 60 * 1000;
