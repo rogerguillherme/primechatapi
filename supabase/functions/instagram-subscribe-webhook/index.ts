@@ -52,7 +52,8 @@ Deno.serve(async (req) => {
 
       // Subscribe Instagram User to comments + messages + mentions
       const igFields = "comments,messages,mentions,message_reactions,story_insights";
-      const igSub = await fetch(`${GRAPH}/${conn.instagram_user_id}/subscribed_apps?subscribed_fields=${igFields}&access_token=${pageToken}`, {
+      const igToken = conn.user_access_token || pageToken;
+      const igSub = await fetch(`${GRAPH}/${conn.instagram_user_id}/subscribed_apps?subscribed_fields=${igFields}&access_token=${igToken}`, {
         method: "POST",
       });
       const igSubData = await igSub.json();

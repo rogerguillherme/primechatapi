@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
       for (const entry of body.entry || []) {
         // Determinar event_type para o log
         let eventType = "unknown";
-        if (entry.changes?.some((c: any) => c.field === "comments")) eventType = "comment";
+        if (entry.changes?.some((c: any) => c.field === "comments" || (c.field === "feed" && c.value?.item === "comment"))) eventType = "comment";
         else if (entry.changes?.some((c: any) => c.field === "messages")) eventType = "message";
         else if (entry.messaging?.some((m: any) => m.postback)) eventType = "postback";
         else if (entry.messaging?.length) eventType = "message";
@@ -132,6 +132,9 @@ Deno.serve(async (req) => {
               if (change.field === "comments") {
                 await handleComment(adminClient, resolvedConn, change.value, agent);
               }
+              if (change.field === "feed" && change.value?.item === "comment" && change.value?.verb !== "remove") {
+                await handleComment(adminClient, resolvedConn, normalizeFeedComment(change.value), agent);
+              }
               if (change.field === "messages" && change.value?.message?.text && change.value?.sender?.id !== resolvedConn.instagram_user_id) {
                 await handleDM(adminClient, resolvedConn, change.value, agent);
               }
@@ -220,7 +223,7 @@ async function enrichConnectionForMessaging(conn: any) {
   }
 }
 
-async function runSteps(steps: any[], conn: any, ctx: { username: string; text: string; commentId?: string; senderId?: string }) {
+async function runSteps(steps: any[], conn: any, ctx: { username: string; text: string; commentId?: string; senderId?: string }, options: { skipDelays?: boolean } = {}) {
   const sorted = (steps || []).sort((a: any, b: any) => a.step_order - b.step_order);
   let privateReplySent = false;
   for (const step of sorted) {
@@ -235,7 +238,7 @@ async function runSteps(steps: any[], conn: any, ctx: { username: string; text: 
       .replace(/\{comentario\}/gi, ctx.text);
 
     if (step.step_type === "delay") {
-      await new Promise((r) => setTimeout(r, (step.delay_seconds || 5) * 1000));
+      if (!options.skipDelays) await new Promise((r) => setTimeout(r, (step.delay_seconds || 5) * 1000));
     } else if (step.step_type === "reply_comment" && ctx.commentId) {
       await replyToComment(conn.access_token, ctx.commentId, message);
     } else if (step.step_type === "send_dm") {
@@ -388,7 +391,7 @@ async function handleComment(adminClient: any, conn: any, commentData: any, agen
     } catch (e) { console.log("like_comment failed:", (e as Error).message); }
     await runSteps(automation.instagram_automation_steps, conn, {
       username, text, commentId, senderId: from.id,
-    });
+    }, { skipDelays: true });
   }
 
   if (!matched && agent && agentChannelEnabled(agent, "replyComments")) {
@@ -400,6 +403,19 @@ async function handleComment(adminClient: any, conn: any, commentData: any, agen
       }
     }
   }
+}
+
+function normalizeFeedComment(value: any) {
+  return {
+    id: value.comment_id || value.id,
+    text: value.message || value.text || "",
+    from: {
+      id: value.from?.id || value.sender_id || value.user_id,
+      username: value.from?.username || value.username || value.sender_name || value.from?.name,
+      name: value.from?.name || value.sender_name,
+    },
+    media_id: value.media_id || value.post_id,
+  };
 }
 
 async function handleDM(adminClient: any, conn: any, msg: any, agent: any) {
@@ -711,13 +727,33 @@ async function sendPrivateReplyToComment(conn: any, commentId: string, message: 
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        message: { text: message },
+        message,
         access_token: conn.access_token,
       }),
     });
     const data = await res.json();
-    if (!res.ok) console.error("Private reply failed:", data);
-    else console.log("Private reply OK:", data);
+    if (res.ok) {
+      console.log("Private reply OK:", data);
+      return;
+    }
+
+    if (conn.page_id) {
+      const fallback = await fetch(`https://graph.facebook.com/v19.0/${conn.page_id}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipient: { comment_id: commentId },
+          message: { text: message },
+          access_token: conn.access_token,
+        }),
+      });
+      const fallbackData = await fallback.json();
+      if (!fallback.ok) console.error("Private reply failed:", fallbackData);
+      else console.log("Private reply fallback OK:", fallbackData);
+      return;
+    }
+
+    console.error("Private reply failed:", data);
   } catch (e) {
     console.error("Private reply error:", e);
   }
