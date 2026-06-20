@@ -275,9 +275,13 @@ async function ensureWebhookSubscriptions(conn: any) {
       });
     }
     if (conn.instagram_user_id) {
-      await fetch(`${GRAPH}/${conn.instagram_user_id}/subscribed_apps?subscribed_fields=comments,messages,mentions&access_token=${encodeURIComponent(conn.access_token)}`, {
-        method: "POST",
-      });
+      const tokens = [conn.user_access_token, conn.access_token].filter(Boolean);
+      for (const token of tokens) {
+        const res = await fetch(`${GRAPH}/${conn.instagram_user_id}/subscribed_apps?subscribed_fields=comments,messages,mentions&access_token=${encodeURIComponent(token)}`, {
+          method: "POST",
+        });
+        if (res.ok) break;
+      }
     }
   } catch (e) {
     console.log("ensureWebhookSubscriptions failed:", (e as Error).message);
