@@ -167,12 +167,17 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
         }
 
         const stepState = { privateReplySent: false };
+
+        // Auto-like the comment (Graph API) — best effort
+        const likeResult = await likeComment(conn, c.id);
+
         const stepsResult = await runSteps(automation.instagram_automation_steps || [], conn, {
           username,
           text,
           commentId: c.id,
           senderId: c.user?.id,
         }, stepState);
+        stepsResult.unshift({ type: "like_comment", ok: likeResult.ok, response: likeResult.data });
 
         const failed = stepsResult.find((step: any) => step.ok === false);
         await admin.from("instagram_comment_automation_runs").upsert({
