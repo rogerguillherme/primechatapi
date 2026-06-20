@@ -126,7 +126,7 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
 
   for (const media of mediaList) {
     const commentsData = await fetchGraphWithFallback(
-      `${GRAPH}/${media.id}/comments?fields=id,text,username,timestamp,user{id,username},replies{id,username,text}&limit=${maxComments}`,
+      `${GRAPH}/${media.id}/comments?fields=id,text,username,timestamp,user{id,username},replies{id,username,text}&order=reverse_chronological&limit=${maxComments}`,
       [pageToken, connection.access_token]
     );
     if (!commentsData.ok) {
