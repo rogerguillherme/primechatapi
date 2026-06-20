@@ -129,7 +129,7 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
 
   for (const media of mediaList) {
     const commentsData = await fetchGraphWithFallback(
-      `${GRAPH}/${media.id}/comments?fields=id,text,username,timestamp,user{id,username},replies{id,username,text}&order=reverse_chronological&limit=${maxComments}`,
+      `${GRAPH}/${media.id}/comments?fields=id,text,username,timestamp,user{id,username},replies{id,username,text,timestamp,user{id,username}}&order=reverse_chronological&limit=${maxComments}`,
       [pageToken, connection.access_token]
     );
     if (!commentsData.ok) {
@@ -137,7 +137,9 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
       continue;
     }
 
-    for (const c of commentsData.data?.data || []) {
+    for (const parentComment of commentsData.data?.data || []) {
+      const commentCandidates = [parentComment, ...(parentComment.replies?.data || [])];
+      for (const c of commentCandidates) {
       totalScanned++;
       const text = (c.text || "").trim();
       if (!c.id || !text) continue;
@@ -210,6 +212,7 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
           steps: stepsResult,
         });
         break;
+      }
       }
     }
   }
