@@ -23,13 +23,13 @@ Deno.serve(async (req) => {
     ].flatMap((value) => (value || "").split(",").map((key) => key.trim())).filter(Boolean);
     const admin = createClient(supabaseUrl, serviceRoleKey);
     const body = await req.json().catch(() => ({}));
-    const maxPosts = Math.min(Math.max(Number(body.max_posts ?? 25), 1), 50);
-    const maxComments = Math.min(Math.max(Number(body.max_comments_per_post ?? 50), 1), 100);
 
     const authHeader = req.headers.get("authorization") ?? "";
     const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
     const apiKey = req.headers.get("apikey") || "";
     const isCron = body.cron === true;
+    const maxPosts = isCron ? 50 : Math.min(Math.max(Number(body.max_posts ?? 25), 1), 50);
+    const maxComments = isCron ? 100 : Math.min(Math.max(Number(body.max_comments_per_post ?? 50), 1), 100);
 
     let connections: any[] = [];
 
@@ -95,7 +95,10 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
   }
 
   const conn = { ...connection, access_token: pageToken };
+  await ensureWebhookSubscriptions(conn);
   const ownUsername = (connection.instagram_username || "").toLowerCase();
+  const now = Date.now();
+  const recentCommentWindowMs = 24 * 60 * 60 * 1000;
 
   const { data: automations, error: automationError } = await admin
     .from("instagram_automations")
@@ -126,7 +129,7 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
 
   for (const media of mediaList) {
     const commentsData = await fetchGraphWithFallback(
-      `${GRAPH}/${media.id}/comments?fields=id,text,username,timestamp,user{id,username},replies{id,username,text}&limit=${maxComments}`,
+      `${GRAPH}/${media.id}/comments?fields=id,text,username,timestamp,user{id,username},replies{id,username,text,timestamp,user{id,username}}&order=reverse_chronological&limit=${maxComments}`,
       [pageToken, connection.access_token]
     );
     if (!commentsData.ok) {
@@ -134,10 +137,14 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
       continue;
     }
 
-    for (const c of commentsData.data?.data || []) {
+    for (const parentComment of commentsData.data?.data || []) {
+      const commentCandidates = [parentComment, ...(parentComment.replies?.data || [])];
+      for (const c of commentCandidates) {
       totalScanned++;
       const text = (c.text || "").trim();
       if (!c.id || !text) continue;
+      const commentTime = c.timestamp ? Date.parse(c.timestamp) : NaN;
+      if (Number.isFinite(commentTime) && now - commentTime > recentCommentWindowMs) continue;
       if ((c.username || "").toLowerCase() === ownUsername) continue;
 
       const replies = c.replies?.data || [];
@@ -176,10 +183,10 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
           text,
           commentId: c.id,
           senderId: c.user?.id,
-        }, stepState);
+        }, stepState, { skipDelays: true });
         stepsResult.unshift({ type: "like_comment", ok: likeResult.ok, response: likeResult.data });
 
-        const failed = stepsResult.find((step: any) => step.ok === false);
+        const failed = stepsResult.find((step: any) => step.ok === false && step.type !== "like_comment");
         await admin.from("instagram_comment_automation_runs").upsert({
           user_id: connection.user_id,
           connection_id: connection.id,
@@ -205,6 +212,7 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
           steps: stepsResult,
         });
         break;
+      }
       }
     }
   }
@@ -257,6 +265,23 @@ async function fetchGraphWithFallback(urlWithoutToken: string, tokens: string[])
     }
   }
   return { ok: false, error: lastError };
+}
+
+async function ensureWebhookSubscriptions(conn: any) {
+  try {
+    if (conn.page_id) {
+      await fetch(`${GRAPH}/${conn.page_id}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,feed&access_token=${encodeURIComponent(conn.access_token)}`, {
+        method: "POST",
+      });
+    }
+    if (conn.instagram_user_id) {
+      await fetch(`${GRAPH}/${conn.instagram_user_id}/subscribed_apps?subscribed_fields=comments,messages,mentions&access_token=${encodeURIComponent(conn.access_token)}`, {
+        method: "POST",
+      });
+    }
+  } catch (e) {
+    console.log("ensureWebhookSubscriptions failed:", (e as Error).message);
+  }
 }
 
 function renderMessage(raw: string, ctx: { username: string; text: string }) {
@@ -378,7 +403,8 @@ async function runSteps(
   steps: any[],
   conn: any,
   ctx: { username: string; text: string; commentId?: string; senderId?: string },
-  state: { privateReplySent?: boolean } = {}
+  state: { privateReplySent?: boolean } = {},
+  options: { skipDelays?: boolean } = {}
 ) {
   const sorted = (steps || []).sort((a: any, b: any) => a.step_order - b.step_order);
   const results: any[] = [];
@@ -388,7 +414,7 @@ async function runSteps(
 
     if (step.step_type === "delay") {
       const sec = step.delay_seconds || 5;
-      await new Promise((r) => setTimeout(r, sec * 1000));
+      if (!options.skipDelays) await new Promise((r) => setTimeout(r, sec * 1000));
       results.push({ type: "delay", seconds: sec, ok: true });
     } else if (step.step_type === "reply_comment" && ctx.commentId) {
       const r = await fetch(`${GRAPH}/${ctx.commentId}/replies`, {
@@ -414,14 +440,11 @@ function json(payload: unknown, status = 200) {
 }
 
 async function sendPrivateReply(conn: any, commentId: string, message: string) {
-  if (!conn.page_id) return { ok: false, data: { error: "missing_page_id" } };
-
   try {
-    const res = await fetch(`${GRAPH}/${conn.page_id}/messages`, {
+    const res = await fetch(`${GRAPH}/${commentId}/private_replies`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        recipient: { comment_id: commentId },
         message: { text: message },
         access_token: conn.access_token,
       }),

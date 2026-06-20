@@ -189,7 +189,7 @@ async function finalizeConnection(adminClient: any, userId: string, userAccessTo
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        subscribed_fields: "messages,messaging_postbacks",
+        subscribed_fields: "messages,messaging_postbacks,feed",
         access_token: pageAccessToken,
       }),
     });
@@ -197,7 +197,7 @@ async function finalizeConnection(adminClient: any, userId: string, userAccessTo
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        subscribed_fields: "comments",
+        subscribed_fields: "comments,messages,mentions",
         access_token: pageAccessToken,
       }),
     });

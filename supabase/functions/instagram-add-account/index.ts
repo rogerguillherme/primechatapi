@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          subscribed_fields: "messages,messaging_postbacks",
+          subscribed_fields: "messages,messaging_postbacks,feed",
           access_token: pageAccessToken,
         }),
       });
@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          subscribed_fields: "comments",
+          subscribed_fields: "comments,messages,mentions",
           access_token: pageAccessToken,
         }),
       });

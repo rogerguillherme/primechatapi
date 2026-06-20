@@ -706,17 +706,11 @@ async function replyToComment(accessToken: string, commentId: string, message: s
 }
 
 async function sendPrivateReplyToComment(conn: any, commentId: string, message: string) {
-  if (!conn.page_id) {
-    console.error("Private reply failed: missing page_id on instagram connection");
-    return;
-  }
-
   try {
-    const res = await fetch(`https://graph.facebook.com/v19.0/${conn.page_id}/messages`, {
+    const res = await fetch(`https://graph.facebook.com/v19.0/${commentId}/private_replies`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        recipient: { comment_id: commentId },
         message: { text: message },
         access_token: conn.access_token,
       }),
