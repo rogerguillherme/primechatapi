@@ -258,11 +258,30 @@ function renderMessage(raw: string, ctx: { username: string; text: string }) {
     .replace(/\{comentario\}/gi, ctx.text);
 }
 
-async function sendDM(conn: any, ctx: any, step: any, message: string) {
+async function sendDM(conn: any, ctx: any, step: any, message: string, state?: { privateReplySent?: boolean }) {
   const dmType = step.dm_type || "text";
   const buttons: any[] = Array.isArray(step.buttons) ? step.buttons : [];
 
-  // Para botões/link, usamos /me/messages (template button). private_replies só aceita texto.
+  if (ctx.commentId) {
+    if (state?.privateReplySent) {
+      return { type: "send_dm_private_reply", ok: true, skipped: true, reason: "private_reply_already_sent_for_comment" };
+    }
+
+    let finalMessage = message;
+    if (dmType === "link" && step.link_url) {
+      finalMessage = `${message}\n\n👉 ${step.link_url}`;
+    } else if (dmType === "buttons" && buttons.length > 0) {
+      const urlBtns = buttons.filter((b) => (b.action || "url") === "url" && b.url);
+      if (urlBtns.length > 0) {
+        finalMessage = `${message}\n\n${urlBtns.map((b: any) => `👉 ${b.title}: ${b.url}`).join("\n")}`;
+      }
+    }
+
+    const r = await sendPrivateReply(conn, ctx.commentId, finalMessage);
+    if (r.ok && state) state.privateReplySent = true;
+    return { type: "send_dm_private_reply", ok: r.ok, message: finalMessage, response: r.data };
+  }
+
   const useMessenger = (dmType === "buttons" || dmType === "link") && ctx.senderId;
 
   if (useMessenger) {
@@ -332,16 +351,6 @@ async function sendDM(conn: any, ctx: any, step: any, message: string) {
     }
   }
 
-  if (ctx.commentId) {
-    const r = await fetch(`${GRAPH}/${ctx.commentId}/private_replies`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: finalMessage, access_token: conn.access_token }),
-    });
-    const d = await r.json();
-    return { type: "send_dm_private_reply", ok: r.ok, message: finalMessage, response: d };
-  }
-
   if (ctx.senderId) {
     const r = await fetch(`${GRAPH}/me/messages?access_token=${conn.access_token}`, {
       method: "POST",
@@ -357,7 +366,8 @@ async function sendDM(conn: any, ctx: any, step: any, message: string) {
 async function runSteps(
   steps: any[],
   conn: any,
-  ctx: { username: string; text: string; commentId?: string; senderId?: string }
+  ctx: { username: string; text: string; commentId?: string; senderId?: string },
+  state: { privateReplySent?: boolean } = {}
 ) {
   const sorted = (steps || []).sort((a: any, b: any) => a.step_order - b.step_order);
   const results: any[] = [];
@@ -378,7 +388,7 @@ async function runSteps(
       const d = await r.json();
       results.push({ type: "reply_comment", ok: r.ok, message, response: d });
     } else if (step.step_type === "send_dm") {
-      const r = await sendDM(conn, ctx, step, message);
+      const r = await sendDM(conn, ctx, step, message, state);
       results.push(r);
     }
   }
@@ -390,4 +400,24 @@ function json(payload: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+async function sendPrivateReply(conn: any, commentId: string, message: string) {
+  if (!conn.page_id) return { ok: false, data: { error: "missing_page_id" } };
+
+  try {
+    const res = await fetch(`${GRAPH}/${conn.page_id}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        recipient: { comment_id: commentId },
+        message: { text: message },
+        access_token: conn.access_token,
+      }),
+    });
+    const data = await res.json();
+    return { ok: res.ok, data };
+  } catch (e) {
+    return { ok: false, data: { error: (e as Error).message } };
+  }
 }
