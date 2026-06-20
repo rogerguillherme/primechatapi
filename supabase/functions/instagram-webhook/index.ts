@@ -391,7 +391,7 @@ async function handleComment(adminClient: any, conn: any, commentData: any, agen
     } catch (e) { console.log("like_comment failed:", (e as Error).message); }
     await runSteps(automation.instagram_automation_steps, conn, {
       username, text, commentId, senderId: from.id,
-    });
+    }, { skipDelays: true });
   }
 
   if (!matched && agent && agentChannelEnabled(agent, "replyComments")) {
