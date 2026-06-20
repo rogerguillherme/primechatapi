@@ -96,6 +96,8 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
 
   const conn = { ...connection, access_token: pageToken };
   const ownUsername = (connection.instagram_username || "").toLowerCase();
+  const now = Date.now();
+  const recentCommentWindowMs = 24 * 60 * 60 * 1000;
 
   const { data: automations, error: automationError } = await admin
     .from("instagram_automations")
@@ -138,6 +140,8 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
       totalScanned++;
       const text = (c.text || "").trim();
       if (!c.id || !text) continue;
+      const commentTime = c.timestamp ? Date.parse(c.timestamp) : NaN;
+      if (Number.isFinite(commentTime) && now - commentTime > recentCommentWindowMs) continue;
       if ((c.username || "").toLowerCase() === ownUsername) continue;
 
       const replies = c.replies?.data || [];
@@ -176,10 +180,10 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
           text,
           commentId: c.id,
           senderId: c.user?.id,
-        }, stepState);
+        }, stepState, { skipDelays: true });
         stepsResult.unshift({ type: "like_comment", ok: likeResult.ok, response: likeResult.data });
 
-        const failed = stepsResult.find((step: any) => step.ok === false);
+        const failed = stepsResult.find((step: any) => step.ok === false && step.type !== "like_comment");
         await admin.from("instagram_comment_automation_runs").upsert({
           user_id: connection.user_id,
           connection_id: connection.id,
