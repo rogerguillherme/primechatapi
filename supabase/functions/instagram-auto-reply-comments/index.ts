@@ -382,7 +382,8 @@ async function runSteps(
   steps: any[],
   conn: any,
   ctx: { username: string; text: string; commentId?: string; senderId?: string },
-  state: { privateReplySent?: boolean } = {}
+  state: { privateReplySent?: boolean } = {},
+  options: { skipDelays?: boolean } = {}
 ) {
   const sorted = (steps || []).sort((a: any, b: any) => a.step_order - b.step_order);
   const results: any[] = [];
@@ -392,7 +393,7 @@ async function runSteps(
 
     if (step.step_type === "delay") {
       const sec = step.delay_seconds || 5;
-      await new Promise((r) => setTimeout(r, sec * 1000));
+      if (!options.skipDelays) await new Promise((r) => setTimeout(r, sec * 1000));
       results.push({ type: "delay", seconds: sec, ok: true });
     } else if (step.step_type === "reply_comment" && ctx.commentId) {
       const r = await fetch(`${GRAPH}/${ctx.commentId}/replies`, {
