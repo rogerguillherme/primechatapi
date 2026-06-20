@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
       for (const entry of body.entry || []) {
         // Determinar event_type para o log
         let eventType = "unknown";
-        if (entry.changes?.some((c: any) => c.field === "comments")) eventType = "comment";
+        if (entry.changes?.some((c: any) => c.field === "comments" || (c.field === "feed" && c.value?.item === "comment"))) eventType = "comment";
         else if (entry.changes?.some((c: any) => c.field === "messages")) eventType = "message";
         else if (entry.messaging?.some((m: any) => m.postback)) eventType = "postback";
         else if (entry.messaging?.length) eventType = "message";
@@ -131,6 +131,9 @@ Deno.serve(async (req) => {
             for (const change of entry.changes || []) {
               if (change.field === "comments") {
                 await handleComment(adminClient, resolvedConn, change.value, agent);
+              }
+              if (change.field === "feed" && change.value?.item === "comment" && change.value?.verb !== "remove") {
+                await handleComment(adminClient, resolvedConn, normalizeFeedComment(change.value), agent);
               }
               if (change.field === "messages" && change.value?.message?.text && change.value?.sender?.id !== resolvedConn.instagram_user_id) {
                 await handleDM(adminClient, resolvedConn, change.value, agent);
