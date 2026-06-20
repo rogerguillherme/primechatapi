@@ -727,13 +727,33 @@ async function sendPrivateReplyToComment(conn: any, commentId: string, message: 
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        message: { text: message },
+        message,
         access_token: conn.access_token,
       }),
     });
     const data = await res.json();
-    if (!res.ok) console.error("Private reply failed:", data);
-    else console.log("Private reply OK:", data);
+    if (res.ok) {
+      console.log("Private reply OK:", data);
+      return;
+    }
+
+    if (conn.page_id) {
+      const fallback = await fetch(`https://graph.facebook.com/v19.0/${conn.page_id}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipient: { comment_id: commentId },
+          message: { text: message },
+          access_token: conn.access_token,
+        }),
+      });
+      const fallbackData = await fallback.json();
+      if (!fallback.ok) console.error("Private reply failed:", fallbackData);
+      else console.log("Private reply fallback OK:", fallbackData);
+      return;
+    }
+
+    console.error("Private reply failed:", data);
   } catch (e) {
     console.error("Private reply error:", e);
   }
