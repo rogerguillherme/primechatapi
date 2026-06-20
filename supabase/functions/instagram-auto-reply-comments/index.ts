@@ -432,3 +432,17 @@ async function sendPrivateReply(conn: any, commentId: string, message: string) {
     return { ok: false, data: { error: (e as Error).message } };
   }
 }
+
+async function likeComment(conn: any, commentId: string) {
+  try {
+    const res = await fetch(`${GRAPH}/${commentId}/likes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ access_token: conn.access_token }),
+    });
+    const data = await res.json();
+    return { ok: res.ok, data };
+  } catch (e) {
+    return { ok: false, data: { error: (e as Error).message } };
+  }
+}
