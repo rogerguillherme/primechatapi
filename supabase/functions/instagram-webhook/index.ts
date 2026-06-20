@@ -222,6 +222,7 @@ async function enrichConnectionForMessaging(conn: any) {
 
 async function runSteps(steps: any[], conn: any, ctx: { username: string; text: string; commentId?: string; senderId?: string }) {
   const sorted = (steps || []).sort((a: any, b: any) => a.step_order - b.step_order);
+  let privateReplySent = false;
   for (const step of sorted) {
     // Suporte a múltiplas variantes separadas por "|||" — escolhe uma aleatória
     const rawMessage = step.message || "";
@@ -238,15 +239,34 @@ async function runSteps(steps: any[], conn: any, ctx: { username: string; text: 
     } else if (step.step_type === "reply_comment" && ctx.commentId) {
       await replyToComment(conn.access_token, ctx.commentId, message);
     } else if (step.step_type === "send_dm") {
-      await sendRichDM(conn, ctx, step, message);
+      if (ctx.commentId && privateReplySent) {
+        console.log("Skipping extra private reply for comment — Instagram allows one initial DM per comment");
+        continue;
+      }
+      const sentPrivateReply = await sendRichDM(conn, ctx, step, message);
+      if (ctx.commentId && sentPrivateReply) privateReplySent = true;
     }
   }
 }
 
 // Envio de DM com suporte a botões (URL/postback) e link
-async function sendRichDM(conn: any, ctx: { commentId?: string; senderId?: string }, step: any, message: string) {
+async function sendRichDM(conn: any, ctx: { commentId?: string; senderId?: string }, step: any, message: string): Promise<boolean> {
   const dmType = step.dm_type || "text";
   const buttons: any[] = Array.isArray(step.buttons) ? step.buttons : [];
+  if (ctx.commentId) {
+    let finalMessage = message;
+    if (dmType === "link" && step.link_url) {
+      finalMessage = `${message}\n\n👉 ${step.link_url}`;
+    } else if (dmType === "buttons" && buttons.length > 0) {
+      const urlBtns = buttons.filter((b: any) => (b.action || "url") === "url" && b.url);
+      if (urlBtns.length > 0) {
+        finalMessage = `${message}\n\n${urlBtns.map((b: any) => `👉 ${b.title}: ${b.url}`).join("\n")}`;
+      }
+    }
+    await sendPrivateReplyToComment(conn, ctx.commentId, finalMessage);
+    return true;
+  }
+
   const useTemplate = (dmType === "buttons" || dmType === "link") && ctx.senderId && conn.page_id;
 
   if (useTemplate) {
@@ -302,10 +322,10 @@ async function sendRichDM(conn: any, ctx: { commentId?: string; senderId?: strin
       const data = await res.json();
       if (!res.ok) console.error("Rich DM failed:", data);
       else console.log(`Rich DM (${dmType}) OK:`, data);
-      return;
+      return false;
     } catch (e) {
       console.error("Rich DM error:", e);
-      return;
+      return false;
     }
   }
 
@@ -321,10 +341,12 @@ async function sendRichDM(conn: any, ctx: { commentId?: string; senderId?: strin
   }
 
   if (ctx.commentId) {
-    await sendPrivateReplyToComment(conn.access_token, ctx.commentId, finalMessage);
+    await sendPrivateReplyToComment(conn, ctx.commentId, finalMessage);
+    return true;
   } else if (ctx.senderId) {
     await sendInstagramDM(conn.access_token, conn.page_id, ctx.senderId, finalMessage);
   }
+  return false;
 }
 
 async function handleComment(adminClient: any, conn: any, commentData: any, agent: any) {
@@ -675,14 +697,20 @@ async function replyToComment(accessToken: string, commentId: string, message: s
   }
 }
 
-async function sendPrivateReplyToComment(accessToken: string, commentId: string, message: string) {
+async function sendPrivateReplyToComment(conn: any, commentId: string, message: string) {
+  if (!conn.page_id) {
+    console.error("Private reply failed: missing page_id on instagram connection");
+    return;
+  }
+
   try {
-    const res = await fetch(`https://graph.facebook.com/v19.0/${commentId}/private_replies`, {
+    const res = await fetch(`https://graph.facebook.com/v19.0/${conn.page_id}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        message,
-        access_token: accessToken,
+        recipient: { comment_id: commentId },
+        message: { text: message },
+        access_token: conn.access_token,
       }),
     });
     const data = await res.json();

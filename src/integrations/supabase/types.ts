@@ -989,6 +989,72 @@ export type Database = {
         }
         Relationships: []
       }
+      instagram_comment_automation_runs: {
+        Row: {
+          automation_id: string
+          comment_id: string
+          comment_text: string | null
+          commenter_id: string | null
+          commenter_username: string | null
+          connection_id: string
+          created_at: string
+          error: string | null
+          id: string
+          media_id: string | null
+          processed_at: string
+          status: string
+          step_results: Json
+          user_id: string
+        }
+        Insert: {
+          automation_id: string
+          comment_id: string
+          comment_text?: string | null
+          commenter_id?: string | null
+          commenter_username?: string | null
+          connection_id: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          media_id?: string | null
+          processed_at?: string
+          status?: string
+          step_results?: Json
+          user_id: string
+        }
+        Update: {
+          automation_id?: string
+          comment_id?: string
+          comment_text?: string | null
+          commenter_id?: string | null
+          commenter_username?: string | null
+          connection_id?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          media_id?: string | null
+          processed_at?: string
+          status?: string
+          step_results?: Json
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "instagram_comment_automation_runs_automation_id_fkey"
+            columns: ["automation_id"]
+            isOneToOne: false
+            referencedRelation: "instagram_automations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "instagram_comment_automation_runs_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "instagram_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       instagram_connections: {
         Row: {
           access_token: string
