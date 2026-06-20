@@ -405,6 +405,19 @@ async function handleComment(adminClient: any, conn: any, commentData: any, agen
   }
 }
 
+function normalizeFeedComment(value: any) {
+  return {
+    id: value.comment_id || value.id,
+    text: value.message || value.text || "",
+    from: {
+      id: value.from?.id || value.sender_id || value.user_id,
+      username: value.from?.username || value.username || value.sender_name || value.from?.name,
+      name: value.from?.name || value.sender_name,
+    },
+    media_id: value.media_id || value.post_id,
+  };
+}
+
 async function handleDM(adminClient: any, conn: any, msg: any, agent: any) {
   const text = msg.message?.text || "";
   const senderId = msg.sender?.id;
