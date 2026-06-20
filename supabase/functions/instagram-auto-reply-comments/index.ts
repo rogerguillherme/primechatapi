@@ -264,6 +264,23 @@ async function fetchGraphWithFallback(urlWithoutToken: string, tokens: string[])
   return { ok: false, error: lastError };
 }
 
+async function ensureWebhookSubscriptions(conn: any) {
+  try {
+    if (conn.page_id) {
+      await fetch(`${GRAPH}/${conn.page_id}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,feed&access_token=${encodeURIComponent(conn.access_token)}`, {
+        method: "POST",
+      });
+    }
+    if (conn.instagram_user_id) {
+      await fetch(`${GRAPH}/${conn.instagram_user_id}/subscribed_apps?subscribed_fields=comments,messages,mentions&access_token=${encodeURIComponent(conn.access_token)}`, {
+        method: "POST",
+      });
+    }
+  } catch (e) {
+    console.log("ensureWebhookSubscriptions failed:", (e as Error).message);
+  }
+}
+
 function renderMessage(raw: string, ctx: { username: string; text: string }) {
   const variants = (raw || "").split("|||").map((s) => s.trim()).filter(Boolean);
   const picked = variants.length > 0 ? variants[Math.floor(Math.random() * variants.length)] : "";
