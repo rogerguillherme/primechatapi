@@ -414,14 +414,11 @@ function json(payload: unknown, status = 200) {
 }
 
 async function sendPrivateReply(conn: any, commentId: string, message: string) {
-  if (!conn.page_id) return { ok: false, data: { error: "missing_page_id" } };
-
   try {
-    const res = await fetch(`${GRAPH}/${conn.page_id}/messages`, {
+    const res = await fetch(`${GRAPH}/${commentId}/private_replies`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        recipient: { comment_id: commentId },
         message: { text: message },
         access_token: conn.access_token,
       }),
