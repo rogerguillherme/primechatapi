@@ -223,7 +223,7 @@ async function enrichConnectionForMessaging(conn: any) {
   }
 }
 
-async function runSteps(steps: any[], conn: any, ctx: { username: string; text: string; commentId?: string; senderId?: string }) {
+async function runSteps(steps: any[], conn: any, ctx: { username: string; text: string; commentId?: string; senderId?: string }, options: { skipDelays?: boolean } = {}) {
   const sorted = (steps || []).sort((a: any, b: any) => a.step_order - b.step_order);
   let privateReplySent = false;
   for (const step of sorted) {
@@ -238,7 +238,7 @@ async function runSteps(steps: any[], conn: any, ctx: { username: string; text: 
       .replace(/\{comentario\}/gi, ctx.text);
 
     if (step.step_type === "delay") {
-      await new Promise((r) => setTimeout(r, (step.delay_seconds || 5) * 1000));
+      if (!options.skipDelays) await new Promise((r) => setTimeout(r, (step.delay_seconds || 5) * 1000));
     } else if (step.step_type === "reply_comment" && ctx.commentId) {
       await replyToComment(conn.access_token, ctx.commentId, message);
     } else if (step.step_type === "send_dm") {
