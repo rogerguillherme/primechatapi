@@ -98,7 +98,7 @@ Deno.serve(async (req) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           subscribed_fields: "comments,messages,mentions",
-          access_token: pageAccessToken,
+          access_token: userToken,
         }),
       });
     } catch (e) {
