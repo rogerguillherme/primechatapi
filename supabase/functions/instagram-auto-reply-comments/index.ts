@@ -14,7 +14,12 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
+    const allowedCronKeys = [
+      Deno.env.get("SUPABASE_ANON_KEY"),
+      Deno.env.get("SUPABASE_PUBLISHABLE_KEY"),
+      Deno.env.get("SUPABASE_PUBLISHABLE_KEYS"),
+      Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")?.split(",")?.[0],
+    ].flatMap((value) => (value || "").split(",").map((key) => key.trim())).filter(Boolean);
     const admin = createClient(supabaseUrl, serviceRoleKey);
     const body = await req.json().catch(() => ({}));
     const maxPosts = Math.min(Math.max(Number(body.max_posts ?? 10), 1), 25);
@@ -28,7 +33,7 @@ Deno.serve(async (req) => {
     let connections: any[] = [];
 
     if (isCron) {
-      if (!anonKey || (apiKey !== anonKey && bearer !== anonKey)) {
+      if (!allowedCronKeys.includes(apiKey) && !allowedCronKeys.includes(bearer)) {
         return json({ error: "Unauthorized" }, 401);
       }
       const { data, error } = await admin
