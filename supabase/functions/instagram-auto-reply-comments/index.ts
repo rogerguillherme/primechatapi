@@ -449,12 +449,24 @@ async function sendPrivateReply(conn: any, commentId: string, message: string) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        message: { text: message },
+        message,
         access_token: conn.access_token,
       }),
     });
     const data = await res.json();
-    return { ok: res.ok, data };
+    if (res.ok || !conn.page_id) return { ok: res.ok, data };
+
+    const fallback = await fetch(`${GRAPH}/${conn.page_id}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        recipient: { comment_id: commentId },
+        message: { text: message },
+        access_token: conn.access_token,
+      }),
+    });
+    const fallbackData = await fallback.json();
+    return { ok: fallback.ok, data: fallbackData };
   } catch (e) {
     return { ok: false, data: { error: (e as Error).message } };
   }
