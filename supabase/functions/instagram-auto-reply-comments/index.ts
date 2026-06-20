@@ -23,8 +23,8 @@ Deno.serve(async (req) => {
     ].flatMap((value) => (value || "").split(",").map((key) => key.trim())).filter(Boolean);
     const admin = createClient(supabaseUrl, serviceRoleKey);
     const body = await req.json().catch(() => ({}));
-    const maxPosts = Math.min(Math.max(Number(body.max_posts ?? 10), 1), 25);
-    const maxComments = Math.min(Math.max(Number(body.max_comments_per_post ?? 25), 1), 50);
+    const maxPosts = Math.min(Math.max(Number(body.max_posts ?? 25), 1), 50);
+    const maxComments = Math.min(Math.max(Number(body.max_comments_per_post ?? 50), 1), 100);
 
     const authHeader = req.headers.get("authorization") ?? "";
     const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
@@ -167,12 +167,17 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
         }
 
         const stepState = { privateReplySent: false };
+
+        // Auto-like the comment (Graph API) — best effort
+        const likeResult = await likeComment(conn, c.id);
+
         const stepsResult = await runSteps(automation.instagram_automation_steps || [], conn, {
           username,
           text,
           commentId: c.id,
           senderId: c.user?.id,
         }, stepState);
+        stepsResult.unshift({ type: "like_comment", ok: likeResult.ok, response: likeResult.data });
 
         const failed = stepsResult.find((step: any) => step.ok === false);
         await admin.from("instagram_comment_automation_runs").upsert({
@@ -420,6 +425,20 @@ async function sendPrivateReply(conn: any, commentId: string, message: string) {
         message: { text: message },
         access_token: conn.access_token,
       }),
+    });
+    const data = await res.json();
+    return { ok: res.ok, data };
+  } catch (e) {
+    return { ok: false, data: { error: (e as Error).message } };
+  }
+}
+
+async function likeComment(conn: any, commentId: string) {
+  try {
+    const res = await fetch(`${GRAPH}/${commentId}/likes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ access_token: conn.access_token }),
     });
     const data = await res.json();
     return { ok: res.ok, data };

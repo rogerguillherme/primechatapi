@@ -378,6 +378,14 @@ async function handleComment(adminClient: any, conn: any, commentData: any, agen
     }
     matched = true;
     console.log(`✓ Automation "${automation.name}" triggered — running ${(automation.instagram_automation_steps || []).length} steps`);
+    // Auto-like the comment (best effort)
+    try {
+      await fetch(`https://graph.facebook.com/v19.0/${commentId}/likes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ access_token: conn.access_token }),
+      });
+    } catch (e) { console.log("like_comment failed:", (e as Error).message); }
     await runSteps(automation.instagram_automation_steps, conn, {
       username, text, commentId, senderId: from.id,
     });
