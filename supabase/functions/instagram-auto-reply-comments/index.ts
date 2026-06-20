@@ -19,6 +19,7 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_PUBLISHABLE_KEY"),
       Deno.env.get("SUPABASE_PUBLISHABLE_KEYS"),
       Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")?.split(",")?.[0],
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJIUzI1NiIsInJlZiI6Im5uandlbW1lcnVtemtpaXlrcGFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1NDEwNDcsImV4cCI6MjA4NzExNzA0N30._GKCqMhMBR3j0jK438raMweCb2Bf_LMs-BuCwAPLQ48",
     ].flatMap((value) => (value || "").split(",").map((key) => key.trim())).filter(Boolean);
     const admin = createClient(supabaseUrl, serviceRoleKey);
     const body = await req.json().catch(() => ({}));
