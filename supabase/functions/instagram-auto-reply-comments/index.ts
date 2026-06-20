@@ -23,8 +23,8 @@ Deno.serve(async (req) => {
     ].flatMap((value) => (value || "").split(",").map((key) => key.trim())).filter(Boolean);
     const admin = createClient(supabaseUrl, serviceRoleKey);
     const body = await req.json().catch(() => ({}));
-    const maxPosts = Math.min(Math.max(Number(body.max_posts ?? 10), 1), 25);
-    const maxComments = Math.min(Math.max(Number(body.max_comments_per_post ?? 25), 1), 50);
+    const maxPosts = Math.min(Math.max(Number(body.max_posts ?? 25), 1), 50);
+    const maxComments = Math.min(Math.max(Number(body.max_comments_per_post ?? 50), 1), 100);
 
     const authHeader = req.headers.get("authorization") ?? "";
     const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
