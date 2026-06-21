@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
   }
 });
 
-async function processConnection(admin: any, connection: any, maxPosts: number, maxComments: number) {
+async function processConnection(admin: any, connection: any, maxPosts: number, maxComments: number, options: { isCron?: boolean; scanPostLimit?: number; postOffset?: number | null } = {}) {
   let pageToken = connection.access_token;
   if (connection.page_id) {
     try {
@@ -120,15 +120,18 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
     return emptyConnectionResult(connection, "Nenhuma automação ativa");
   }
 
+  const mediaLimit = Math.max(maxPosts, options.scanPostLimit || maxPosts);
   const mediaData = await fetchGraphWithFallback(
-    `${GRAPH}/${connection.instagram_user_id}/media?fields=id,caption,timestamp&limit=${maxPosts}`,
+    `${GRAPH}/${connection.instagram_user_id}/media?fields=id,caption,timestamp&limit=${mediaLimit}`,
     [pageToken, connection.access_token]
   );
   if (!mediaData.ok) {
     return { ...emptyConnectionResult(connection, mediaData.error || "Erro ao listar posts"), error: mediaData.error };
   }
 
-  const mediaList = mediaData.data?.data || [];
+  const allMediaList = mediaData.data?.data || [];
+  const resolvedOffset = options.postOffset ?? (options.isCron ? getCronPostOffset(connection.id, allMediaList.length, maxPosts) : 0);
+  const mediaList = allMediaList.slice(resolvedOffset, resolvedOffset + maxPosts);
   let totalScanned = 0;
   let totalMatched = 0;
   let totalSkippedAlreadyReplied = 0;
