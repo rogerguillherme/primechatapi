@@ -270,6 +270,44 @@ async function fetchGraphWithFallback(urlWithoutToken: string, tokens: string[])
   return { ok: false, error: lastError };
 }
 
+async function fetchCommentsForMedia(mediaList: any[], pageToken: string, fallbackToken: string, maxComments: number) {
+  const results = new Map<string, any>();
+  const tokens = [...new Set([pageToken, fallbackToken].filter(Boolean))];
+  const fields = `comments.order(reverse_chronological).limit(${maxComments}){id,text,username,timestamp,user{id,username},replies{id,username,text,timestamp,user{id,username}}}`;
+
+  for (let i = 0; i < mediaList.length; i += 10) {
+    const chunk = mediaList.slice(i, i + 10);
+    const ids = chunk.map((media) => media.id).filter(Boolean).join(",");
+    if (!ids) continue;
+
+    let chunkOk = false;
+    let lastError = "";
+    for (const token of tokens) {
+      try {
+        const res = await fetch(`${GRAPH}/?ids=${encodeURIComponent(ids)}&fields=${encodeURIComponent(fields)}&access_token=${encodeURIComponent(token)}`);
+        const data = await res.json();
+        if (!res.ok) {
+          lastError = data?.error?.message || JSON.stringify(data);
+          continue;
+        }
+        for (const media of chunk) {
+          results.set(media.id, { ok: true, data: { data: data?.[media.id]?.comments?.data || [] } });
+        }
+        chunkOk = true;
+        break;
+      } catch (e) {
+        lastError = (e as Error).message;
+      }
+    }
+
+    if (!chunkOk) {
+      for (const media of chunk) results.set(media.id, { ok: false, error: lastError || "Erro ao listar comentários" });
+    }
+  }
+
+  return results;
+}
+
 async function ensureWebhookSubscriptions(conn: any) {
   try {
     if (conn.page_id) {
