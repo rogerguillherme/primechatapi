@@ -28,16 +28,21 @@ Deno.serve(async (req) => {
     const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
     const apiKey = req.headers.get("apikey") || "";
     const isCron = body.cron === true;
-    const defaultMaxPosts = isCron ? 50 : 25;
-    const defaultMaxComments = isCron ? 25 : 50;
+    const defaultMaxPosts = isCron ? 10 : 25;
+    const defaultMaxComments = isCron ? 50 : 50;
     const requestedMaxPosts = Number(body.max_posts ?? defaultMaxPosts);
     const requestedMaxComments = Number(body.max_comments_per_post ?? defaultMaxComments);
-    const maxPosts = Math.min(Math.max(Number.isFinite(requestedMaxPosts) ? requestedMaxPosts : defaultMaxPosts, 1), 50);
+    const maxPosts = Math.min(Math.max(Number.isFinite(requestedMaxPosts) ? requestedMaxPosts : defaultMaxPosts, 1), 100);
     const maxComments = Math.min(Math.max(Number.isFinite(requestedMaxComments) ? requestedMaxComments : defaultMaxComments, 1), isCron ? 50 : 100);
-    const requestedScanPostLimit = Number(body.scan_post_limit ?? (isCron ? 50 : maxPosts));
+    const requestedScanPostLimit = Number(body.scan_post_limit ?? (isCron ? 300 : maxPosts));
     const requestedPostOffset = Number(body.post_offset);
-    const scanPostLimit = Math.min(Math.max(Number.isFinite(requestedScanPostLimit) ? requestedScanPostLimit : maxPosts, maxPosts), 50);
+    const scanPostLimit = Math.min(Math.max(Number.isFinite(requestedScanPostLimit) ? requestedScanPostLimit : maxPosts, maxPosts), 500);
     const postOffset = Number.isFinite(requestedPostOffset) ? Math.max(0, Math.floor(requestedPostOffset)) : null;
+    const requestedCommentPageLimit = Number(body.comment_page_limit ?? (isCron ? 3 : 5));
+    const commentPageLimit = Math.min(Math.max(Number.isFinite(requestedCommentPageLimit) ? requestedCommentPageLimit : 1, 1), 10);
+    const debugSearch = typeof body.debug_search === "string" ? body.debug_search.trim().toLowerCase() : "";
+    const debugOnly = body.debug_only === true;
+    const debugMedia = body.debug_media === true;
 
     let connections: any[] = [];
 
@@ -73,7 +78,7 @@ Deno.serve(async (req) => {
 
     const perConnection = [];
     for (const connection of connections) {
-      perConnection.push(await processConnection(admin, connection, maxPosts, maxComments, { isCron, scanPostLimit, postOffset }));
+      perConnection.push(await processConnection(admin, connection, maxPosts, maxComments, { isCron, scanPostLimit, postOffset, commentPageLimit, debugSearch, debugOnly, debugMedia }));
     }
 
     return json({
@@ -85,6 +90,8 @@ Deno.serve(async (req) => {
       skipped_already_replied: perConnection.reduce((sum, item) => sum + item.skippedAlreadyReplied, 0),
       posts_checked: perConnection.reduce((sum, item) => sum + item.postsChecked, 0),
       results: perConnection.flatMap((item) => item.results),
+      debug_matches: perConnection.flatMap((item) => item.debugMatches || []),
+      debug_media: perConnection.flatMap((item) => item.debugMedia || []),
     });
   } catch (error) {
     console.error("instagram-auto-reply-comments error:", error);
@@ -92,7 +99,7 @@ Deno.serve(async (req) => {
   }
 });
 
-async function processConnection(admin: any, connection: any, maxPosts: number, maxComments: number, options: { isCron?: boolean; scanPostLimit?: number; postOffset?: number | null } = {}) {
+async function processConnection(admin: any, connection: any, maxPosts: number, maxComments: number, options: { isCron?: boolean; scanPostLimit?: number; postOffset?: number | null; commentPageLimit?: number; debugSearch?: string; debugOnly?: boolean; debugMedia?: boolean } = {}) {
   let pageToken = connection.access_token;
   if (connection.page_id) {
     try {
@@ -121,24 +128,27 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
   }
 
   const mediaLimit = Math.max(maxPosts, options.scanPostLimit || maxPosts);
-  const mediaData = await fetchGraphWithFallback(
-    `${GRAPH}/${connection.instagram_user_id}/media?fields=id,caption,timestamp&limit=${mediaLimit}`,
-    [pageToken, connection.access_token]
-  );
+  const mediaData = await fetchMediaWithPaging(connection.instagram_user_id, [pageToken, connection.access_token], mediaLimit);
   if (!mediaData.ok) {
     return { ...emptyConnectionResult(connection, mediaData.error || "Erro ao listar posts"), error: mediaData.error };
   }
 
   const allMediaList = mediaData.data?.data || [];
   const resolvedOffset = options.postOffset ?? (options.isCron ? getCronPostOffset(connection.id, allMediaList.length, maxPosts) : 0);
-  const mediaList = allMediaList.slice(resolvedOffset, resolvedOffset + maxPosts);
+  const mediaWindow = allMediaList.slice(resolvedOffset, resolvedOffset + maxPosts);
+  const topCommentedMedia = allMediaList
+    .filter((media: any) => Number(media.comments_count || 0) > 0)
+    .sort((a: any, b: any) => Number(b.comments_count || 0) - Number(a.comments_count || 0))
+    .slice(0, maxPosts);
+  const mediaList = uniqueById([...mediaWindow, ...topCommentedMedia]).slice(0, Math.min(maxPosts * 2, 100));
   let totalScanned = 0;
   let totalMatched = 0;
   let totalSkippedAlreadyReplied = 0;
   let totalSkippedAlreadyProcessed = 0;
   const results: any[] = [];
+  const debugMatches: any[] = [];
 
-  const commentsByMedia = await fetchCommentsForMedia(mediaList, pageToken, connection.access_token, maxComments);
+  const commentsByMedia = await fetchCommentsForMedia(mediaList, pageToken, connection.access_token, maxComments, options.commentPageLimit || 1);
 
   for (const media of mediaList) {
     const commentsData = commentsByMedia.get(media.id) || { ok: false, error: "Comentários não retornados" };
@@ -149,10 +159,19 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
 
     for (const parentComment of commentsData.data?.data || []) {
       const commentCandidates = [parentComment, ...(parentComment.replies?.data || [])];
+      if (Number(parentComment.replies_count || 0) > (parentComment.replies?.data?.length || 0)) {
+        const extraReplies = await fetchRepliesForComment(parentComment.id, [pageToken, connection.access_token], maxComments, options.commentPageLimit || 1);
+        commentCandidates.push(...extraReplies);
+      }
       for (const c of commentCandidates) {
       totalScanned++;
       const text = (c.text || "").trim();
       if (!c.id || !text) continue;
+      const lower = text.toLowerCase();
+      const username = c.username || c.user?.username || "amigo(a)";
+      if (options.debugSearch && (`${lower} ${String(username).toLowerCase()}`).includes(options.debugSearch)) {
+        debugMatches.push({ media_id: media.id, comment_id: c.id, username, text, timestamp: c.timestamp });
+      }
       const commentTime = c.timestamp ? Date.parse(c.timestamp) : NaN;
       if (Number.isFinite(commentTime) && now - commentTime > recentCommentWindowMs) continue;
       if ((c.username || "").toLowerCase() === ownUsername) continue;
@@ -164,8 +183,7 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
         continue;
       }
 
-      const lower = text.toLowerCase();
-      const username = c.username || c.user?.username || "amigo(a)";
+      if (options.debugOnly) continue;
 
       for (const automation of automations) {
         if (!automationMatches(automation, lower)) continue;
@@ -236,6 +254,8 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
     skippedAlreadyReplied: totalSkippedAlreadyReplied,
     postsChecked: mediaList.length,
     results,
+    debugMatches,
+    debugMedia: options.debugMedia ? mediaList.map((media: any) => ({ id: media.id, caption: media.caption, timestamp: media.timestamp, comments_count: media.comments_count })) : [],
   };
 }
 
@@ -269,6 +289,16 @@ function getCronPostOffset(connectionId: string, totalPosts: number, windowSize:
   return ((minuteBucket + seed) % windows) * windowSize;
 }
 
+function uniqueById(items: any[]) {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const id = String(item?.id || "");
+    if (!id || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
 async function fetchGraphWithFallback(urlWithoutToken: string, tokens: string[]) {
   const uniqueTokens = [...new Set(tokens.filter(Boolean))];
   let lastError = "";
@@ -285,10 +315,35 @@ async function fetchGraphWithFallback(urlWithoutToken: string, tokens: string[])
   return { ok: false, error: lastError };
 }
 
-async function fetchCommentsForMedia(mediaList: any[], pageToken: string, fallbackToken: string, maxComments: number) {
+async function fetchMediaWithPaging(igUserId: string, tokens: string[], limit: number) {
+  const uniqueTokens = [...new Set(tokens.filter(Boolean))];
+  let lastError = "";
+  for (const token of uniqueTokens) {
+    try {
+      const data: any[] = [];
+      let nextUrl: string | null = `${GRAPH}/${igUserId}/media?fields=id,caption,timestamp,comments_count&limit=${Math.min(limit, 100)}&access_token=${encodeURIComponent(token)}`;
+      while (nextUrl && data.length < limit) {
+        const res = await fetch(nextUrl);
+        const page = await res.json();
+        if (!res.ok) {
+          lastError = page?.error?.message || JSON.stringify(page);
+          break;
+        }
+        data.push(...(page.data || []));
+        nextUrl = page.paging?.next || null;
+      }
+      if (data.length > 0 || !lastError) return { ok: true, data: { data: data.slice(0, limit) } };
+    } catch (e) {
+      lastError = (e as Error).message;
+    }
+  }
+  return { ok: false, error: lastError };
+}
+
+async function fetchCommentsForMedia(mediaList: any[], pageToken: string, fallbackToken: string, maxComments: number, pageLimit = 1) {
   const results = new Map<string, any>();
   const tokens = [...new Set([pageToken, fallbackToken].filter(Boolean))];
-  const fields = `comments.order(reverse_chronological).limit(${maxComments}){id,text,username,timestamp,user{id,username},replies{id,username,text,timestamp,user{id,username}}}`;
+  const fields = `comments.order(reverse_chronological).limit(${maxComments}){id,text,username,timestamp,user{id,username},replies_count,replies.limit(${maxComments}){id,username,text,timestamp,user{id,username}}}`;
 
   for (let i = 0; i < mediaList.length; i += 10) {
     const chunk = mediaList.slice(i, i + 10);
@@ -306,7 +361,17 @@ async function fetchCommentsForMedia(mediaList: any[], pageToken: string, fallba
           continue;
         }
         for (const media of chunk) {
-          results.set(media.id, { ok: true, data: { data: data?.[media.id]?.comments?.data || [] } });
+          const firstPage = data?.[media.id]?.comments || { data: [] };
+          const comments = [...(firstPage.data || [])];
+          let nextUrl = firstPage.paging?.next || null;
+          for (let page = 1; nextUrl && page < pageLimit; page++) {
+            const nextRes = await fetch(nextUrl);
+            const nextData = await nextRes.json();
+            if (!nextRes.ok) break;
+            comments.push(...(nextData.data || []));
+            nextUrl = nextData.paging?.next || null;
+          }
+          results.set(media.id, { ok: true, data: { data: comments } });
         }
         chunkOk = true;
         break;
@@ -321,6 +386,24 @@ async function fetchCommentsForMedia(mediaList: any[], pageToken: string, fallba
   }
 
   return results;
+}
+
+async function fetchRepliesForComment(commentId: string, tokens: string[], maxReplies: number, pageLimit = 1) {
+  const replies: any[] = [];
+  for (const token of [...new Set(tokens.filter(Boolean))]) {
+    try {
+      let nextUrl: string | null = `${GRAPH}/${commentId}/replies?fields=id,username,text,timestamp,user{id,username}&limit=${maxReplies}&access_token=${encodeURIComponent(token)}`;
+      for (let page = 0; nextUrl && page < pageLimit; page++) {
+        const res = await fetch(nextUrl);
+        const data = await res.json();
+        if (!res.ok) break;
+        replies.push(...(data.data || []));
+        nextUrl = data.paging?.next || null;
+      }
+      if (replies.length > 0) break;
+    } catch { /* try next token */ }
+  }
+  return replies;
 }
 
 async function ensureWebhookSubscriptions(conn: any) {
