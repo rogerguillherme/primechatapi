@@ -131,11 +131,10 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
   let totalSkippedAlreadyProcessed = 0;
   const results: any[] = [];
 
+  const commentsByMedia = await fetchCommentsForMedia(mediaList, pageToken, connection.access_token, maxComments);
+
   for (const media of mediaList) {
-    const commentsData = await fetchGraphWithFallback(
-      `${GRAPH}/${media.id}/comments?fields=id,text,username,timestamp,user{id,username},replies{id,username,text,timestamp,user{id,username}}&order=reverse_chronological&limit=${maxComments}`,
-      [pageToken, connection.access_token]
-    );
+    const commentsData = commentsByMedia.get(media.id) || { ok: false, error: "Comentários não retornados" };
     if (!commentsData.ok) {
       results.push({ media_id: media.id, ok: false, error: commentsData.error || "Erro ao listar comentários" });
       continue;
