@@ -88,6 +88,7 @@ Deno.serve(async (req) => {
       skipped_already_replied: perConnection.reduce((sum, item) => sum + item.skippedAlreadyReplied, 0),
       posts_checked: perConnection.reduce((sum, item) => sum + item.postsChecked, 0),
       results: perConnection.flatMap((item) => item.results),
+      debug_matches: perConnection.flatMap((item) => item.debugMatches || []),
     });
   } catch (error) {
     console.error("instagram-auto-reply-comments error:", error);
