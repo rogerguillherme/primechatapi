@@ -167,6 +167,11 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
       totalScanned++;
       const text = (c.text || "").trim();
       if (!c.id || !text) continue;
+      const lower = text.toLowerCase();
+      const username = c.username || c.user?.username || "amigo(a)";
+      if (options.debugSearch && (`${lower} ${String(username).toLowerCase()}`).includes(options.debugSearch)) {
+        debugMatches.push({ media_id: media.id, comment_id: c.id, username, text, timestamp: c.timestamp });
+      }
       const commentTime = c.timestamp ? Date.parse(c.timestamp) : NaN;
       if (Number.isFinite(commentTime) && now - commentTime > recentCommentWindowMs) continue;
       if ((c.username || "").toLowerCase() === ownUsername) continue;
@@ -178,11 +183,6 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
         continue;
       }
 
-      const lower = text.toLowerCase();
-      const username = c.username || c.user?.username || "amigo(a)";
-      if (options.debugSearch && (`${lower} ${String(username).toLowerCase()}`).includes(options.debugSearch)) {
-        debugMatches.push({ media_id: media.id, comment_id: c.id, username, text, timestamp: c.timestamp });
-      }
       if (options.debugOnly) continue;
 
       for (const automation of automations) {
