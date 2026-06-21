@@ -287,7 +287,7 @@ async function fetchGraphWithFallback(urlWithoutToken: string, tokens: string[])
   return { ok: false, error: lastError };
 }
 
-async function fetchCommentsForMedia(mediaList: any[], pageToken: string, fallbackToken: string, maxComments: number) {
+async function fetchCommentsForMedia(mediaList: any[], pageToken: string, fallbackToken: string, maxComments: number, pageLimit = 1) {
   const results = new Map<string, any>();
   const tokens = [...new Set([pageToken, fallbackToken].filter(Boolean))];
   const fields = `comments.order(reverse_chronological).limit(${maxComments}){id,text,username,timestamp,user{id,username},replies{id,username,text,timestamp,user{id,username}}}`;
@@ -308,7 +308,17 @@ async function fetchCommentsForMedia(mediaList: any[], pageToken: string, fallba
           continue;
         }
         for (const media of chunk) {
-          results.set(media.id, { ok: true, data: { data: data?.[media.id]?.comments?.data || [] } });
+          const firstPage = data?.[media.id]?.comments || { data: [] };
+          const comments = [...(firstPage.data || [])];
+          let nextUrl = firstPage.paging?.next || null;
+          for (let page = 1; nextUrl && page < pageLimit; page++) {
+            const nextRes = await fetch(nextUrl);
+            const nextData = await nextRes.json();
+            if (!nextRes.ok) break;
+            comments.push(...(nextData.data || []));
+            nextUrl = nextData.paging?.next || null;
+          }
+          results.set(media.id, { ok: true, data: { data: comments } });
         }
         chunkOk = true;
         break;
