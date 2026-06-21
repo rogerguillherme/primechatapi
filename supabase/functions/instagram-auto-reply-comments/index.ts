@@ -91,6 +91,7 @@ Deno.serve(async (req) => {
       posts_checked: perConnection.reduce((sum, item) => sum + item.postsChecked, 0),
       results: perConnection.flatMap((item) => item.results),
       debug_matches: perConnection.flatMap((item) => item.debugMatches || []),
+      debug_media: perConnection.flatMap((item) => item.debugMedia || []),
     });
   } catch (error) {
     console.error("instagram-auto-reply-comments error:", error);
@@ -98,7 +99,7 @@ Deno.serve(async (req) => {
   }
 });
 
-async function processConnection(admin: any, connection: any, maxPosts: number, maxComments: number, options: { isCron?: boolean; scanPostLimit?: number; postOffset?: number | null; commentPageLimit?: number; debugSearch?: string; debugOnly?: boolean } = {}) {
+async function processConnection(admin: any, connection: any, maxPosts: number, maxComments: number, options: { isCron?: boolean; scanPostLimit?: number; postOffset?: number | null; commentPageLimit?: number; debugSearch?: string; debugOnly?: boolean; debugMedia?: boolean } = {}) {
   let pageToken = connection.access_token;
   if (connection.page_id) {
     try {
@@ -254,6 +255,7 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
     postsChecked: mediaList.length,
     results,
     debugMatches,
+    debugMedia: options.debugMedia ? mediaList.map((media: any) => ({ id: media.id, caption: media.caption, timestamp: media.timestamp, comments_count: media.comments_count })) : [],
   };
 }
 
