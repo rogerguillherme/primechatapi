@@ -157,6 +157,10 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
 
     for (const parentComment of commentsData.data?.data || []) {
       const commentCandidates = [parentComment, ...(parentComment.replies?.data || [])];
+      if (Number(parentComment.replies_count || 0) > (parentComment.replies?.data?.length || 0)) {
+        const extraReplies = await fetchRepliesForComment(parentComment.id, [pageToken, connection.access_token], maxComments, options.commentPageLimit || 1);
+        commentCandidates.push(...extraReplies);
+      }
       for (const c of commentCandidates) {
       totalScanned++;
       const text = (c.text || "").trim();
