@@ -124,7 +124,7 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
 
   const mediaLimit = Math.max(maxPosts, options.scanPostLimit || maxPosts);
   const mediaData = await fetchGraphWithFallback(
-    `${GRAPH}/${connection.instagram_user_id}/media?fields=id,caption,timestamp&limit=${mediaLimit}`,
+    `${GRAPH}/${connection.instagram_user_id}/media?fields=id,caption,timestamp,comments_count&limit=${mediaLimit}`,
     [pageToken, connection.access_token]
   );
   if (!mediaData.ok) {
@@ -133,7 +133,12 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
 
   const allMediaList = mediaData.data?.data || [];
   const resolvedOffset = options.postOffset ?? (options.isCron ? getCronPostOffset(connection.id, allMediaList.length, maxPosts) : 0);
-  const mediaList = allMediaList.slice(resolvedOffset, resolvedOffset + maxPosts);
+  const mediaWindow = allMediaList.slice(resolvedOffset, resolvedOffset + maxPosts);
+  const topCommentedMedia = allMediaList
+    .filter((media: any) => Number(media.comments_count || 0) > 0)
+    .sort((a: any, b: any) => Number(b.comments_count || 0) - Number(a.comments_count || 0))
+    .slice(0, maxPosts);
+  const mediaList = uniqueById([...mediaWindow, ...topCommentedMedia]).slice(0, Math.min(maxPosts * 2, 100));
   let totalScanned = 0;
   let totalMatched = 0;
   let totalSkippedAlreadyReplied = 0;
