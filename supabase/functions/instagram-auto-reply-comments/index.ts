@@ -41,6 +41,7 @@ Deno.serve(async (req) => {
     const requestedCommentPageLimit = Number(body.comment_page_limit ?? (isCron ? 3 : 5));
     const commentPageLimit = Math.min(Math.max(Number.isFinite(requestedCommentPageLimit) ? requestedCommentPageLimit : 1, 1), 10);
     const debugSearch = typeof body.debug_search === "string" ? body.debug_search.trim().toLowerCase() : "";
+    const debugOnly = body.debug_only === true;
 
     let connections: any[] = [];
 
@@ -76,7 +77,7 @@ Deno.serve(async (req) => {
 
     const perConnection = [];
     for (const connection of connections) {
-      perConnection.push(await processConnection(admin, connection, maxPosts, maxComments, { isCron, scanPostLimit, postOffset, commentPageLimit, debugSearch }));
+      perConnection.push(await processConnection(admin, connection, maxPosts, maxComments, { isCron, scanPostLimit, postOffset, commentPageLimit, debugSearch, debugOnly }));
     }
 
     return json({
