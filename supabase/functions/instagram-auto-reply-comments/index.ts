@@ -28,16 +28,18 @@ Deno.serve(async (req) => {
     const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
     const apiKey = req.headers.get("apikey") || "";
     const isCron = body.cron === true;
-    const defaultMaxPosts = isCron ? 50 : 25;
-    const defaultMaxComments = isCron ? 25 : 50;
+    const defaultMaxPosts = isCron ? 10 : 25;
+    const defaultMaxComments = isCron ? 50 : 50;
     const requestedMaxPosts = Number(body.max_posts ?? defaultMaxPosts);
     const requestedMaxComments = Number(body.max_comments_per_post ?? defaultMaxComments);
-    const maxPosts = Math.min(Math.max(Number.isFinite(requestedMaxPosts) ? requestedMaxPosts : defaultMaxPosts, 1), 50);
+    const maxPosts = Math.min(Math.max(Number.isFinite(requestedMaxPosts) ? requestedMaxPosts : defaultMaxPosts, 1), 100);
     const maxComments = Math.min(Math.max(Number.isFinite(requestedMaxComments) ? requestedMaxComments : defaultMaxComments, 1), isCron ? 50 : 100);
-    const requestedScanPostLimit = Number(body.scan_post_limit ?? (isCron ? 50 : maxPosts));
+    const requestedScanPostLimit = Number(body.scan_post_limit ?? (isCron ? 100 : maxPosts));
     const requestedPostOffset = Number(body.post_offset);
-    const scanPostLimit = Math.min(Math.max(Number.isFinite(requestedScanPostLimit) ? requestedScanPostLimit : maxPosts, maxPosts), 50);
+    const scanPostLimit = Math.min(Math.max(Number.isFinite(requestedScanPostLimit) ? requestedScanPostLimit : maxPosts, maxPosts), 100);
     const postOffset = Number.isFinite(requestedPostOffset) ? Math.max(0, Math.floor(requestedPostOffset)) : null;
+    const requestedCommentPageLimit = Number(body.comment_page_limit ?? (isCron ? 3 : 5));
+    const commentPageLimit = Math.min(Math.max(Number.isFinite(requestedCommentPageLimit) ? requestedCommentPageLimit : 1, 1), 10);
 
     let connections: any[] = [];
 
@@ -73,7 +75,7 @@ Deno.serve(async (req) => {
 
     const perConnection = [];
     for (const connection of connections) {
-      perConnection.push(await processConnection(admin, connection, maxPosts, maxComments, { isCron, scanPostLimit, postOffset }));
+      perConnection.push(await processConnection(admin, connection, maxPosts, maxComments, { isCron, scanPostLimit, postOffset, commentPageLimit }));
     }
 
     return json({
