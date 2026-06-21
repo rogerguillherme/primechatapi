@@ -308,6 +308,31 @@ async function fetchGraphWithFallback(urlWithoutToken: string, tokens: string[])
   return { ok: false, error: lastError };
 }
 
+async function fetchMediaWithPaging(igUserId: string, tokens: string[], limit: number) {
+  const uniqueTokens = [...new Set(tokens.filter(Boolean))];
+  let lastError = "";
+  for (const token of uniqueTokens) {
+    try {
+      const data: any[] = [];
+      let nextUrl: string | null = `${GRAPH}/${igUserId}/media?fields=id,caption,timestamp,comments_count&limit=${Math.min(limit, 100)}&access_token=${encodeURIComponent(token)}`;
+      while (nextUrl && data.length < limit) {
+        const res = await fetch(nextUrl);
+        const page = await res.json();
+        if (!res.ok) {
+          lastError = page?.error?.message || JSON.stringify(page);
+          break;
+        }
+        data.push(...(page.data || []));
+        nextUrl = page.paging?.next || null;
+      }
+      if (data.length > 0 || !lastError) return { ok: true, data: { data: data.slice(0, limit) } };
+    } catch (e) {
+      lastError = (e as Error).message;
+    }
+  }
+  return { ok: false, error: lastError };
+}
+
 async function fetchCommentsForMedia(mediaList: any[], pageToken: string, fallbackToken: string, maxComments: number, pageLimit = 1) {
   const results = new Map<string, any>();
   const tokens = [...new Set([pageToken, fallbackToken].filter(Boolean))];
