@@ -261,6 +261,14 @@ function automationMatches(automation: any, lowerText: string) {
   return false;
 }
 
+function getCronPostOffset(connectionId: string, totalPosts: number, windowSize: number) {
+  if (totalPosts <= windowSize) return 0;
+  const windows = Math.max(1, Math.ceil(totalPosts / windowSize));
+  const minuteBucket = Math.floor(Date.now() / 60000);
+  const seed = String(connectionId || "").split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return ((minuteBucket + seed) % windows) * windowSize;
+}
+
 async function fetchGraphWithFallback(urlWithoutToken: string, tokens: string[]) {
   const uniqueTokens = [...new Set(tokens.filter(Boolean))];
   let lastError = "";
