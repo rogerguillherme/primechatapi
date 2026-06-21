@@ -28,8 +28,16 @@ Deno.serve(async (req) => {
     const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
     const apiKey = req.headers.get("apikey") || "";
     const isCron = body.cron === true;
-    const maxPosts = isCron ? 50 : Math.min(Math.max(Number(body.max_posts ?? 25), 1), 50);
-    const maxComments = isCron ? 100 : Math.min(Math.max(Number(body.max_comments_per_post ?? 50), 1), 100);
+    const defaultMaxPosts = isCron ? 50 : 25;
+    const defaultMaxComments = isCron ? 25 : 50;
+    const requestedMaxPosts = Number(body.max_posts ?? defaultMaxPosts);
+    const requestedMaxComments = Number(body.max_comments_per_post ?? defaultMaxComments);
+    const maxPosts = Math.min(Math.max(Number.isFinite(requestedMaxPosts) ? requestedMaxPosts : defaultMaxPosts, 1), 50);
+    const maxComments = Math.min(Math.max(Number.isFinite(requestedMaxComments) ? requestedMaxComments : defaultMaxComments, 1), isCron ? 50 : 100);
+    const requestedScanPostLimit = Number(body.scan_post_limit ?? (isCron ? 50 : maxPosts));
+    const requestedPostOffset = Number(body.post_offset);
+    const scanPostLimit = Math.min(Math.max(Number.isFinite(requestedScanPostLimit) ? requestedScanPostLimit : maxPosts, maxPosts), 50);
+    const postOffset = Number.isFinite(requestedPostOffset) ? Math.max(0, Math.floor(requestedPostOffset)) : null;
 
     let connections: any[] = [];
 
@@ -65,7 +73,7 @@ Deno.serve(async (req) => {
 
     const perConnection = [];
     for (const connection of connections) {
-      perConnection.push(await processConnection(admin, connection, maxPosts, maxComments));
+      perConnection.push(await processConnection(admin, connection, maxPosts, maxComments, { isCron, scanPostLimit, postOffset }));
     }
 
     return json({
@@ -84,7 +92,7 @@ Deno.serve(async (req) => {
   }
 });
 
-async function processConnection(admin: any, connection: any, maxPosts: number, maxComments: number) {
+async function processConnection(admin: any, connection: any, maxPosts: number, maxComments: number, options: { isCron?: boolean; scanPostLimit?: number; postOffset?: number | null } = {}) {
   let pageToken = connection.access_token;
   if (connection.page_id) {
     try {
@@ -112,26 +120,28 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
     return emptyConnectionResult(connection, "Nenhuma automação ativa");
   }
 
+  const mediaLimit = Math.max(maxPosts, options.scanPostLimit || maxPosts);
   const mediaData = await fetchGraphWithFallback(
-    `${GRAPH}/${connection.instagram_user_id}/media?fields=id,caption,timestamp&limit=${maxPosts}`,
+    `${GRAPH}/${connection.instagram_user_id}/media?fields=id,caption,timestamp&limit=${mediaLimit}`,
     [pageToken, connection.access_token]
   );
   if (!mediaData.ok) {
     return { ...emptyConnectionResult(connection, mediaData.error || "Erro ao listar posts"), error: mediaData.error };
   }
 
-  const mediaList = mediaData.data?.data || [];
+  const allMediaList = mediaData.data?.data || [];
+  const resolvedOffset = options.postOffset ?? (options.isCron ? getCronPostOffset(connection.id, allMediaList.length, maxPosts) : 0);
+  const mediaList = allMediaList.slice(resolvedOffset, resolvedOffset + maxPosts);
   let totalScanned = 0;
   let totalMatched = 0;
   let totalSkippedAlreadyReplied = 0;
   let totalSkippedAlreadyProcessed = 0;
   const results: any[] = [];
 
+  const commentsByMedia = await fetchCommentsForMedia(mediaList, pageToken, connection.access_token, maxComments);
+
   for (const media of mediaList) {
-    const commentsData = await fetchGraphWithFallback(
-      `${GRAPH}/${media.id}/comments?fields=id,text,username,timestamp,user{id,username},replies{id,username,text,timestamp,user{id,username}}&order=reverse_chronological&limit=${maxComments}`,
-      [pageToken, connection.access_token]
-    );
+    const commentsData = commentsByMedia.get(media.id) || { ok: false, error: "Comentários não retornados" };
     if (!commentsData.ok) {
       results.push({ media_id: media.id, ok: false, error: commentsData.error || "Erro ao listar comentários" });
       continue;
@@ -251,6 +261,14 @@ function automationMatches(automation: any, lowerText: string) {
   return false;
 }
 
+function getCronPostOffset(connectionId: string, totalPosts: number, windowSize: number) {
+  if (totalPosts <= windowSize) return 0;
+  const windows = Math.max(1, Math.ceil(totalPosts / windowSize));
+  const minuteBucket = Math.floor(Date.now() / 60000);
+  const seed = String(connectionId || "").split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return ((minuteBucket + seed) % windows) * windowSize;
+}
+
 async function fetchGraphWithFallback(urlWithoutToken: string, tokens: string[]) {
   const uniqueTokens = [...new Set(tokens.filter(Boolean))];
   let lastError = "";
@@ -265,6 +283,44 @@ async function fetchGraphWithFallback(urlWithoutToken: string, tokens: string[])
     }
   }
   return { ok: false, error: lastError };
+}
+
+async function fetchCommentsForMedia(mediaList: any[], pageToken: string, fallbackToken: string, maxComments: number) {
+  const results = new Map<string, any>();
+  const tokens = [...new Set([pageToken, fallbackToken].filter(Boolean))];
+  const fields = `comments.order(reverse_chronological).limit(${maxComments}){id,text,username,timestamp,user{id,username},replies{id,username,text,timestamp,user{id,username}}}`;
+
+  for (let i = 0; i < mediaList.length; i += 10) {
+    const chunk = mediaList.slice(i, i + 10);
+    const ids = chunk.map((media) => media.id).filter(Boolean).join(",");
+    if (!ids) continue;
+
+    let chunkOk = false;
+    let lastError = "";
+    for (const token of tokens) {
+      try {
+        const res = await fetch(`${GRAPH}/?ids=${encodeURIComponent(ids)}&fields=${encodeURIComponent(fields)}&access_token=${encodeURIComponent(token)}`);
+        const data = await res.json();
+        if (!res.ok) {
+          lastError = data?.error?.message || JSON.stringify(data);
+          continue;
+        }
+        for (const media of chunk) {
+          results.set(media.id, { ok: true, data: { data: data?.[media.id]?.comments?.data || [] } });
+        }
+        chunkOk = true;
+        break;
+      } catch (e) {
+        lastError = (e as Error).message;
+      }
+    }
+
+    if (!chunkOk) {
+      for (const media of chunk) results.set(media.id, { ok: false, error: lastError || "Erro ao listar comentários" });
+    }
+  }
+
+  return results;
 }
 
 async function ensureWebhookSubscriptions(conn: any) {
