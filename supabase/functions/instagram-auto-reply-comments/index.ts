@@ -34,9 +34,9 @@ Deno.serve(async (req) => {
     const requestedMaxComments = Number(body.max_comments_per_post ?? defaultMaxComments);
     const maxPosts = Math.min(Math.max(Number.isFinite(requestedMaxPosts) ? requestedMaxPosts : defaultMaxPosts, 1), 100);
     const maxComments = Math.min(Math.max(Number.isFinite(requestedMaxComments) ? requestedMaxComments : defaultMaxComments, 1), isCron ? 50 : 100);
-    const requestedScanPostLimit = Number(body.scan_post_limit ?? (isCron ? 100 : maxPosts));
+    const requestedScanPostLimit = Number(body.scan_post_limit ?? (isCron ? 300 : maxPosts));
     const requestedPostOffset = Number(body.post_offset);
-    const scanPostLimit = Math.min(Math.max(Number.isFinite(requestedScanPostLimit) ? requestedScanPostLimit : maxPosts, maxPosts), 100);
+    const scanPostLimit = Math.min(Math.max(Number.isFinite(requestedScanPostLimit) ? requestedScanPostLimit : maxPosts, maxPosts), 500);
     const postOffset = Number.isFinite(requestedPostOffset) ? Math.max(0, Math.floor(requestedPostOffset)) : null;
     const requestedCommentPageLimit = Number(body.comment_page_limit ?? (isCron ? 3 : 5));
     const commentPageLimit = Math.min(Math.max(Number.isFinite(requestedCommentPageLimit) ? requestedCommentPageLimit : 1, 1), 10);
@@ -126,10 +126,7 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
   }
 
   const mediaLimit = Math.max(maxPosts, options.scanPostLimit || maxPosts);
-  const mediaData = await fetchGraphWithFallback(
-    `${GRAPH}/${connection.instagram_user_id}/media?fields=id,caption,timestamp,comments_count&limit=${mediaLimit}`,
-    [pageToken, connection.access_token]
-  );
+  const mediaData = await fetchMediaWithPaging(connection.instagram_user_id, [pageToken, connection.access_token], mediaLimit);
   if (!mediaData.ok) {
     return { ...emptyConnectionResult(connection, mediaData.error || "Erro ao listar posts"), error: mediaData.error };
   }
