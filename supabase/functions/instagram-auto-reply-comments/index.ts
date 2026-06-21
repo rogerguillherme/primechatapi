@@ -276,6 +276,16 @@ function getCronPostOffset(connectionId: string, totalPosts: number, windowSize:
   return ((minuteBucket + seed) % windows) * windowSize;
 }
 
+function uniqueById(items: any[]) {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const id = String(item?.id || "");
+    if (!id || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
 async function fetchGraphWithFallback(urlWithoutToken: string, tokens: string[]) {
   const uniqueTokens = [...new Set(tokens.filter(Boolean))];
   let lastError = "";
