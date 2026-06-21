@@ -28,8 +28,12 @@ Deno.serve(async (req) => {
     const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
     const apiKey = req.headers.get("apikey") || "";
     const isCron = body.cron === true;
-    const maxPosts = isCron ? 50 : Math.min(Math.max(Number(body.max_posts ?? 25), 1), 50);
-    const maxComments = isCron ? 100 : Math.min(Math.max(Number(body.max_comments_per_post ?? 50), 1), 100);
+    const defaultMaxPosts = isCron ? 10 : 25;
+    const defaultMaxComments = isCron ? 25 : 50;
+    const requestedMaxPosts = Number(body.max_posts ?? defaultMaxPosts);
+    const requestedMaxComments = Number(body.max_comments_per_post ?? defaultMaxComments);
+    const maxPosts = Math.min(Math.max(Number.isFinite(requestedMaxPosts) ? requestedMaxPosts : defaultMaxPosts, 1), isCron ? 25 : 50);
+    const maxComments = Math.min(Math.max(Number.isFinite(requestedMaxComments) ? requestedMaxComments : defaultMaxComments, 1), isCron ? 50 : 100);
 
     let connections: any[] = [];
 
