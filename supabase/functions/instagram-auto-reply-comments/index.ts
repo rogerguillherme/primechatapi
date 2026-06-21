@@ -34,6 +34,10 @@ Deno.serve(async (req) => {
     const requestedMaxComments = Number(body.max_comments_per_post ?? defaultMaxComments);
     const maxPosts = Math.min(Math.max(Number.isFinite(requestedMaxPosts) ? requestedMaxPosts : defaultMaxPosts, 1), 50);
     const maxComments = Math.min(Math.max(Number.isFinite(requestedMaxComments) ? requestedMaxComments : defaultMaxComments, 1), isCron ? 50 : 100);
+    const requestedScanPostLimit = Number(body.scan_post_limit ?? (isCron ? 50 : maxPosts));
+    const requestedPostOffset = Number(body.post_offset);
+    const scanPostLimit = Math.min(Math.max(Number.isFinite(requestedScanPostLimit) ? requestedScanPostLimit : maxPosts, maxPosts), 50);
+    const postOffset = Number.isFinite(requestedPostOffset) ? Math.max(0, Math.floor(requestedPostOffset)) : null;
 
     let connections: any[] = [];
 
@@ -69,7 +73,7 @@ Deno.serve(async (req) => {
 
     const perConnection = [];
     for (const connection of connections) {
-      perConnection.push(await processConnection(admin, connection, maxPosts, maxComments));
+      perConnection.push(await processConnection(admin, connection, maxPosts, maxComments, { isCron, scanPostLimit, postOffset }));
     }
 
     return json({
