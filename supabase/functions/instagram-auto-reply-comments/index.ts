@@ -340,7 +340,7 @@ async function fetchMediaWithPaging(igUserId: string, tokens: string[], limit: n
 async function fetchCommentsForMedia(mediaList: any[], pageToken: string, fallbackToken: string, maxComments: number, pageLimit = 1) {
   const results = new Map<string, any>();
   const tokens = [...new Set([pageToken, fallbackToken].filter(Boolean))];
-  const fields = `comments.order(reverse_chronological).limit(${maxComments}){id,text,username,timestamp,user{id,username},replies{id,username,text,timestamp,user{id,username}}}`;
+  const fields = `comments.order(reverse_chronological).limit(${maxComments}){id,text,username,timestamp,user{id,username},replies_count,replies.limit(${maxComments}){id,username,text,timestamp,user{id,username}}}`;
 
   for (let i = 0; i < mediaList.length; i += 10) {
     const chunk = mediaList.slice(i, i + 10);
@@ -383,6 +383,24 @@ async function fetchCommentsForMedia(mediaList: any[], pageToken: string, fallba
   }
 
   return results;
+}
+
+async function fetchRepliesForComment(commentId: string, tokens: string[], maxReplies: number, pageLimit = 1) {
+  const replies: any[] = [];
+  for (const token of [...new Set(tokens.filter(Boolean))]) {
+    try {
+      let nextUrl: string | null = `${GRAPH}/${commentId}/replies?fields=id,username,text,timestamp,user{id,username}&limit=${maxReplies}&access_token=${encodeURIComponent(token)}`;
+      for (let page = 0; nextUrl && page < pageLimit; page++) {
+        const res = await fetch(nextUrl);
+        const data = await res.json();
+        if (!res.ok) break;
+        replies.push(...(data.data || []));
+        nextUrl = data.paging?.next || null;
+      }
+      if (replies.length > 0) break;
+    } catch { /* try next token */ }
+  }
+  return replies;
 }
 
 async function ensureWebhookSubscriptions(conn: any) {
