@@ -94,7 +94,7 @@ Deno.serve(async (req) => {
   }
 });
 
-async function processConnection(admin: any, connection: any, maxPosts: number, maxComments: number, options: { isCron?: boolean; scanPostLimit?: number; postOffset?: number | null } = {}) {
+async function processConnection(admin: any, connection: any, maxPosts: number, maxComments: number, options: { isCron?: boolean; scanPostLimit?: number; postOffset?: number | null; commentPageLimit?: number } = {}) {
   let pageToken = connection.access_token;
   if (connection.page_id) {
     try {
@@ -140,7 +140,7 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
   let totalSkippedAlreadyProcessed = 0;
   const results: any[] = [];
 
-  const commentsByMedia = await fetchCommentsForMedia(mediaList, pageToken, connection.access_token, maxComments);
+  const commentsByMedia = await fetchCommentsForMedia(mediaList, pageToken, connection.access_token, maxComments, options.commentPageLimit || 1);
 
   for (const media of mediaList) {
     const commentsData = commentsByMedia.get(media.id) || { ok: false, error: "Comentários não retornados" };
