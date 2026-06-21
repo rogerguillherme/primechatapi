@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
   }
 });
 
-async function processConnection(admin: any, connection: any, maxPosts: number, maxComments: number, options: { isCron?: boolean; scanPostLimit?: number; postOffset?: number | null; commentPageLimit?: number; debugSearch?: string } = {}) {
+async function processConnection(admin: any, connection: any, maxPosts: number, maxComments: number, options: { isCron?: boolean; scanPostLimit?: number; postOffset?: number | null; commentPageLimit?: number; debugSearch?: string; debugOnly?: boolean } = {}) {
   let pageToken = connection.access_token;
   if (connection.page_id) {
     try {
@@ -180,6 +180,7 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
       if (options.debugSearch && (`${lower} ${String(username).toLowerCase()}`).includes(options.debugSearch)) {
         debugMatches.push({ media_id: media.id, comment_id: c.id, username, text, timestamp: c.timestamp });
       }
+      if (options.debugOnly) continue;
 
       for (const automation of automations) {
         if (!automationMatches(automation, lower)) continue;
