@@ -95,7 +95,7 @@ Deno.serve(async (req) => {
   }
 });
 
-async function processConnection(admin: any, connection: any, maxPosts: number, maxComments: number, options: { isCron?: boolean; scanPostLimit?: number; postOffset?: number | null; commentPageLimit?: number } = {}) {
+async function processConnection(admin: any, connection: any, maxPosts: number, maxComments: number, options: { isCron?: boolean; scanPostLimit?: number; postOffset?: number | null; commentPageLimit?: number; debugSearch?: string } = {}) {
   let pageToken = connection.access_token;
   if (connection.page_id) {
     try {
@@ -145,6 +145,7 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
   let totalSkippedAlreadyReplied = 0;
   let totalSkippedAlreadyProcessed = 0;
   const results: any[] = [];
+  const debugMatches: any[] = [];
 
   const commentsByMedia = await fetchCommentsForMedia(mediaList, pageToken, connection.access_token, maxComments, options.commentPageLimit || 1);
 
@@ -174,6 +175,9 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
 
       const lower = text.toLowerCase();
       const username = c.username || c.user?.username || "amigo(a)";
+      if (options.debugSearch && (`${lower} ${String(username).toLowerCase()}`).includes(options.debugSearch)) {
+        debugMatches.push({ media_id: media.id, comment_id: c.id, username, text, timestamp: c.timestamp });
+      }
 
       for (const automation of automations) {
         if (!automationMatches(automation, lower)) continue;
@@ -244,6 +248,7 @@ async function processConnection(admin: any, connection: any, maxPosts: number, 
     skippedAlreadyReplied: totalSkippedAlreadyReplied,
     postsChecked: mediaList.length,
     results,
+    debugMatches,
   };
 }
 
