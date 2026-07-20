@@ -92,7 +92,7 @@ async function adminFetch(action: string, method: string, body?: any) {
   }
 
   if (!res.ok || data?.success === false) {
-    if (res.status === 401) {
+    if (res.status === 401 || data?.code === "UNAUTHORIZED") {
       await expireLocalSession();
       throw new AdminFetchError("Sessão expirada. Faça login novamente.", 401);
     }
