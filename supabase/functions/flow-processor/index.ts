@@ -486,6 +486,24 @@ async function advanceToNextStep(
     .order("step_order");
 
   if (childSteps && childSteps.length > 0) {
+    if (currentStep.step_type === "cta_url" && childSteps.length === 1 && childSteps[0].step_type === "condition") {
+      const { data: conditionChildren } = await supabase
+        .from("flow_steps")
+        .select("*")
+        .eq("flow_id", exec.flow_id)
+        .eq("parent_step_id", childSteps[0].id)
+        .order("step_order");
+
+      if (conditionChildren && conditionChildren.length > 0) {
+        nextStep = conditionChildren[0];
+      } else {
+        await supabase.from("flow_executions").update({
+          status: "completed",
+          updated_at: new Date().toISOString(),
+        }).eq("id", exec.id);
+        return;
+      }
+    } else
     if (childSteps.length === 1) {
       nextStep = childSteps[0];
     } else {

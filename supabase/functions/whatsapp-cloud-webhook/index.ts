@@ -1297,6 +1297,23 @@ async function advanceExecution(execution: any, currentStep: any, lead: any, sup
     .order("step_order");
 
   if (childSteps && childSteps.length > 0) {
+    if (currentStep.step_type === "cta_url" && childSteps.length === 1 && childSteps[0].step_type === "condition") {
+      const { data: conditionChildren } = await supabase
+        .from("flow_steps")
+        .select("*")
+        .eq("flow_id", execution.flow_id)
+        .eq("parent_step_id", childSteps[0].id)
+        .order("step_order");
+
+      if (conditionChildren && conditionChildren.length > 0) {
+        await processFlowStep(conditionChildren[0], execution, lead, supabase, execution.metadata?.account_id || null);
+        return;
+      }
+
+      await supabase.from("flow_executions").update({ status: "completed" }).eq("id", execution.id);
+      return;
+    }
+
     if (childSteps.length === 1) {
       await processFlowStep(childSteps[0], execution, lead, supabase, execution.metadata?.account_id || null);
       return;

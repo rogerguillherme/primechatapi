@@ -6,6 +6,98 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+async function configureAppWebhookSubscription(supabaseUrl: string, verifyToken: string) {
+  const metaAppId = Deno.env.get("META_APP_ID");
+  const metaAppSecret = Deno.env.get("META_APP_SECRET");
+
+  if (!metaAppId || !metaAppSecret) {
+    return { ok: false, skipped: true, reason: "META_APP_ID/META_APP_SECRET ausente" };
+  }
+
+  const params = new URLSearchParams();
+  params.set("object", "whatsapp_business_account");
+  params.set("callback_url", `${supabaseUrl}/functions/v1/whatsapp-cloud-webhook`);
+  params.set("fields", "messages");
+  params.set("verify_token", verifyToken);
+  params.set("include_values", "true");
+  params.set("access_token", `${metaAppId}|${metaAppSecret}`);
+
+  const appSubRes = await fetch(`https://graph.facebook.com/v21.0/${metaAppId}/subscriptions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: params.toString(),
+  });
+
+  const appSubText = await appSubRes.text();
+  let appSubData: any;
+  try { appSubData = JSON.parse(appSubText); } catch { appSubData = { raw: appSubText }; }
+
+  return {
+    ok: appSubRes.ok && !appSubData?.error,
+    status: appSubRes.status,
+    success: appSubData?.success ?? false,
+    error: appSubData?.error?.message,
+    details: appSubData?.error ? appSubData : undefined,
+  };
+}
+
+async function subscribeWabaToApp(
+  businessAccountId: string,
+  accessToken: string,
+  supabaseUrl: string,
+  verifyToken: string,
+) {
+  const subUrl = `https://graph.facebook.com/v21.0/${businessAccountId}/subscribed_apps`;
+
+  const withFields = new URLSearchParams();
+  withFields.set("override_callback_uri", `${supabaseUrl}/functions/v1/whatsapp-cloud-webhook`);
+  withFields.set("verify_token", verifyToken);
+  withFields.set("subscribed_fields", "messages");
+
+  let subRes = await fetch(subUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: withFields.toString(),
+  });
+
+  let subText = await subRes.text();
+  let subData: any;
+  try { subData = JSON.parse(subText); } catch { subData = { raw: subText }; }
+
+  if (subRes.ok && !subData?.error) {
+    return { ok: true, subscribed: subData?.success ?? true, used_fields_param: true, details: subData };
+  }
+
+  // Some Graph API versions ignore/deny subscribed_fields on WABA subscriptions.
+  // Retry with the canonical WABA call so the override callback still gets forced.
+  const fallback = new URLSearchParams();
+  fallback.set("override_callback_uri", `${supabaseUrl}/functions/v1/whatsapp-cloud-webhook`);
+  fallback.set("verify_token", verifyToken);
+
+  subRes = await fetch(subUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: fallback.toString(),
+  });
+
+  subText = await subRes.text();
+  try { subData = JSON.parse(subText); } catch { subData = { raw: subText }; }
+
+  return {
+    ok: subRes.ok && !subData?.error,
+    subscribed: subData?.success ?? true,
+    used_fields_param: false,
+    error: subData?.error?.message || (!subRes.ok ? `HTTP ${subRes.status}` : undefined),
+    details: subData,
+  };
+}
+
 /**
  * Subscribes the configured Meta App to the given WABA so we receive
  * `messages` webhook events (delivered/read/failed/inbound).
@@ -35,6 +127,11 @@ Deno.serve(async (req) => {
     }
 
     const { account_id } = await req.json().catch(() => ({}));
+    const verifyToken = Deno.env.get("WHATSAPP_VERIFY_TOKEN") || "prime_chat_verify_2026";
+    const appSubscription = await configureAppWebhookSubscription(supabaseUrl, verifyToken).catch((e: any) => ({
+      ok: false,
+      error: e?.message || String(e),
+    }));
 
     const { data: isAdmin } = await adminClient.rpc("has_role", {
       _user_id: user.id,
@@ -73,30 +170,21 @@ Deno.serve(async (req) => {
         // 1) Subscribe app to WABA  → receive webhook events.
         // Always force the callback override; otherwise Meta may keep or restore
         // the app-level default URL and button replies never reach this webhook.
-        const subUrl = `https://graph.facebook.com/v21.0/${acc.business_account_id}/subscribed_apps`;
-        const params = new URLSearchParams();
-        params.set("override_callback_uri", `${supabaseUrl}/functions/v1/whatsapp-cloud-webhook`);
-        params.set("verify_token", Deno.env.get("WHATSAPP_VERIFY_TOKEN") || "prime_chat_verify_2026");
+        const wabaSubscription = await subscribeWabaToApp(
+          acc.business_account_id,
+          acc.access_token,
+          supabaseUrl,
+          verifyToken,
+        );
 
-        const subRes = await fetch(subUrl, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${acc.access_token}`,
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: params.toString(),
-        });
-        const subText = await subRes.text();
-        let subData: any;
-        try { subData = JSON.parse(subText); } catch { subData = { raw: subText }; }
-
-        if (!subRes.ok || subData?.error) {
+        if (!wabaSubscription.ok) {
           results.push({
             account_id: acc.id,
             name: acc.name,
             ok: false,
-            error: subData?.error?.message || `HTTP ${subRes.status}`,
-            details: subData,
+            app_subscription: appSubscription,
+            error: wabaSubscription.error || "Falha ao assinar WABA",
+            details: wabaSubscription.details,
           });
           continue;
         }
@@ -108,7 +196,9 @@ Deno.serve(async (req) => {
             webhook_subscribed: true,
             webhook_subscribed_at: new Date().toISOString(),
             webhook_last_check_at: new Date().toISOString(),
-            webhook_last_status: "success (override_callback_uri)"
+            webhook_last_status: appSubscription.ok
+              ? "success (app messages + override_callback_uri)"
+              : `success override; app messages warning: ${appSubscription.error || appSubscription.reason || "unknown"}`
           })
           .eq("id", acc.id);
 
@@ -116,7 +206,9 @@ Deno.serve(async (req) => {
           account_id: acc.id,
           name: acc.name,
           ok: !updateErr,
-          subscribed: subData?.success ?? true,
+          subscribed: wabaSubscription.subscribed,
+          app_subscription: appSubscription,
+          used_fields_param: wabaSubscription.used_fields_param,
           db_updated: !updateErr,
           update_error: updateErr?.message,
         });
