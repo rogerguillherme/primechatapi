@@ -2004,6 +2004,7 @@ export type Database = {
           account_id: string | null
           created_at: string
           event_type: string
+          field_mapping: Json
           id: string
           is_active: boolean
           updated_at: string
@@ -2014,6 +2015,7 @@ export type Database = {
           account_id?: string | null
           created_at?: string
           event_type: string
+          field_mapping?: Json
           id?: string
           is_active?: boolean
           updated_at?: string
@@ -2024,6 +2026,7 @@ export type Database = {
           account_id?: string | null
           created_at?: string
           event_type?: string
+          field_mapping?: Json
           id?: string
           is_active?: boolean
           updated_at?: string
