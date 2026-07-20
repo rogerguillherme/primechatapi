@@ -1297,7 +1297,11 @@ async function advanceExecution(execution: any, currentStep: any, lead: any, sup
     .order("step_order");
 
   if (childSteps && childSteps.length > 0) {
-    if (currentStep.step_type === "cta_url" && childSteps.length === 1 && childSteps[0].step_type === "condition") {
+    if (
+      (currentStep.step_type === "cta_url" || (currentStep.step_type === "message" && currentStep.template_id)) &&
+      childSteps.length === 1 &&
+      childSteps[0].step_type === "condition"
+    ) {
       const { data: conditionChildren } = await supabase
         .from("flow_steps")
         .select("*")
