@@ -250,7 +250,16 @@ export default function AdminUsers() {
             </div>
             <div className="space-y-1.5">
               <Label>Senha {editingUser && <span className="text-muted-foreground">(deixe vazio para manter)</span>}</Label>
-              <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder={editingUser ? "••••••••" : "Mínimo 6 caracteres"} minLength={editingUser ? 0 : 6} required={!editingUser} />
+              <Input
+                type="password"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                placeholder={editingUser ? "Mínimo 6 caracteres para alterar" : "Mínimo 6 caracteres"}
+                required={!editingUser}
+              />
+              {editingUser && form.password && form.password.length < 6 && (
+                <p className="text-xs text-destructive">A senha precisa ter no mínimo 6 caracteres</p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>Cargo</Label>
