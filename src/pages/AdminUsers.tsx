@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Shield, User, Loader2, ArrowLeft } from "lucide-react";
+import { Plus, Pencil, Trash2, Shield, User, Loader2, ArrowLeft, RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 interface AppUser {
@@ -23,9 +23,52 @@ interface AppUser {
   role: string;
 }
 
+class AdminFetchError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "AdminFetchError";
+    this.status = status;
+  }
+}
+
+const PASSWORD_HELPER_TEXT = "Use 10+ caracteres com maiúscula, minúscula, número e símbolo.";
+
+function getPasswordValidationError(password: string, required: boolean) {
+  const value = password.trim();
+
+  if (!value) {
+    return required ? "Senha é obrigatória para novos usuários" : null;
+  }
+
+  if (value.length < 10) return "A senha precisa ter no mínimo 10 caracteres";
+  if (!/[a-z]/.test(value)) return "Inclua pelo menos uma letra minúscula";
+  if (!/[A-Z]/.test(value)) return "Inclua pelo menos uma letra maiúscula";
+  if (!/\d/.test(value)) return "Inclua pelo menos um número";
+  if (!/[^A-Za-z0-9]/.test(value)) return "Inclua pelo menos um símbolo";
+
+  return null;
+}
+
+async function expireLocalSession() {
+  await supabase.auth.signOut({ scope: "local" });
+  const redirectTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  window.location.assign(`/auth?redirect=${encodeURIComponent(redirectTo)}`);
+}
+
 async function adminFetch(action: string, method: string, body?: any) {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error("Não autenticado");
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || !session) {
+    await expireLocalSession();
+    throw new AdminFetchError("Sessão expirada. Faça login novamente.", 401);
+  }
+
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) {
+    await expireLocalSession();
+    throw new AdminFetchError("Sessão expirada. Faça login novamente.", 401);
+  }
 
   const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
   const res = await fetch(
@@ -39,8 +82,24 @@ async function adminFetch(action: string, method: string, body?: any) {
       ...(body ? { body: JSON.stringify(body) } : {}),
     }
   );
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || "Erro desconhecido");
+  const responseText = await res.text();
+  let data: any = {};
+
+  try {
+    data = responseText ? JSON.parse(responseText) : {};
+  } catch {
+    data = { error: responseText || "Erro desconhecido" };
+  }
+
+  if (!res.ok || data?.success === false) {
+    if (res.status === 401) {
+      await expireLocalSession();
+      throw new AdminFetchError("Sessão expirada. Faça login novamente.", 401);
+    }
+
+    throw new AdminFetchError(data?.error || "Erro desconhecido", res.status);
+  }
+
   return data;
 }
 
@@ -54,10 +113,12 @@ export default function AdminUsers() {
 
   const isSuperAdmin = user?.email === "admin@primechat.com";
 
-  const { data: users = [], isLoading } = useQuery<AppUser[]>({
+  const { data: users = [], isLoading, isError, error: usersError } = useQuery<AppUser[], Error>({
     queryKey: ["admin-users"],
     queryFn: () => adminFetch("list", "GET"),
     enabled: isSuperAdmin,
+    retry: false,
+    throwOnError: false,
   });
 
   const createMutation = useMutation({
@@ -109,28 +170,30 @@ export default function AdminUsers() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const passwordError = getPasswordValidationError(form.password, !editingUser);
+
+    if (passwordError) {
+      toast.error(passwordError);
+      return;
+    }
+
+    const normalizedPassword = form.password.trim();
+
     if (editingUser) {
-      if (form.password && form.password.length < 6) {
-        toast.error("A senha precisa ter no mínimo 6 caracteres");
-        return;
-      }
       updateMutation.mutate({
         user_id: editingUser.id,
         email: form.email !== editingUser.email ? form.email : undefined,
-        password: form.password ? form.password : undefined,
+        password: normalizedPassword ? normalizedPassword : undefined,
         display_name: form.display_name,
         role: form.role,
       });
     } else {
-      if (!form.password) {
-        toast.error("Senha é obrigatória para novos usuários");
-        return;
-      }
-      createMutation.mutate(form);
+      createMutation.mutate({ ...form, password: normalizedPassword });
     }
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
+  const passwordValidationMessage = getPasswordValidationError(form.password, !editingUser);
 
   if (!isSuperAdmin) {
     return (
@@ -169,6 +232,17 @@ export default function AdminUsers() {
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : isError ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-12 px-4 text-center">
+              <Shield size={36} className="text-muted-foreground" />
+              <div className="space-y-1">
+                <p className="font-medium">Não foi possível carregar os usuários</p>
+                <p className="text-sm text-muted-foreground">{usersError?.message || "Tente novamente em instantes."}</p>
+              </div>
+              <Button variant="outline" onClick={() => queryClient.invalidateQueries({ queryKey: ["admin-users"] })}>
+                <RefreshCw size={16} className="mr-2" /> Tentar novamente
+              </Button>
             </div>
           ) : (
             <Table>
@@ -258,11 +332,12 @@ export default function AdminUsers() {
                 type="password"
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
-                placeholder={editingUser ? "Mínimo 6 caracteres para alterar" : "Mínimo 6 caracteres"}
+                placeholder={editingUser ? "Digite apenas se quiser alterar" : "Senha forte obrigatória"}
                 required={!editingUser}
               />
-              {editingUser && form.password && form.password.length < 6 && (
-                <p className="text-xs text-destructive">A senha precisa ter no mínimo 6 caracteres</p>
+              <p className="text-xs text-muted-foreground">{PASSWORD_HELPER_TEXT}</p>
+              {form.password && passwordValidationMessage && (
+                <p className="text-xs text-destructive">{passwordValidationMessage}</p>
               )}
             </div>
             <div className="space-y-1.5">

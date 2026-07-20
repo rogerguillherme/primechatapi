@@ -15,6 +15,10 @@ function jsonResponse(data: any, status = 200) {
   });
 }
 
+function validationResponse(message: string) {
+  return jsonResponse({ success: false, error: message }, 200);
+}
+
 function normalizeAdminAuthError(error: any) {
   const rawMessage = String(error?.message || "Erro desconhecido");
   const lowerMessage = rawMessage.toLowerCase();
@@ -103,6 +107,9 @@ serve(async (req) => {
       if (error) {
         console.error("Error creating user:", error.message);
         const normalized = normalizeAdminAuthError(error);
+        if (normalized.status === 400 || normalized.status === 422) {
+          return validationResponse(normalized.message);
+        }
         return jsonResponse({ error: normalized.message }, normalized.status);
       }
 
@@ -143,6 +150,9 @@ serve(async (req) => {
         if (error) {
           console.error("Error updating user:", error.message);
           const normalized = normalizeAdminAuthError(error);
+          if (normalized.status === 400 || normalized.status === 422) {
+            return validationResponse(normalized.message);
+          }
           return jsonResponse({ error: normalized.message }, normalized.status);
         }
       }
