@@ -24,7 +24,38 @@ function normalizePhone(raw: string | null): string | null {
   return digits || null;
 }
 
-function extractLead(payload: any): { phone: string | null; name: string | null; email: string | null; cpf: string | null; orderId: string | null; amount: number | null; productName: string | null; } {
+type FieldMapping = Partial<Record<"phone" | "name" | "email" | "cpf" | "order_id" | "amount" | "product_name", string>>;
+
+function normalizePath(path: unknown): string | null {
+  if (typeof path !== "string") return null;
+  const clean = path.trim().replace(/\[(\d+)\]/g, ".$1");
+  return clean || null;
+}
+
+function getByPath(obj: any, path: unknown): any {
+  const clean = normalizePath(path);
+  if (!clean) return undefined;
+  return clean.split(".").reduce((acc, part) => {
+    if (acc == null) return undefined;
+    return acc[part];
+  }, obj);
+}
+
+function parseAmount(raw: any, path?: string | null): number | null {
+  if (raw == null || raw === "") return null;
+  const numeric = typeof raw === "number"
+    ? raw
+    : Number(String(raw).replace(/[^\d,.-]/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", "."));
+  if (!Number.isFinite(numeric) || numeric <= 0) return null;
+  const lowerPath = (path || "").toLowerCase();
+  return lowerPath.includes("cent") || lowerPath.includes("cents") ? numeric / 100 : numeric;
+}
+
+function mapped(mapping: FieldMapping | null | undefined, key: keyof FieldMapping, payload: any): any {
+  return getByPath(payload, mapping?.[key]);
+}
+
+function extractLead(payload: any, fieldMapping: FieldMapping = {}): { phone: string | null; name: string | null; email: string | null; cpf: string | null; orderId: string | null; amount: number | null; productName: string | null; } {
   const p = payload || {};
   const data = p.data || {};
   const client = data.client || {};
@@ -37,24 +68,29 @@ function extractLead(payload: any): { phone: string | null; name: string | null;
   const offer = data.offer || {};
   const product = offer.product || data.product || p.product || {};
 
+  const mappedAmountPath = normalizePath(fieldMapping.amount);
+  const mappedAmount = parseAmount(mapped(fieldMapping, "amount", p), mappedAmountPath);
+
   const phone = normalizePhone(pickFirst(
+    mapped(fieldMapping, "phone", p),
     client.phone, user.phone, customer.phone, buyer.phone,
-    invoice?.customer?.phone, p.phone,
+    invoice?.customer?.phone, p.phone, p.telefone, p.celular, p.whatsapp,
   ));
 
   const name = pickFirst(
+    mapped(fieldMapping, "name", p),
     client.full_name,
     [client.first_name, client.last_name].filter(Boolean).join(" ").trim() || null,
     user.firstName ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() : null,
-    customer.name, buyer.name, invoice?.customer?.name, p.name,
+    customer.name, buyer.name, invoice?.customer?.name, p.name, p.nome, p.full_name, p.nome_completo,
   );
 
-  const email = pickFirst(client.email, user.email, customer.email, buyer.email, invoice?.customer?.email, p.email);
-  const cpf = pickFirst(client.document, user.document, customer.document, buyer.document, p.cpf);
-  const orderId = pickFirst(tx.id, p.order_id, data.order_id, invoice?.id, p.id);
+  const email = pickFirst(mapped(fieldMapping, "email", p), client.email, user.email, customer.email, buyer.email, invoice?.customer?.email, p.email);
+  const cpf = pickFirst(mapped(fieldMapping, "cpf", p), client.document, user.document, customer.document, buyer.document, p.cpf, p.documento);
+  const orderId = pickFirst(mapped(fieldMapping, "order_id", p), tx.id, p.order_id, data.order_id, invoice?.id, p.id, p.pedido);
   const amountCents = Number(tx.amount ?? offer.amount ?? 0);
-  const amount = amountCents > 0 ? amountCents / 100 : null;
-  const productName = pickFirst(product.name, offer.name, p.product_name);
+  const amount = mappedAmount ?? (amountCents > 0 ? amountCents / 100 : parseAmount(p.amount ?? p.valor ?? p.total));
+  const productName = pickFirst(mapped(fieldMapping, "product_name", p), product.name, offer.name, p.product_name, p.produto);
 
   return { phone, name, email, cpf, orderId, amount, productName };
 }
@@ -287,7 +323,10 @@ Deno.serve(async (req) => {
     }
 
     // Extract lead info, upsert lead, trigger flow
-    const info = extractLead(payload);
+    const endpointMapping = (endpoint as any).field_mapping && typeof (endpoint as any).field_mapping === "object"
+      ? (endpoint as any).field_mapping as FieldMapping
+      : {};
+    const info = extractLead(payload, endpointMapping);
     let leadId: string | null = null;
     let flowsStarted = 0;
     try {
@@ -304,6 +343,9 @@ Deno.serve(async (req) => {
             order_id: info.orderId,
             amount: info.amount,
             product_name: info.productName,
+            name: info.name,
+            email: info.email,
+            cpf: info.cpf,
             source: "custom_webhook",
             // Lock outbound delivery to the WhatsApp account bound to this webhook
             account_id: (endpoint as any).account_id || undefined,
