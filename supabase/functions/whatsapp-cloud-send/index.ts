@@ -103,9 +103,19 @@ async function ensureWebhookSubscription(accessToken: string, businessAccountId?
   if (!businessAccountId || !accessToken) return;
 
   try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const verifyToken = Deno.env.get("WHATSAPP_VERIFY_TOKEN") || "prime_chat_verify_2026";
+    const params = new URLSearchParams();
+    params.set("override_callback_uri", `${supabaseUrl}/functions/v1/whatsapp-cloud-webhook`);
+    params.set("verify_token", verifyToken);
+
     const subRes = await fetch(`https://graph.facebook.com/v21.0/${businessAccountId}/subscribed_apps`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: params.toString(),
     });
 
     const subText = await subRes.text();
