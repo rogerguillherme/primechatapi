@@ -105,11 +105,36 @@ async function ensureWebhookSubscription(accessToken: string, businessAccountId?
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const verifyToken = Deno.env.get("WHATSAPP_VERIFY_TOKEN") || "prime_chat_verify_2026";
+    const metaAppId = Deno.env.get("META_APP_ID");
+    const metaAppSecret = Deno.env.get("META_APP_SECRET");
+
+    // Ensure the Meta app itself is subscribed to WABA `messages` events. If this
+    // app-level field is missing, WABA override succeeds but button replies never
+    // POST to our webhook.
+    if (metaAppId && metaAppSecret) {
+      const appParams = new URLSearchParams();
+      appParams.set("object", "whatsapp_business_account");
+      appParams.set("callback_url", `${supabaseUrl}/functions/v1/whatsapp-cloud-webhook`);
+      appParams.set("fields", "messages");
+      appParams.set("verify_token", verifyToken);
+      appParams.set("include_values", "true");
+      appParams.set("access_token", `${metaAppId}|${metaAppSecret}`);
+
+      const appSubRes = await fetch(`https://graph.facebook.com/v21.0/${metaAppId}/subscriptions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: appParams.toString(),
+      });
+      const appSubText = await appSubRes.text();
+      console.log("Meta app messages subscription check:", appSubRes.status, appSubText);
+    }
+
     const params = new URLSearchParams();
     params.set("override_callback_uri", `${supabaseUrl}/functions/v1/whatsapp-cloud-webhook`);
     params.set("verify_token", verifyToken);
+    params.set("subscribed_fields", "messages");
 
-    const subRes = await fetch(`https://graph.facebook.com/v21.0/${businessAccountId}/subscribed_apps`, {
+    let subRes = await fetch(`https://graph.facebook.com/v21.0/${businessAccountId}/subscribed_apps`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -118,8 +143,24 @@ async function ensureWebhookSubscription(accessToken: string, businessAccountId?
       body: params.toString(),
     });
 
-    const subText = await subRes.text();
+    let subText = await subRes.text();
     console.log("WABA subscription check:", subRes.status, subText);
+
+    if (!subRes.ok) {
+      const fallback = new URLSearchParams();
+      fallback.set("override_callback_uri", `${supabaseUrl}/functions/v1/whatsapp-cloud-webhook`);
+      fallback.set("verify_token", verifyToken);
+      subRes = await fetch(`https://graph.facebook.com/v21.0/${businessAccountId}/subscribed_apps`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: fallback.toString(),
+      });
+      subText = await subRes.text();
+      console.log("WABA subscription fallback check:", subRes.status, subText);
+    }
   } catch (error) {
     console.error("Failed to ensure WABA subscription:", error);
   }
