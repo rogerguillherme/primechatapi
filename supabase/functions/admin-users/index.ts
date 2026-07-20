@@ -183,7 +183,8 @@ serve(async (req) => {
 
     return jsonResponse({ error: "Ação inválida" }, 400);
   } catch (error) {
-    console.error("admin-users error:", error.message);
-    return jsonResponse({ error: error.message }, 500);
+    const message = error instanceof Error ? error.message : "Erro interno";
+    console.error("admin-users error:", message);
+    return jsonResponse({ error: message }, 500);
   }
 });
