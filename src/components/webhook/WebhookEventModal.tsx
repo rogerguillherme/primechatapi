@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -103,6 +103,43 @@ const ACTIONS: Record<string, { action: string; description: string }[]> = {
   ],
 };
 
+const FIELD_MAPPING_FIELDS = [
+  { key: "phone", label: "Telefone", required: true, placeholder: "customer.phone, telefone, phone" },
+  { key: "name", label: "Nome", required: false, placeholder: "customer.name, nome, name" },
+  { key: "email", label: "Email", required: false, placeholder: "customer.email, email" },
+  { key: "cpf", label: "CPF / Documento", required: false, placeholder: "customer.document, cpf, documento" },
+  { key: "order_id", label: "Pedido", required: false, placeholder: "order.id, pedido, id" },
+  { key: "amount", label: "Valor", required: false, placeholder: "order.amount, valor, totalCents" },
+  { key: "product_name", label: "Produto", required: false, placeholder: "order.product, produto, product.name" },
+] as const;
+
+type FieldMappingKey = typeof FIELD_MAPPING_FIELDS[number]["key"];
+type FieldMapping = Partial<Record<FieldMappingKey, string>>;
+
+function normalizeFieldMapping(value: unknown): FieldMapping {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const input = value as Record<string, unknown>;
+  return FIELD_MAPPING_FIELDS.reduce<FieldMapping>((acc, field) => {
+    const path = input[field.key];
+    if (typeof path === "string" && path.trim()) acc[field.key] = path.trim();
+    return acc;
+  }, {});
+}
+
+function extractPayloadPaths(value: unknown, prefix = "", depth = 0): string[] {
+  if (!value || typeof value !== "object" || depth > 4) return [];
+  if (Array.isArray(value)) {
+    return value[0] ? extractPayloadPaths(value[0], `${prefix}[0]`, depth + 1) : [];
+  }
+  return Object.entries(value as Record<string, unknown>).flatMap(([key, child]) => {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (child && typeof child === "object") {
+      return [path, ...extractPayloadPaths(child, path, depth + 1)];
+    }
+    return [path];
+  });
+}
+
 function getWebhookUrl(token: string) {
   const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
   return `https://${projectId}.supabase.co/functions/v1/custom-webhook/${token}`;
@@ -140,6 +177,8 @@ export function WebhookEventModal({ open, onOpenChange, eventType, endpoint }: W
   const Icon = meta?.icon || Link2;
   const [copied, setCopied] = useState(false);
   const [sendingTest, setSendingTest] = useState(false);
+  const [savingMapping, setSavingMapping] = useState(false);
+  const [fieldMapping, setFieldMapping] = useState<FieldMapping>({});
   const queryClient = useQueryClient();
 
   const webhookUrl = endpoint ? getWebhookUrl(endpoint.webhook_token) : "";
@@ -158,6 +197,18 @@ export function WebhookEventModal({ open, onOpenChange, eventType, endpoint }: W
     enabled: open && !!endpoint,
     refetchInterval: open ? 5000 : false,
   });
+
+  useEffect(() => {
+    setFieldMapping(normalizeFieldMapping(endpoint?.field_mapping));
+  }, [endpoint?.id, endpoint?.field_mapping]);
+
+  const payloadPathOptions = useMemo(() => {
+    const paths = new Set<string>();
+    (events || []).forEach((event: any) => {
+      extractPayloadPaths(event.payload).forEach((path) => paths.add(path));
+    });
+    return Array.from(paths).sort().slice(0, 120);
+  }, [events]);
 
   const copyUrl = () => {
     navigator.clipboard.writeText(webhookUrl);
@@ -184,6 +235,25 @@ export function WebhookEventModal({ open, onOpenChange, eventType, endpoint }: W
       toast.error(err.message || "Erro ao enviar teste");
     } finally {
       setSendingTest(false);
+    }
+  };
+
+  const handleSaveMapping = async () => {
+    if (!endpoint) return;
+    setSavingMapping(true);
+    try {
+      const cleaned = normalizeFieldMapping(fieldMapping);
+      const { error } = await supabase
+        .from("webhook_endpoints")
+        .update({ field_mapping: cleaned })
+        .eq("id", endpoint.id);
+      if (error) throw error;
+      toast.success("Mapeamento salvo");
+      queryClient.invalidateQueries({ queryKey: ["webhook-endpoints"] });
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao salvar mapeamento");
+    } finally {
+      setSavingMapping(false);
     }
   };
 
@@ -273,6 +343,53 @@ export function WebhookEventModal({ open, onOpenChange, eventType, endpoint }: W
 
               {/* Variables Tab */}
               <TabsContent value="variables" className="mt-0 space-y-4">
+                {endpoint && (
+                  <div className="space-y-3 rounded-lg border p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-semibold">Mapeamento de Parâmetros</h3>
+                        <p className="text-xs text-muted-foreground">Selecione o caminho do JSON que alimenta cada variável do lead e do fluxo.</p>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={handleSaveMapping}
+                        disabled={savingMapping}
+                        className="gap-2 text-xs"
+                      >
+                        {savingMapping ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                        Salvar
+                      </Button>
+                    </div>
+
+                    <datalist id={`payload-paths-${eventType}`}>
+                      {payloadPathOptions.map((path) => (
+                        <option key={path} value={path} />
+                      ))}
+                    </datalist>
+
+                    <div className="grid gap-2">
+                      {FIELD_MAPPING_FIELDS.map((field) => (
+                        <div key={field.key} className="grid gap-1.5 sm:grid-cols-[150px_1fr] sm:items-center">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium">{field.label}</span>
+                            {field.required && <Badge variant="default" className="text-[9px] px-1">Obrigatório</Badge>}
+                          </div>
+                          <Input
+                            value={fieldMapping[field.key] || ""}
+                            list={`payload-paths-${eventType}`}
+                            placeholder={field.placeholder}
+                            onChange={(event) => setFieldMapping((current) => ({
+                              ...current,
+                              [field.key]: event.target.value,
+                            }))}
+                            className="h-8 font-mono text-xs"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <h3 className="text-sm font-semibold mb-1">Campos do Payload</h3>
                   <p className="text-xs text-muted-foreground mb-3">Campos esperados no JSON do webhook para este evento.</p>

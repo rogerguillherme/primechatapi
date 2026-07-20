@@ -109,19 +109,29 @@ async function resolveMatchedFlowStep(
     return null;
   }
 
+  let anchorStep = currentStep;
+  if (currentStep.step_type === "no_response" && currentStep.parent_step_id) {
+    const { data: parentStep } = await supabase
+      .from("flow_steps")
+      .select("id, step_type, parent_step_id")
+      .eq("id", currentStep.parent_step_id)
+      .maybeSingle();
+    if (parentStep) anchorStep = parentStep;
+  }
+
   let branchSteps: any[] = [];
 
   const { data } = await supabase
     .from("flow_steps")
     .select("*")
     .eq("flow_id", flowId)
-    .eq("parent_step_id", currentStepId);
+    .eq("parent_step_id", anchorStep.id);
 
   branchSteps = data || [];
 
   // If the current step IS a condition and we found no children, 
   // it might be that the user is replying TO a condition step that is waiting.
-  if (branchSteps.length === 0 && currentStep.step_type === "condition") {
+  if (branchSteps.length === 0 && anchorStep.step_type === "condition") {
     // In some cases, we might want to check siblings if the flow structure is "flat" 
     // but here we follow the parent_step_id chain.
   }
@@ -131,7 +141,7 @@ async function resolveMatchedFlowStep(
 
   // Fallback: if we are at a condition step and it has exactly one child (that is NOT another condition),
   // treat it as the next step to execute if no specific trigger matches.
-  if (currentStep.step_type === "condition" && branchSteps.length === 1 && branchSteps[0].step_type !== "condition") {
+  if (anchorStep.step_type === "condition" && branchSteps.length === 1 && branchSteps[0].step_type !== "condition") {
     return branchSteps[0];
   }
 
@@ -519,6 +529,20 @@ Deno.serve(async (req) => {
       const messageId = msg.id || crypto.randomUUID();
       const timestamp = msg.timestamp ? new Date(parseInt(msg.timestamp) * 1000).toISOString() : new Date().toISOString();
 
+      console.log("WhatsApp inbound message summary:", JSON.stringify({
+        messageId,
+        type: msg.type,
+        from: rawPhone,
+        phoneNumberId: incomingPhoneNumberId || null,
+        accountId: resolvedAccountId,
+        userId: resolvedUserId,
+        interactiveType: msg.interactive?.type || null,
+        interactiveButtonId: msg.interactive?.button_reply?.id || msg.interactive?.list_reply?.id || null,
+        interactiveButtonTitle: msg.interactive?.button_reply?.title || msg.interactive?.list_reply?.title || null,
+        quickReplyPayload: msg.button?.payload || null,
+        quickReplyText: msg.button?.text || null,
+      }));
+
       // Get sender name from contacts
       const contact = value.contacts?.find((c: any) => c.wa_id === rawPhone);
       const senderName = contact?.profile?.name || `WhatsApp ${rawPhone}`;
@@ -887,11 +911,47 @@ Deno.serve(async (req) => {
           .from("flow_executions")
           .select("id, current_step_id, flow_id, metadata, lead_id, status, updated_at")
           .in("lead_id", leadIds)
-          .in("status", ["waiting_reply", "running"]);
+          .in("status", ["waiting_reply", "running", "waiting_no_response"]);
 
         const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
 
         const activeExecutions = executions || [];
+        console.log("Flow reply lookup:", JSON.stringify({
+          leadId: lead.id,
+          leadIds,
+          cleanPhone,
+          phoneVariants,
+          buttonPayload,
+          buttonTitle,
+          text: text ? text.slice(0, 120) : "",
+          accountId: resolvedAccountId,
+          executionCount: activeExecutions.length,
+          executions: activeExecutions.map((exec: any) => ({
+            id: exec.id,
+            status: exec.status,
+            flowId: exec.flow_id,
+            leadId: exec.lead_id,
+            currentStepId: exec.current_step_id,
+            updatedAt: exec.updated_at,
+          })),
+        }));
+
+        if (buttonPayload && activeExecutions.length === 0) {
+          const { data: recentExecutions } = await supabase
+            .from("flow_executions")
+            .select("id, status, current_step_id, flow_id, lead_id, updated_at")
+            .in("lead_id", leadIds)
+            .order("updated_at", { ascending: false })
+            .limit(5);
+          console.warn("Button reply received but no active execution was found:", JSON.stringify({
+            leadId: lead.id,
+            leadIds,
+            buttonPayload,
+            buttonTitle,
+            recentExecutions: recentExecutions || [],
+          }));
+        }
+
         if (activeExecutions.length > 0) {
           for (const exec of activeExecutions) {
             // If it's 'running', only consider it if it's stuck (updated > 5 mins ago)
