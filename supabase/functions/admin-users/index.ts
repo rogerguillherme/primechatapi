@@ -15,6 +15,30 @@ function jsonResponse(data: any, status = 200) {
   });
 }
 
+function normalizeAdminAuthError(error: any) {
+  const rawMessage = String(error?.message || "Erro desconhecido");
+  const lowerMessage = rawMessage.toLowerCase();
+
+  if (
+    lowerMessage.includes("weak") ||
+    lowerMessage.includes("easy to guess") ||
+    lowerMessage.includes("known to be") ||
+    lowerMessage.includes("pwned") ||
+    lowerMessage.includes("password should") ||
+    lowerMessage.includes("password must")
+  ) {
+    return {
+      status: 400,
+      message: "Senha muito fraca ou vazada. Use uma senha mais forte, com letras, números e símbolos.",
+    };
+  }
+
+  return {
+    status: error?.status && error.status >= 400 && error.status < 500 ? error.status : 500,
+    message: rawMessage,
+  };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -76,7 +100,11 @@ serve(async (req) => {
         email_confirm: true,
         user_metadata: { full_name: display_name },
       });
-      if (error) throw error;
+      if (error) {
+        console.error("Error creating user:", error.message);
+        const normalized = normalizeAdminAuthError(error);
+        return jsonResponse({ error: normalized.message }, normalized.status);
+      }
 
       if (role && data.user) {
         await supabaseAdmin.from("user_roles").upsert({
@@ -114,10 +142,8 @@ serve(async (req) => {
         const { error } = await supabaseAdmin.auth.admin.updateUserById(user_id, updateData);
         if (error) {
           console.error("Error updating user:", error.message);
-          const msg = /weak|pwned|known to be/i.test(error.message)
-            ? "Senha muito fraca ou vazada. Use uma senha mais forte (ex: letras, números e símbolos)."
-            : error.message;
-          return jsonResponse({ error: msg }, 400);
+          const normalized = normalizeAdminAuthError(error);
+          return jsonResponse({ error: normalized.message }, normalized.status);
         }
       }
 
