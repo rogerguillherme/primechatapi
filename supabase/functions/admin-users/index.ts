@@ -114,7 +114,10 @@ serve(async (req) => {
         const { error } = await supabaseAdmin.auth.admin.updateUserById(user_id, updateData);
         if (error) {
           console.error("Error updating user:", error.message);
-          throw error;
+          const msg = /weak|pwned|known to be/i.test(error.message)
+            ? "Senha muito fraca ou vazada. Use uma senha mais forte (ex: letras, números e símbolos)."
+            : error.message;
+          return jsonResponse({ error: msg }, 400);
         }
       }
 
