@@ -36,10 +36,15 @@ Deno.serve(async (req) => {
 
     const { account_id } = await req.json().catch(() => ({}));
 
+    const { data: isAdmin } = await adminClient.rpc("has_role", {
+      _user_id: user.id,
+      _role: "admin",
+    });
+
     let q = adminClient
       .from("whatsapp_accounts")
       .select("id, name, business_account_id, access_token, phone_number_id")
-      .eq("user_id", user.id);
+    if (!isAdmin) q = q.eq("user_id", user.id);
     if (account_id) q = q.eq("id", account_id);
 
     const { data: accounts, error: accErr } = await q;
