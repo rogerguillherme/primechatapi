@@ -292,13 +292,41 @@ Deno.serve(async (req) => {
       businessAccountId,
       provider,
       apiKey: D360_API_KEY,
+      webhookSubscribed,
+      webhookLastCheckAt,
     } = await getAccountCredentials(supabase, account_id);
 
     const isD360 = provider === "d360";
     const isEvolution = provider === "evolution";
 
     if (!isD360 && !isEvolution) {
-      await ensureWebhookSubscription(ACCESS_TOKEN, businessAccountId);
+      const accountSnapshot: AccountCredentials = {
+        accountId: resolvedAccountId,
+        phoneNumberId: PHONE_NUMBER_ID,
+        accessToken: ACCESS_TOKEN,
+        businessAccountId,
+        provider,
+        apiKey: D360_API_KEY,
+        webhookSubscribed,
+        webhookLastCheckAt,
+      };
+
+      if (shouldRefreshWebhookSubscription(accountSnapshot)) {
+        const subscriptionResult = await ensureWebhookSubscription(ACCESS_TOKEN || "", businessAccountId);
+        if (resolvedAccountId) {
+          await supabase
+            .from("whatsapp_accounts")
+            .update({
+              webhook_subscribed: subscriptionResult.ok ? true : webhookSubscribed,
+              webhook_subscribed_at: subscriptionResult.ok ? new Date().toISOString() : undefined,
+              webhook_last_check_at: new Date().toISOString(),
+              webhook_last_status: subscriptionResult.ok
+                ? "success (periodic refresh)"
+                : `warning refresh failed: ${subscriptionResult.error || subscriptionResult.appStatus || subscriptionResult.wabaStatus || "unknown"}`,
+            })
+            .eq("id", resolvedAccountId);
+        }
+      }
     }
 
     const cleanPhone = phone.replace(/\D/g, "");
