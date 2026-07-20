@@ -34,8 +34,40 @@ function withUniqueSignature(text: string | null | undefined): string {
   return (text ?? "").toString();
 }
 
-async function getAccountCredentials(supabase: any, accountId?: string) {
-  const baseSelect = "id, phone_number_id, access_token, business_account_id, provider, api_key";
+type AccountCredentials = {
+  accountId?: string;
+  phoneNumberId?: string | null;
+  accessToken?: string | null;
+  businessAccountId?: string | null;
+  provider: string;
+  apiKey?: string | null;
+  webhookSubscribed?: boolean | null;
+  webhookLastCheckAt?: string | null;
+};
+
+type WebhookEnsureResult = {
+  ok: boolean;
+  skipped?: boolean;
+  appStatus?: number;
+  wabaStatus?: number;
+  error?: string;
+};
+
+const WEBHOOK_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+function shouldRefreshWebhookSubscription(account: AccountCredentials): boolean {
+  if (!account.businessAccountId || !account.accessToken) return false;
+  if (account.webhookSubscribed !== true) return true;
+  if (!account.webhookLastCheckAt) return true;
+
+  const lastCheck = new Date(account.webhookLastCheckAt).getTime();
+  if (!Number.isFinite(lastCheck)) return true;
+
+  return Date.now() - lastCheck > WEBHOOK_REFRESH_INTERVAL_MS;
+}
+
+async function getAccountCredentials(supabase: any, accountId?: string): Promise<AccountCredentials> {
+  const baseSelect = "id, phone_number_id, access_token, business_account_id, provider, api_key, webhook_subscribed, webhook_last_check_at";
 
   if (accountId) {
     const { data, error } = await supabase
@@ -52,6 +84,8 @@ async function getAccountCredentials(supabase: any, accountId?: string) {
         businessAccountId: data.business_account_id,
         provider: (data.provider as string) || "meta_cloud",
         apiKey: data.api_key as string | null,
+        webhookSubscribed: data.webhook_subscribed as boolean | null,
+        webhookLastCheckAt: data.webhook_last_check_at as string | null,
       };
     }
   }
@@ -70,6 +104,8 @@ async function getAccountCredentials(supabase: any, accountId?: string) {
       businessAccountId: defaultAcc.business_account_id,
       provider: (defaultAcc.provider as string) || "meta_cloud",
       apiKey: defaultAcc.api_key as string | null,
+      webhookSubscribed: defaultAcc.webhook_subscribed as boolean | null,
+      webhookLastCheckAt: defaultAcc.webhook_last_check_at as string | null,
     };
   }
 
@@ -88,6 +124,8 @@ async function getAccountCredentials(supabase: any, accountId?: string) {
       businessAccountId: firstAcc.business_account_id,
       provider: (firstAcc.provider as string) || "meta_cloud",
       apiKey: firstAcc.api_key as string | null,
+      webhookSubscribed: firstAcc.webhook_subscribed as boolean | null,
+      webhookLastCheckAt: firstAcc.webhook_last_check_at as string | null,
     };
   }
 
@@ -99,8 +137,8 @@ async function getAccountCredentials(supabase: any, accountId?: string) {
   throw new Error("No WhatsApp account configured");
 }
 
-async function ensureWebhookSubscription(accessToken: string, businessAccountId?: string | null) {
-  if (!businessAccountId || !accessToken) return;
+async function ensureWebhookSubscription(accessToken: string, businessAccountId?: string | null): Promise<WebhookEnsureResult> {
+  if (!businessAccountId || !accessToken) return { ok: false, skipped: true, error: "missing credentials" };
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -127,6 +165,10 @@ async function ensureWebhookSubscription(accessToken: string, businessAccountId?
       });
       const appSubText = await appSubRes.text();
       console.log("Meta app messages subscription check:", appSubRes.status, appSubText);
+
+      if (!appSubRes.ok) {
+        return { ok: false, appStatus: appSubRes.status, error: appSubText };
+      }
     }
 
     const params = new URLSearchParams();
@@ -161,8 +203,15 @@ async function ensureWebhookSubscription(accessToken: string, businessAccountId?
       subText = await subRes.text();
       console.log("WABA subscription fallback check:", subRes.status, subText);
     }
+
+    if (!subRes.ok) {
+      return { ok: false, wabaStatus: subRes.status, error: subText };
+    }
+
+    return { ok: true, wabaStatus: subRes.status };
   } catch (error) {
     console.error("Failed to ensure WABA subscription:", error);
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
 }
 
