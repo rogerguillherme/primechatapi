@@ -15,6 +15,10 @@ function jsonResponse(data: any, status = 200) {
   });
 }
 
+function expectedErrorResponse(message: string, code = "VALIDATION_ERROR") {
+  return jsonResponse({ success: false, error: message, code }, 200);
+}
+
 function normalizeAdminAuthError(error: any) {
   const rawMessage = String(error?.message || "Erro desconhecido");
   const lowerMessage = rawMessage.toLowerCase();
@@ -51,7 +55,7 @@ serve(async (req) => {
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return jsonResponse({ error: "Não autorizado" }, 401);
+      return expectedErrorResponse("Não autorizado", "UNAUTHORIZED");
     }
 
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -60,7 +64,7 @@ serve(async (req) => {
     });
     const { data: { user: caller } } = await callerClient.auth.getUser();
     if (!caller) {
-      return jsonResponse({ error: "Não autorizado" }, 401);
+      return expectedErrorResponse("Não autorizado", "UNAUTHORIZED");
     }
 
     if (caller.email !== "admin@primechat.com") {
@@ -103,6 +107,9 @@ serve(async (req) => {
       if (error) {
         console.error("Error creating user:", error.message);
         const normalized = normalizeAdminAuthError(error);
+        if (normalized.status === 400 || normalized.status === 422) {
+          return expectedErrorResponse(normalized.message);
+        }
         return jsonResponse({ error: normalized.message }, normalized.status);
       }
 
@@ -143,6 +150,9 @@ serve(async (req) => {
         if (error) {
           console.error("Error updating user:", error.message);
           const normalized = normalizeAdminAuthError(error);
+          if (normalized.status === 400 || normalized.status === 422) {
+            return expectedErrorResponse(normalized.message);
+          }
           return jsonResponse({ error: normalized.message }, normalized.status);
         }
       }
