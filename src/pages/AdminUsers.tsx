@@ -110,10 +110,14 @@ export default function AdminUsers() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (editingUser) {
+      if (form.password && form.password.length < 6) {
+        toast.error("A senha precisa ter no mínimo 6 caracteres");
+        return;
+      }
       updateMutation.mutate({
         user_id: editingUser.id,
         email: form.email !== editingUser.email ? form.email : undefined,
-        password: form.password || undefined,
+        password: form.password ? form.password : undefined,
         display_name: form.display_name,
         role: form.role,
       });
@@ -250,7 +254,16 @@ export default function AdminUsers() {
             </div>
             <div className="space-y-1.5">
               <Label>Senha {editingUser && <span className="text-muted-foreground">(deixe vazio para manter)</span>}</Label>
-              <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder={editingUser ? "••••••••" : "Mínimo 6 caracteres"} minLength={editingUser ? 0 : 6} required={!editingUser} />
+              <Input
+                type="password"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                placeholder={editingUser ? "Mínimo 6 caracteres para alterar" : "Mínimo 6 caracteres"}
+                required={!editingUser}
+              />
+              {editingUser && form.password && form.password.length < 6 && (
+                <p className="text-xs text-destructive">A senha precisa ter no mínimo 6 caracteres</p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>Cargo</Label>
