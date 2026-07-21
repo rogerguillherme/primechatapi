@@ -22,6 +22,7 @@ interface AppUser {
   last_sign_in_at: string | null;
   display_name: string;
   role: string;
+  instagram_enabled: boolean;
 }
 
 class AdminFetchError extends Error {
@@ -110,9 +111,13 @@ export default function AdminUsers() {
   const { user } = useAuth();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
-  const [form, setForm] = useState({ email: "", password: "", display_name: "", role: "user" });
+  const [form, setForm] = useState({ email: "", password: "", display_name: "", role: "user", instagram_enabled: false });
 
   const isSuperAdmin = user?.email === "admin@primechat.com";
+
+  useEffect(() => {
+    if (user && !isSuperAdmin) navigate("/", { replace: true });
+  }, [user, isSuperAdmin, navigate]);
 
   const { data: users = [], isLoading, isError, error: usersError } = useQuery<AppUser[], Error>({
     queryKey: ["admin-users"],
@@ -154,18 +159,18 @@ export default function AdminUsers() {
   const closeDialog = () => {
     setDialogOpen(false);
     setEditingUser(null);
-    setForm({ email: "", password: "", display_name: "", role: "user" });
+    setForm({ email: "", password: "", display_name: "", role: "user", instagram_enabled: false });
   };
 
   const openCreate = () => {
     setEditingUser(null);
-    setForm({ email: "", password: "", display_name: "", role: "user" });
+    setForm({ email: "", password: "", display_name: "", role: "user", instagram_enabled: false });
     setDialogOpen(true);
   };
 
   const openEdit = (u: AppUser) => {
     setEditingUser(u);
-    setForm({ email: u.email, password: "", display_name: u.display_name, role: u.role });
+    setForm({ email: u.email, password: "", display_name: u.display_name, role: u.role, instagram_enabled: u.instagram_enabled });
     setDialogOpen(true);
   };
 
@@ -187,6 +192,7 @@ export default function AdminUsers() {
         password: normalizedPassword ? normalizedPassword : undefined,
         display_name: form.display_name,
         role: form.role,
+        instagram_enabled: form.instagram_enabled,
       });
     } else {
       createMutation.mutate({ ...form, password: normalizedPassword });
@@ -252,6 +258,7 @@ export default function AdminUsers() {
                   <TableHead>Nome</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Cargo</TableHead>
+                  <TableHead className="text-center">Instagram</TableHead>
                   <TableHead>Último acesso</TableHead>
                   <TableHead className="w-[100px]">Ações</TableHead>
                 </TableRow>
@@ -266,6 +273,12 @@ export default function AdminUsers() {
                         {u.role === "admin" ? <Shield size={12} /> : <User size={12} />}
                         {u.role === "admin" ? "Admin" : "Usuário"}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Switch
+                        checked={u.instagram_enabled}
+                        onCheckedChange={(v) => updateMutation.mutate({ user_id: u.id, instagram_enabled: v })}
+                      />
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {u.last_sign_in_at
@@ -299,7 +312,7 @@ export default function AdminUsers() {
                 ))}
                 {users.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                       Nenhum usuário encontrado
                     </TableCell>
                   </TableRow>
@@ -352,6 +365,19 @@ export default function AdminUsers() {
                   <SelectItem value="admin">Administrador</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div className="flex items-center gap-2">
+                <Instagram size={16} className="text-pink-500" />
+                <div>
+                  <p className="text-sm font-medium">Acesso ao Instagram</p>
+                  <p className="text-[11px] text-muted-foreground">Libera a plataforma Instagram para este usuário</p>
+                </div>
+              </div>
+              <Switch
+                checked={form.instagram_enabled}
+                onCheckedChange={(v) => setForm({ ...form, instagram_enabled: v })}
+              />
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={closeDialog}>Cancelar</Button>
