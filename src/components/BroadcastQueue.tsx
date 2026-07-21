@@ -516,7 +516,7 @@ function QueueItemCard({
         const batch = uniqueEntries.slice(i, i + BATCH);
         const { data: upserted, error } = await supabase
           .from("leads")
-          .upsert(batch, { onConflict: "phone,user_id", ignoreDuplicates: false })
+          .insert(batch)
           .select("id");
         if (error) {
           const phones55 = batch.map((b) => b.phone);

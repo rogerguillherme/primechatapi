@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS public.leads_phone_user_unique;
