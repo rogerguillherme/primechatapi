@@ -977,7 +977,7 @@ function BroadcastTab() {
           
           const { data: upserted, error: upsertErr } = await supabase
             .from("leads")
-            .upsert(upsertRows, { onConflict: "phone,user_id", ignoreDuplicates: false })
+            .insert(upsertRows)
             .select("id, phone");
           
           if (upsertErr) {
