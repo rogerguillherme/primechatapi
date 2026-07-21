@@ -487,7 +487,7 @@ async function advanceToNextStep(
 
   if (childSteps && childSteps.length > 0) {
     if (
-      (currentStep.step_type === "cta_url" || (currentStep.step_type === "message" && currentStep.template_id)) &&
+      currentStep.step_type === "cta_url" &&
       childSteps.length === 1 &&
       childSteps[0].step_type === "condition"
     ) {
@@ -499,7 +499,7 @@ async function advanceToNextStep(
         .order("step_order");
 
       if (conditionChildren && conditionChildren.length > 0) {
-        console.log("Bypassing virtual condition after non-webhook button:", childSteps[0].id, "next:", conditionChildren[0].id);
+        console.log("Bypassing virtual condition after CTA URL step:", childSteps[0].id, "next:", conditionChildren[0].id);
         nextStep = conditionChildren[0];
       } else {
         await supabase.from("flow_executions").update({

@@ -1298,7 +1298,7 @@ async function advanceExecution(execution: any, currentStep: any, lead: any, sup
 
   if (childSteps && childSteps.length > 0) {
     if (
-      (currentStep.step_type === "cta_url" || (currentStep.step_type === "message" && currentStep.template_id)) &&
+      currentStep.step_type === "cta_url" &&
       childSteps.length === 1 &&
       childSteps[0].step_type === "condition"
     ) {
