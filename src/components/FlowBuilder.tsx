@@ -831,7 +831,7 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
   if (!isLoaded) return <p className="text-sm text-muted-foreground text-center py-8">Carregando...</p>;
 
   return (
-    <div className="fixed inset-0 z-50 bg-background flex flex-col">
+    <div className="absolute inset-0 z-40 bg-background flex flex-col">
       {/* Header bar */}
       <div className="flex items-center gap-3 px-4 py-2 border-b border-border bg-background shrink-0">
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onBack}>
@@ -900,7 +900,7 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
 }
 
 /* ── Main FlowBuilder Component ── */
-export function FlowBuilder({ initialTriggerType, initialFlowId }: { initialTriggerType?: string; initialFlowId?: string }) {
+export function FlowBuilder({ initialTriggerType, initialFlowId, onEditorClose }: { initialTriggerType?: string; initialFlowId?: string; onEditorClose?: () => void }) {
   const { user } = useAuth();
   const [editingFlow, setEditingFlow] = useState<Flow | null | undefined>(
     initialTriggerType ? null : undefined
@@ -923,14 +923,21 @@ export function FlowBuilder({ initialTriggerType, initialFlowId }: { initialTrig
     loadFlow();
   }, [initialFlowId, user]);
 
+  const handleBack = () => {
+    setEditingFlow(undefined);
+    onEditorClose?.();
+  };
+
   if (editingFlow !== undefined) {
     return (
-      <FlowEditorView
-        flow={editingFlow}
-        onBack={() => setEditingFlow(undefined)}
-        initialTriggerType={!editingFlow ? initialTriggerType : undefined}
-        initialKind={!editingFlow ? newFlowKind : undefined}
-      />
+      <div className="relative min-h-[calc(100vh-4rem)]">
+        <FlowEditorView
+          flow={editingFlow}
+          onBack={handleBack}
+          initialTriggerType={!editingFlow ? initialTriggerType : undefined}
+          initialKind={!editingFlow ? newFlowKind : undefined}
+        />
+      </div>
     );
   }
 

@@ -2714,7 +2714,12 @@ export default function WhatsAppApi() {
 
         {/* ── Flows Tab ── */}
         <TabsContent value="flows" className="space-y-4 p-6 max-w-6xl overflow-y-auto flex-1 m-0">
-          <FlowBuilder key={flowTriggerType || flowEditId || "default"} initialTriggerType={flowTriggerType} initialFlowId={flowEditId} />
+          <FlowBuilder
+            key={flowTriggerType || flowEditId || "default"}
+            initialTriggerType={flowTriggerType}
+            initialFlowId={flowEditId}
+            onEditorClose={() => { setFlowEditId(undefined); setFlowTriggerType(undefined); }}
+          />
         </TabsContent>
 
         {/* ── Analytics Tab ── */}

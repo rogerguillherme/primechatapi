@@ -1,4 +1,5 @@
 import { useAuth } from "@/contexts/AuthContext";
+import { useProfile } from "@/hooks/use-profile";
 import { RevenueHero } from "@/components/dashboard/RevenueHero";
 import { KpiGrid } from "@/components/dashboard/KpiGrid";
 import { AiInsights } from "@/components/dashboard/AiInsights";
@@ -13,6 +14,7 @@ interface DashboardHomeProps {
 
 export function DashboardHome({ onNavigateTab }: DashboardHomeProps) {
   const { user } = useAuth();
+  const { isSuperAdmin } = useProfile();
   const greeting = getGreeting();
   const name = user?.email?.split("@")[0] || "por aqui";
 
@@ -28,15 +30,19 @@ export function DashboardHome({ onNavigateTab }: DashboardHomeProps) {
         </p>
       </div>
 
-      {/* Hero + KPIs */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2">
-          <RevenueHero />
+      {/* Hero + KPIs (revenue hero apenas para admin) */}
+      {isSuperAdmin ? (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2">
+            <RevenueHero />
+          </div>
+          <div className="grid grid-cols-1 gap-4">
+            <QuickActions onNavigate={(t) => onNavigateTab?.(t)} />
+          </div>
         </div>
-        <div className="grid grid-cols-1 gap-4">
-          <QuickActions onNavigate={(t) => onNavigateTab?.(t)} />
-        </div>
-      </div>
+      ) : (
+        <QuickActions onNavigate={(t) => onNavigateTab?.(t)} />
+      )}
 
       <KpiGrid />
 
@@ -49,10 +55,10 @@ export function DashboardHome({ onNavigateTab }: DashboardHomeProps) {
             else if (id.includes("campaign") || id.includes("readrate")) onNavigateTab?.("broadcast");
           }}
         />
-        <SalesRanking />
+        {isSuperAdmin && <SalesRanking />}
       </div>
 
-      <RecentOrders />
+      {isSuperAdmin && <RecentOrders />}
     </div>
   );
 }

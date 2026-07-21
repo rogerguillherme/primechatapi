@@ -12,6 +12,9 @@ import { InstagramSettings } from "@/components/instagram/InstagramSettings";
 import { InstagramPosts } from "@/components/instagram/InstagramPosts";
 import { InstagramAgent } from "@/components/instagram/InstagramAgent";
 import { InstagramComments } from "@/components/instagram/InstagramComments";
+import { useProfile } from "@/hooks/use-profile";
+import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   MessageSquare, Zap, BarChart3, Settings, Instagram, MessageCircle,
@@ -25,6 +28,14 @@ export default function InstagramDashboard() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const { instagramEnabled, loading: profileLoading } = useProfile();
+
+  useEffect(() => {
+    if (!profileLoading && user && !instagramEnabled) {
+      toast.error("Acesso ao Instagram não liberado para sua conta.");
+      navigate("/", { replace: true });
+    }
+  }, [profileLoading, instagramEnabled, user, navigate]);
 
   useEffect(() => {
     const tab = searchParams.get("tab");
@@ -47,6 +58,14 @@ export default function InstagramDashboard() {
     },
     enabled: !!user,
   });
+
+  if (profileLoading || !instagramEnabled) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   const navItems = [
     { id: "chat", icon: MessageSquare, label: "Chat" },

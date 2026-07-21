@@ -71,6 +71,7 @@ export default function Chat() {
   const initialLeadId = searchParams.get("lead");
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(initialLeadId);
   const [search, setSearch] = useState("");
+  const [dateFilter, setDateFilter] = useState<"all" | "today" | "7d" | "30d">("all");
   const [message, setMessage] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [activeTab, setActiveTab] = useState<ChatTab>("aguardando_respostas");
@@ -402,13 +403,23 @@ export default function Chat() {
   const filteredLeads = useMemo(() => {
     if (!leads) return [];
     const s = search.toLowerCase();
-    return leads.filter(
-      (l) =>
-        (l.chat_status === activeTab) &&
-        (l.name.toLowerCase().includes(s) || l.phone.includes(s) || l.email?.toLowerCase().includes(s)) &&
-        (!filterAccountId || leadAccountMap?.get(filterAccountId)?.has(l.id))
-    );
-  }, [leads, search, activeTab, filterAccountId, leadAccountMap]);
+    const now = Date.now();
+    const cutoff =
+      dateFilter === "today" ? now - 24 * 60 * 60 * 1000 :
+      dateFilter === "7d" ? now - 7 * 24 * 60 * 60 * 1000 :
+      dateFilter === "30d" ? now - 30 * 24 * 60 * 60 * 1000 : 0;
+    return leads.filter((l) => {
+      if (l.chat_status !== activeTab) return false;
+      if (!(l.name.toLowerCase().includes(s) || l.phone.includes(s) || l.email?.toLowerCase().includes(s))) return false;
+      if (filterAccountId && !leadAccountMap?.get(filterAccountId)?.has(l.id)) return false;
+      if (cutoff > 0) {
+        const latest = latestMessages?.get(l.id);
+        const ts = latest ? new Date(latest.created_at).getTime() : 0;
+        if (ts < cutoff) return false;
+      }
+      return true;
+    });
+  }, [leads, search, activeTab, filterAccountId, leadAccountMap, dateFilter, latestMessages]);
 
   const tabCounts = useMemo(() => {
     if (!leads) return {} as Record<ChatTab, number>;
@@ -549,6 +560,27 @@ export default function Chat() {
             </div>
           </div>
         )}
+
+        {/* Date filter */}
+        <div className="px-3 py-1.5 border-b border-border bg-card flex gap-1">
+          {([
+            { v: "all", l: "Todas" },
+            { v: "today", l: "Hoje" },
+            { v: "7d", l: "7 dias" },
+            { v: "30d", l: "30 dias" },
+          ] as const).map((o) => (
+            <button
+              key={o.v}
+              onClick={() => setDateFilter(o.v)}
+              className={cn(
+                "flex-1 text-[11px] py-1 rounded-md transition-colors",
+                dateFilter === o.v ? "bg-primary text-primary-foreground" : "bg-muted/40 text-muted-foreground hover:bg-muted"
+              )}
+            >
+              {o.l}
+            </button>
+          ))}
+        </div>
 
         {/* Account filter */}
         {accounts.length > 1 && (

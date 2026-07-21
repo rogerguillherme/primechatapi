@@ -4,8 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { usePlatform, Platform } from "@/contexts/PlatformContext";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useProfile } from "@/hooks/use-profile";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/NotificationBell";
 import { GlobalSearch } from "@/components/GlobalSearch";
@@ -15,21 +14,7 @@ export function AppHeader() {
   const { user, signOut } = useAuth();
   const { platform, setPlatform } = usePlatform();
   const navigate = useNavigate();
-
-  const { data: isAdmin } = useQuery({
-    queryKey: ["user-role", user?.id],
-    queryFn: async () => {
-      if (!user) return false;
-      const { data } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id)
-        .eq("role", "admin")
-        .maybeSingle();
-      return !!data;
-    },
-    enabled: !!user,
-  });
+  const { isAdmin, instagramEnabled } = useProfile();
 
   const handlePlatformSwitch = (p: Platform) => {
     setPlatform(p);
@@ -59,33 +44,35 @@ export function AppHeader() {
               </div>
             </div>
 
-            {/* Platform selector */}
-            <div className="flex items-center bg-white/10 rounded-lg p-0.5 ml-4">
-              <button
-                onClick={() => handlePlatformSwitch("whatsapp")}
-                className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
-                  platform === "whatsapp"
-                    ? "bg-white/20 text-white shadow-sm"
-                    : "text-white/50 hover:text-white/80"
-                )}
-              >
-                <MessageCircle size={14} />
-                WhatsApp
-              </button>
-              <button
-                onClick={() => handlePlatformSwitch("instagram")}
-                className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
-                  platform === "instagram"
-                    ? "bg-white/20 text-white shadow-sm"
-                    : "text-white/50 hover:text-white/80"
-                )}
-              >
-                <Instagram size={14} />
-                Instagram
-              </button>
-            </div>
+            {/* Platform selector — Instagram só quando liberado */}
+            {instagramEnabled && (
+              <div className="flex items-center bg-white/10 rounded-lg p-0.5 ml-4">
+                <button
+                  onClick={() => handlePlatformSwitch("whatsapp")}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                    platform === "whatsapp"
+                      ? "bg-white/20 text-white shadow-sm"
+                      : "text-white/50 hover:text-white/80"
+                  )}
+                >
+                  <MessageCircle size={14} />
+                  WhatsApp
+                </button>
+                <button
+                  onClick={() => handlePlatformSwitch("instagram")}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                    platform === "instagram"
+                      ? "bg-white/20 text-white shadow-sm"
+                      : "text-white/50 hover:text-white/80"
+                  )}
+                >
+                  <Instagram size={14} />
+                  Instagram
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2">

@@ -83,6 +83,10 @@ serve(async (req) => {
       const roleMap = new Map<string, string>();
       roles?.forEach((r: any) => roleMap.set(r.user_id, r.role));
 
+      const { data: profiles } = await supabaseAdmin.from("profiles").select("user_id, instagram_enabled");
+      const igMap = new Map<string, boolean>();
+      profiles?.forEach((p: any) => igMap.set(p.user_id, !!p.instagram_enabled));
+
       const mapped = users.map((u: any) => ({
         id: u.id,
         email: u.email,
@@ -90,6 +94,7 @@ serve(async (req) => {
         last_sign_in_at: u.last_sign_in_at,
         display_name: u.user_metadata?.full_name || u.user_metadata?.name || "",
         role: roleMap.get(u.id) || "user",
+        instagram_enabled: igMap.get(u.id) || false,
       }));
 
       return jsonResponse(mapped);
@@ -132,7 +137,7 @@ serve(async (req) => {
         return jsonResponse({ error: "Body inválido" }, 400);
       }
 
-      const { user_id, email, password, display_name, role } = body;
+      const { user_id, email, password, display_name, role, instagram_enabled } = body;
 
       if (!user_id) {
         return jsonResponse({ error: "user_id é obrigatório" }, 400);
@@ -167,6 +172,14 @@ serve(async (req) => {
         const { error: insError } = await supabaseAdmin.from("user_roles")
           .insert({ user_id, role });
         if (insError) console.error("Error inserting new role:", insError.message);
+      }
+
+      if (typeof instagram_enabled === "boolean") {
+        const { error: profErr } = await supabaseAdmin
+          .from("profiles")
+          .update({ instagram_enabled })
+          .eq("user_id", user_id);
+        if (profErr) console.error("Error updating instagram_enabled:", profErr.message);
       }
 
       return jsonResponse({ success: true });
