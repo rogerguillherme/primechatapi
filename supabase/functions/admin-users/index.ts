@@ -137,7 +137,7 @@ serve(async (req) => {
         return jsonResponse({ error: "Body inválido" }, 400);
       }
 
-      const { user_id, email, password, display_name, role } = body;
+      const { user_id, email, password, display_name, role, instagram_enabled } = body;
 
       if (!user_id) {
         return jsonResponse({ error: "user_id é obrigatório" }, 400);
