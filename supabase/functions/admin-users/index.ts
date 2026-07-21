@@ -174,6 +174,14 @@ serve(async (req) => {
         if (insError) console.error("Error inserting new role:", insError.message);
       }
 
+      if (typeof instagram_enabled === "boolean") {
+        const { error: profErr } = await supabaseAdmin
+          .from("profiles")
+          .update({ instagram_enabled })
+          .eq("user_id", user_id);
+        if (profErr) console.error("Error updating instagram_enabled:", profErr.message);
+      }
+
       return jsonResponse({ success: true });
     }
 
