@@ -63,6 +63,8 @@ function AdminOnlyRoute({ children }: { children: React.ReactNode }) {
   }
 
   return <>{children}</>;
+}
+
 
 function AppRoutes() {
   return (
