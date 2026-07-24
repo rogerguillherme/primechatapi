@@ -4,7 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AppHeader } from "@/components/AppHeader";
-import { HelpChatBubble } from "@/components/HelpChatBubble";
+import { AiAssistantChat } from "@/components/AiAssistantChat";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { PlatformProvider } from "@/contexts/PlatformContext";
 import WhatsAppApi from "./pages/WhatsAppApi";
@@ -75,7 +75,7 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <WhatsAppApi />
-            <HelpChatBubble />
+            <AiAssistantChat />
           </ProtectedRoute>
         }
       />
@@ -84,7 +84,7 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <InstagramDashboard />
-            <HelpChatBubble />
+            <AiAssistantChat />
           </ProtectedRoute>
         }
       />
