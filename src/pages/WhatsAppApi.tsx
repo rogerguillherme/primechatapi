@@ -1125,7 +1125,11 @@ function BroadcastTab() {
               body.template_language = selectedTemplate.template_language || "pt_BR";
               body.template_params = resolveParams((selectedTemplate.template_params || []) as any[], lead.name, "");
             } else {
-              body.message = customMessage.replace(/\{nome\}/g, lead.name.split(" ")[0]);
+              body.message = customMessage
+                .replace(/\{nome\}/g, (lead.name || "").split(" ")[0] || "")
+                .replace(/\{nome_completo\}/g, lead.name || "")
+                .replace(/\{telefone\}/g, lead.phone || "")
+                .replace(/\{email\}/g, (lead as any).email || "");
             }
             const { data: sendData2, error } = await supabase.functions.invoke("whatsapp-cloud-send", { body });
             if (error) throw error;
