@@ -228,7 +228,7 @@ export function SendingMetrics() {
       // 1. Broadcast jobs
       const { data: jobs } = await supabase
         .from("broadcast_jobs")
-        .select("id, created_at, total_leads, sent_count, delivered_count, read_count, error_count, lead_ids, template_name")
+        .select("id, created_at, total_leads, sent_count, delivered_count, read_count, error_count, lead_ids, template_name, status")
         .order("created_at", { ascending: false });
 
       const { data: events } = jobs && jobs.length > 0
@@ -244,6 +244,8 @@ export function SendingMetrics() {
         for (const job of jobs) {
           const effective = getEffectiveJobCounts(job, eventMap);
           const dateStr = format(new Date(job.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR });
+          const status = (job as any).status as string | undefined;
+          const inProgress = status === "processing" || status === "queued" || status === "running" || status === "paused";
           groups.push({
             key: job.id,
             label: `Disparo ${dateStr}${job.template_name ? ` — ${job.template_name}` : ""}`,
@@ -254,6 +256,8 @@ export function SendingMetrics() {
             failed: job.error_count || 0,
             leadIds: job.lead_ids || [],
             type: "broadcast",
+            status,
+            inProgress,
           });
         }
       }
