@@ -156,7 +156,8 @@ export function CloudChatTab() {
       const { data } = await supabase
         .from("chat_messages")
         .select("lead_id, content, created_at, direction, status, account_id")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(5000);
       const map = new Map<string, { content: string; created_at: string; direction: string; status: string | null }>();
       for (const m of data || []) {
         if (!map.has(m.lead_id)) map.set(m.lead_id, m as any);
