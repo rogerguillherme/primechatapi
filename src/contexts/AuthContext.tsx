@@ -22,6 +22,18 @@ export const useAuth = () => useContext(AuthContext);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const lastUserIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const currentUserId = session?.user?.id ?? null;
+    if (lastUserIdRef.current !== null && lastUserIdRef.current !== currentUserId) {
+      // User switched (login as different user, or signed out). Clear all cached queries.
+      queryClient.clear();
+    }
+    lastUserIdRef.current = currentUserId;
+  }, [session?.user?.id, queryClient]);
+
 
   useEffect(() => {
     let isMounted = true;
