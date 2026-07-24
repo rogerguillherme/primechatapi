@@ -40,9 +40,8 @@ export function DeleteOldLeadsDialog({ trigger }: Props) {
 
   const preview = useMutation({
     mutationFn: async () => {
-      const q = buildQuery();
-      const { count, error } = await q.select("id", { count: "exact", head: true });
-      if (error) throw error;
+      const q = applyFilters(supabase.from("leads").select("id", { count: "exact", head: true }));
+      const { count, error } = await q;
       return count ?? 0;
     },
     onSuccess: (c) => setPreviewCount(c),
