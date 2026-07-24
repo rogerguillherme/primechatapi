@@ -38,6 +38,8 @@ interface BroadcastGroup {
   type?: "broadcast" | "flow";
   flowId?: string;
   date?: string;
+  status?: string;
+  inProgress?: boolean;
 }
 
 interface AccountStats {
@@ -226,7 +228,7 @@ export function SendingMetrics() {
       // 1. Broadcast jobs
       const { data: jobs } = await supabase
         .from("broadcast_jobs")
-        .select("id, created_at, total_leads, sent_count, delivered_count, read_count, error_count, lead_ids, template_name")
+        .select("id, created_at, total_leads, sent_count, delivered_count, read_count, error_count, lead_ids, template_name, status")
         .order("created_at", { ascending: false });
 
       const { data: events } = jobs && jobs.length > 0
@@ -242,6 +244,8 @@ export function SendingMetrics() {
         for (const job of jobs) {
           const effective = getEffectiveJobCounts(job, eventMap);
           const dateStr = format(new Date(job.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR });
+          const status = (job as any).status as string | undefined;
+          const inProgress = status === "processing" || status === "queued" || status === "running" || status === "paused";
           groups.push({
             key: job.id,
             label: `Disparo ${dateStr}${job.template_name ? ` — ${job.template_name}` : ""}`,
@@ -252,6 +256,8 @@ export function SendingMetrics() {
             failed: job.error_count || 0,
             leadIds: job.lead_ids || [],
             type: "broadcast",
+            status,
+            inProgress,
           });
         }
       }
@@ -310,7 +316,10 @@ export function SendingMetrics() {
       // Sort: most recent first
       return groups;
     },
-    refetchInterval: 30000,
+    refetchInterval: (query) => {
+      const data = query.state.data as BroadcastGroup[] | undefined;
+      return data?.some((g) => g.inProgress) ? 5000 : 30000;
+    },
   });
 
   const pct = (n: number, t: number) => t > 0 ? `${Math.round((n / t) * 100)}%` : "—";
@@ -462,14 +471,26 @@ function DispatchItem({ group, isExpanded, onToggle }: {
           <div className="flex items-center gap-2">
             {group.type === "flow" && <Zap size={12} className="text-amber-500 shrink-0" />}
             <p className="text-sm font-medium truncate">{group.label}</p>
+            {group.inProgress && (
+              <Badge className="text-[10px] bg-amber-500/15 text-amber-600 border-amber-500/30 gap-1">
+                <Loader2 size={10} className="animate-spin" />
+                Em andamento
+              </Badge>
+            )}
+            {group.status === "paused" && (
+              <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-500/40">Pausado</Badge>
+            )}
           </div>
-          <p className="text-xs text-muted-foreground">{group.total} lead{group.total !== 1 ? "s" : ""} disparado{group.total !== 1 ? "s" : ""}</p>
+          <p className="text-xs text-muted-foreground">
+            {group.total} lead{group.total !== 1 ? "s" : ""} · {group.sent}/{group.total} enviado{group.sent !== 1 ? "s" : ""}
+          </p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <Badge variant="outline" className="text-[10px]">{group.sent} env</Badge>
           {group.failed > 0 && <Badge variant="destructive" className="text-[10px]">{group.failed} err</Badge>}
         </div>
       </button>
+
 
       {isExpanded && (
         <div className="px-4 pb-3 pl-11 bg-muted/20 space-y-3">

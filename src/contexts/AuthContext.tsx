@@ -1,5 +1,6 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
 import { Session, User } from "@supabase/supabase-js";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 interface AuthContextType {
@@ -21,6 +22,18 @@ export const useAuth = () => useContext(AuthContext);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const lastUserIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const currentUserId = session?.user?.id ?? null;
+    if (lastUserIdRef.current !== null && lastUserIdRef.current !== currentUserId) {
+      // User switched (login as different user, or signed out). Clear all cached queries.
+      queryClient.clear();
+    }
+    lastUserIdRef.current = currentUserId;
+  }, [session?.user?.id, queryClient]);
+
 
   useEffect(() => {
     let isMounted = true;

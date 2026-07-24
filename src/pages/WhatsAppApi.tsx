@@ -2704,6 +2704,11 @@ export default function WhatsAppApi() {
           )}
         </TabsContent>
 
+        {/* ── Home Tab (Dashboard) ── */}
+        <TabsContent value="home" className="overflow-y-auto flex-1 m-0 p-0">
+          <DashboardHome onNavigateTab={(t) => setActiveMainTab(t)} />
+        </TabsContent>
+
         {/* ── Webhook Tab (Event Webhooks) ── */}
         {/* ── Chat Tab ── */}
         <TabsContent value="chat" className="flex-1 overflow-hidden m-0 p-0">
