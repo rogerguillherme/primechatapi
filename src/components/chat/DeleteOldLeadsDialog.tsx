@@ -42,6 +42,7 @@ export function DeleteOldLeadsDialog({ trigger }: Props) {
     mutationFn: async () => {
       const q = applyFilters(supabase.from("leads").select("id", { count: "exact", head: true }));
       const { count, error } = await q;
+      if (error) throw error;
       return count ?? 0;
     },
     onSuccess: (c) => setPreviewCount(c),
@@ -50,8 +51,7 @@ export function DeleteOldLeadsDialog({ trigger }: Props) {
 
   const doDelete = useMutation({
     mutationFn: async () => {
-      const q = buildQuery();
-      const { data: ids, error } = await q.select("id");
+      const { data: ids, error } = await applyFilters(supabase.from("leads").select("id"));
       if (error) throw error;
       const leadIds = (ids || []).map((r: any) => r.id);
       if (leadIds.length === 0) return 0;
