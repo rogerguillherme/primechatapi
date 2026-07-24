@@ -7,6 +7,7 @@ import { QuickActions } from "@/components/dashboard/QuickActions";
 import { SalesRanking } from "@/components/dashboard/SalesRanking";
 import { RecentOrders } from "@/components/dashboard/RecentOrders";
 import { BroadcastMetricsPanel } from "@/components/dashboard/BroadcastMetricsPanel";
+import { SpendByAccountPanel } from "@/components/dashboard/SpendByAccountPanel";
 
 interface DashboardHomeProps {
   /** Called when user clicks an action that should switch the parent tab. */
@@ -47,7 +48,12 @@ export function DashboardHome({ onNavigateTab }: DashboardHomeProps) {
 
       <KpiGrid />
 
-      <BroadcastMetricsPanel />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2">
+          <BroadcastMetricsPanel />
+        </div>
+        <SpendByAccountPanel />
+      </div>
 
       {/* Insights + Ranking */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
