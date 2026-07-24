@@ -121,10 +121,13 @@ export function CloudChatTab() {
   const { data: leads } = useQuery({
     queryKey: ["chat-leads"],
     queryFn: async () => {
+      // Sort by most recent activity so new leads from recent broadcasts always appear
+      // (default PostgREST limit is 1000 rows — alphabetical order was hiding recent leads).
       const { data } = await supabase
         .from("leads")
-        .select("id, name, phone, email, photo_url, chat_status, ai_enabled")
-        .order("name");
+        .select("id, name, phone, email, photo_url, chat_status, ai_enabled, updated_at")
+        .order("updated_at", { ascending: false, nullsFirst: false })
+        .limit(5000);
       return data || [];
     },
   });
