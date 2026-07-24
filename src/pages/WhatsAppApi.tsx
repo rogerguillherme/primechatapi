@@ -1530,6 +1530,7 @@ function BroadcastTab() {
                   <code>{"{telefone}"}</code>, <code>{"{email}"}</code>
                   {mode === "csv" && <> e <code>{"{codigo}"}</code></>}. Requer janela de conversa aberta (24h) ou uso posterior via API.
                 </p>
+              </div>
             )}
 
             {sendType !== "flow" ? (
