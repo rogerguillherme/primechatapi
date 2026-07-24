@@ -471,14 +471,26 @@ function DispatchItem({ group, isExpanded, onToggle }: {
           <div className="flex items-center gap-2">
             {group.type === "flow" && <Zap size={12} className="text-amber-500 shrink-0" />}
             <p className="text-sm font-medium truncate">{group.label}</p>
+            {group.inProgress && (
+              <Badge className="text-[10px] bg-amber-500/15 text-amber-600 border-amber-500/30 gap-1">
+                <Loader2 size={10} className="animate-spin" />
+                Em andamento
+              </Badge>
+            )}
+            {group.status === "paused" && (
+              <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-500/40">Pausado</Badge>
+            )}
           </div>
-          <p className="text-xs text-muted-foreground">{group.total} lead{group.total !== 1 ? "s" : ""} disparado{group.total !== 1 ? "s" : ""}</p>
+          <p className="text-xs text-muted-foreground">
+            {group.total} lead{group.total !== 1 ? "s" : ""} · {group.sent}/{group.total} enviado{group.sent !== 1 ? "s" : ""}
+          </p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <Badge variant="outline" className="text-[10px]">{group.sent} env</Badge>
           {group.failed > 0 && <Badge variant="destructive" className="text-[10px]">{group.failed} err</Badge>}
         </div>
       </button>
+
 
       {isExpanded && (
         <div className="px-4 pb-3 pl-11 bg-muted/20 space-y-3">
