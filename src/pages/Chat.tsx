@@ -487,6 +487,16 @@ export default function Chat() {
             >
               <Search size={18} />
             </button>
+            <DeleteOldLeadsDialog
+              trigger={
+                <button
+                  title="Excluir leads antigos por período"
+                  className="p-2 rounded-full hover:bg-white/10 text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors"
+                >
+                  <Trash2 size={18} />
+                </button>
+              }
+            />
 
             {/* Global AI mode menu — always visible */}
             <DropdownMenu>
