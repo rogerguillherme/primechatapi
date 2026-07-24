@@ -38,6 +38,8 @@ interface BroadcastGroup {
   type?: "broadcast" | "flow";
   flowId?: string;
   date?: string;
+  status?: string;
+  inProgress?: boolean;
 }
 
 interface AccountStats {
