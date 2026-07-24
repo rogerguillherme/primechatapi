@@ -26,22 +26,16 @@ export function DeleteOldLeadsDialog({ trigger }: Props) {
   const [previewCount, setPreviewCount] = useState<number | null>(null);
   const [confirmText, setConfirmText] = useState("");
 
-  const buildQuery = () => {
+  const applyFilters = (q: any) => {
     if (!user) throw new Error("Sem sessão");
     const startIso = new Date(start + "T00:00:00").toISOString();
     const endIso = new Date(end + "T23:59:59").toISOString();
-    // Leads sem atividade após "end": última interação anterior a endIso
-    // e (se houver) posterior a startIso — janela de leads "antigos e inativos".
-    let q = supabase
-      .from("leads")
-      .eq("user_id", user.id);
-    // Sem last_inbound_at nem last_outbound_at depois de endIso
-    q = q.or(`last_inbound_at.is.null,last_inbound_at.lte.${endIso}`);
-    q = q.or(`last_outbound_at.is.null,last_outbound_at.lte.${endIso}`);
-    // Última atividade (ou criação) posterior a startIso — mantém foco no intervalo
-    q = q.gte("created_at", startIso);
-    q = q.lte("created_at", endIso);
-    return q;
+    return q
+      .eq("user_id", user.id)
+      .gte("created_at", startIso)
+      .lte("created_at", endIso)
+      .or(`last_inbound_at.is.null,last_inbound_at.lte.${endIso}`)
+      .or(`last_outbound_at.is.null,last_outbound_at.lte.${endIso}`);
   };
 
   const preview = useMutation({
