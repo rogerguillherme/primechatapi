@@ -121,10 +121,13 @@ export function CloudChatTab() {
   const { data: leads } = useQuery({
     queryKey: ["chat-leads"],
     queryFn: async () => {
+      // Sort by most recent activity so new leads from recent broadcasts always appear
+      // (default PostgREST limit is 1000 rows — alphabetical order was hiding recent leads).
       const { data } = await supabase
         .from("leads")
-        .select("id, name, phone, email, photo_url, chat_status, ai_enabled")
-        .order("name");
+        .select("id, name, phone, email, photo_url, chat_status, ai_enabled, updated_at")
+        .order("updated_at", { ascending: false, nullsFirst: false })
+        .limit(5000);
       return data || [];
     },
   });
@@ -153,7 +156,8 @@ export function CloudChatTab() {
       const { data } = await supabase
         .from("chat_messages")
         .select("lead_id, content, created_at, direction, status, account_id")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(5000);
       const map = new Map<string, { content: string; created_at: string; direction: string; status: string | null }>();
       for (const m of data || []) {
         if (!map.has(m.lead_id)) map.set(m.lead_id, m as any);
