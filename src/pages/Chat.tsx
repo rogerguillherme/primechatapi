@@ -28,6 +28,8 @@ import { AudioRecorder } from "@/components/AudioRecorder";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
+import { DeleteOldLeadsDialog } from "@/components/chat/DeleteOldLeadsDialog";
+import { Trash2 } from "lucide-react";
 
 type ChatTab = "novos_pedidos" | "aguardando_respostas" | "respondidas" | "reembolso";
 
