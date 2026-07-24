@@ -1125,7 +1125,11 @@ function BroadcastTab() {
               body.template_language = selectedTemplate.template_language || "pt_BR";
               body.template_params = resolveParams((selectedTemplate.template_params || []) as any[], lead.name, "");
             } else {
-              body.message = customMessage.replace(/\{nome\}/g, lead.name.split(" ")[0]);
+              body.message = customMessage
+                .replace(/\{nome\}/g, (lead.name || "").split(" ")[0] || "")
+                .replace(/\{nome_completo\}/g, lead.name || "")
+                .replace(/\{telefone\}/g, lead.phone || "")
+                .replace(/\{email\}/g, (lead as any).email || "");
             }
             const { data: sendData2, error } = await supabase.functions.invoke("whatsapp-cloud-send", { body });
             if (error) throw error;
@@ -1513,7 +1517,7 @@ function BroadcastTab() {
             {/* Custom message */}
             {sendType === "custom" && (
               <div className="space-y-2">
-                <Label>Mensagem personalizada (use {"{nome}"}, {"{codigo}"})</Label>
+                <Label>Mensagem personalizada</Label>
                 <textarea
                   value={customMessage}
                   onChange={(e) => setCustomMessage(e.target.value)}
@@ -1521,6 +1525,11 @@ function BroadcastTab() {
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm min-h-[120px] resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   rows={5}
                 />
+                <p className="text-[11px] text-muted-foreground">
+                  Variáveis disponíveis: <code>{"{nome}"}</code>, <code>{"{nome_completo}"}</code>,{" "}
+                  <code>{"{telefone}"}</code>, <code>{"{email}"}</code>
+                  {mode === "csv" && <> e <code>{"{codigo}"}</code></>}. Requer janela de conversa aberta (24h) ou uso posterior via API.
+                </p>
               </div>
             )}
 
