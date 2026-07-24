@@ -1057,7 +1057,37 @@ function BroadcastTab() {
           try {
             const accountId = accountIds[accountRR % accountIds.length];
             accountRR++;
+            // Upsert lead so the message shows in the chat thread
+            const phoneNormalized = row.telefone.replace(/\D/g, "");
+            const phoneWithDdi = phoneNormalized.length <= 11 ? `55${phoneNormalized}` : phoneNormalized;
+            let leadIdForSend: string | null = null;
+            try {
+              const { data: existingLead } = await supabase
+                .from("leads")
+                .select("id")
+                .eq("phone", phoneWithDdi)
+                .eq("user_id", user?.id)
+                .maybeSingle();
+              if (existingLead?.id) {
+                leadIdForSend = existingLead.id;
+              } else {
+                const { data: newLead } = await supabase
+                  .from("leads")
+                  .insert({
+                    phone: phoneWithDdi,
+                    name: row.nome || `Contato ${phoneNormalized.slice(-4)}`,
+                    origin: "csv_import",
+                    user_id: user?.id,
+                  })
+                  .select("id")
+                  .single();
+                leadIdForSend = newLead?.id || null;
+              }
+            } catch {
+              // Non-fatal: send anyway; message just won't appear in chat
+            }
             const body: any = { phone: row.telefone, account_id: accountId };
+            if (leadIdForSend) body.lead_id = leadIdForSend;
             if (sendType === "template" && selectedTemplate?.template_name) {
               body.template_name = selectedTemplate.template_name;
               body.template_language = selectedTemplate.template_language || "pt_BR";

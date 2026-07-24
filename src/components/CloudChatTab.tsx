@@ -24,14 +24,12 @@ import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 
-type ChatTab = "novos_pedidos" | "aguardando_respostas" | "respondidas" | "reembolso" | "erro";
+type ChatTab = "aguardando_respostas" | "respondidas" | "erro";
 type AiMode = "off" | "all" | "selected";
 
 const CHAT_TABS: { value: ChatTab; label: string; icon: React.ReactNode }[] = [
-  { value: "aguardando_respostas", label: "Aguardando", icon: <Clock size={14} /> },
   { value: "respondidas", label: "Respondidas", icon: <MessageCircleReply size={14} /> },
-  { value: "novos_pedidos", label: "Novos", icon: <ShoppingBag size={14} /> },
-  { value: "reembolso", label: "Reembolso", icon: <RotateCcw size={14} /> },
+  { value: "aguardando_respostas", label: "Aguardando", icon: <Clock size={14} /> },
   { value: "erro", label: "Erro", icon: <AlertCircle size={14} /> },
 ];
 
@@ -148,45 +146,34 @@ export function CloudChatTab() {
     },
   });
 
-  // Lead IDs with at least one failed outbound message
-  const { data: failedLeadIds } = useQuery({
-    queryKey: ["chat-failed-leads"],
-    queryFn: async () => {
-      const set = new Set<string>();
-      const pageSize = 1000;
-      let from = 0;
-      while (true) {
-        const { data, error } = await supabase
-          .from("chat_messages")
-          .select("lead_id")
-          .eq("direction", "outbound")
-          .eq("status", "failed")
-          .range(from, from + pageSize - 1);
-        if (error || !data || data.length === 0) break;
-        for (const m of data) set.add(m.lead_id);
-        if (data.length < pageSize) break;
-        from += pageSize;
-      }
-      return set;
-    },
-    refetchInterval: 30000,
-  });
-
-  // Latest messages
+  // Latest message per lead (used for ordering, preview and "erro" tab detection)
   const { data: latestMessages } = useQuery({
     queryKey: ["chat-latest-messages"],
     queryFn: async () => {
       const { data } = await supabase
         .from("chat_messages")
-        .select("lead_id, content, created_at, direction, account_id")
+        .select("lead_id, content, created_at, direction, status, account_id")
         .order("created_at", { ascending: false });
-      const map = new Map<string, { content: string; created_at: string; direction: string }>();
+      const map = new Map<string, { content: string; created_at: string; direction: string; status: string | null }>();
       for (const m of data || []) {
-        if (!map.has(m.lead_id)) map.set(m.lead_id, m);
+        if (!map.has(m.lead_id)) map.set(m.lead_id, m as any);
       }
       return map;
     },
+    refetchInterval: 15000,
   });
+
+  // A lead sits in "Erro" only while its most recent message is a failed outbound.
+  // Once a new inbound message arrives (or a successful send happens), it moves out
+  // to the tab defined by chat_status.
+  const failedLeadIds = useMemo(() => {
+    const set = new Set<string>();
+    if (!latestMessages) return set;
+    for (const [leadId, msg] of latestMessages) {
+      if (msg.direction === "outbound" && msg.status === "failed") set.add(leadId);
+    }
+    return set;
+  }, [latestMessages]);
 
   const { data: aiMode = "off" } = useQuery({
     queryKey: ["ai-auto-reply-mode"],
