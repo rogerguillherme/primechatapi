@@ -316,7 +316,10 @@ export function SendingMetrics() {
       // Sort: most recent first
       return groups;
     },
-    refetchInterval: 30000,
+    refetchInterval: (query) => {
+      const data = query.state.data as BroadcastGroup[] | undefined;
+      return data?.some((g) => g.inProgress) ? 5000 : 30000;
+    },
   });
 
   const pct = (n: number, t: number) => t > 0 ? `${Math.round((n / t) * 100)}%` : "—";
