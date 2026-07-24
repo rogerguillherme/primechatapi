@@ -24,14 +24,12 @@ import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 
-type ChatTab = "novos_pedidos" | "aguardando_respostas" | "respondidas" | "reembolso" | "erro";
+type ChatTab = "aguardando_respostas" | "respondidas" | "erro";
 type AiMode = "off" | "all" | "selected";
 
 const CHAT_TABS: { value: ChatTab; label: string; icon: React.ReactNode }[] = [
-  { value: "aguardando_respostas", label: "Aguardando", icon: <Clock size={14} /> },
   { value: "respondidas", label: "Respondidas", icon: <MessageCircleReply size={14} /> },
-  { value: "novos_pedidos", label: "Novos", icon: <ShoppingBag size={14} /> },
-  { value: "reembolso", label: "Reembolso", icon: <RotateCcw size={14} /> },
+  { value: "aguardando_respostas", label: "Aguardando", icon: <Clock size={14} /> },
   { value: "erro", label: "Erro", icon: <AlertCircle size={14} /> },
 ];
 
