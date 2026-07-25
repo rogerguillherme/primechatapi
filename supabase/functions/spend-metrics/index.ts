@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
     const end = new Date(now.getFullYear(), now.getMonth() - monthOffset + 1, 1);
 
     const [accountsRes, jobsRes, tplRes] = await Promise.all([
-      admin.from("whatsapp_accounts").select("id, display_name, phone_number, whatsapp_business_account_id, access_token").eq("user_id", userId),
+      admin.from("whatsapp_accounts").select("id, name, phone_number_id, business_account_id, access_token").eq("user_id", userId),
       admin
         .from("broadcast_jobs")
         .select("id, account_id, account_ids, template_id, sent_count, delivered_count, created_at, status")
