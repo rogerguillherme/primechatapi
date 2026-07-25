@@ -247,7 +247,7 @@ async function runTool(name: string, args: any, admin: SupabaseClient, userId: s
           admin.from("orders").select("amount, status, created_at").eq("status", "approved").gte("created_at", new Date(now - 30 * dayMs).toISOString()),
           admin.from("broadcast_jobs").select("id, status, sent_count, delivered_count, read_count, error_count").eq("user_id", userId).order("created_at", { ascending: false }).limit(30),
           admin.from("flows").select("id, active").eq("user_id", userId),
-          admin.from("whatsapp_accounts").select("id, display_name, phone_number, status").eq("user_id", userId),
+          admin.from("whatsapp_accounts").select("id, name, phone_number_id, last_health_status").eq("user_id", userId),
         ]);
         const leads = leadsRes.data || [];
         const jobs = jobsRes.data || [];
@@ -263,7 +263,7 @@ async function runTool(name: string, args: any, admin: SupabaseClient, userId: s
           read_rate_percent: totalSent > 0 ? Math.round((totalRead / totalSent) * 100) : 0,
           active_flows: (flowsRes.data || []).filter((f: any) => f.active).length,
           total_flows: (flowsRes.data || []).length,
-          accounts: (accountsRes.data || []).map((a: any) => ({ id: a.id, name: a.display_name, phone: a.phone_number, status: a.status })),
+          accounts: (accountsRes.data || []).map((a: any) => ({ id: a.id, name: a.name, phone_number_id: a.phone_number_id, status: a.last_health_status })),
         };
       }
       case "list_leads": {
@@ -287,7 +287,7 @@ async function runTool(name: string, args: any, admin: SupabaseClient, userId: s
         return { flows: data || [] };
       }
       case "list_whatsapp_accounts": {
-        const { data, error } = await admin.from("whatsapp_accounts").select("id, display_name, phone_number, status, quality_rating, tier, is_default").eq("user_id", userId);
+        const { data, error } = await admin.from("whatsapp_accounts").select("id, name, phone_number_id, last_health_status, is_default").eq("user_id", userId);
         if (error) return { error: error.message };
         return { accounts: data || [] };
       }
@@ -304,12 +304,12 @@ async function runTool(name: string, args: any, admin: SupabaseClient, userId: s
         const [jobsRes, tplRes, accRes] = await Promise.all([
           admin.from("broadcast_jobs").select("id, account_id, template_id, sent_count").eq("user_id", userId).gte("created_at", start.toISOString()).lt("created_at", end.toISOString()),
           admin.from("chat_templates").select("id, category").eq("user_id", userId),
-          admin.from("whatsapp_accounts").select("id, display_name, phone_number").eq("user_id", userId),
+          admin.from("whatsapp_accounts").select("id, name, phone_number_id").eq("user_id", userId),
         ]);
         const PRICING: any = { utility: 0.008, marketing: 0.0625, authentication: 0.0315, service: 0 };
         const inferCat = (c: any) => { const s = (c || "").toLowerCase(); if (s.includes("util")) return "utility"; if (s.includes("auth")) return "authentication"; if (s.includes("service")) return "service"; return "marketing"; };
         const tplCat = new Map((tplRes.data || []).map((t: any) => [t.id, inferCat(t.category)]));
-        const accMap = new Map((accRes.data || []).map((a: any) => [a.id, a.display_name || a.phone_number]));
+        const accMap = new Map((accRes.data || []).map((a: any) => [a.id, a.name || a.phone_number_id]));
         let totalUsd = 0;
         const byAcc: Record<string, { name: string; sent: number; usd: number }> = {};
         for (const j of jobsRes.data || []) {

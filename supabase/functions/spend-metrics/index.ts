@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
     const end = new Date(now.getFullYear(), now.getMonth() - monthOffset + 1, 1);
 
     const [accountsRes, jobsRes, tplRes] = await Promise.all([
-      admin.from("whatsapp_accounts").select("id, display_name, phone_number, whatsapp_business_account_id, access_token").eq("user_id", userId),
+      admin.from("whatsapp_accounts").select("id, name, phone_number_id, business_account_id, access_token").eq("user_id", userId),
       admin
         .from("broadcast_jobs")
         .select("id, account_id, account_ids, template_id, sent_count, delivered_count, created_at, status")
@@ -79,8 +79,8 @@ Deno.serve(async (req) => {
     for (const a of accounts) {
       byAccount.set(a.id, {
         account_id: a.id,
-        display_name: a.display_name || a.phone_number || "Conta",
-        phone_number: a.phone_number || "",
+        display_name: a.name || a.phone_number_id || "Conta",
+        phone_number: a.phone_number_id || "",
         sent: 0,
         delivered: 0,
         cost_usd: 0,
@@ -129,10 +129,10 @@ Deno.serve(async (req) => {
       const sinceUnix = Math.floor(start.getTime() / 1000);
       const untilUnix = Math.floor((Math.min(end.getTime(), Date.now())) / 1000);
       await Promise.all(accounts.map(async (a: any) => {
-        if (!a.whatsapp_business_account_id) return;
+        if (!a.business_account_id) return;
         try {
           const t = a.access_token || metaToken;
-          const u = `https://graph.facebook.com/v20.0/${a.whatsapp_business_account_id}/conversation_analytics?start=${sinceUnix}&end=${untilUnix}&granularity=MONTHLY&metric_types=%5B%22COST%22%5D&access_token=${encodeURIComponent(t)}`;
+          const u = `https://graph.facebook.com/v20.0/${a.business_account_id}/conversation_analytics?start=${sinceUnix}&end=${untilUnix}&granularity=MONTHLY&metric_types=%5B%22COST%22%5D&access_token=${encodeURIComponent(t)}`;
           const r = await fetch(u);
           if (!r.ok) return;
           const d = await r.json();
