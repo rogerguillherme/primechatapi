@@ -304,7 +304,7 @@ async function runTool(name: string, args: any, admin: SupabaseClient, userId: s
         const [jobsRes, tplRes, accRes] = await Promise.all([
           admin.from("broadcast_jobs").select("id, account_id, template_id, sent_count").eq("user_id", userId).gte("created_at", start.toISOString()).lt("created_at", end.toISOString()),
           admin.from("chat_templates").select("id, category").eq("user_id", userId),
-          admin.from("whatsapp_accounts").select("id, display_name, phone_number").eq("user_id", userId),
+          admin.from("whatsapp_accounts").select("id, name, phone_number_id").eq("user_id", userId),
         ]);
         const PRICING: any = { utility: 0.008, marketing: 0.0625, authentication: 0.0315, service: 0 };
         const inferCat = (c: any) => { const s = (c || "").toLowerCase(); if (s.includes("util")) return "utility"; if (s.includes("auth")) return "authentication"; if (s.includes("service")) return "service"; return "marketing"; };
