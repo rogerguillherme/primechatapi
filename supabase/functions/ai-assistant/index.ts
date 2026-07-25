@@ -247,7 +247,7 @@ async function runTool(name: string, args: any, admin: SupabaseClient, userId: s
           admin.from("orders").select("amount, status, created_at").eq("status", "approved").gte("created_at", new Date(now - 30 * dayMs).toISOString()),
           admin.from("broadcast_jobs").select("id, status, sent_count, delivered_count, read_count, error_count").eq("user_id", userId).order("created_at", { ascending: false }).limit(30),
           admin.from("flows").select("id, active").eq("user_id", userId),
-          admin.from("whatsapp_accounts").select("id, display_name, phone_number, status").eq("user_id", userId),
+          admin.from("whatsapp_accounts").select("id, name, phone_number_id, last_health_status").eq("user_id", userId),
         ]);
         const leads = leadsRes.data || [];
         const jobs = jobsRes.data || [];
