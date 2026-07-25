@@ -129,10 +129,10 @@ Deno.serve(async (req) => {
       const sinceUnix = Math.floor(start.getTime() / 1000);
       const untilUnix = Math.floor((Math.min(end.getTime(), Date.now())) / 1000);
       await Promise.all(accounts.map(async (a: any) => {
-        if (!a.whatsapp_business_account_id) return;
+        if (!a.business_account_id) return;
         try {
           const t = a.access_token || metaToken;
-          const u = `https://graph.facebook.com/v20.0/${a.whatsapp_business_account_id}/conversation_analytics?start=${sinceUnix}&end=${untilUnix}&granularity=MONTHLY&metric_types=%5B%22COST%22%5D&access_token=${encodeURIComponent(t)}`;
+          const u = `https://graph.facebook.com/v20.0/${a.business_account_id}/conversation_analytics?start=${sinceUnix}&end=${untilUnix}&granularity=MONTHLY&metric_types=%5B%22COST%22%5D&access_token=${encodeURIComponent(t)}`;
           const r = await fetch(u);
           if (!r.ok) return;
           const d = await r.json();
