@@ -79,8 +79,8 @@ Deno.serve(async (req) => {
     for (const a of accounts) {
       byAccount.set(a.id, {
         account_id: a.id,
-        display_name: a.display_name || a.phone_number || "Conta",
-        phone_number: a.phone_number || "",
+        display_name: a.name || a.phone_number_id || "Conta",
+        phone_number: a.phone_number_id || "",
         sent: 0,
         delivered: 0,
         cost_usd: 0,
