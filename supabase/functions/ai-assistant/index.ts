@@ -263,7 +263,7 @@ async function runTool(name: string, args: any, admin: SupabaseClient, userId: s
           read_rate_percent: totalSent > 0 ? Math.round((totalRead / totalSent) * 100) : 0,
           active_flows: (flowsRes.data || []).filter((f: any) => f.active).length,
           total_flows: (flowsRes.data || []).length,
-          accounts: (accountsRes.data || []).map((a: any) => ({ id: a.id, name: a.display_name, phone: a.phone_number, status: a.status })),
+          accounts: (accountsRes.data || []).map((a: any) => ({ id: a.id, name: a.name, phone_number_id: a.phone_number_id, status: a.last_health_status })),
         };
       }
       case "list_leads": {
