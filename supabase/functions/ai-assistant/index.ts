@@ -287,7 +287,7 @@ async function runTool(name: string, args: any, admin: SupabaseClient, userId: s
         return { flows: data || [] };
       }
       case "list_whatsapp_accounts": {
-        const { data, error } = await admin.from("whatsapp_accounts").select("id, display_name, phone_number, status, quality_rating, tier, is_default").eq("user_id", userId);
+        const { data, error } = await admin.from("whatsapp_accounts").select("id, name, phone_number_id, last_health_status, is_default").eq("user_id", userId);
         if (error) return { error: error.message };
         return { accounts: data || [] };
       }
