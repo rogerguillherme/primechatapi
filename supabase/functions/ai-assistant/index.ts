@@ -309,7 +309,7 @@ async function runTool(name: string, args: any, admin: SupabaseClient, userId: s
         const PRICING: any = { utility: 0.008, marketing: 0.0625, authentication: 0.0315, service: 0 };
         const inferCat = (c: any) => { const s = (c || "").toLowerCase(); if (s.includes("util")) return "utility"; if (s.includes("auth")) return "authentication"; if (s.includes("service")) return "service"; return "marketing"; };
         const tplCat = new Map((tplRes.data || []).map((t: any) => [t.id, inferCat(t.category)]));
-        const accMap = new Map((accRes.data || []).map((a: any) => [a.id, a.display_name || a.phone_number]));
+        const accMap = new Map((accRes.data || []).map((a: any) => [a.id, a.name || a.phone_number_id]));
         let totalUsd = 0;
         const byAcc: Record<string, { name: string; sent: number; usd: number }> = {};
         for (const j of jobsRes.data || []) {
