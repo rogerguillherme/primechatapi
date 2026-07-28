@@ -584,6 +584,52 @@ Deno.serve(async (req) => {
           language: { code: resolvedLanguage || "pt_BR" },
         },
       };
+
+      const components: any[] = [];
+
+      // --- Header (media) support -------------------------------------------------
+      // Meta rejects the send with #132012 when the created template has a media
+      // header but no matching header component is sent. Discover the header format
+      // from the Graph API and attach the media (explicit media_url or the template's
+      // own example asset).
+      let headerFormat: string | null = null;
+      let headerExampleUrl: string | null = null;
+      if (!isD360 && businessAccountId && ACCESS_TOKEN) {
+        try {
+          const tRes = await fetch(
+            `https://graph.facebook.com/v21.0/${businessAccountId}/message_templates?name=${encodeURIComponent(template_name)}&limit=20`,
+            { headers: { Authorization: `Bearer ${ACCESS_TOKEN}` } },
+          );
+          const tJson = await tRes.json().catch(() => ({}));
+          const lang = (resolvedLanguage || "pt_BR").toLowerCase();
+          const match = (tJson?.data || []).find((t: any) =>
+            t.name === template_name && String(t.language).toLowerCase() === lang
+          ) || (tJson?.data || [])[0];
+          const headerComp = (match?.components || []).find((c: any) => c.type === "HEADER");
+          if (headerComp && headerComp.format && headerComp.format !== "TEXT") {
+            headerFormat = String(headerComp.format).toLowerCase(); // image | video | document
+            const ex = headerComp.example;
+            headerExampleUrl = ex?.header_handle?.[0] || ex?.header_url?.[0] || null;
+          }
+        } catch (e) {
+          console.error("Falha ao inspecionar header do template:", e);
+        }
+      }
+
+      if (headerFormat) {
+        const headerLink = (media_url && (!media_type || media_type === headerFormat)) ? media_url : headerExampleUrl;
+        if (!headerLink) {
+          return new Response(
+            JSON.stringify({ error: `Template "${template_name}" exige um cabeçalho do tipo ${headerFormat.toUpperCase()}. Informe media_url com esse tipo de mídia.` }),
+            { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+        components.push({
+          type: "header",
+          parameters: [{ type: headerFormat, [headerFormat]: { link: headerLink } }],
+        });
+      }
+
       if (finalParams && Array.isArray(finalParams) && finalParams.length > 0) {
         const fallbackName = leadFirstName || "amigo(a)";
         const rawParams = finalParams
@@ -599,10 +645,14 @@ Deno.serve(async (req) => {
           idx === rawParams.length - 1 ? { ...p, text: withUniqueSignature(p.text) } : p
         );
         if (mappedParams.length > 0) {
-          templateBody.template.components = [{ type: "body", parameters: mappedParams }];
+          components.push({ type: "body", parameters: mappedParams });
         }
       }
+      if (components.length > 0) {
+        templateBody.template.components = components;
+      }
       body = templateBody;
+
     } else if (media_url && media_type) {
       if (media_type === "image") {
         body = { messaging_product: "whatsapp", to: cleanPhone, type: "image", image: { link: media_url, caption: message || undefined } };
