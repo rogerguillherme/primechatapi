@@ -652,18 +652,27 @@ Deno.serve(async (req) => {
       }
 
       if (headerFormat) {
-        const headerLink = (media_url && (!media_type || media_type === headerFormat)) ? media_url : headerExampleUrl;
+        let headerLink = (media_url && (!media_type || media_type === headerFormat)) ? media_url : headerExampleUrl;
         if (!headerLink) {
           return new Response(
             JSON.stringify({ error: `Template "${template_name}" exige um cabeçalho do tipo ${headerFormat.toUpperCase()}. Informe media_url com esse tipo de mídia.` }),
             { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
         }
+        // Meta's own signed CDN links (template example media) often fail to be
+        // re-downloaded by the send API — mirror to a stable public URL.
+        headerLink = await resolveTemplateHeaderLink(
+          supabase,
+          headerLink,
+          `${businessAccountId}_${template_name}_${resolvedLanguage || "pt_BR"}`,
+          headerFormat as "image" | "video" | "document",
+        );
         components.push({
           type: "header",
           parameters: [{ type: headerFormat, [headerFormat]: { link: headerLink } }],
         });
       }
+
 
       if (finalParams && Array.isArray(finalParams) && finalParams.length > 0) {
         const fallbackName = leadFirstName || "amigo(a)";
