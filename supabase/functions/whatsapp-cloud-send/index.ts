@@ -597,13 +597,15 @@ Deno.serve(async (req) => {
       if (!isD360 && businessAccountId && ACCESS_TOKEN) {
         try {
           const tRes = await fetch(
-            `https://graph.facebook.com/v21.0/${businessAccountId}/message_templates?name=${encodeURIComponent(template_name)}&limit=20`,
+            `https://graph.facebook.com/v21.0/${businessAccountId}/message_templates?name=${encodeURIComponent(template_name)}&limit=20&fields=name,language,status,components`,
             { headers: { Authorization: `Bearer ${ACCESS_TOKEN}` } },
           );
           const tJson = await tRes.json().catch(() => ({}));
           const lang = (resolvedLanguage || "pt_BR").toLowerCase();
           const match = (tJson?.data || []).find((t: any) =>
-            t.name === template_name && String(t.language).toLowerCase() === lang
+            String(t.name).toLowerCase() === String(template_name).toLowerCase() && String(t.language).toLowerCase() === lang
+          ) || (tJson?.data || []).find((t: any) =>
+            String(t.name).toLowerCase() === String(template_name).toLowerCase()
           ) || (tJson?.data || [])[0];
           const headerComp = (match?.components || []).find((c: any) => c.type === "HEADER");
           if (headerComp && headerComp.format && headerComp.format !== "TEXT") {

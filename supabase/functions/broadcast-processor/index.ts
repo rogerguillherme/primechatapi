@@ -78,6 +78,55 @@ function makeParamUnique(text: string, isLast: boolean): string {
   return `${text}${uniqueZeroWidthSuffix()}`;
 }
 
+type TemplateMediaHeader = {
+  format: "image" | "video" | "document";
+  link: string | null;
+} | null;
+
+async function fetchTemplateMediaHeader(
+  accessToken: string,
+  businessAccountId: string | null | undefined,
+  templateName: string,
+  language: string,
+): Promise<TemplateMediaHeader> {
+  if (!accessToken || !businessAccountId || !templateName) return null;
+
+  try {
+    const url = `https://graph.facebook.com/v21.0/${businessAccountId}/message_templates?name=${encodeURIComponent(templateName)}&limit=50&fields=name,language,status,components`;
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      console.error("Failed to inspect template header:", response.status, JSON.stringify(payload));
+      return null;
+    }
+
+    const templates = Array.isArray(payload?.data) ? payload.data : [];
+    const targetLanguage = String(language || "pt_BR").toLowerCase();
+    const targetName = String(templateName).toLowerCase();
+    const template = templates.find((item: any) =>
+      String(item?.name).toLowerCase() === targetName && String(item?.language).toLowerCase() === targetLanguage
+    ) || templates.find((item: any) => String(item?.name).toLowerCase() === targetName) || templates[0];
+
+    const header = (template?.components || []).find((component: any) => component?.type === "HEADER");
+    const format = String(header?.format || "").toUpperCase();
+    if (!["IMAGE", "VIDEO", "DOCUMENT"].includes(format)) return null;
+
+    const example = header?.example || {};
+    const exampleLink = example?.header_handle?.[0] || example?.header_url?.[0] || null;
+
+    return {
+      format: format.toLowerCase() as "image" | "video" | "document",
+      link: typeof exampleLink === "string" && exampleLink.trim() ? exampleLink : null,
+    };
+  } catch (error) {
+    console.error("Error inspecting template header:", error);
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -319,7 +368,7 @@ Deno.serve(async (req) => {
       ? job.account_ids
       : [job.account_id];
 
-    const accountCredentials: Array<{ id: string; phoneNumberId: string; accessToken: string }> = [];
+    const accountCredentials: Array<{ id: string; phoneNumberId: string; accessToken: string; businessAccountId: string | null }> = [];
 
     for (const accId of accountIds) {
       const { data: acc } = await supabase
@@ -341,7 +390,12 @@ Deno.serve(async (req) => {
         if (metaConn?.meta_access_token) accessToken = metaConn.meta_access_token;
       }
 
-      accountCredentials.push({ id: acc.id, phoneNumberId: acc.phone_number_id, accessToken });
+      accountCredentials.push({
+        id: acc.id,
+        phoneNumberId: acc.phone_number_id,
+        accessToken,
+        businessAccountId: acc.business_account_id,
+      });
     }
 
     if (accountCredentials.length === 0) {
@@ -467,6 +521,7 @@ Deno.serve(async (req) => {
     let consecutiveErrors = job.consecutive_errors || 0;
     let lastError = "";
     let accountIndex = 0; // for round-robin
+    const templateHeaderCache: Record<string, Promise<TemplateMediaHeader>> = {};
 
     for (const lead of batchLeads) {
       // ── AUTO-PAUSE CHECK ──
@@ -554,8 +609,33 @@ Deno.serve(async (req) => {
           },
         };
 
+        const components: any[] = [];
+        const headerCacheKey = `${currentAccount.id}:${templateName}:${templateLanguage}`;
+        const templateHeader = templateHeaderCache[headerCacheKey] ||= fetchTemplateMediaHeader(
+          currentAccount.accessToken,
+          currentAccount.businessAccountId,
+          templateName,
+          templateLanguage,
+        );
+        const mediaHeader = await templateHeader;
+
+        if (mediaHeader) {
+          if (!mediaHeader.link) {
+            throw new Error(`Template "${templateName}" exige cabeçalho ${mediaHeader.format.toUpperCase()}, mas a mídia de exemplo não está disponível.`);
+          }
+
+          components.push({
+            type: "header",
+            parameters: [{ type: mediaHeader.format, [mediaHeader.format]: { link: mediaHeader.link } }],
+          });
+        }
+
         if (resolvedParams.length > 0) {
-          msgBody.template.components = [{ type: "body", parameters: resolvedParams }];
+          components.push({ type: "body", parameters: resolvedParams });
+        }
+
+        if (components.length > 0) {
+          msgBody.template.components = components;
         }
 
         const waRes = await fetch(apiUrl, {
