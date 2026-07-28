@@ -530,6 +530,39 @@ Deno.serve(async (req) => {
     let body: any;
     let templateRecord: any = null;
 
+    // Meta Cloud only allows free-form messages after the customer has replied
+    // to this specific conversation recently. Templates are still allowed outside
+    // the 24h window, so block only non-template sends before Meta accepts and
+    // later fails them asynchronously with code 131047.
+    if (!template_name && lead_id && !isD360) {
+      const { data: leadWindow } = await supabase
+        .from("leads")
+        .select("last_inbound_at")
+        .eq("id", lead_id)
+        .maybeSingle();
+
+      const lastInboundMs = leadWindow?.last_inbound_at ? new Date(leadWindow.last_inbound_at).getTime() : NaN;
+      const insideWindow = Number.isFinite(lastInboundMs) && Date.now() - lastInboundMs <= 24 * 60 * 60 * 1000;
+
+      if (!insideWindow) {
+        const friendlyMsg = "Esse contato está fora da janela de 24h da Meta. Envie um template aprovado para reabrir a conversa.";
+        await supabase.from("chat_messages").insert({
+          lead_id,
+          direction: "outbound",
+          content: `❌ ${friendlyMsg}`,
+          media_type: media_type || null,
+          media_url: media_url || null,
+          status: "failed",
+          account_id: account_id || resolvedAccountId || null,
+        });
+
+        return new Response(
+          JSON.stringify({ error: friendlyMsg, wa_error: { code: 131047, title: "Re-engagement message" } }),
+          { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+
     if (template_name) {
       const templateLookup = await getTemplateRecord(supabase, template_name, account_id);
       templateRecord = templateLookup.template;
