@@ -833,10 +833,12 @@ Deno.serve(async (req) => {
         contentText = media_type === "audio" ? "🎤 Áudio" : media_type === "image" ? "📷 Imagem" : media_type === "video" ? "🎥 Vídeo" : "📎 Arquivo";
       }
 
+      const initialStatus = waData.messages?.[0]?.message_status === "accepted" ? "accepted" : "sent";
+
       await supabase.from("chat_messages").insert({
         lead_id, direction: "outbound", content: contentText,
         media_type: media_type || null, media_url: media_url || null,
-        zapi_message_id: waMessageId, status: "sent",
+        zapi_message_id: waMessageId, status: initialStatus,
         account_id: account_id || resolvedAccountId || null,
       });
 
