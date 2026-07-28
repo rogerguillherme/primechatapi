@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveTemplateHeaderLink } from "../_shared/template-media.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -624,11 +625,19 @@ Deno.serve(async (req) => {
             throw new Error(`Template "${templateName}" exige cabeçalho ${mediaHeader.format.toUpperCase()}, mas a mídia de exemplo não está disponível.`);
           }
 
+          const headerLink = await resolveTemplateHeaderLink(
+            supabase,
+            mediaHeader.link,
+            `${currentAccount.businessAccountId}_${templateName}_${templateLanguage}`,
+            mediaHeader.format,
+          );
+
           components.push({
             type: "header",
-            parameters: [{ type: mediaHeader.format, [mediaHeader.format]: { link: mediaHeader.link } }],
+            parameters: [{ type: mediaHeader.format, [mediaHeader.format]: { link: headerLink } }],
           });
         }
+
 
         if (resolvedParams.length > 0) {
           components.push({ type: "body", parameters: resolvedParams });
