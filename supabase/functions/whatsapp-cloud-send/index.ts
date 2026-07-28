@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveTemplateHeaderLink } from "../_shared/template-media.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
