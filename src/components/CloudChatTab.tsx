@@ -52,6 +52,7 @@ function formatDateSeparator(date: Date) {
 
 function StatusIcon({ status }: { status: string }) {
   if (status === "failed") return <AlertCircle size={14} className="text-destructive" aria-label="Falha no envio" />;
+  if (status === "accepted" || status === "queued" || status === "processing") return <Clock size={14} className="opacity-60" aria-label="Aguardando confirmação da Meta" />;
   if (status === "read") return <CheckCheck size={14} className="text-sky-400" />;
   if (status === "delivered") return <CheckCheck size={14} className="opacity-60" />;
   return <Check size={14} className="opacity-60" />;
