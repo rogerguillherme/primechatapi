@@ -92,8 +92,9 @@ export default function Chat() {
     queryFn: async () => {
       const { data } = await supabase
         .from("leads")
-        .select("id, name, phone, email, photo_url, chat_status")
-        .order("name");
+        .select("id, name, phone, email, photo_url, chat_status, updated_at, last_inbound_at, last_outbound_at")
+        .order("updated_at", { ascending: false })
+        .limit(5000);
       return data || [];
     },
   });
