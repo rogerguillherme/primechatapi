@@ -2488,6 +2488,35 @@ export default function WhatsAppApi() {
                               </Button>
                             )}
 
+                            {account.provider === "meta_cloud" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-xs h-8 gap-1"
+                                onClick={async () => {
+                                  const t = toast.loading("Re-inscrevendo webhook com override_callback_uri...");
+                                  try {
+                                    const { data, error } = await supabase.functions.invoke(
+                                      "whatsapp-subscribe-webhook",
+                                      { body: { account_id: account.id } },
+                                    );
+                                    if (error) throw error;
+                                    const r = data?.results?.[0];
+                                    if (r?.ok) {
+                                      toast.success("Webhook re-inscrito com sucesso!", { id: t });
+                                      loadAccounts();
+                                    } else {
+                                      toast.error(`Falha: ${r?.error || "erro desconhecido"}`, { id: t });
+                                    }
+                                  } catch (e: any) {
+                                    toast.error(e.message, { id: t });
+                                  }
+                                }}
+                              >
+                                <Plug size={14} /> Re-inscrever Webhook
+                              </Button>
+                            )}
+
                             <Button variant="outline" size="sm" onClick={() => startEditing(account)} className="text-xs h-8 gap-1">
                               <Pencil size={14} /> Configurações
                             </Button>
