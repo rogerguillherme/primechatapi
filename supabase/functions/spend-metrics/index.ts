@@ -159,35 +159,64 @@ Deno.serve(async (req) => {
       totalCostUsd += cost;
     }));
 
-    // Try to enrich with Meta Graph billing (best effort, ignore failures)
+    // Fetch real Meta Graph billing (source of truth). When available, it
+    // overrides the local estimate for that account. Estimates remain as
+    // fallback for accounts without Meta data (e.g. missing token/WABA).
     const metaToken = Deno.env.get("META_SYSTEM_USER_TOKEN");
-    if (metaToken) {
-      const sinceUnix = Math.floor(start.getTime() / 1000);
-      const untilUnix = Math.floor((Math.min(end.getTime(), Date.now())) / 1000);
-      await Promise.all(accounts.map(async (a: any) => {
-        if (!a.business_account_id) return;
-        try {
-          const t = a.access_token || metaToken;
-          const u = `https://graph.facebook.com/v20.0/${a.business_account_id}/conversation_analytics?start=${sinceUnix}&end=${untilUnix}&granularity=MONTHLY&metric_types=%5B%22COST%22%5D&access_token=${encodeURIComponent(t)}`;
-          const r = await fetch(u);
-          if (!r.ok) return;
-          const d = await r.json();
-          const points = d?.conversation_analytics?.data?.[0]?.data_points || [];
-          const cost = points.reduce((s: number, p: any) => s + Number(p.cost || 0), 0);
+    const sinceUnix = Math.floor(start.getTime() / 1000);
+    const untilUnix = Math.floor((Math.min(end.getTime(), Date.now())) / 1000);
+    const metaDebug: Record<string, string> = {};
+    let totalMetaUsd = 0;
+
+    await Promise.all(accounts.map(async (a: any) => {
+      if (!a.business_account_id) { metaDebug[a.id] = "no_waba"; return; }
+      const t = a.access_token || metaToken;
+      if (!t) { metaDebug[a.id] = "no_token"; return; }
+      try {
+        // Preferred: WABA node with nested conversation_analytics field
+        const fields = `conversation_analytics.start(${sinceUnix}).end(${untilUnix}).granularity(MONTHLY).metric_types(["COST"]).dimensions(["CONVERSATION_CATEGORY"])`;
+        const u = `https://graph.facebook.com/v20.0/${a.business_account_id}?fields=${encodeURIComponent(fields)}&access_token=${encodeURIComponent(t)}`;
+        const r = await fetch(u);
+        const d = await r.json();
+        if (!r.ok) {
+          metaDebug[a.id] = `err_${r.status}:${d?.error?.message || "unknown"}`;
+          return;
+        }
+        const points = d?.conversation_analytics?.data?.[0]?.data_points || [];
+        let cost = 0;
+        const byCat: Record<string, number> = { marketing: 0, utility: 0, authentication: 0, service: 0 };
+        for (const p of points) {
+          const c = Number(p.cost || 0);
+          cost += c;
+          const cat = inferCategory(p.conversation_category);
+          byCat[cat] += c;
+        }
+        const row = byAccount.get(a.id);
+        if (row) {
+          row.meta_amount_usd = cost;
           if (cost > 0) {
-            const row = byAccount.get(a.id);
-            if (row) row.meta_amount_usd = cost;
+            // Meta values are authoritative — override the estimate.
+            totalCostUsd -= row.cost_usd;
+            row.cost_usd = cost;
+            row.by_category = byCat;
+            totalCostUsd += cost;
+            totalMetaUsd += cost;
           }
-        } catch (_e) { /* ignore */ }
-      }));
-    }
+          metaDebug[a.id] = `ok:${cost}`;
+        }
+      } catch (e: any) {
+        metaDebug[a.id] = `exc:${e?.message || e}`;
+      }
+    }));
 
     const rows = [...byAccount.values(), ...(unassigned.sent > 0 ? [unassigned] : [])].map((r) => ({
       ...r,
       cost_brl: +(r.cost_usd * USD_TO_BRL).toFixed(2),
       cost_usd: +r.cost_usd.toFixed(4),
-      meta_amount_brl: r.meta_amount_usd ? +(r.meta_amount_usd * USD_TO_BRL).toFixed(2) : undefined,
+      meta_amount_brl: r.meta_amount_usd !== undefined ? +(r.meta_amount_usd * USD_TO_BRL).toFixed(2) : undefined,
     })).sort((a, b) => b.cost_usd - a.cost_usd);
+
+    const anyMeta = rows.some((r) => r.meta_amount_usd !== undefined && r.meta_amount_usd > 0);
 
     return json({
       month: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`,
@@ -195,8 +224,12 @@ Deno.serve(async (req) => {
       total_delivered: Math.round(totalDelivered),
       total_cost_usd: +totalCostUsd.toFixed(4),
       total_cost_brl: +(totalCostUsd * USD_TO_BRL).toFixed(2),
+      total_meta_usd: +totalMetaUsd.toFixed(4),
+      total_meta_brl: +(totalMetaUsd * USD_TO_BRL).toFixed(2),
+      source: anyMeta ? "meta" : "estimate",
       usd_to_brl: USD_TO_BRL,
       accounts: rows,
+      meta_debug: metaDebug,
     });
   } catch (err: any) {
     console.error("spend-metrics error:", err);

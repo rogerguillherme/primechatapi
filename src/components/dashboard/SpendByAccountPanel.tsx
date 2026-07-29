@@ -21,6 +21,8 @@ interface SpendResp {
   total_sent: number;
   total_cost_usd: number;
   total_cost_brl: number;
+  total_meta_brl?: number;
+  source?: "meta" | "estimate";
   usd_to_brl: number;
   accounts: SpendRow[];
 }
@@ -50,8 +52,9 @@ export function SpendByAccountPanel() {
           <div>
             <h3 className="font-display font-semibold text-sm">Gasto do mês por conta</h3>
             <p className="text-[11px] text-muted-foreground leading-none mt-0.5">
-              {data?.month ? `Mês ${data.month}` : "Estimativa em BRL"}
+              {data?.month ? `Mês ${data.month}` : ""} {data?.source === "meta" ? "· Dados reais da Meta" : "· Estimativa"}
             </p>
+
           </div>
         </div>
         <div className="text-right">
@@ -106,8 +109,12 @@ export function SpendByAccountPanel() {
       </div>
 
       <p className="text-[10px] text-muted-foreground mt-3 flex items-center gap-1">
-        <DollarSign size={10} /> Estimativa com preços WhatsApp Cloud BR. Valores da Meta aparecem quando disponíveis.
+        <DollarSign size={10} />
+        {data?.source === "meta"
+          ? "Valores reais faturados na Meta (BM)."
+          : "Meta não retornou valores para este mês — mostrando estimativa com preços BR."}
       </p>
+
     </PremiumCard>
   );
 }
