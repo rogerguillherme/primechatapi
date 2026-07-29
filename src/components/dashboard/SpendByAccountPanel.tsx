@@ -52,8 +52,9 @@ export function SpendByAccountPanel() {
           <div>
             <h3 className="font-display font-semibold text-sm">Gasto do mês por conta</h3>
             <p className="text-[11px] text-muted-foreground leading-none mt-0.5">
-              {data?.month ? `Mês ${data.month}` : "Estimativa em BRL"}
+              {data?.month ? `Mês ${data.month}` : ""} {data?.source === "meta" ? "· Dados reais da Meta" : "· Estimativa"}
             </p>
+
           </div>
         </div>
         <div className="text-right">
