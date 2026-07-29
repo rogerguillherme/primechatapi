@@ -128,20 +128,40 @@ export function BroadcastMetricsPanel() {
     }));
   }, [data, period]);
 
-  const topCampaigns = useMemo(() => {
+  const campaignRows = useMemo(() => {
     const jobs = data?.jobs || [];
+    const tplCat = data?.tplCat || new Map();
+    const clicksByJob = data?.clicksByJob || new Map<string, any[]>();
     return [...jobs]
       .filter((j) => (j.sent_count || 0) > 0)
-      .sort((a, b) => (b.sent_count || 0) - (a.sent_count || 0))
-      .slice(0, 5)
-      .map((j) => ({
-        id: j.id,
-        name: j.template_name || "Disparo",
-        sent: j.sent_count || 0,
-        read: j.read_count || 0,
-        readRate: (j.sent_count || 0) > 0 ? ((j.read_count || 0) / (j.sent_count || 1)) * 100 : 0,
-        date: j.created_at,
-      }));
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .map((j) => {
+        const sent = j.sent_count || 0;
+        const delivered = j.delivered_count || 0;
+        const read = j.read_count || 0;
+        const errors = j.error_count || 0;
+        const cat = (j.template_id && tplCat.get(j.template_id)) || "marketing";
+        const rate = cat === "utility" ? PRICING.utility : cat === "authentication" ? PRICING.authentication : PRICING.marketing;
+        const costBrl = sent * rate * USD_TO_BRL;
+        const links = clicksByJob.get(j.id) || [];
+        const totalClicks = links.reduce((s, l) => s + (l.click_count || 0), 0);
+        return {
+          id: j.id,
+          name: j.template_name || "Disparo",
+          date: j.created_at,
+          sent,
+          delivered,
+          read,
+          errors,
+          deliveryRate: sent > 0 ? (delivered / sent) * 100 : 0,
+          readRate: sent > 0 ? (read / sent) * 100 : 0,
+          costBrl,
+          category: cat,
+          links,
+          totalClicks,
+          clickRate: sent > 0 ? (totalClicks / sent) * 100 : 0,
+        };
+      });
   }, [data]);
 
   const stats = [
