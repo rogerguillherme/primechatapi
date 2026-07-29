@@ -130,13 +130,13 @@ export function SendingMetrics() {
         .from("chat_messages")
         .select("id", { count: "exact", head: true })
         .eq("direction", "outbound")
-        .not("delivered_at", "is", null);
+        .in("status", ["delivered", "read"]);
 
       const { count: readCount } = await supabase
         .from("chat_messages")
         .select("id", { count: "exact", head: true })
         .eq("direction", "outbound")
-        .not("read_at", "is", null);
+        .eq("status", "read");
 
       const msgTotal = outboundCount || 0;
       const msgDelivered = deliveredCount || 0;
