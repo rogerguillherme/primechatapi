@@ -130,13 +130,13 @@ export function SendingMetrics() {
         .from("chat_messages")
         .select("id", { count: "exact", head: true })
         .eq("direction", "outbound")
-        .not("delivered_at", "is", null);
+        .in("status", ["delivered", "read"]);
 
       const { count: readCount } = await supabase
         .from("chat_messages")
         .select("id", { count: "exact", head: true })
         .eq("direction", "outbound")
-        .not("read_at", "is", null);
+        .eq("status", "read");
 
       const msgTotal = outboundCount || 0;
       const msgDelivered = deliveredCount || 0;
@@ -157,7 +157,7 @@ export function SendingMetrics() {
     queryFn: async () => {
       const accountMap = new Map<string, { total: number; sent: number; delivered: number; read: number; failed: number }>();
 
-      // Broadcast jobs
+      // Broadcast jobs (if any)
       const { data: jobs } = await supabase
         .from("broadcast_jobs")
         .select("id, account_id, total_leads, sent_count, delivered_count, read_count, error_count");
@@ -185,21 +185,36 @@ export function SendingMetrics() {
         }
       }
 
-      // Outbound messages per account
-      for (const acc of accounts) {
-        const { count: outCount } = await supabase
-          .from("chat_messages")
-          .select("id", { count: "exact", head: true })
-          .eq("direction", "outbound")
-          .eq("account_id", acc.id);
+      // Count outbound chat_messages per account and status.
+      // Iterates known accounts + "sem conta" (null account_id).
+      const targets: (string | null)[] = [...accounts.map((a) => a.id), null];
+      for (const target of targets) {
+        const base = () => {
+          let q = supabase
+            .from("chat_messages")
+            .select("id", { count: "exact", head: true })
+            .eq("direction", "outbound");
+          q = target === null ? q.is("account_id", null) : q.eq("account_id", target);
+          return q;
+        };
+        const [{ count: total }, { count: delivered }, { count: read }, { count: failed }] = await Promise.all([
+          base(),
+          base().in("status", ["delivered", "read"]),
+          base().eq("status", "read"),
+          base().eq("status", "failed"),
+        ]);
 
-        const existing = accountMap.get(acc.id) || { total: 0, sent: 0, delivered: 0, read: 0, failed: 0 };
-        const msgCount = outCount || 0;
-        if (msgCount > existing.total) {
-          existing.total = msgCount;
-          existing.sent = msgCount;
+        const key = target ?? "unknown";
+        const existing = accountMap.get(key) || { total: 0, sent: 0, delivered: 0, read: 0, failed: 0 };
+        const msgTotal = total || 0;
+        if (msgTotal > existing.total) {
+          existing.total = msgTotal;
+          existing.sent = msgTotal;
         }
-        if (msgCount > 0) accountMap.set(acc.id, existing);
+        existing.delivered = Math.max(existing.delivered, delivered || 0);
+        existing.read = Math.max(existing.read, read || 0);
+        existing.failed = Math.max(existing.failed, failed || 0);
+        if (existing.total > 0) accountMap.set(key, existing);
       }
 
       const result: AccountStats[] = [];
@@ -211,7 +226,7 @@ export function SendingMetrics() {
 
       const unknown = accountMap.get("unknown");
       if (unknown && unknown.total > 0) {
-        result.push({ id: "unknown", name: "Sem conta", ...unknown });
+        result.push({ id: "unknown", name: "Sem conta vinculada", ...unknown });
       }
 
       return result;

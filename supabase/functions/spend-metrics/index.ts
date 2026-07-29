@@ -123,6 +123,42 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Also count outbound chat_messages per account (covers individual sends
+    // and flow-triggered messages that don't go through broadcast_jobs).
+    await Promise.all(accounts.map(async (a: any) => {
+      const row = byAccount.get(a.id);
+      if (!row) return;
+      const { count: sentCount } = await admin
+        .from("chat_messages")
+        .select("id", { count: "exact", head: true })
+        .eq("direction", "outbound")
+        .eq("account_id", a.id)
+        .gte("created_at", start.toISOString())
+        .lt("created_at", end.toISOString())
+        .in("status", ["sent", "delivered", "read", "accepted"]);
+      const { count: deliveredCount } = await admin
+        .from("chat_messages")
+        .select("id", { count: "exact", head: true })
+        .eq("direction", "outbound")
+        .eq("account_id", a.id)
+        .gte("created_at", start.toISOString())
+        .lt("created_at", end.toISOString())
+        .in("status", ["delivered", "read"]);
+      const s = sentCount || 0;
+      const d = deliveredCount || 0;
+      if (s === 0) return;
+      // Default to marketing pricing for individual sends (no template category context).
+      const price = PRICING.marketing;
+      const cost = s * price;
+      row.sent += s;
+      row.delivered += d;
+      row.cost_usd += cost;
+      row.by_category.marketing += cost;
+      totalSent += s;
+      totalDelivered += d;
+      totalCostUsd += cost;
+    }));
+
     // Try to enrich with Meta Graph billing (best effort, ignore failures)
     const metaToken = Deno.env.get("META_SYSTEM_USER_TOKEN");
     if (metaToken) {
