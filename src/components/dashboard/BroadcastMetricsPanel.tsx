@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
-import { Send, CheckCheck, Eye, AlertTriangle, DollarSign } from "lucide-react";
+import { Send, CheckCheck, Eye, AlertTriangle, DollarSign, MousePointerClick, ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, subDays, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -33,6 +33,7 @@ function inferCategory(cat: string | null | undefined): "utility" | "marketing" 
 export function BroadcastMetricsPanel() {
   const { user } = useAuth();
   const [period, setPeriod] = useState<PeriodKey>("30d");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["broadcast-metrics", user?.id, period],
@@ -56,7 +57,25 @@ export function BroadcastMetricsPanel() {
       const jobs = jobsRes.data || [];
       const tpls = tplRes.data || [];
       const tplCat = new Map(tpls.map((t) => [t.id, inferCategory(t.category)]));
-      return { jobs, tplCat, days };
+
+      // Fetch click tracking for these campaigns
+      const jobIds = jobs.map((j) => j.id);
+      let clicks: any[] = [];
+      if (jobIds.length > 0) {
+        const { data: cl } = await supabase
+          .from("click_tracking_links")
+          .select("campaign_id, original_url, short_code, click_count")
+          .in("campaign_id", jobIds);
+        clicks = cl || [];
+      }
+      const clicksByJob = new Map<string, any[]>();
+      for (const c of clicks) {
+        const list = clicksByJob.get(c.campaign_id) || [];
+        list.push(c);
+        clicksByJob.set(c.campaign_id, list);
+      }
+
+      return { jobs, tplCat, days, clicksByJob };
     },
     enabled: !!user,
     refetchInterval: 60_000,
@@ -109,20 +128,40 @@ export function BroadcastMetricsPanel() {
     }));
   }, [data, period]);
 
-  const topCampaigns = useMemo(() => {
+  const campaignRows = useMemo(() => {
     const jobs = data?.jobs || [];
+    const tplCat = data?.tplCat || new Map();
+    const clicksByJob = data?.clicksByJob || new Map<string, any[]>();
     return [...jobs]
       .filter((j) => (j.sent_count || 0) > 0)
-      .sort((a, b) => (b.sent_count || 0) - (a.sent_count || 0))
-      .slice(0, 5)
-      .map((j) => ({
-        id: j.id,
-        name: j.template_name || "Disparo",
-        sent: j.sent_count || 0,
-        read: j.read_count || 0,
-        readRate: (j.sent_count || 0) > 0 ? ((j.read_count || 0) / (j.sent_count || 1)) * 100 : 0,
-        date: j.created_at,
-      }));
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .map((j) => {
+        const sent = j.sent_count || 0;
+        const delivered = j.delivered_count || 0;
+        const read = j.read_count || 0;
+        const errors = j.error_count || 0;
+        const cat = (j.template_id && tplCat.get(j.template_id)) || "marketing";
+        const rate = cat === "utility" ? PRICING.utility : cat === "authentication" ? PRICING.authentication : PRICING.marketing;
+        const costBrl = sent * rate * USD_TO_BRL;
+        const links = clicksByJob.get(j.id) || [];
+        const totalClicks = links.reduce((s, l) => s + (l.click_count || 0), 0);
+        return {
+          id: j.id,
+          name: j.template_name || "Disparo",
+          date: j.created_at,
+          sent,
+          delivered,
+          read,
+          errors,
+          deliveryRate: sent > 0 ? (delivered / sent) * 100 : 0,
+          readRate: sent > 0 ? (read / sent) * 100 : 0,
+          costBrl,
+          category: cat,
+          links,
+          totalClicks,
+          clickRate: sent > 0 ? (totalClicks / sent) * 100 : 0,
+        };
+      });
   }, [data]);
 
   const stats = [
@@ -236,27 +275,94 @@ export function BroadcastMetricsPanel() {
         </div>
       </div>
 
-      {/* Top campaigns */}
-      {topCampaigns.length > 0 && (
+      {/* Per-campaign metrics */}
+      {campaignRows.length > 0 && (
         <div>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-            Top campanhas
+            Métricas por disparo
           </p>
           <div className="space-y-1.5">
-            {topCampaigns.map((c) => (
-              <div key={c.id} className="flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-card/40 px-3 py-2">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium truncate">{c.name}</p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {format(new Date(c.date), "dd/MM/yyyy HH:mm", { locale: ptBR })}
-                  </p>
+            {campaignRows.map((c) => {
+              const isOpen = expandedId === c.id;
+              return (
+                <div key={c.id} className="rounded-lg border border-border/50 bg-card/40 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedId(isOpen ? null : c.id)}
+                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-card/60 transition-colors text-left"
+                  >
+                    {isOpen ? <ChevronDown size={14} className="text-muted-foreground shrink-0" /> : <ChevronRight size={14} className="text-muted-foreground shrink-0" />}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{c.name}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {format(new Date(c.date), "dd/MM/yyyy HH:mm", { locale: ptBR })} · {c.category}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-semibold tabular-nums">{c.sent.toLocaleString("pt-BR")}</p>
+                      <p className="text-[10px] text-muted-foreground">enviadas</p>
+                    </div>
+                  </button>
+                  {isOpen && (
+                    <div className="border-t border-border/50 px-3 py-3 space-y-3 bg-background/40">
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase">Entregues</p>
+                          <p className="text-sm font-semibold tabular-nums">{c.delivered.toLocaleString("pt-BR")}</p>
+                          <p className="text-[10px] text-emerald-500">{c.deliveryRate.toFixed(1)}%</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase">Abertura</p>
+                          <p className="text-sm font-semibold tabular-nums">{c.read.toLocaleString("pt-BR")}</p>
+                          <p className="text-[10px] text-sky-500">{c.readRate.toFixed(1)}%</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase">Cliques</p>
+                          <p className="text-sm font-semibold tabular-nums">{c.totalClicks.toLocaleString("pt-BR")}</p>
+                          <p className="text-[10px] text-primary">{c.clickRate.toFixed(1)}% CTR</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase">Erros</p>
+                          <p className="text-sm font-semibold tabular-nums text-destructive">{c.errors.toLocaleString("pt-BR")}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase">Custo</p>
+                          <p className="text-sm font-semibold tabular-nums text-revenue">
+                            R$ {c.costBrl.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                      </div>
+                      {c.links.length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                            <MousePointerClick size={11} /> Cliques por botão
+                          </p>
+                          <div className="space-y-1">
+                            {c.links
+                              .sort((a: any, b: any) => (b.click_count || 0) - (a.click_count || 0))
+                              .map((l: any) => (
+                                <div key={l.short_code} className="flex items-center justify-between gap-2 text-xs bg-card/40 rounded px-2 py-1.5">
+                                  <span className="truncate text-muted-foreground" title={l.original_url}>
+                                    {l.original_url}
+                                  </span>
+                                  <span className="tabular-nums font-semibold shrink-0">
+                                    {(l.click_count || 0).toLocaleString("pt-BR")}
+                                  </span>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      )}
+                      {c.links.length === 0 && (
+                        <p className="text-[10px] text-muted-foreground italic">
+                          Sem links rastreados neste disparo.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <div className="text-right shrink-0">
-                  <p className="text-sm font-semibold tabular-nums">{c.sent.toLocaleString("pt-BR")}</p>
-                  <p className="text-[10px] text-muted-foreground">{c.readRate.toFixed(0)}% lidas</p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
