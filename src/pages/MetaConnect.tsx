@@ -170,14 +170,14 @@ export default function MetaConnect() {
         .from("whatsapp_accounts")
         .select("id");
 
-      const { error } = await supabase.from("whatsapp_accounts").insert({
+      const { data: inserted, error } = await supabase.from("whatsapp_accounts").insert({
         user_id: user.id,
         name: phone.verified_name || phone.display_phone_number || "WhatsApp",
         phone_number_id: phone.id,
         business_account_id: waba.id,
         access_token: activeConnection.meta_access_token,
         is_default: !existingAccounts || existingAccounts.length === 0,
-      });
+      }).select("id").single();
 
       if (error) {
         if ((error as any).code === "23505" || /duplicate key|unique constraint/i.test(error.message)) {
@@ -207,18 +207,39 @@ export default function MetaConnect() {
         console.warn("Erro no registro automático:", regErr);
       }
 
-      // Subscribe app to WABA so we receive delivery/read/failed webhooks.
-      // Without this, status stays "sent" forever.
-      try {
-        const { data: subData } = await supabase.functions.invoke("whatsapp-subscribe-webhook", {
-          body: {},
-        });
-        const failed = (subData?.results || []).filter((r: any) => !r.ok);
-        if (failed.length > 0) {
-          toast.warning("Webhook não foi ativado automaticamente. Acesse WhatsApp Manager → Account tools → Webhooks e clique em Subscribe.");
+      // Subscribe app to WABA so we receive delivery/read/failed/inbound webhooks.
+      // Without this, status stays "sent" forever and button clicks never trigger flow steps.
+      // Retry up to 3 times because Meta sometimes needs a few seconds after phone registration.
+      const subscribeWithRetry = async () => {
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            const { data: subData, error: subErr } = await supabase.functions.invoke(
+              "whatsapp-subscribe-webhook",
+              { body: { account_id: inserted?.id } },
+            );
+            if (subErr) throw subErr;
+            const results = subData?.results || [];
+            const allOk = results.length > 0 && results.every((r: any) => r.ok);
+            if (allOk) return { ok: true, results };
+            if (attempt < 3) await new Promise((r) => setTimeout(r, 2000 * attempt));
+            else return { ok: false, results };
+          } catch (e) {
+            if (attempt === 3) return { ok: false, error: e };
+            await new Promise((r) => setTimeout(r, 2000 * attempt));
+          }
         }
-      } catch (subErr) {
-        console.warn("Auto subscribe webhook failed:", subErr);
+        return { ok: false };
+      };
+
+      const subResult = await subscribeWithRetry();
+      if (subResult.ok) {
+        toast.success("Webhook configurado — respostas e cliques chegarão automaticamente.");
+        queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
+      } else {
+        console.warn("Auto subscribe webhook failed:", subResult);
+        toast.warning(
+          "Não consegui ativar o webhook automaticamente. Use o botão 'Re-inscrever Webhook' na página WhatsApp API.",
+        );
       }
 
       try {
