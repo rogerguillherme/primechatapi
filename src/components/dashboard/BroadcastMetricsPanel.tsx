@@ -42,7 +42,7 @@ export function BroadcastMetricsPanel() {
       const days = PERIOD_DAYS[period];
       const startIso = startOfDay(subDays(new Date(), days - 1)).toISOString();
 
-      const [jobsRes, tplRes] = await Promise.all([
+      const [jobsRes, tplRes, flowMsgsRes] = await Promise.all([
         supabase
           .from("broadcast_jobs")
           .select("id, template_id, template_name, sent_count, delivered_count, read_count, error_count, created_at, status")
@@ -53,6 +53,14 @@ export function BroadcastMetricsPanel() {
           .from("chat_templates")
           .select("id, category")
           .eq("user_id", user.id),
+        // Flow / conversational outbound (non-template): everything in chat_messages
+        // that's outbound and NOT sent as an opening template.
+        supabase
+          .from("chat_messages")
+          .select("id, status, created_at, delivered_at, read_at, account_id, lead_id")
+          .eq("direction", "outbound")
+          .is("zapi_message_id", null) // heuristic: opening templates carry wa msg id via logs; flow uses this too — refined below
+          .gte("created_at", startIso),
       ]);
       const jobs = jobsRes.data || [];
       const tpls = tplRes.data || [];
@@ -75,11 +83,46 @@ export function BroadcastMetricsPanel() {
         clicksByJob.set(c.campaign_id, list);
       }
 
-      return { jobs, tplCat, days, clicksByJob };
+      // Flow messages: outbound chat_messages that are NOT part of a broadcast.
+      // We approximate by pulling all outbound and subtracting message_logs (broadcast sends).
+      const { data: logs } = await supabase
+        .from("message_logs")
+        .select("wa_message_id, phone, created_at")
+        .eq("user_id", user.id)
+        .gte("created_at", startIso);
+      const broadcastWaIds = new Set((logs || []).map((l) => l.wa_message_id).filter(Boolean));
+
+      const { data: allOutbound } = await supabase
+        .from("chat_messages")
+        .select("id, status, created_at, zapi_message_id, account_id, lead_id")
+        .eq("direction", "outbound")
+        .gte("created_at", startIso)
+        .limit(10000);
+
+      const flowMsgs = (allOutbound || []).filter((m) => !m.zapi_message_id || !broadcastWaIds.has(m.zapi_message_id));
+
+      return { jobs, tplCat, days, clicksByJob, flowMsgs };
     },
     enabled: !!user,
     refetchInterval: 60_000,
   });
+
+  const flowSummary = useMemo(() => {
+    const msgs = data?.flowMsgs || [];
+    let sent = 0, delivered = 0, read = 0, errors = 0;
+    for (const m of msgs) {
+      sent++;
+      if (m.status === "delivered" || m.status === "read") delivered++;
+      if (m.status === "read") read++;
+      if (m.status === "failed" || m.status === "error") errors++;
+    }
+    return {
+      sent, delivered, read, errors,
+      deliveryRate: sent > 0 ? (delivered / sent) * 100 : 0,
+      readRate: sent > 0 ? (read / sent) * 100 : 0,
+    };
+  }, [data]);
+
 
   const summary = useMemo(() => {
     const jobs = data?.jobs || [];
