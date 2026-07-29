@@ -1,0 +1,1 @@
+CREATE POLICY "Authenticated can manage app_settings" ON public.app_settings FOR ALL TO authenticated USING (true) WITH CHECK (true);
