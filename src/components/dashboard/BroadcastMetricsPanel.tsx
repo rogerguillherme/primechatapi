@@ -214,6 +214,13 @@ export function BroadcastMetricsPanel() {
     { label: "Erros", value: summary.errors, icon: AlertTriangle, color: "text-destructive" },
   ];
 
+  const flowStats = [
+    { label: "Enviadas", value: flowSummary.sent, icon: Send, color: "text-primary" },
+    { label: "Entregues", value: flowSummary.delivered, hint: `${flowSummary.deliveryRate.toFixed(1)}%`, icon: CheckCheck, color: "text-emerald-500" },
+    { label: "Lidas", value: flowSummary.read, hint: `${flowSummary.readRate.toFixed(1)}%`, icon: Eye, color: "text-sky-500" },
+    { label: "Erros", value: flowSummary.errors, icon: AlertTriangle, color: "text-destructive" },
+  ];
+
   return (
     <PremiumCard className="p-5 sm:p-6 space-y-5">
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -233,21 +240,54 @@ export function BroadcastMetricsPanel() {
         </Select>
       </div>
 
-      {/* Stats grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {stats.map((s) => (
-          <div key={s.label} className="rounded-xl border border-border/60 bg-card/40 p-3">
-            <div className="flex items-center justify-between mb-1.5">
-              <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{s.label}</p>
-              <s.icon size={14} className={cn(s.color)} />
+      {/* Aberturas 24h */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Aberturas de janela 24h (templates)
+          </p>
+          <span className="text-[10px] text-muted-foreground">Mensagens iniciais via template</span>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {stats.map((s) => (
+            <div key={s.label} className="rounded-xl border border-border/60 bg-card/40 p-3">
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{s.label}</p>
+                <s.icon size={14} className={cn(s.color)} />
+              </div>
+              <p className="text-2xl font-display font-bold tabular-nums leading-none">
+                {s.value.toLocaleString("pt-BR")}
+              </p>
+              {s.hint && <p className="text-[10px] text-muted-foreground mt-1">{s.hint}</p>}
             </div>
-            <p className="text-2xl font-display font-bold tabular-nums leading-none">
-              {s.value.toLocaleString("pt-BR")}
-            </p>
-            {s.hint && <p className="text-[10px] text-muted-foreground mt-1">{s.hint}</p>}
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
+
+      {/* Mensagens de fluxo */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Mensagens de fluxo
+          </p>
+          <span className="text-[10px] text-muted-foreground">Dentro da janela 24h · sem custo por mensagem</span>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {flowStats.map((s) => (
+            <div key={s.label} className="rounded-xl border border-border/60 bg-card/40 p-3">
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{s.label}</p>
+                <s.icon size={14} className={cn(s.color)} />
+              </div>
+              <p className="text-2xl font-display font-bold tabular-nums leading-none">
+                {s.value.toLocaleString("pt-BR")}
+              </p>
+              {s.hint && <p className="text-[10px] text-muted-foreground mt-1">{s.hint}</p>}
+            </div>
+          ))}
+        </div>
+      </div>
+
 
       {/* Cost breakdown */}
       <div className="rounded-xl border border-border/60 bg-gradient-to-br from-revenue/5 to-transparent p-4">
