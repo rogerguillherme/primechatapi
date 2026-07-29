@@ -2504,7 +2504,7 @@ export default function WhatsAppApi() {
                                     const r = data?.results?.[0];
                                     if (r?.ok) {
                                       toast.success("Webhook re-inscrito com sucesso!", { id: t });
-                                      loadAccounts();
+                                      queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
                                     } else {
                                       toast.error(`Falha: ${r?.error || "erro desconhecido"}`, { id: t });
                                     }
