@@ -42,7 +42,7 @@ export function BroadcastMetricsPanel() {
       const days = PERIOD_DAYS[period];
       const startIso = startOfDay(subDays(new Date(), days - 1)).toISOString();
 
-      const [jobsRes, tplRes] = await Promise.all([
+      const [jobsRes, tplRes, flowMsgsRes] = await Promise.all([
         supabase
           .from("broadcast_jobs")
           .select("id, template_id, template_name, sent_count, delivered_count, read_count, error_count, created_at, status")
@@ -53,6 +53,14 @@ export function BroadcastMetricsPanel() {
           .from("chat_templates")
           .select("id, category")
           .eq("user_id", user.id),
+        // Flow / conversational outbound (non-template): everything in chat_messages
+        // that's outbound and NOT sent as an opening template.
+        supabase
+          .from("chat_messages")
+          .select("id, status, created_at, delivered_at, read_at, account_id, lead_id")
+          .eq("direction", "outbound")
+          .is("zapi_message_id", null) // heuristic: opening templates carry wa msg id via logs; flow uses this too — refined below
+          .gte("created_at", startIso),
       ]);
       const jobs = jobsRes.data || [];
       const tpls = tplRes.data || [];
@@ -75,11 +83,46 @@ export function BroadcastMetricsPanel() {
         clicksByJob.set(c.campaign_id, list);
       }
 
-      return { jobs, tplCat, days, clicksByJob };
+      // Flow messages: outbound chat_messages that are NOT part of a broadcast.
+      // We approximate by pulling all outbound and subtracting message_logs (broadcast sends).
+      const { data: logs } = await supabase
+        .from("message_logs")
+        .select("wa_message_id, phone, created_at")
+        .eq("user_id", user.id)
+        .gte("created_at", startIso);
+      const broadcastWaIds = new Set((logs || []).map((l) => l.wa_message_id).filter(Boolean));
+
+      const { data: allOutbound } = await supabase
+        .from("chat_messages")
+        .select("id, status, created_at, zapi_message_id, account_id, lead_id")
+        .eq("direction", "outbound")
+        .gte("created_at", startIso)
+        .limit(10000);
+
+      const flowMsgs = (allOutbound || []).filter((m) => !m.zapi_message_id || !broadcastWaIds.has(m.zapi_message_id));
+
+      return { jobs, tplCat, days, clicksByJob, flowMsgs };
     },
     enabled: !!user,
     refetchInterval: 60_000,
   });
+
+  const flowSummary = useMemo(() => {
+    const msgs = data?.flowMsgs || [];
+    let sent = 0, delivered = 0, read = 0, errors = 0;
+    for (const m of msgs) {
+      sent++;
+      if (m.status === "delivered" || m.status === "read") delivered++;
+      if (m.status === "read") read++;
+      if (m.status === "failed" || m.status === "error") errors++;
+    }
+    return {
+      sent, delivered, read, errors,
+      deliveryRate: sent > 0 ? (delivered / sent) * 100 : 0,
+      readRate: sent > 0 ? (read / sent) * 100 : 0,
+    };
+  }, [data]);
+
 
   const summary = useMemo(() => {
     const jobs = data?.jobs || [];
@@ -171,6 +214,13 @@ export function BroadcastMetricsPanel() {
     { label: "Erros", value: summary.errors, icon: AlertTriangle, color: "text-destructive" },
   ];
 
+  const flowStats = [
+    { label: "Enviadas", value: flowSummary.sent, icon: Send, color: "text-primary" },
+    { label: "Entregues", value: flowSummary.delivered, hint: `${flowSummary.deliveryRate.toFixed(1)}%`, icon: CheckCheck, color: "text-emerald-500" },
+    { label: "Lidas", value: flowSummary.read, hint: `${flowSummary.readRate.toFixed(1)}%`, icon: Eye, color: "text-sky-500" },
+    { label: "Erros", value: flowSummary.errors, icon: AlertTriangle, color: "text-destructive" },
+  ];
+
   return (
     <PremiumCard className="p-5 sm:p-6 space-y-5">
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -190,21 +240,54 @@ export function BroadcastMetricsPanel() {
         </Select>
       </div>
 
-      {/* Stats grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {stats.map((s) => (
-          <div key={s.label} className="rounded-xl border border-border/60 bg-card/40 p-3">
-            <div className="flex items-center justify-between mb-1.5">
-              <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{s.label}</p>
-              <s.icon size={14} className={cn(s.color)} />
+      {/* Aberturas 24h */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Aberturas de janela 24h (templates)
+          </p>
+          <span className="text-[10px] text-muted-foreground">Mensagens iniciais via template</span>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {stats.map((s) => (
+            <div key={s.label} className="rounded-xl border border-border/60 bg-card/40 p-3">
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{s.label}</p>
+                <s.icon size={14} className={cn(s.color)} />
+              </div>
+              <p className="text-2xl font-display font-bold tabular-nums leading-none">
+                {s.value.toLocaleString("pt-BR")}
+              </p>
+              {s.hint && <p className="text-[10px] text-muted-foreground mt-1">{s.hint}</p>}
             </div>
-            <p className="text-2xl font-display font-bold tabular-nums leading-none">
-              {s.value.toLocaleString("pt-BR")}
-            </p>
-            {s.hint && <p className="text-[10px] text-muted-foreground mt-1">{s.hint}</p>}
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
+
+      {/* Mensagens de fluxo */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Mensagens de fluxo
+          </p>
+          <span className="text-[10px] text-muted-foreground">Dentro da janela 24h · sem custo por mensagem</span>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {flowStats.map((s) => (
+            <div key={s.label} className="rounded-xl border border-border/60 bg-card/40 p-3">
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{s.label}</p>
+                <s.icon size={14} className={cn(s.color)} />
+              </div>
+              <p className="text-2xl font-display font-bold tabular-nums leading-none">
+                {s.value.toLocaleString("pt-BR")}
+              </p>
+              {s.hint && <p className="text-[10px] text-muted-foreground mt-1">{s.hint}</p>}
+            </div>
+          ))}
+        </div>
+      </div>
+
 
       {/* Cost breakdown */}
       <div className="rounded-xl border border-border/60 bg-gradient-to-br from-revenue/5 to-transparent p-4">
