@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
-import { Send, CheckCheck, Eye, AlertTriangle, DollarSign } from "lucide-react";
+import { Send, CheckCheck, Eye, AlertTriangle, DollarSign, MousePointerClick, ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, subDays, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
