@@ -109,8 +109,12 @@ export function SpendByAccountPanel() {
       </div>
 
       <p className="text-[10px] text-muted-foreground mt-3 flex items-center gap-1">
-        <DollarSign size={10} /> Estimativa com preços WhatsApp Cloud BR. Valores da Meta aparecem quando disponíveis.
+        <DollarSign size={10} />
+        {data?.source === "meta"
+          ? "Valores reais faturados na Meta (BM)."
+          : "Meta não retornou valores para este mês — mostrando estimativa com preços BR."}
       </p>
+
     </PremiumCard>
   );
 }
