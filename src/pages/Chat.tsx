@@ -417,7 +417,9 @@ export default function Chat() {
       if (filterAccountId && !leadAccountMap?.get(filterAccountId)?.has(l.id)) return false;
       if (cutoff > 0) {
         const latest = latestMessages?.get(l.id);
-        const ts = latest ? new Date(latest.created_at).getTime() : 0;
+        const ts = latest
+          ? new Date(latest.created_at).getTime()
+          : new Date((l as any).updated_at || (l as any).last_inbound_at || (l as any).last_outbound_at || 0).getTime();
         if (ts < cutoff) return false;
       }
       return true;
