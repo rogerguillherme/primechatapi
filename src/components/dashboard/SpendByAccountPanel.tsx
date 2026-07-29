@@ -21,6 +21,8 @@ interface SpendResp {
   total_sent: number;
   total_cost_usd: number;
   total_cost_brl: number;
+  total_meta_brl?: number;
+  source?: "meta" | "estimate";
   usd_to_brl: number;
   accounts: SpendRow[];
 }
