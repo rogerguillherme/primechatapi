@@ -55,7 +55,10 @@ function collectMetricPoints(payload: any): any[] {
 }
 
 function metaCostToUsd(cost: number, point: any): number {
-  const currency = String(point?.currency || point?.cost_currency || point?.billing_currency || "USD").toUpperCase();
+  // Meta returns pricing_analytics cost in the WABA billing currency and often
+  // omits the currency field. Prime Chat accounts are BR numbers/BMs, so BRL is
+  // the safe default when Meta does not send an explicit currency.
+  const currency = String(point?.currency || point?.cost_currency || point?.billing_currency || "BRL").toUpperCase();
   if (currency === "BRL" || currency === "R$") return cost / USD_TO_BRL;
   return cost;
 }
@@ -79,7 +82,9 @@ async function fetchPricingAnalytics(wabaId: string, token: string, sinceUnix: n
   const url = new URL(`https://graph.facebook.com/v25.0/${wabaId}/pricing_analytics`);
   url.searchParams.set("start", String(sinceUnix));
   url.searchParams.set("end", String(untilUnix));
-  url.searchParams.set("granularity", "MONTHLY");
+  // MONTHLY can return an empty array for the current open month; DAILY returns
+  // the real billed points and we aggregate them locally.
+  url.searchParams.set("granularity", "DAILY");
   url.searchParams.set("metric_types", JSON.stringify(["COST", "VOLUME"]));
   url.searchParams.set("dimensions", JSON.stringify(["PHONE", "PRICING_CATEGORY"]));
   url.searchParams.set("access_token", token);
