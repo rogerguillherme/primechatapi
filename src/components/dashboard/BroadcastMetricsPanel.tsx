@@ -289,38 +289,6 @@ export function BroadcastMetricsPanel() {
       </div>
 
 
-      {/* Cost breakdown */}
-      <div className="rounded-xl border border-border/60 bg-gradient-to-br from-revenue/5 to-transparent p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <DollarSign size={16} className="text-revenue" />
-            <p className="text-sm font-semibold">Gasto estimado no período</p>
-          </div>
-          <div className="text-right">
-            <p className="text-xl font-display font-bold tabular-nums">
-              R$ {summary.totalBrl.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </p>
-            <p className="text-[10px] text-muted-foreground">
-              ≈ US$ {summary.totalUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </p>
-          </div>
-        </div>
-        <div className="grid grid-cols-3 gap-2 text-xs">
-          <div className="rounded-lg bg-background/60 border border-border/50 p-2">
-            <p className="text-[10px] text-muted-foreground uppercase">Marketing</p>
-            <p className="font-semibold tabular-nums">R$ {(summary.costMkt * USD_TO_BRL).toFixed(2)}</p>
-          </div>
-          <div className="rounded-lg bg-background/60 border border-border/50 p-2">
-            <p className="text-[10px] text-muted-foreground uppercase">Utility</p>
-            <p className="font-semibold tabular-nums">R$ {(summary.costUtl * USD_TO_BRL).toFixed(2)}</p>
-          </div>
-          <div className="rounded-lg bg-background/60 border border-border/50 p-2">
-            <p className="text-[10px] text-muted-foreground uppercase">Auth</p>
-            <p className="font-semibold tabular-nums">R$ {(summary.costAuth * USD_TO_BRL).toFixed(2)}</p>
-          </div>
-        </div>
-      </div>
-
       {/* Daily chart */}
       <div>
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
