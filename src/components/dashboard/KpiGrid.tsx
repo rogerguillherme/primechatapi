@@ -29,12 +29,6 @@ export function KpiGrid() {
       if (!user) return null;
       const { data } = await supabase.rpc("get_advanced_dashboard_stats", { p_user_id: user.id });
       const row = data?.[0] || null;
-      if (!row) return null;
-
-      // Estimativa: cada mensagem automatizada economiza ~2min de operação
-      const sentMsgs = Number(row.total_messages_sent || 0);
-      const minutesSaved = sentMsgs * 2;
-      const hoursSaved = Math.round(minutesSaved / 60);
 
       const now = new Date();
       const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -44,17 +38,9 @@ export function KpiGrid() {
         .eq("user_id", user.id)
         .gte("created_at", startOfToday.toISOString());
 
-      const { count: activeCampaigns } = await supabase
-        .from("broadcast_jobs")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .in("status", ["running", "processing", "pending"]);
-
       return {
         leadsToday: leadsToday ?? 0,
-        responseRate: Number(row.response_rate || 0),
-        hoursSaved,
-        activeCampaigns: activeCampaigns ?? 0,
+        responseRate: Number(row?.response_rate || 0),
       };
     },
     enabled: !!user,
@@ -76,24 +62,11 @@ export function KpiGrid() {
       icon: Reply,
       accent: "revenue",
     },
-    {
-      label: "IA economizou",
-      value: `${stats?.hoursSaved ?? 0}h`,
-      hint: "Tempo poupado pelas automações",
-      icon: Clock,
-      accent: "ai",
-    },
-    {
-      label: "Campanhas ativas",
-      value: String(stats?.activeCampaigns ?? 0),
-      hint: "Disparos em andamento agora",
-      icon: Zap,
-      accent: "warning",
-    },
   ];
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+
       {kpis.map((k) => (
         <PremiumCard key={k.label} className="p-4 sm:p-5">
           <div className="flex items-start justify-between gap-2 mb-3">
