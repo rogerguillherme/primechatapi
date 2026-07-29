@@ -33,6 +33,7 @@ function inferCategory(cat: string | null | undefined): "utility" | "marketing" 
 export function BroadcastMetricsPanel() {
   const { user } = useAuth();
   const [period, setPeriod] = useState<PeriodKey>("30d");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["broadcast-metrics", user?.id, period],
@@ -56,7 +57,25 @@ export function BroadcastMetricsPanel() {
       const jobs = jobsRes.data || [];
       const tpls = tplRes.data || [];
       const tplCat = new Map(tpls.map((t) => [t.id, inferCategory(t.category)]));
-      return { jobs, tplCat, days };
+
+      // Fetch click tracking for these campaigns
+      const jobIds = jobs.map((j) => j.id);
+      let clicks: any[] = [];
+      if (jobIds.length > 0) {
+        const { data: cl } = await supabase
+          .from("click_tracking_links")
+          .select("campaign_id, original_url, short_code, click_count")
+          .in("campaign_id", jobIds);
+        clicks = cl || [];
+      }
+      const clicksByJob = new Map<string, any[]>();
+      for (const c of clicks) {
+        const list = clicksByJob.get(c.campaign_id) || [];
+        list.push(c);
+        clicksByJob.set(c.campaign_id, list);
+      }
+
+      return { jobs, tplCat, days, clicksByJob };
     },
     enabled: !!user,
     refetchInterval: 60_000,
