@@ -538,11 +538,38 @@ Deno.serve(async (req) => {
     if (!template_name && lead_id && !isD360) {
       const { data: leadWindow } = await supabase
         .from("leads")
-        .select("last_inbound_at")
+        .select("last_inbound_at, phone, user_id")
         .eq("id", lead_id)
         .maybeSingle();
 
-      const lastInboundMs = leadWindow?.last_inbound_at ? new Date(leadWindow.last_inbound_at).getTime() : NaN;
+      // Duplicate leads with the same phone are allowed, so the reply may have
+      // landed on a sibling lead row. Consider the most recent inbound across
+      // every lead that shares this phone for the same user.
+      let lastInboundMs = leadWindow?.last_inbound_at ? new Date(leadWindow.last_inbound_at).getTime() : NaN;
+
+      const digits = String(leadWindow?.phone || phone || "").replace(/\D/g, "");
+      if (digits) {
+        const variants = new Set<string>([digits]);
+        if (digits.startsWith("55") && digits.length === 13) variants.add(digits.slice(0, 4) + digits.slice(5));
+        if (digits.startsWith("55") && digits.length === 12) variants.add(digits.slice(0, 4) + "9" + digits.slice(4));
+
+        let siblingQuery = supabase
+          .from("leads")
+          .select("last_inbound_at")
+          .in("phone", Array.from(variants))
+          .not("last_inbound_at", "is", null)
+          .order("last_inbound_at", { ascending: false })
+          .limit(1);
+
+        if (leadWindow?.user_id) siblingQuery = siblingQuery.eq("user_id", leadWindow.user_id);
+
+        const { data: sibling } = await siblingQuery.maybeSingle();
+        const siblingMs = sibling?.last_inbound_at ? new Date(sibling.last_inbound_at).getTime() : NaN;
+        if (Number.isFinite(siblingMs) && (!Number.isFinite(lastInboundMs) || siblingMs > lastInboundMs)) {
+          lastInboundMs = siblingMs;
+        }
+      }
+
       const insideWindow = Number.isFinite(lastInboundMs) && Date.now() - lastInboundMs <= 24 * 60 * 60 * 1000;
 
       if (!insideWindow) {
