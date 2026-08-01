@@ -45,9 +45,10 @@ export function WhatsAppLimits() {
       }
       return data?.limits || [];
     },
-    refetchInterval: isAuthenticated ? 60000 : false,
-    staleTime: 30000,
-    retry: false,
+    refetchInterval: isAuthenticated ? 300000 : false,
+    staleTime: 240000,
+    retry: 1,
+    retryDelay: 3000,
   });
 
   if (!isAuthenticated) return null;
