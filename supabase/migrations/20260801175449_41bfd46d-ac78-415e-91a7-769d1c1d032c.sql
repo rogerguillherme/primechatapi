@@ -1,0 +1,1 @@
+ALTER TABLE public.broadcast_jobs ADD COLUMN IF NOT EXISTS campaign_name text;
