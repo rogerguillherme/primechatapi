@@ -529,6 +529,23 @@ Deno.serve(async (req) => {
       const messageId = msg.id || crypto.randomUUID();
       const timestamp = msg.timestamp ? new Date(parseInt(msg.timestamp) * 1000).toISOString() : new Date().toISOString();
 
+      // ── IDEMPOTENCY GUARD ──
+      // Meta retries webhook deliveries; without this the same message/button click
+      // was processed several times, advancing the flow repeatedly and sending duplicates.
+      if (msg.id) {
+        const { error: dedupError } = await supabase
+          .from("whatsapp_inbound_dedup")
+          .insert({ message_id: msg.id });
+        if (dedupError) {
+          if (dedupError.code === "23505") {
+            console.log("Duplicate inbound webhook ignored:", msg.id);
+            continue;
+          }
+          console.error("Dedup insert error (processing anyway):", dedupError);
+        }
+      }
+
+
       console.log("WhatsApp inbound message summary:", JSON.stringify({
         messageId,
         type: msg.type,
