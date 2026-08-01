@@ -111,7 +111,8 @@ export function BroadcastMetricsPanel() {
         .from("message_logs")
         .select("wa_message_id, phone, created_at")
         .eq("user_id", user.id)
-        .gte("created_at", startIso);
+        .gte("created_at", startIso)
+        .lte("created_at", endIso);
       const broadcastWaIds = new Set((logs || []).map((l) => l.wa_message_id).filter(Boolean));
 
       const { data: allOutbound } = await supabase
@@ -119,7 +120,9 @@ export function BroadcastMetricsPanel() {
         .select("id, status, created_at, zapi_message_id, account_id, lead_id")
         .eq("direction", "outbound")
         .gte("created_at", startIso)
+        .lte("created_at", endIso)
         .limit(10000);
+
 
       const flowMsgs = (allOutbound || []).filter((m) => !m.zapi_message_id || !broadcastWaIds.has(m.zapi_message_id));
 
