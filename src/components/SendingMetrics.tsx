@@ -90,6 +90,8 @@ export function SendingMetrics() {
   const [refreshing, setRefreshing] = useState(false);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const { accounts } = useWhatsAppAccounts();
+  const { data: listData, isLoading: listLoading } = useCampaignListMetrics();
+
 
   const handleRefresh = () => {
     setRefreshing(true);
