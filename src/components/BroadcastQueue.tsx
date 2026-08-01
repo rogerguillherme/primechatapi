@@ -41,6 +41,7 @@ function getInitials(name: string) {
 /* ── types ── */
 interface QueueItem {
   id: string;
+  campaignName: string;
   accountId: string;
   templateId: string;
   leadSource: "manual" | "last_broadcast";
@@ -190,6 +191,7 @@ export function BroadcastQueue() {
   const addQueueItem = () => {
     const newItem: QueueItem = {
       id: generateId(),
+      campaignName: "",
       accountId: defaultAccount?.id || accounts[0]?.id || "",
       templateId: "",
       leadSource: "manual",
@@ -301,6 +303,7 @@ export function BroadcastQueue() {
         user_id: session?.user.id,
         account_id: item.accountId,
         template_id: item.templateId,
+        campaign_name: item.campaignName?.trim() || null,
         template_name: template.template_name,
         template_language: template.template_language || "pt_BR",
         template_params: storedParams,
@@ -897,6 +900,20 @@ function QueueItemCard({
         {isExpanded && item.status === "pending" && (
           <CardContent className="pt-0 space-y-4">
             <Separator />
+
+            {/* Custom campaign name */}
+            <div className="space-y-2">
+              <Label className="text-xs">Nome da lista (opcional)</Label>
+              <Input
+                value={item.campaignName}
+                onChange={(e) => onUpdate({ campaignName: e.target.value })}
+                placeholder="Ex.: Lista Black Friday — Base quente"
+                className="text-sm"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                Se vazio, usamos o nome do template nas métricas.
+              </p>
+            </div>
 
             {/* Account selector */}
             <div className="space-y-2">
