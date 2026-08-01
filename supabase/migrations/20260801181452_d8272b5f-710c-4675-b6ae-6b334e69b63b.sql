@@ -1,0 +1,1 @@
+ANALYZE public.chat_messages;
