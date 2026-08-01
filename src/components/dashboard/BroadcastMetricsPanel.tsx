@@ -106,7 +106,7 @@ export function BroadcastMetricsPanel() {
           .gte("created_at", startIso)
           .lte("created_at", endIso)
           .order("created_at", { ascending: false })
-          .limit(5000),
+          .limit(2000),
       ]);
 
       const clicks = clicksRes.data || [];
