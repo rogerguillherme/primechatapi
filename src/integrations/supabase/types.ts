@@ -2323,6 +2323,21 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_inbound_dedup: {
+        Row: {
+          created_at: string
+          message_id: string
+        }
+        Insert: {
+          created_at?: string
+          message_id: string
+        }
+        Update: {
+          created_at?: string
+          message_id?: string
+        }
+        Relationships: []
+      }
       whatsapp_onboarding_sessions: {
         Row: {
           completed_at: string | null
