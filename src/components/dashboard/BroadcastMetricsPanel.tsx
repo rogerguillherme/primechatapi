@@ -233,17 +233,18 @@ export function BroadcastMetricsPanel() {
   }, [data]);
 
   const stats = [
-    { label: "Enviadas", value: summary.sent, icon: Send, color: "text-primary" },
-    { label: "Entregues", value: summary.delivered, hint: `${summary.deliveryRate.toFixed(1)}%`, icon: CheckCheck, color: "text-emerald-500" },
-    { label: "Lidas", value: summary.read, hint: `${summary.readRate.toFixed(1)}%`, icon: Eye, color: "text-sky-500" },
-    { label: "Erros", value: summary.errors, icon: AlertTriangle, color: "text-destructive" },
+    { label: "Enviadas", value: summary.sent.toLocaleString("pt-BR"), icon: Send, color: "text-primary" },
+    { label: "Recebidos", value: summary.delivered.toLocaleString("pt-BR"), hint: `${summary.deliveryRate.toFixed(1)}% entrega`, icon: CheckCheck, color: "text-emerald-500" },
+    { label: "Abertura", value: `${summary.readRate.toFixed(1)}%`, hint: `${summary.read.toLocaleString("pt-BR")} lidas`, icon: Eye, color: "text-sky-500" },
+    { label: "Falhas", value: summary.errors.toLocaleString("pt-BR"), hint: `${(summary.sent > 0 ? (summary.errors / summary.sent) * 100 : 0).toFixed(1)}%`, icon: AlertTriangle, color: "text-destructive" },
+    { label: "Gasto do envio", value: `R$ ${summary.totalBrl.toFixed(2)}`, hint: `US$ ${summary.totalUsd.toFixed(2)}`, icon: DollarSign, color: "text-amber-500" },
   ];
 
   const flowStats = [
-    { label: "Enviadas", value: flowSummary.sent, icon: Send, color: "text-primary" },
-    { label: "Entregues", value: flowSummary.delivered, hint: `${flowSummary.deliveryRate.toFixed(1)}%`, icon: CheckCheck, color: "text-emerald-500" },
-    { label: "Lidas", value: flowSummary.read, hint: `${flowSummary.readRate.toFixed(1)}%`, icon: Eye, color: "text-sky-500" },
-    { label: "Erros", value: flowSummary.errors, icon: AlertTriangle, color: "text-destructive" },
+    { label: "Enviadas", value: flowSummary.sent.toLocaleString("pt-BR"), icon: Send, color: "text-primary" },
+    { label: "Recebidos", value: flowSummary.delivered.toLocaleString("pt-BR"), hint: `${flowSummary.deliveryRate.toFixed(1)}% entrega`, icon: CheckCheck, color: "text-emerald-500" },
+    { label: "Abertura", value: `${flowSummary.readRate.toFixed(1)}%`, hint: `${flowSummary.read.toLocaleString("pt-BR")} lidas`, icon: Eye, color: "text-sky-500" },
+    { label: "Falhas", value: flowSummary.errors.toLocaleString("pt-BR"), icon: AlertTriangle, color: "text-destructive" },
   ];
 
   return (
@@ -253,17 +254,47 @@ export function BroadcastMetricsPanel() {
           <h2 className="text-lg font-display font-bold">Disparos & Custos</h2>
           <p className="text-xs text-muted-foreground">Performance e gasto estimado com WhatsApp Cloud API</p>
         </div>
-        <Select value={period} onValueChange={(v) => setPeriod(v as PeriodKey)}>
-          <SelectTrigger className="h-9 w-[140px] text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="7d">Últimos 7 dias</SelectItem>
-            <SelectItem value="30d">Últimos 30 dias</SelectItem>
-            <SelectItem value="90d">Últimos 90 dias</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Select value={period} onValueChange={(v) => setPeriod(v as PeriodKey)}>
+            <SelectTrigger className="h-9 w-[150px] text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="today">Hoje</SelectItem>
+              <SelectItem value="7d">Últimos 7 dias</SelectItem>
+              <SelectItem value="30d">Últimos 30 dias</SelectItem>
+              <SelectItem value="90d">Últimos 90 dias</SelectItem>
+              <SelectItem value="custom">Personalizado</SelectItem>
+            </SelectContent>
+          </Select>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant={period === "custom" ? "default" : "outline"}
+                size="sm"
+                className="h-9 gap-1.5 text-xs"
+              >
+                <CalendarIcon size={14} />
+                {rangeLabel}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <Calendar
+                mode="range"
+                selected={customRange.from ? { from: customRange.from, to: customRange.to } : undefined}
+                onSelect={(range: any) => {
+                  setCustomRange({ from: range?.from, to: range?.to });
+                  if (range?.from) setPeriod("custom");
+                }}
+                numberOfMonths={2}
+                locale={ptBR}
+                className="p-3 pointer-events-auto"
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
+
 
       {/* Aberturas 24h */}
       <div>
