@@ -647,7 +647,25 @@ export default function Chat() {
 
         {/* Contact list */}
         <ScrollArea className="flex-1">
+          {leadsLoading && (
+            <div className="px-3 py-6 text-sm text-muted-foreground">Carregando conversas...</div>
+          )}
+          {!leadsLoading && leadsError && (
+            <div className="px-3 py-6 text-sm text-muted-foreground space-y-2">
+              <p>Não foi possível carregar as conversas.</p>
+              <button
+                onClick={() => refetchLeads()}
+                className="text-primary underline"
+              >
+                Tentar novamente
+              </button>
+            </div>
+          )}
+          {!leadsLoading && !leadsError && sortedLeads.length === 0 && (
+            <div className="px-3 py-6 text-sm text-muted-foreground">Nenhuma conversa encontrada.</div>
+          )}
           {sortedLeads.map((lead) => {
+
             const latest = latestMessages?.get(lead.id);
             const isSelected = lead.id === selectedLeadId;
             const avatarColor = getAvatarColor(lead.name);
