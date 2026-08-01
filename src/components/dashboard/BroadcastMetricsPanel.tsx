@@ -178,11 +178,10 @@ export function BroadcastMetricsPanel() {
   }, [data]);
 
   const chartData = useMemo(() => {
-    const days = data?.days ?? PERIOD_DAYS[period];
     const jobs = data?.jobs || [];
     const buckets = new Map<string, number>();
     for (let i = days - 1; i >= 0; i--) {
-      const key = format(subDays(new Date(), i), "yyyy-MM-dd");
+      const key = format(subDays(endDate, i), "yyyy-MM-dd");
       buckets.set(key, 0);
     }
     for (const j of jobs) {
@@ -194,7 +193,8 @@ export function BroadcastMetricsPanel() {
       label: format(new Date(date), days <= 7 ? "EEE dd" : "dd/MM", { locale: ptBR }),
       sent,
     }));
-  }, [data, period]);
+  }, [data, days, endDate]);
+
 
   const campaignRows = useMemo(() => {
     const jobs = data?.jobs || [];
