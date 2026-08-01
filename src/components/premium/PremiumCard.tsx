@@ -53,7 +53,7 @@ export function PremiumCard({
   };
 
   return (
-    <div className={cn("scene-3d", flat && "perspective-none")}>
+    <div className={cn("h-full", !flat && "scene-3d")}>
       <div
         ref={innerRef}
         onClick={onClick}
