@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.sync_lead_last_message() FROM PUBLIC, anon, authenticated;
