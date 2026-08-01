@@ -4,12 +4,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { PremiumCard } from "@/components/premium/PremiumCard";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
-import { Send, CheckCheck, Eye, AlertTriangle, DollarSign, MousePointerClick, ChevronDown, ChevronRight } from "lucide-react";
+import { Send, CheckCheck, Eye, AlertTriangle, DollarSign, MousePointerClick, ChevronDown, ChevronRight, CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { format, subDays, startOfDay } from "date-fns";
+import { format, subDays, startOfDay, endOfDay, differenceInCalendarDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 // WhatsApp Cloud API pricing (USD) — Brazil
@@ -20,8 +23,8 @@ const PRICING = {
 };
 const USD_TO_BRL = 5.2;
 
-type PeriodKey = "7d" | "30d" | "90d";
-const PERIOD_DAYS: Record<PeriodKey, number> = { "7d": 7, "30d": 30, "90d": 90 };
+type PeriodKey = "today" | "7d" | "30d" | "90d" | "custom";
+const PERIOD_DAYS: Record<Exclude<PeriodKey, "custom">, number> = { today: 1, "7d": 7, "30d": 30, "90d": 90 };
 
 function inferCategory(cat: string | null | undefined): "utility" | "marketing" | "authentication" {
   const c = (cat || "").toLowerCase();
@@ -32,15 +35,31 @@ function inferCategory(cat: string | null | undefined): "utility" | "marketing" 
 
 export function BroadcastMetricsPanel() {
   const { user } = useAuth();
-  const [period, setPeriod] = useState<PeriodKey>("30d");
+  const [period, setPeriod] = useState<PeriodKey>("today");
+  const [customRange, setCustomRange] = useState<{ from?: Date; to?: Date }>({});
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  const { startDate, endDate, days } = useMemo(() => {
+    if (period === "custom" && customRange.from) {
+      const from = startOfDay(customRange.from);
+      const to = endOfDay(customRange.to || customRange.from);
+      return { startDate: from, endDate: to, days: differenceInCalendarDays(to, from) + 1 };
+    }
+    const d = PERIOD_DAYS[(period === "custom" ? "today" : period) as Exclude<PeriodKey, "custom">];
+    return { startDate: startOfDay(subDays(new Date(), d - 1)), endDate: endOfDay(new Date()), days: d };
+  }, [period, customRange]);
+
+  const rangeLabel =
+    period === "custom" && customRange.from
+      ? `${format(customRange.from, "dd/MM/yy", { locale: ptBR })} – ${format(customRange.to || customRange.from, "dd/MM/yy", { locale: ptBR })}`
+      : "Personalizado";
+
   const { data, isLoading } = useQuery({
-    queryKey: ["broadcast-metrics", user?.id, period],
+    queryKey: ["broadcast-metrics", user?.id, startDate.toISOString(), endDate.toISOString()],
     queryFn: async () => {
       if (!user) return null;
-      const days = PERIOD_DAYS[period];
-      const startIso = startOfDay(subDays(new Date(), days - 1)).toISOString();
+      const startIso = startDate.toISOString();
+      const endIso = endDate.toISOString();
 
       const [jobsRes, tplRes, flowMsgsRes] = await Promise.all([
         supabase
@@ -48,6 +67,7 @@ export function BroadcastMetricsPanel() {
           .select("id, template_id, template_name, sent_count, delivered_count, read_count, error_count, created_at, status")
           .eq("user_id", user.id)
           .gte("created_at", startIso)
+          .lte("created_at", endIso)
           .order("created_at", { ascending: false }),
         supabase
           .from("chat_templates")
@@ -60,8 +80,10 @@ export function BroadcastMetricsPanel() {
           .select("id, status, created_at, delivered_at, read_at, account_id, lead_id")
           .eq("direction", "outbound")
           .is("zapi_message_id", null) // heuristic: opening templates carry wa msg id via logs; flow uses this too — refined below
-          .gte("created_at", startIso),
+          .gte("created_at", startIso)
+          .lte("created_at", endIso),
       ]);
+
       const jobs = jobsRes.data || [];
       const tpls = tplRes.data || [];
       const tplCat = new Map(tpls.map((t) => [t.id, inferCategory(t.category)]));
@@ -89,7 +111,8 @@ export function BroadcastMetricsPanel() {
         .from("message_logs")
         .select("wa_message_id, phone, created_at")
         .eq("user_id", user.id)
-        .gte("created_at", startIso);
+        .gte("created_at", startIso)
+        .lte("created_at", endIso);
       const broadcastWaIds = new Set((logs || []).map((l) => l.wa_message_id).filter(Boolean));
 
       const { data: allOutbound } = await supabase
@@ -97,7 +120,9 @@ export function BroadcastMetricsPanel() {
         .select("id, status, created_at, zapi_message_id, account_id, lead_id")
         .eq("direction", "outbound")
         .gte("created_at", startIso)
+        .lte("created_at", endIso)
         .limit(10000);
+
 
       const flowMsgs = (allOutbound || []).filter((m) => !m.zapi_message_id || !broadcastWaIds.has(m.zapi_message_id));
 
@@ -153,11 +178,10 @@ export function BroadcastMetricsPanel() {
   }, [data]);
 
   const chartData = useMemo(() => {
-    const days = data?.days ?? PERIOD_DAYS[period];
     const jobs = data?.jobs || [];
     const buckets = new Map<string, number>();
     for (let i = days - 1; i >= 0; i--) {
-      const key = format(subDays(new Date(), i), "yyyy-MM-dd");
+      const key = format(subDays(endDate, i), "yyyy-MM-dd");
       buckets.set(key, 0);
     }
     for (const j of jobs) {
@@ -169,7 +193,8 @@ export function BroadcastMetricsPanel() {
       label: format(new Date(date), days <= 7 ? "EEE dd" : "dd/MM", { locale: ptBR }),
       sent,
     }));
-  }, [data, period]);
+  }, [data, days, endDate]);
+
 
   const campaignRows = useMemo(() => {
     const jobs = data?.jobs || [];
@@ -208,17 +233,18 @@ export function BroadcastMetricsPanel() {
   }, [data]);
 
   const stats = [
-    { label: "Enviadas", value: summary.sent, icon: Send, color: "text-primary" },
-    { label: "Entregues", value: summary.delivered, hint: `${summary.deliveryRate.toFixed(1)}%`, icon: CheckCheck, color: "text-emerald-500" },
-    { label: "Lidas", value: summary.read, hint: `${summary.readRate.toFixed(1)}%`, icon: Eye, color: "text-sky-500" },
-    { label: "Erros", value: summary.errors, icon: AlertTriangle, color: "text-destructive" },
+    { label: "Enviadas", value: summary.sent.toLocaleString("pt-BR"), icon: Send, color: "text-primary" },
+    { label: "Recebidos", value: summary.delivered.toLocaleString("pt-BR"), hint: `${summary.deliveryRate.toFixed(1)}% entrega`, icon: CheckCheck, color: "text-emerald-500" },
+    { label: "Abertura", value: `${summary.readRate.toFixed(1)}%`, hint: `${summary.read.toLocaleString("pt-BR")} lidas`, icon: Eye, color: "text-sky-500" },
+    { label: "Falhas", value: summary.errors.toLocaleString("pt-BR"), hint: `${(summary.sent > 0 ? (summary.errors / summary.sent) * 100 : 0).toFixed(1)}%`, icon: AlertTriangle, color: "text-destructive" },
+    { label: "Gasto do envio", value: `R$ ${summary.totalBrl.toFixed(2)}`, hint: `US$ ${summary.totalUsd.toFixed(2)}`, icon: DollarSign, color: "text-amber-500" },
   ];
 
   const flowStats = [
-    { label: "Enviadas", value: flowSummary.sent, icon: Send, color: "text-primary" },
-    { label: "Entregues", value: flowSummary.delivered, hint: `${flowSummary.deliveryRate.toFixed(1)}%`, icon: CheckCheck, color: "text-emerald-500" },
-    { label: "Lidas", value: flowSummary.read, hint: `${flowSummary.readRate.toFixed(1)}%`, icon: Eye, color: "text-sky-500" },
-    { label: "Erros", value: flowSummary.errors, icon: AlertTriangle, color: "text-destructive" },
+    { label: "Enviadas", value: flowSummary.sent.toLocaleString("pt-BR"), icon: Send, color: "text-primary" },
+    { label: "Recebidos", value: flowSummary.delivered.toLocaleString("pt-BR"), hint: `${flowSummary.deliveryRate.toFixed(1)}% entrega`, icon: CheckCheck, color: "text-emerald-500" },
+    { label: "Abertura", value: `${flowSummary.readRate.toFixed(1)}%`, hint: `${flowSummary.read.toLocaleString("pt-BR")} lidas`, icon: Eye, color: "text-sky-500" },
+    { label: "Falhas", value: flowSummary.errors.toLocaleString("pt-BR"), icon: AlertTriangle, color: "text-destructive" },
   ];
 
   return (
@@ -228,17 +254,47 @@ export function BroadcastMetricsPanel() {
           <h2 className="text-lg font-display font-bold">Disparos & Custos</h2>
           <p className="text-xs text-muted-foreground">Performance e gasto estimado com WhatsApp Cloud API</p>
         </div>
-        <Select value={period} onValueChange={(v) => setPeriod(v as PeriodKey)}>
-          <SelectTrigger className="h-9 w-[140px] text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="7d">Últimos 7 dias</SelectItem>
-            <SelectItem value="30d">Últimos 30 dias</SelectItem>
-            <SelectItem value="90d">Últimos 90 dias</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Select value={period} onValueChange={(v) => setPeriod(v as PeriodKey)}>
+            <SelectTrigger className="h-9 w-[150px] text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="today">Hoje</SelectItem>
+              <SelectItem value="7d">Últimos 7 dias</SelectItem>
+              <SelectItem value="30d">Últimos 30 dias</SelectItem>
+              <SelectItem value="90d">Últimos 90 dias</SelectItem>
+              <SelectItem value="custom">Personalizado</SelectItem>
+            </SelectContent>
+          </Select>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant={period === "custom" ? "default" : "outline"}
+                size="sm"
+                className="h-9 gap-1.5 text-xs"
+              >
+                <CalendarIcon size={14} />
+                {rangeLabel}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <Calendar
+                mode="range"
+                selected={customRange.from ? { from: customRange.from, to: customRange.to } : undefined}
+                onSelect={(range: any) => {
+                  setCustomRange({ from: range?.from, to: range?.to });
+                  if (range?.from) setPeriod("custom");
+                }}
+                numberOfMonths={2}
+                locale={ptBR}
+                className="p-3 pointer-events-auto"
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
+
 
       {/* Aberturas 24h */}
       <div>
@@ -248,7 +304,7 @@ export function BroadcastMetricsPanel() {
           </p>
           <span className="text-[10px] text-muted-foreground">Mensagens iniciais via template</span>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           {stats.map((s) => (
             <div key={s.label} className="rounded-xl border border-border/60 bg-card/40 p-3">
               <div className="flex items-center justify-between mb-1.5">
@@ -256,8 +312,9 @@ export function BroadcastMetricsPanel() {
                 <s.icon size={14} className={cn(s.color)} />
               </div>
               <p className="text-2xl font-display font-bold tabular-nums leading-none">
-                {s.value.toLocaleString("pt-BR")}
+                {s.value}
               </p>
+
               {s.hint && <p className="text-[10px] text-muted-foreground mt-1">{s.hint}</p>}
             </div>
           ))}
@@ -280,7 +337,7 @@ export function BroadcastMetricsPanel() {
                 <s.icon size={14} className={cn(s.color)} />
               </div>
               <p className="text-2xl font-display font-bold tabular-nums leading-none">
-                {s.value.toLocaleString("pt-BR")}
+                {s.value}
               </p>
               {s.hint && <p className="text-[10px] text-muted-foreground mt-1">{s.hint}</p>}
             </div>

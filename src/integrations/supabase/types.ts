@@ -2181,6 +2181,7 @@ export type Database = {
           business_account_id: string | null
           business_id: string | null
           created_at: string
+          display_phone_number: string | null
           id: string
           is_default: boolean
           last_health_at: string | null
@@ -2209,6 +2210,7 @@ export type Database = {
           business_account_id?: string | null
           business_id?: string | null
           created_at?: string
+          display_phone_number?: string | null
           id?: string
           is_default?: boolean
           last_health_at?: string | null
@@ -2237,6 +2239,7 @@ export type Database = {
           business_account_id?: string | null
           business_id?: string | null
           created_at?: string
+          display_phone_number?: string | null
           id?: string
           is_default?: boolean
           last_health_at?: string | null

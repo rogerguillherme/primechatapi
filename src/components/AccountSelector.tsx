@@ -8,6 +8,7 @@ interface Account {
   name: string;
   is_default: boolean;
   phone_number_id: string;
+  display_phone_number?: string | null;
 }
 
 interface AccountSelectorProps {
@@ -17,6 +18,10 @@ interface AccountSelectorProps {
   mode?: "single" | "multi";
   compact?: boolean;
   label?: string;
+}
+
+function phoneLabel(a: Account) {
+  return a.display_phone_number || a.phone_number_id;
 }
 
 export function AccountSelector({ accounts, selectedIds, onToggle, mode = "single", compact = false, label = "Conta" }: AccountSelectorProps) {
@@ -39,7 +44,7 @@ export function AccountSelector({ accounts, selectedIds, onToggle, mode = "singl
         >
           {accounts.map((a) => (
             <option key={a.id} value={a.id}>
-              {a.name} {a.is_default ? "(padrão)" : ""}
+              {a.name} · {phoneLabel(a)} {a.is_default ? "(padrão)" : ""}
             </option>
           ))}
         </select>
@@ -79,6 +84,7 @@ export function AccountSelector({ accounts, selectedIds, onToggle, mode = "singl
                 <span className="text-sm font-medium truncate">{a.name}</span>
                 {a.is_default && <Badge variant="default" className="text-[10px] px-1.5 py-0">Padrão</Badge>}
               </div>
+              <p className="text-xs text-muted-foreground tabular-nums truncate">{phoneLabel(a)}</p>
             </div>
             {mode === "single" && (
               <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${selectedIds.has(a.id) ? "border-primary bg-primary" : "border-muted-foreground/40"}`}>

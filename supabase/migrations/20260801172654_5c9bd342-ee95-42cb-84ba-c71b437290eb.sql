@@ -1,0 +1,1 @@
+ALTER TABLE public.whatsapp_accounts ADD COLUMN IF NOT EXISTS display_phone_number text;
