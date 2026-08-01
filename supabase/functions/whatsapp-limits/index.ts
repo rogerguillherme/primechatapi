@@ -71,11 +71,13 @@ Deno.serve(async (req) => {
     }
 
     // Fetch active meta_connections to use their (potentially fresher) tokens
-    const { data: metaConns } = await adminClient
-      .from("meta_connections")
-      .select("waba_id, meta_access_token")
-      .eq("user_id", userId)
-      .eq("status", "connected");
+    const metaConns = await withRetry<any[]>(() =>
+      adminClient
+        .from("meta_connections")
+        .select("waba_id, meta_access_token")
+        .eq("user_id", userId)
+        .eq("status", "connected")
+    ).catch(() => null);
 
     // Build a map of waba_id -> meta_access_token
     const metaTokenByWaba: Record<string, string> = {};
