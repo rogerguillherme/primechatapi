@@ -4,12 +4,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { PremiumCard } from "@/components/premium/PremiumCard";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
-import { Send, CheckCheck, Eye, AlertTriangle, DollarSign, MousePointerClick, ChevronDown, ChevronRight } from "lucide-react";
+import { Send, CheckCheck, Eye, AlertTriangle, DollarSign, MousePointerClick, ChevronDown, ChevronRight, CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { format, subDays, startOfDay } from "date-fns";
+import { format, subDays, startOfDay, endOfDay, differenceInCalendarDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 // WhatsApp Cloud API pricing (USD) — Brazil
@@ -20,8 +23,8 @@ const PRICING = {
 };
 const USD_TO_BRL = 5.2;
 
-type PeriodKey = "7d" | "30d" | "90d";
-const PERIOD_DAYS: Record<PeriodKey, number> = { "7d": 7, "30d": 30, "90d": 90 };
+type PeriodKey = "today" | "7d" | "30d" | "90d" | "custom";
+const PERIOD_DAYS: Record<Exclude<PeriodKey, "custom">, number> = { today: 1, "7d": 7, "30d": 30, "90d": 90 };
 
 function inferCategory(cat: string | null | undefined): "utility" | "marketing" | "authentication" {
   const c = (cat || "").toLowerCase();
@@ -32,15 +35,31 @@ function inferCategory(cat: string | null | undefined): "utility" | "marketing" 
 
 export function BroadcastMetricsPanel() {
   const { user } = useAuth();
-  const [period, setPeriod] = useState<PeriodKey>("30d");
+  const [period, setPeriod] = useState<PeriodKey>("today");
+  const [customRange, setCustomRange] = useState<{ from?: Date; to?: Date }>({});
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  const { startDate, endDate, days } = useMemo(() => {
+    if (period === "custom" && customRange.from) {
+      const from = startOfDay(customRange.from);
+      const to = endOfDay(customRange.to || customRange.from);
+      return { startDate: from, endDate: to, days: differenceInCalendarDays(to, from) + 1 };
+    }
+    const d = PERIOD_DAYS[(period === "custom" ? "today" : period) as Exclude<PeriodKey, "custom">];
+    return { startDate: startOfDay(subDays(new Date(), d - 1)), endDate: endOfDay(new Date()), days: d };
+  }, [period, customRange]);
+
+  const rangeLabel =
+    period === "custom" && customRange.from
+      ? `${format(customRange.from, "dd/MM/yy", { locale: ptBR })} – ${format(customRange.to || customRange.from, "dd/MM/yy", { locale: ptBR })}`
+      : "Personalizado";
+
   const { data, isLoading } = useQuery({
-    queryKey: ["broadcast-metrics", user?.id, period],
+    queryKey: ["broadcast-metrics", user?.id, startDate.toISOString(), endDate.toISOString()],
     queryFn: async () => {
       if (!user) return null;
-      const days = PERIOD_DAYS[period];
-      const startIso = startOfDay(subDays(new Date(), days - 1)).toISOString();
+      const startIso = startDate.toISOString();
+      const endIso = endDate.toISOString();
 
       const [jobsRes, tplRes, flowMsgsRes] = await Promise.all([
         supabase
@@ -48,6 +67,7 @@ export function BroadcastMetricsPanel() {
           .select("id, template_id, template_name, sent_count, delivered_count, read_count, error_count, created_at, status")
           .eq("user_id", user.id)
           .gte("created_at", startIso)
+          .lte("created_at", endIso)
           .order("created_at", { ascending: false }),
         supabase
           .from("chat_templates")
@@ -60,8 +80,10 @@ export function BroadcastMetricsPanel() {
           .select("id, status, created_at, delivered_at, read_at, account_id, lead_id")
           .eq("direction", "outbound")
           .is("zapi_message_id", null) // heuristic: opening templates carry wa msg id via logs; flow uses this too — refined below
-          .gte("created_at", startIso),
+          .gte("created_at", startIso)
+          .lte("created_at", endIso),
       ]);
+
       const jobs = jobsRes.data || [];
       const tpls = tplRes.data || [];
       const tplCat = new Map(tpls.map((t) => [t.id, inferCategory(t.category)]));
