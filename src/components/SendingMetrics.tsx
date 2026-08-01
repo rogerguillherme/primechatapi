@@ -418,6 +418,25 @@ export function SendingMetrics() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
+            <Zap size={16} /> Métricas individuais por lista
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <CampaignListMetrics rows={listData?.rows || []} isLoading={listLoading} title="" />
+          {listData && (
+            <p className="text-[11px] text-muted-foreground mt-3">
+              Custo total do período: <span className="font-semibold text-revenue">R$ {listData.totals.costBrl.toFixed(2)}</span>{" "}
+              · {listData.totals.billable.toLocaleString("pt-BR")} cobradas ·{" "}
+              {listData.totals.freeInWindow.toLocaleString("pt-BR")} grátis (janela 24h)
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
             <Send size={16} /> Disparos realizados
           </CardTitle>
         </CardHeader>
