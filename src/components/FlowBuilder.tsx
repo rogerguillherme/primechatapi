@@ -138,6 +138,65 @@ function FlowListView({ onEdit }: { onEdit: (flow: Flow | null, kind?: FlowKind)
     onError: (err: any) => toast.error(err.message),
   });
 
+  const duplicateFlow = useMutation({
+    mutationFn: async (flow: Flow) => {
+      const { data: original, error: fetchError } = await supabase
+        .from("flows")
+        .select("*")
+        .eq("id", flow.id)
+        .single();
+      if (fetchError) throw fetchError;
+
+      const { id: _id, created_at: _c, updated_at: _u, ...rest } = original as any;
+      const { data: newFlow, error: insertError } = await supabase
+        .from("flows")
+        .insert({ ...rest, name: `${original.name} (cópia)`, active: false })
+        .select("id")
+        .single();
+      if (insertError) throw insertError;
+
+      const { data: steps, error: stepsError } = await supabase
+        .from("flow_steps")
+        .select("*")
+        .eq("flow_id", flow.id)
+        .order("step_order");
+      if (stepsError) throw stepsError;
+
+      if (steps && steps.length > 0) {
+        const payload = steps.map((s: any) => {
+          const { id: _sid, created_at: _sc, ...srest } = s;
+          return { ...srest, flow_id: newFlow.id, parent_step_id: null };
+        });
+        const { data: newSteps, error: stepsInsertError } = await supabase
+          .from("flow_steps")
+          .insert(payload)
+          .select("id, step_order");
+        if (stepsInsertError) throw stepsInsertError;
+
+        // Remap parent references using step_order as the stable key.
+        const byOrder = new Map<number, string>((newSteps || []).map((s: any) => [s.step_order, s.id]));
+        const oldById = new Map<string, any>(steps.map((s: any) => [s.id, s]));
+        for (const oldStep of steps as any[]) {
+          if (!oldStep.parent_step_id) continue;
+          const parentOld = oldById.get(oldStep.parent_step_id);
+          const newId = byOrder.get(oldStep.step_order);
+          const newParentId = parentOld ? byOrder.get(parentOld.step_order) : undefined;
+          if (newId && newParentId) {
+            await supabase.from("flow_steps").update({ parent_step_id: newParentId }).eq("id", newId);
+          }
+        }
+      }
+
+      return newFlow.id as string;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["flows"] });
+      queryClient.invalidateQueries({ queryKey: ["flow-step-counts"] });
+      toast.success("Fluxo duplicado (criado como inativo).");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
   const deleteFlow = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("flows").delete().eq("id", id);
@@ -149,6 +208,7 @@ function FlowListView({ onEdit }: { onEdit: (flow: Flow | null, kind?: FlowKind)
     },
     onError: (err: any) => toast.error(err.message),
   });
+
 
   const filteredFlows = (flows || []).filter((f) => ((f.flow_kind as FlowKind) || "api") === activeKind);
 
