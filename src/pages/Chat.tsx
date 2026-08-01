@@ -87,20 +87,23 @@ export default function Chat() {
 
 
   // Fetch leads (already carries the denormalized last-message summary)
-  const { data: leads } = useQuery({
+  const { data: leads, isLoading: leadsLoading, error: leadsError, refetch: refetchLeads } = useQuery({
     queryKey: ["chat-leads"],
     queryFn: async () => {
-      const { data } = await (supabase as any)
+      const { data, error } = await (supabase as any)
         .from("leads")
         .select(
           "id, name, phone, email, photo_url, chat_status, updated_at, last_inbound_at, last_outbound_at, last_message_content, last_message_at, last_message_direction, last_message_status, last_message_account_id, account_ids"
         )
         .order("updated_at", { ascending: false })
-        .limit(5000);
+        .limit(1000);
+      if (error) throw error;
       return (data || []) as any[];
     },
     staleTime: 15000,
+    retry: 2,
   });
+
 
   const leadAccountMap = useMemo(() => {
     const map = new Map<string, Set<string>>();
@@ -644,7 +647,25 @@ export default function Chat() {
 
         {/* Contact list */}
         <ScrollArea className="flex-1">
+          {leadsLoading && (
+            <div className="px-3 py-6 text-sm text-muted-foreground">Carregando conversas...</div>
+          )}
+          {!leadsLoading && leadsError && (
+            <div className="px-3 py-6 text-sm text-muted-foreground space-y-2">
+              <p>Não foi possível carregar as conversas.</p>
+              <button
+                onClick={() => refetchLeads()}
+                className="text-primary underline"
+              >
+                Tentar novamente
+              </button>
+            </div>
+          )}
+          {!leadsLoading && !leadsError && sortedLeads.length === 0 && (
+            <div className="px-3 py-6 text-sm text-muted-foreground">Nenhuma conversa encontrada.</div>
+          )}
           {sortedLeads.map((lead) => {
+
             const latest = latestMessages?.get(lead.id);
             const isSelected = lead.id === selectedLeadId;
             const avatarColor = getAvatarColor(lead.name);
