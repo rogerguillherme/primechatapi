@@ -251,9 +251,18 @@ function FlowListView({ onEdit }: { onEdit: (flow: Flow | null, kind?: FlowKind)
               >
                 {flow.active ? <Pause size={14} /> : <Play size={14} />}
               </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(flow)}>
+              <Button
+                variant="ghost" size="icon" className="h-8 w-8"
+                onClick={() => duplicateFlow.mutate(flow)}
+                disabled={duplicateFlow.isPending}
+                title="Duplicar fluxo"
+              >
+                {duplicateFlow.isPending ? <Loader2 size={14} className="animate-spin" /> : <Copy size={14} />}
+              </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(flow)} title="Editar">
                 <ChevronRight size={14} />
               </Button>
+
               <Button
                 variant="ghost" size="icon"
                 className="h-8 w-8 text-destructive hover:text-destructive"
