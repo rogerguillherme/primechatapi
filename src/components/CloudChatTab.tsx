@@ -248,9 +248,9 @@ export function CloudChatTab() {
     const channel = supabase
       .channel("cloud-chat-global-rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_messages" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["chat-lead-summaries"] });
         queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
-        queryClient.invalidateQueries({ queryKey: ["chat-lead-summaries"] });
+        queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
+        queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, () => {
         queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
@@ -315,7 +315,7 @@ export function CloudChatTab() {
     const onVisible = () => {
       if (document.visibilityState === "visible") {
         queryClient.invalidateQueries({ queryKey });
-        queryClient.invalidateQueries({ queryKey: ["chat-lead-summaries"] });
+        queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
       }
     };
     document.addEventListener("visibilitychange", onVisible);
@@ -398,7 +398,7 @@ export function CloudChatTab() {
     onSuccess: () => {
       setMessage("");
       queryClient.invalidateQueries({ queryKey: ["chat-messages", selectedLeadId] });
-      queryClient.invalidateQueries({ queryKey: ["chat-lead-summaries"] });
+      queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
     },
     onError: (err: any) => toast.error(err.message),
   });

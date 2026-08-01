@@ -291,7 +291,7 @@ export default function Chat() {
           if (row?.lead_id === selectedLeadId) {
             queryClient.invalidateQueries({ queryKey: ["chat-messages", selectedLeadId] });
           }
-          queryClient.invalidateQueries({ queryKey: ["chat-lead-summaries"] });
+          queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
           queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
         }
       )
@@ -306,7 +306,7 @@ export default function Chat() {
 
     const interval = setInterval(() => {
       queryClient.invalidateQueries({ queryKey: ["chat-messages", selectedLeadId] });
-      queryClient.invalidateQueries({ queryKey: ["chat-lead-summaries"] });
+      queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
       queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
     }, 5000);
 
@@ -350,7 +350,7 @@ export default function Chat() {
     onSuccess: () => {
       setMessage("");
       queryClient.invalidateQueries({ queryKey: ["chat-messages", selectedLeadId] });
-      queryClient.invalidateQueries({ queryKey: ["chat-lead-summaries"] });
+      queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
     },
     onError: (err: any) => {
       toast({ title: "Erro ao enviar", description: err.message, variant: "destructive" });
