@@ -247,7 +247,7 @@ export function SendingMetrics() {
       // 1. Broadcast jobs
       const { data: jobs } = await supabase
         .from("broadcast_jobs")
-        .select("id, created_at, total_leads, sent_count, delivered_count, read_count, error_count, lead_ids, template_name, status")
+        .select("id, created_at, total_leads, sent_count, delivered_count, read_count, error_count, lead_ids, template_name, campaign_name, status")
         .order("created_at", { ascending: false });
 
       const { data: events } = jobs && jobs.length > 0
@@ -267,7 +267,7 @@ export function SendingMetrics() {
           const inProgress = status === "processing" || status === "queued" || status === "running" || status === "paused";
           groups.push({
             key: job.id,
-            label: `Disparo ${dateStr}${job.template_name ? ` — ${job.template_name}` : ""}`,
+            label: `${(job as any).campaign_name || (job.template_name ? `Disparo ${dateStr} — ${job.template_name}` : `Disparo ${dateStr}`)}`,
             total: job.total_leads || job.lead_ids?.length || 0,
             sent: job.sent_count || 0,
             delivered: effective.delivered,

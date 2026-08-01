@@ -207,6 +207,7 @@ export type Database = {
           account_id: string
           account_ids: string[] | null
           auto_paused_by_system: boolean
+          campaign_name: string | null
           consecutive_errors: number
           created_at: string
           delay_max_seconds: number
@@ -244,6 +245,7 @@ export type Database = {
           account_id: string
           account_ids?: string[] | null
           auto_paused_by_system?: boolean
+          campaign_name?: string | null
           consecutive_errors?: number
           created_at?: string
           delay_max_seconds?: number
@@ -281,6 +283,7 @@ export type Database = {
           account_id?: string
           account_ids?: string[] | null
           auto_paused_by_system?: boolean
+          campaign_name?: string | null
           consecutive_errors?: number
           created_at?: string
           delay_max_seconds?: number

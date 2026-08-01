@@ -98,7 +98,7 @@ export function BulkBroadcastDialog({ open, onOpenChange, accountId, accountName
     queryFn: async () => {
       const { data } = await supabase
         .from("broadcast_jobs")
-        .select("id, template_name, total_leads, created_at, status")
+        .select("id, template_name, campaign_name, total_leads, created_at, status")
         .or(`account_id.eq.${accountId},account_ids.cs.{${accountId}}`)
         .order("created_at", { ascending: false })
         .limit(50);
@@ -470,7 +470,7 @@ export function BulkBroadcastDialog({ open, onOpenChange, accountId, accountName
                           ) : (
                             previousJobs.map((j: any) => (
                               <SelectItem key={j.id} value={j.id} className="text-xs">
-                                {j.template_name || "Disparo"} • {j.total_leads} • {format(new Date(j.created_at), "dd/MM HH:mm")}
+                                {(j as any).campaign_name || j.template_name || "Disparo"} • {j.total_leads} • {format(new Date(j.created_at), "dd/MM HH:mm")}
                               </SelectItem>
                             ))
                           )}
