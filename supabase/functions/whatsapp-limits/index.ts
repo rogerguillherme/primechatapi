@@ -42,13 +42,28 @@ Deno.serve(async (req) => {
 
     const userId = claimsData.claims.sub;
 
-    const { data: accounts, error } = await adminClient
-      .from("whatsapp_accounts")
-      .select("id, name, phone_number_id, access_token, is_default, business_account_id, provider")
-      .eq("user_id", userId)
-      .order("is_default", { ascending: false });
+    // The DB pool can be saturated; retry transient "connection pool" timeouts.
+    const withRetry = async <T>(fn: () => Promise<{ data: T | null; error: any }>) => {
+      let lastError: any = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const { data, error } = await fn();
+        if (!error) return data;
+        lastError = error;
+        const msg = String(error.message || "");
+        if (!/connection pool|timed out|timeout/i.test(msg)) break;
+        await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+      }
+      throw lastError;
+    };
 
-    if (error) throw error;
+    const accounts = await withRetry<any[]>(() =>
+      adminClient
+        .from("whatsapp_accounts")
+        .select("id, name, phone_number_id, access_token, is_default, business_account_id, provider")
+        .eq("user_id", userId)
+        .order("is_default", { ascending: false })
+    );
+
     if (!accounts || accounts.length === 0) {
       return new Response(JSON.stringify({ limits: [] }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
