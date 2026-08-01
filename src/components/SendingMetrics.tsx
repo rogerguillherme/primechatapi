@@ -15,6 +15,8 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
+import { CampaignListMetrics, useCampaignListMetrics } from "@/components/dashboard/CampaignListMetrics";
+
 
 function getAvatarColor(name: string) {
   const colors = ["bg-emerald-600", "bg-violet-600", "bg-amber-600", "bg-rose-600", "bg-cyan-600", "bg-indigo-600"];
@@ -88,6 +90,8 @@ export function SendingMetrics() {
   const [refreshing, setRefreshing] = useState(false);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const { accounts } = useWhatsAppAccounts();
+  const { data: listData, isLoading: listLoading } = useCampaignListMetrics();
+
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -414,6 +418,25 @@ export function SendingMetrics() {
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Zap size={16} /> Métricas individuais por lista
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <CampaignListMetrics rows={listData?.rows || []} isLoading={listLoading} title="" />
+          {listData && (
+            <p className="text-[11px] text-muted-foreground mt-3">
+              Custo total do período: <span className="font-semibold text-revenue">R$ {listData.totals.costBrl.toFixed(2)}</span>{" "}
+              · {listData.totals.billable.toLocaleString("pt-BR")} cobradas ·{" "}
+              {listData.totals.freeInWindow.toLocaleString("pt-BR")} grátis (janela 24h)
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
 
       <Card>
         <CardHeader className="pb-2">

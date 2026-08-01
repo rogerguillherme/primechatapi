@@ -10,10 +10,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
-import { Send, CheckCheck, Eye, AlertTriangle, DollarSign, MousePointerClick, ChevronDown, ChevronRight, CalendarIcon } from "lucide-react";
+import { Send, CheckCheck, Eye, AlertTriangle, DollarSign, CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, subDays, startOfDay, endOfDay, differenceInCalendarDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { CampaignListMetrics, useCampaignListMetrics } from "./CampaignListMetrics";
+
 
 // WhatsApp Cloud API pricing (USD) — Brazil
 const PRICING = {
@@ -37,7 +39,7 @@ export function BroadcastMetricsPanel() {
   const { user } = useAuth();
   const [period, setPeriod] = useState<PeriodKey>("today");
   const [customRange, setCustomRange] = useState<{ from?: Date; to?: Date }>({});
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  
 
   const { startDate, endDate, days } = useMemo(() => {
     if (period === "custom" && customRange.from) {
@@ -177,6 +179,16 @@ export function BroadcastMetricsPanel() {
     };
   }, [data]);
 
+  // Per-list metrics + billing that discounts free 24h-window messages
+  const { data: listData, isLoading: listLoading } = useCampaignListMetrics(startDate, endDate);
+  const billing = {
+    billable: listData?.totals.billable || 0,
+    freeInWindow: listData?.totals.freeInWindow || 0,
+    totalUsd: listData?.totals.costUsd || 0,
+    totalBrl: listData?.totals.costBrl || 0,
+  };
+
+
   const chartData = useMemo(() => {
     const jobs = data?.jobs || [];
     const buckets = new Map<string, number>();
@@ -196,49 +208,14 @@ export function BroadcastMetricsPanel() {
   }, [data, days, endDate]);
 
 
-  const campaignRows = useMemo(() => {
-    const jobs = data?.jobs || [];
-    const tplCat = data?.tplCat || new Map();
-    const clicksByJob = data?.clicksByJob || new Map<string, any[]>();
-    return [...jobs]
-      .filter((j) => (j.sent_count || 0) > 0)
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      .map((j) => {
-        const sent = j.sent_count || 0;
-        const delivered = j.delivered_count || 0;
-        const read = j.read_count || 0;
-        const errors = j.error_count || 0;
-        const cat = (j.template_id && tplCat.get(j.template_id)) || "marketing";
-        const rate = cat === "utility" ? PRICING.utility : cat === "authentication" ? PRICING.authentication : PRICING.marketing;
-        const costBrl = sent * rate * USD_TO_BRL;
-        const links = clicksByJob.get(j.id) || [];
-        const totalClicks = links.reduce((s, l) => s + (l.click_count || 0), 0);
-        return {
-          id: j.id,
-          name: j.template_name || "Disparo",
-          date: j.created_at,
-          sent,
-          delivered,
-          read,
-          errors,
-          deliveryRate: sent > 0 ? (delivered / sent) * 100 : 0,
-          readRate: sent > 0 ? (read / sent) * 100 : 0,
-          costBrl,
-          category: cat,
-          links,
-          totalClicks,
-          clickRate: sent > 0 ? (totalClicks / sent) * 100 : 0,
-        };
-      });
-  }, [data]);
-
   const stats = [
     { label: "Enviadas", value: summary.sent.toLocaleString("pt-BR"), icon: Send, color: "text-primary" },
     { label: "Recebidos", value: summary.delivered.toLocaleString("pt-BR"), hint: `${summary.deliveryRate.toFixed(1)}% entrega`, icon: CheckCheck, color: "text-emerald-500" },
     { label: "Abertura", value: `${summary.readRate.toFixed(1)}%`, hint: `${summary.read.toLocaleString("pt-BR")} lidas`, icon: Eye, color: "text-sky-500" },
     { label: "Falhas", value: summary.errors.toLocaleString("pt-BR"), hint: `${(summary.sent > 0 ? (summary.errors / summary.sent) * 100 : 0).toFixed(1)}%`, icon: AlertTriangle, color: "text-destructive" },
-    { label: "Gasto do envio", value: `R$ ${summary.totalBrl.toFixed(2)}`, hint: `US$ ${summary.totalUsd.toFixed(2)}`, icon: DollarSign, color: "text-amber-500" },
+    { label: "Gasto do envio", value: `R$ ${billing.totalBrl.toFixed(2)}`, hint: `${billing.billable.toLocaleString("pt-BR")} cobradas · ${billing.freeInWindow.toLocaleString("pt-BR")} grátis (24h)`, icon: DollarSign, color: "text-amber-500" },
   ];
+
 
   const flowStats = [
     { label: "Enviadas", value: flowSummary.sent.toLocaleString("pt-BR"), icon: Send, color: "text-primary" },
@@ -383,97 +360,9 @@ export function BroadcastMetricsPanel() {
         </div>
       </div>
 
-      {/* Per-campaign metrics */}
-      {campaignRows.length > 0 && (
-        <div>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-            Métricas por disparo
-          </p>
-          <div className="space-y-1.5">
-            {campaignRows.map((c) => {
-              const isOpen = expandedId === c.id;
-              return (
-                <div key={c.id} className="rounded-lg border border-border/50 bg-card/40 overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => setExpandedId(isOpen ? null : c.id)}
-                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-card/60 transition-colors text-left"
-                  >
-                    {isOpen ? <ChevronDown size={14} className="text-muted-foreground shrink-0" /> : <ChevronRight size={14} className="text-muted-foreground shrink-0" />}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">{c.name}</p>
-                      <p className="text-[10px] text-muted-foreground">
-                        {format(new Date(c.date), "dd/MM/yyyy HH:mm", { locale: ptBR })} · {c.category}
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-sm font-semibold tabular-nums">{c.sent.toLocaleString("pt-BR")}</p>
-                      <p className="text-[10px] text-muted-foreground">enviadas</p>
-                    </div>
-                  </button>
-                  {isOpen && (
-                    <div className="border-t border-border/50 px-3 py-3 space-y-3 bg-background/40">
-                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                        <div>
-                          <p className="text-[10px] text-muted-foreground uppercase">Entregues</p>
-                          <p className="text-sm font-semibold tabular-nums">{c.delivered.toLocaleString("pt-BR")}</p>
-                          <p className="text-[10px] text-emerald-500">{c.deliveryRate.toFixed(1)}%</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-muted-foreground uppercase">Abertura</p>
-                          <p className="text-sm font-semibold tabular-nums">{c.read.toLocaleString("pt-BR")}</p>
-                          <p className="text-[10px] text-sky-500">{c.readRate.toFixed(1)}%</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-muted-foreground uppercase">Cliques</p>
-                          <p className="text-sm font-semibold tabular-nums">{c.totalClicks.toLocaleString("pt-BR")}</p>
-                          <p className="text-[10px] text-primary">{c.clickRate.toFixed(1)}% CTR</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-muted-foreground uppercase">Erros</p>
-                          <p className="text-sm font-semibold tabular-nums text-destructive">{c.errors.toLocaleString("pt-BR")}</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-muted-foreground uppercase">Custo</p>
-                          <p className="text-sm font-semibold tabular-nums text-revenue">
-                            R$ {c.costBrl.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </p>
-                        </div>
-                      </div>
-                      {c.links.length > 0 && (
-                        <div>
-                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                            <MousePointerClick size={11} /> Cliques por botão
-                          </p>
-                          <div className="space-y-1">
-                            {c.links
-                              .sort((a: any, b: any) => (b.click_count || 0) - (a.click_count || 0))
-                              .map((l: any) => (
-                                <div key={l.short_code} className="flex items-center justify-between gap-2 text-xs bg-card/40 rounded px-2 py-1.5">
-                                  <span className="truncate text-muted-foreground" title={l.original_url}>
-                                    {l.original_url}
-                                  </span>
-                                  <span className="tabular-nums font-semibold shrink-0">
-                                    {(l.click_count || 0).toLocaleString("pt-BR")}
-                                  </span>
-                                </div>
-                              ))}
-                          </div>
-                        </div>
-                      )}
-                      {c.links.length === 0 && (
-                        <p className="text-[10px] text-muted-foreground italic">
-                          Sem links rastreados neste disparo.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {/* Per-list metrics */}
+      <CampaignListMetrics rows={listData?.rows || []} isLoading={listLoading} title="Métricas por lista" />
     </PremiumCard>
   );
 }
+
