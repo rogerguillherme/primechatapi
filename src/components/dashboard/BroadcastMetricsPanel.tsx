@@ -337,7 +337,7 @@ export function BroadcastMetricsPanel() {
                 <s.icon size={14} className={cn(s.color)} />
               </div>
               <p className="text-2xl font-display font-bold tabular-nums leading-none">
-                {s.value.toLocaleString("pt-BR")}
+                {s.value}
               </p>
               {s.hint && <p className="text-[10px] text-muted-foreground mt-1">{s.hint}</p>}
             </div>
