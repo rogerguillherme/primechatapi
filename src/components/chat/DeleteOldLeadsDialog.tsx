@@ -65,7 +65,7 @@ export function DeleteOldLeadsDialog({ trigger }: Props) {
     onSuccess: (n) => {
       toast({ title: `${n} lead(s) removido(s)`, description: "Chat atualizado." });
       qc.invalidateQueries({ queryKey: ["chat-leads"] });
-      qc.invalidateQueries({ queryKey: ["chat-latest-messages"] });
+      qc.invalidateQueries({ queryKey: ["chat-lead-summaries"] });
       setOpen(false);
       setConfirmText("");
       setPreviewCount(null);
