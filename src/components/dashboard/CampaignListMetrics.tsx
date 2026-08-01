@@ -75,7 +75,8 @@ export interface CampaignListMetricsResult {
 export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
   const { user } = useAuth();
 
-  return useQuery<CampaignListMetricsResult | null>({
+  const query = useQuery<CampaignListMetricsResult | null>({
+
     queryKey: [
       "campaign-list-metrics",
       user?.id,
@@ -94,7 +95,7 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
         )
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
-        .limit(300);
+        .limit(100);
       if (startDate) jobsQuery = jobsQuery.gte("created_at", startDate.toISOString());
       if (endDate) jobsQuery = jobsQuery.lte("created_at", endDate.toISOString());
 
@@ -107,15 +108,25 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
       const tplCat = new Map((tplRes.data || []).map((t) => [t.id, inferCategory(t.category)]));
       const jobIds = jobs.map((j) => j.id);
 
-      // Clicks per campaign
-      let clicks: any[] = [];
-      if (jobIds.length > 0) {
-        const { data } = await supabase
-          .from("click_tracking_links")
-          .select("campaign_id, original_url, short_code, click_count")
-          .in("campaign_id", jobIds);
-        clicks = data || [];
-      }
+      // Clicks + billing logs in parallel
+      const [clicksRes, logsRes] = await Promise.all([
+        jobIds.length > 0
+          ? supabase
+              .from("click_tracking_links")
+              .select("campaign_id, original_url, short_code, click_count")
+              .in("campaign_id", jobIds)
+          : Promise.resolve({ data: [] as any[] }),
+        jobIds.length > 0
+          ? supabase
+              .from("message_logs")
+              .select("job_id, lead_id, status, sent_at, created_at")
+              .eq("user_id", user.id)
+              .in("job_id", jobIds)
+              .limit(20000)
+          : Promise.resolve({ data: [] as any[] }),
+      ]);
+
+      const clicks = clicksRes.data || [];
       const clicksByJob = new Map<string, any[]>();
       for (const c of clicks) {
         const list = clicksByJob.get(c.campaign_id) || [];
@@ -123,26 +134,20 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
         clicksByJob.set(c.campaign_id, list);
       }
 
-      // Message logs to determine which sends were actually billable
-      let logs: any[] = [];
-      if (jobIds.length > 0) {
-        const { data } = await supabase
-          .from("message_logs")
-          .select("job_id, lead_id, status, sent_at, created_at")
-          .eq("user_id", user.id)
-          .in("job_id", jobIds)
-          .limit(50000);
-        logs = data || [];
+      const logs = logsRes.data || [];
+
+      // Leads' last inbound timestamp → 24h window reference (parallel chunks)
+      const leadIds = Array.from(new Set(logs.map((l: any) => l.lead_id).filter(Boolean)));
+      const inboundByLead = new Map<string, string | null>();
+      const chunks: string[][] = [];
+      for (let i = 0; i < leadIds.length; i += 1000) chunks.push(leadIds.slice(i, i + 1000) as string[]);
+      const leadResults = await Promise.all(
+        chunks.map((chunk) => supabase.from("leads").select("id, last_inbound_at").in("id", chunk))
+      );
+      for (const res of leadResults) {
+        for (const l of res.data || []) inboundByLead.set(l.id, l.last_inbound_at);
       }
 
-      // Leads' last inbound timestamp → 24h window reference
-      const leadIds = Array.from(new Set(logs.map((l) => l.lead_id).filter(Boolean)));
-      const inboundByLead = new Map<string, string | null>();
-      for (let i = 0; i < leadIds.length; i += 500) {
-        const chunk = leadIds.slice(i, i + 500);
-        const { data } = await supabase.from("leads").select("id, last_inbound_at").in("id", chunk);
-        for (const l of data || []) inboundByLead.set(l.id, l.last_inbound_at);
-      }
 
       const OK = new Set(["sent", "accepted", "delivered", "read"]);
       const perJob = new Map<string, { billable: number; free: number; okTotal: number }>();
@@ -215,6 +220,9 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
       return { rows, totals };
     },
   });
+
+  return { ...query, isLoading: query.isLoading && !!user };
+
 }
 
 interface Props {

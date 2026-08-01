@@ -56,50 +56,60 @@ export function BroadcastMetricsPanel() {
       ? `${format(customRange.from, "dd/MM/yy", { locale: ptBR })} – ${format(customRange.to || customRange.from, "dd/MM/yy", { locale: ptBR })}`
       : "Personalizado";
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading: queryLoading } = useQuery({
     queryKey: ["broadcast-metrics", user?.id, startDate.toISOString(), endDate.toISOString()],
     queryFn: async () => {
       if (!user) return null;
       const startIso = startDate.toISOString();
       const endIso = endDate.toISOString();
 
-      const [jobsRes, tplRes, flowMsgsRes] = await Promise.all([
+      const [jobsRes, tplRes] = await Promise.all([
         supabase
           .from("broadcast_jobs")
           .select("id, template_id, template_name, sent_count, delivered_count, read_count, error_count, created_at, status")
           .eq("user_id", user.id)
           .gte("created_at", startIso)
           .lte("created_at", endIso)
-          .order("created_at", { ascending: false }),
+          .order("created_at", { ascending: false })
+          .limit(200),
         supabase
           .from("chat_templates")
           .select("id, category")
           .eq("user_id", user.id),
-        // Flow / conversational outbound (non-template): everything in chat_messages
-        // that's outbound and NOT sent as an opening template.
-        supabase
-          .from("chat_messages")
-          .select("id, status, created_at, delivered_at, read_at, account_id, lead_id")
-          .eq("direction", "outbound")
-          .is("zapi_message_id", null) // heuristic: opening templates carry wa msg id via logs; flow uses this too — refined below
-          .gte("created_at", startIso)
-          .lte("created_at", endIso),
       ]);
 
       const jobs = jobsRes.data || [];
       const tpls = tplRes.data || [];
       const tplCat = new Map(tpls.map((t) => [t.id, inferCategory(t.category)]));
 
-      // Fetch click tracking for these campaigns
+      // Fetch click tracking + broadcast logs + outbound messages in parallel
       const jobIds = jobs.map((j) => j.id);
-      let clicks: any[] = [];
-      if (jobIds.length > 0) {
-        const { data: cl } = await supabase
-          .from("click_tracking_links")
-          .select("campaign_id, original_url, short_code, click_count")
-          .in("campaign_id", jobIds);
-        clicks = cl || [];
-      }
+      const [clicksRes, logsRes, outboundRes] = await Promise.all([
+        jobIds.length > 0
+          ? supabase
+              .from("click_tracking_links")
+              .select("campaign_id, original_url, short_code, click_count")
+              .in("campaign_id", jobIds)
+          : Promise.resolve({ data: [] as any[] }),
+        supabase
+          .from("message_logs")
+          .select("wa_message_id")
+          .eq("user_id", user.id)
+          .gte("created_at", startIso)
+          .lte("created_at", endIso)
+          .not("wa_message_id", "is", null)
+          .limit(20000),
+        supabase
+          .from("chat_messages")
+          .select("id, status, created_at, zapi_message_id, account_id, lead_id")
+          .eq("direction", "outbound")
+          .gte("created_at", startIso)
+          .lte("created_at", endIso)
+          .order("created_at", { ascending: false })
+          .limit(2000),
+      ]);
+
+      const clicks = clicksRes.data || [];
       const clicksByJob = new Map<string, any[]>();
       for (const c of clicks) {
         const list = clicksByJob.get(c.campaign_id) || [];
@@ -107,32 +117,23 @@ export function BroadcastMetricsPanel() {
         clicksByJob.set(c.campaign_id, list);
       }
 
+      const broadcastWaIds = new Set((logsRes.data || []).map((l: any) => l.wa_message_id).filter(Boolean));
+
       // Flow messages: outbound chat_messages that are NOT part of a broadcast.
-      // We approximate by pulling all outbound and subtracting message_logs (broadcast sends).
-      const { data: logs } = await supabase
-        .from("message_logs")
-        .select("wa_message_id, phone, created_at")
-        .eq("user_id", user.id)
-        .gte("created_at", startIso)
-        .lte("created_at", endIso);
-      const broadcastWaIds = new Set((logs || []).map((l) => l.wa_message_id).filter(Boolean));
-
-      const { data: allOutbound } = await supabase
-        .from("chat_messages")
-        .select("id, status, created_at, zapi_message_id, account_id, lead_id")
-        .eq("direction", "outbound")
-        .gte("created_at", startIso)
-        .lte("created_at", endIso)
-        .limit(10000);
-
-
-      const flowMsgs = (allOutbound || []).filter((m) => !m.zapi_message_id || !broadcastWaIds.has(m.zapi_message_id));
+      const flowMsgs = (outboundRes.data || []).filter(
+        (m: any) => !m.zapi_message_id || !broadcastWaIds.has(m.zapi_message_id)
+      );
 
       return { jobs, tplCat, days, clicksByJob, flowMsgs };
+
     },
     enabled: !!user,
     refetchInterval: 60_000,
   });
+
+  const isLoading = queryLoading && !!user;
+
+
 
   const flowSummary = useMemo(() => {
     const msgs = data?.flowMsgs || [];

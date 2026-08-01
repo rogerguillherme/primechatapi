@@ -67,25 +67,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const {
-          data: { user },
-          error: userError,
-        } = await supabase.auth.getUser();
-
-        if (userError || !user) {
-          console.warn("Clearing invalid local auth session", userError);
-          await clearLocalSession();
-          applySession(null);
-          return;
-        }
-
+        // Trust the stored session right away so the app can render/query,
+        // then validate it in the background (never block the UI on network).
         applySession(storedSession);
+
+        try {
+          const validation = await Promise.race([
+            supabase.auth.getUser(),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
+          ]);
+          if (!validation) return; // timed out — keep the stored session
+          const { data, error: userError } = validation as Awaited<ReturnType<typeof supabase.auth.getUser>>;
+          if (userError?.status === 401 || userError?.status === 403) {
+            console.warn("Clearing invalid local auth session", userError);
+            await clearLocalSession();
+            applySession(null);
+          } else if (data?.user) {
+            void data.user;
+          }
+        } catch (validationError) {
+          // Network hiccup — keep the stored session instead of logging the user out.
+          console.warn("Auth validation skipped", validationError);
+        }
       } catch (error) {
         console.error("Unexpected auth bootstrap error", error);
         await clearLocalSession();
         applySession(null);
       }
     };
+
 
     const {
       data: { subscription },
