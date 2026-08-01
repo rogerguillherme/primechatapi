@@ -2354,6 +2354,18 @@ export type Database = {
           total_read: number
         }[]
       }
+      get_chat_lead_summaries: {
+        Args: { p_limit?: number }
+        Returns: {
+          account_id: string
+          account_ids: string[]
+          content: string
+          created_at: string
+          direction: string
+          lead_id: string
+          status: string
+        }[]
+      }
       get_dashboard_stats: {
         Args: never
         Returns: {
