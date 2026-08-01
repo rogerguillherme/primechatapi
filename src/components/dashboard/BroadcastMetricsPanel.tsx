@@ -10,10 +10,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
-import { Send, CheckCheck, Eye, AlertTriangle, DollarSign, MousePointerClick, ChevronDown, ChevronRight, CalendarIcon } from "lucide-react";
+import { Send, CheckCheck, Eye, AlertTriangle, DollarSign, CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, subDays, startOfDay, endOfDay, differenceInCalendarDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { CampaignListMetrics, useCampaignListMetrics } from "./CampaignListMetrics";
+
 
 // WhatsApp Cloud API pricing (USD) — Brazil
 const PRICING = {
