@@ -1329,6 +1329,7 @@ export type Database = {
       }
       leads: {
         Row: {
+          account_ids: string[]
           ai_agent_id: string | null
           ai_enabled: boolean
           assigned_to: string | null
@@ -1339,6 +1340,11 @@ export type Database = {
           hubla_id: string | null
           id: string
           last_inbound_at: string | null
+          last_message_account_id: string | null
+          last_message_at: string | null
+          last_message_content: string | null
+          last_message_direction: string | null
+          last_message_status: string | null
           last_outbound_at: string | null
           metadata: Json
           name: string
@@ -1352,6 +1358,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          account_ids?: string[]
           ai_agent_id?: string | null
           ai_enabled?: boolean
           assigned_to?: string | null
@@ -1362,6 +1369,11 @@ export type Database = {
           hubla_id?: string | null
           id?: string
           last_inbound_at?: string | null
+          last_message_account_id?: string | null
+          last_message_at?: string | null
+          last_message_content?: string | null
+          last_message_direction?: string | null
+          last_message_status?: string | null
           last_outbound_at?: string | null
           metadata?: Json
           name: string
@@ -1375,6 +1387,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          account_ids?: string[]
           ai_agent_id?: string | null
           ai_enabled?: boolean
           assigned_to?: string | null
@@ -1385,6 +1398,11 @@ export type Database = {
           hubla_id?: string | null
           id?: string
           last_inbound_at?: string | null
+          last_message_account_id?: string | null
+          last_message_at?: string | null
+          last_message_content?: string | null
+          last_message_direction?: string | null
+          last_message_status?: string | null
           last_outbound_at?: string | null
           metadata?: Json
           name?: string

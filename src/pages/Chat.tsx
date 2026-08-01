@@ -86,51 +86,49 @@ export default function Chat() {
   const { accounts, defaultAccount } = useWhatsAppAccounts();
 
 
-  // Fetch leads
+  // Fetch leads (already carries the denormalized last-message summary)
   const { data: leads } = useQuery({
     queryKey: ["chat-leads"],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from("leads")
-        .select("id, name, phone, email, photo_url, chat_status, updated_at, last_inbound_at, last_outbound_at")
+        .select(
+          "id, name, phone, email, photo_url, chat_status, updated_at, last_inbound_at, last_outbound_at, last_message_content, last_message_at, last_message_direction, last_message_status, last_message_account_id, account_ids"
+        )
         .order("updated_at", { ascending: false })
         .limit(5000);
-      return data || [];
+      return (data || []) as any[];
     },
+    staleTime: 15000,
   });
 
-  // Fetch lead IDs per account for filtering
-  const { data: leadAccountMap } = useQuery({
-    queryKey: ["chat-lead-accounts"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("chat_messages")
-        .select("lead_id, account_id")
-        .not("account_id", "is", null);
-      const map = new Map<string, Set<string>>();
-      for (const m of data || []) {
-        if (!map.has(m.account_id!)) map.set(m.account_id!, new Set());
-        map.get(m.account_id!)!.add(m.lead_id);
+  const leadAccountMap = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const lead of leads || []) {
+      for (const accId of lead.account_ids || []) {
+        if (!map.has(accId)) map.set(accId, new Set());
+        map.get(accId)!.add(lead.id);
       }
-      return map;
-    },
-  });
+    }
+    return map;
+  }, [leads]);
 
-  // Fetch latest message per lead
-  const { data: latestMessages } = useQuery({
-    queryKey: ["chat-latest-messages"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("chat_messages")
-        .select("lead_id, content, created_at, direction, account_id")
-        .order("created_at", { ascending: false });
-      const map = new Map<string, { content: string; created_at: string; direction: string; account_id: string | null }>();
-      for (const m of data || []) {
-        if (!map.has(m.lead_id)) map.set(m.lead_id, m);
-      }
-      return map;
-    },
-  });
+  const latestMessages = useMemo(() => {
+    const map = new Map<string, { content: string; created_at: string; direction: string; status: string | null; account_id: string | null }>();
+    for (const lead of leads || []) {
+      if (!lead.last_message_at) continue;
+      map.set(lead.id, {
+        content: lead.last_message_content || "",
+        created_at: lead.last_message_at,
+        direction: lead.last_message_direction || "outbound",
+        status: lead.last_message_status,
+        account_id: lead.last_message_account_id,
+      });
+    }
+    return map;
+  }, [leads]);
+
+
 
   // Fetch messages for selected lead
   const { data: messages } = useQuery({
@@ -293,7 +291,7 @@ export default function Chat() {
           if (row?.lead_id === selectedLeadId) {
             queryClient.invalidateQueries({ queryKey: ["chat-messages", selectedLeadId] });
           }
-          queryClient.invalidateQueries({ queryKey: ["chat-latest-messages"] });
+          queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
           queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
         }
       )
@@ -308,7 +306,7 @@ export default function Chat() {
 
     const interval = setInterval(() => {
       queryClient.invalidateQueries({ queryKey: ["chat-messages", selectedLeadId] });
-      queryClient.invalidateQueries({ queryKey: ["chat-latest-messages"] });
+      queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
       queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
     }, 5000);
 
@@ -352,7 +350,7 @@ export default function Chat() {
     onSuccess: () => {
       setMessage("");
       queryClient.invalidateQueries({ queryKey: ["chat-messages", selectedLeadId] });
-      queryClient.invalidateQueries({ queryKey: ["chat-latest-messages"] });
+      queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
     },
     onError: (err: any) => {
       toast({ title: "Erro ao enviar", description: err.message, variant: "destructive" });
