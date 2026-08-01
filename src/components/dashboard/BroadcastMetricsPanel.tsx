@@ -179,6 +179,16 @@ export function BroadcastMetricsPanel() {
     };
   }, [data]);
 
+  // Per-list metrics + billing that discounts free 24h-window messages
+  const { data: listData, isLoading: listLoading } = useCampaignListMetrics(startDate, endDate);
+  const billing = {
+    billable: listData?.totals.billable || 0,
+    freeInWindow: listData?.totals.freeInWindow || 0,
+    totalUsd: listData?.totals.costUsd || 0,
+    totalBrl: listData?.totals.costBrl || 0,
+  };
+
+
   const chartData = useMemo(() => {
     const jobs = data?.jobs || [];
     const buckets = new Map<string, number>();
