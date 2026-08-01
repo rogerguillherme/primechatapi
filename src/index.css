@@ -215,10 +215,10 @@
     filter: blur(80px);
     opacity: 0.5;
     will-change: transform;
-    mix-blend-mode: screen;
   }
   .dark .smoke-blob {
-    opacity: 0.42;
+    opacity: 0.45;
+    mix-blend-mode: screen;
   }
   .smoke-blob-1 {
     width: 46vw; height: 46vw; left: -8vw; top: -10vw;
@@ -248,7 +248,7 @@
   /* Vidro para o painel lateral */
   .glass-sidebar {
     background:
-      linear-gradient(160deg, hsl(160 18% 8% / 0.72), hsl(152 44% 22% / 0.55));
+      linear-gradient(160deg, hsl(160 18% 8% / 0.92), hsl(152 44% 20% / 0.82));
     backdrop-filter: blur(22px) saturate(160%);
     -webkit-backdrop-filter: blur(22px) saturate(160%);
     border-right: 1px solid hsl(0 0% 100% / 0.12);
