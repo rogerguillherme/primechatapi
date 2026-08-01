@@ -133,40 +133,49 @@ export function CloudChatTab() {
     },
   });
 
-  // Fetch lead IDs per account
-  const { data: leadAccountMap } = useQuery({
-    queryKey: ["chat-lead-accounts"],
+  // Single server-side query: latest message per lead + accounts used per lead
+  const { data: leadSummaries } = useQuery({
+    queryKey: ["chat-lead-summaries"],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("chat_messages")
-        .select("lead_id, account_id")
-        .not("account_id", "is", null);
-      const map = new Map<string, Set<string>>();
-      for (const m of data || []) {
-        if (!map.has(m.account_id!)) map.set(m.account_id!, new Set());
-        map.get(m.account_id!)!.add(m.lead_id);
-      }
-      return map;
+      const { data } = await (supabase as any).rpc("get_chat_lead_summaries", { p_limit: 5000 });
+      return (data || []) as Array<{
+        lead_id: string;
+        content: string;
+        created_at: string;
+        direction: string;
+        status: string | null;
+        account_id: string | null;
+        account_ids: string[] | null;
+      }>;
     },
+    refetchInterval: 30000,
+    staleTime: 15000,
   });
 
-  // Latest message per lead (used for ordering, preview and "erro" tab detection)
-  const { data: latestMessages } = useQuery({
-    queryKey: ["chat-latest-messages"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("chat_messages")
-        .select("lead_id, content, created_at, direction, status, account_id")
-        .order("created_at", { ascending: false })
-        .limit(5000);
-      const map = new Map<string, { content: string; created_at: string; direction: string; status: string | null }>();
-      for (const m of data || []) {
-        if (!map.has(m.lead_id)) map.set(m.lead_id, m as any);
+  const leadAccountMap = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const row of leadSummaries || []) {
+      for (const accId of row.account_ids || []) {
+        if (!map.has(accId)) map.set(accId, new Set());
+        map.get(accId)!.add(row.lead_id);
       }
-      return map;
-    },
-    refetchInterval: 15000,
-  });
+    }
+    return map;
+  }, [leadSummaries]);
+
+  const latestMessages = useMemo(() => {
+    const map = new Map<string, { content: string; created_at: string; direction: string; status: string | null }>();
+    for (const row of leadSummaries || []) {
+      map.set(row.lead_id, {
+        content: row.content,
+        created_at: row.created_at,
+        direction: row.direction,
+        status: row.status,
+      });
+    }
+    return map;
+  }, [leadSummaries]);
+
 
   // A lead sits in "Erro" only while its most recent message is a failed outbound.
   // Once a new inbound message arrives (or a successful send happens), it moves out
