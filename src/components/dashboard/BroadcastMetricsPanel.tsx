@@ -39,7 +39,7 @@ export function BroadcastMetricsPanel() {
   const { user } = useAuth();
   const [period, setPeriod] = useState<PeriodKey>("today");
   const [customRange, setCustomRange] = useState<{ from?: Date; to?: Date }>({});
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  
 
   const { startDate, endDate, days } = useMemo(() => {
     if (period === "custom" && customRange.from) {
