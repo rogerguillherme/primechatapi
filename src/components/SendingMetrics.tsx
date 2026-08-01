@@ -15,6 +15,8 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
+import { CampaignListMetrics, useCampaignListMetrics } from "@/components/dashboard/CampaignListMetrics";
+
 
 function getAvatarColor(name: string) {
   const colors = ["bg-emerald-600", "bg-violet-600", "bg-amber-600", "bg-rose-600", "bg-cyan-600", "bg-indigo-600"];
