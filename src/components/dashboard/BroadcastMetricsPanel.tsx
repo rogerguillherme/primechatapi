@@ -198,49 +198,14 @@ export function BroadcastMetricsPanel() {
   }, [data, days, endDate]);
 
 
-  const campaignRows = useMemo(() => {
-    const jobs = data?.jobs || [];
-    const tplCat = data?.tplCat || new Map();
-    const clicksByJob = data?.clicksByJob || new Map<string, any[]>();
-    return [...jobs]
-      .filter((j) => (j.sent_count || 0) > 0)
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      .map((j) => {
-        const sent = j.sent_count || 0;
-        const delivered = j.delivered_count || 0;
-        const read = j.read_count || 0;
-        const errors = j.error_count || 0;
-        const cat = (j.template_id && tplCat.get(j.template_id)) || "marketing";
-        const rate = cat === "utility" ? PRICING.utility : cat === "authentication" ? PRICING.authentication : PRICING.marketing;
-        const costBrl = sent * rate * USD_TO_BRL;
-        const links = clicksByJob.get(j.id) || [];
-        const totalClicks = links.reduce((s, l) => s + (l.click_count || 0), 0);
-        return {
-          id: j.id,
-          name: j.template_name || "Disparo",
-          date: j.created_at,
-          sent,
-          delivered,
-          read,
-          errors,
-          deliveryRate: sent > 0 ? (delivered / sent) * 100 : 0,
-          readRate: sent > 0 ? (read / sent) * 100 : 0,
-          costBrl,
-          category: cat,
-          links,
-          totalClicks,
-          clickRate: sent > 0 ? (totalClicks / sent) * 100 : 0,
-        };
-      });
-  }, [data]);
-
   const stats = [
     { label: "Enviadas", value: summary.sent.toLocaleString("pt-BR"), icon: Send, color: "text-primary" },
     { label: "Recebidos", value: summary.delivered.toLocaleString("pt-BR"), hint: `${summary.deliveryRate.toFixed(1)}% entrega`, icon: CheckCheck, color: "text-emerald-500" },
     { label: "Abertura", value: `${summary.readRate.toFixed(1)}%`, hint: `${summary.read.toLocaleString("pt-BR")} lidas`, icon: Eye, color: "text-sky-500" },
     { label: "Falhas", value: summary.errors.toLocaleString("pt-BR"), hint: `${(summary.sent > 0 ? (summary.errors / summary.sent) * 100 : 0).toFixed(1)}%`, icon: AlertTriangle, color: "text-destructive" },
-    { label: "Gasto do envio", value: `R$ ${summary.totalBrl.toFixed(2)}`, hint: `US$ ${summary.totalUsd.toFixed(2)}`, icon: DollarSign, color: "text-amber-500" },
+    { label: "Gasto do envio", value: `R$ ${billing.totalBrl.toFixed(2)}`, hint: `${billing.billable.toLocaleString("pt-BR")} cobradas · ${billing.freeInWindow.toLocaleString("pt-BR")} grátis (24h)`, icon: DollarSign, color: "text-amber-500" },
   ];
+
 
   const flowStats = [
     { label: "Enviadas", value: flowSummary.sent.toLocaleString("pt-BR"), icon: Send, color: "text-primary" },
