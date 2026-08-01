@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { SmokeBackground } from "@/components/SmokeBackground";
+
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -2186,11 +2188,14 @@ export default function WhatsAppApi() {
   }, []);
 
   return (
-    <div className="animate-fade-in">
-      <Tabs value={activeMainTab} onValueChange={(v) => { setActiveMainTab(v); if (v !== "flows") setFlowTriggerType(undefined); }} className="flex h-screen gap-0" orientation="vertical">
+    <div className="animate-fade-in relative">
+      <SmokeBackground />
+      <Tabs value={activeMainTab} onValueChange={(v) => { setActiveMainTab(v); if (v !== "flows") setFlowTriggerType(undefined); }} className="relative z-10 flex h-screen gap-0" orientation="vertical">
         {/* Sidebar */}
-        <div className={cn("shrink-0 border-r border-sidebar-border gradient-header flex flex-col transition-all duration-300", sidebarCollapsed ? "w-14" : "w-56")}>
-          <div className="p-3 border-b border-sidebar-border flex items-center justify-between">
+        <div className={cn("shrink-0 glass-sidebar flex flex-col transition-all duration-300 relative", sidebarCollapsed ? "w-14" : "w-56")}>
+          <div className="glass-sheen pointer-events-none absolute inset-0" />
+          <div className="relative p-3 border-b border-white/10 flex items-center justify-between">
+
             {!sidebarCollapsed && (
               <div className="flex items-center gap-2.5 animate-fade-in">
                 <div className="w-8 h-8 rounded-lg bg-whatsapp/20 flex items-center justify-center">
