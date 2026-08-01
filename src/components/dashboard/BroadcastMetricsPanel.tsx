@@ -304,7 +304,7 @@ export function BroadcastMetricsPanel() {
           </p>
           <span className="text-[10px] text-muted-foreground">Mensagens iniciais via template</span>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           {stats.map((s) => (
             <div key={s.label} className="rounded-xl border border-border/60 bg-card/40 p-3">
               <div className="flex items-center justify-between mb-1.5">
@@ -312,8 +312,9 @@ export function BroadcastMetricsPanel() {
                 <s.icon size={14} className={cn(s.color)} />
               </div>
               <p className="text-2xl font-display font-bold tabular-nums leading-none">
-                {s.value.toLocaleString("pt-BR")}
+                {s.value}
               </p>
+
               {s.hint && <p className="text-[10px] text-muted-foreground mt-1">{s.hint}</p>}
             </div>
           ))}
