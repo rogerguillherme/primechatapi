@@ -1,8 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { ChevronDown, ChevronRight, MousePointerClick } from "lucide-react";
+import { ChevronDown, ChevronRight, MousePointerClick, Pencil, Check, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -24,7 +26,12 @@ export function inferCategory(cat: string | null | undefined): "utility" | "mark
 
 export interface CampaignListRow {
   id: string;
+  /** Display name: custom name when set, template name otherwise */
   name: string;
+  /** Custom name saved by the user (null when not set) */
+  customName: string | null;
+  /** Original template name */
+  templateName: string | null;
   date: string;
   status?: string | null;
   total: number;
@@ -83,7 +90,7 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
       let jobsQuery = supabase
         .from("broadcast_jobs")
         .select(
-          "id, template_id, template_name, total_leads, sent_count, delivered_count, read_count, error_count, created_at, status"
+          "id, campaign_name, template_id, template_name, total_leads, sent_count, delivered_count, read_count, error_count, created_at, status"
         )
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
@@ -167,7 +174,9 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
         const totalClicks = links.reduce((s, l) => s + (l.click_count || 0), 0);
         return {
           id: j.id,
-          name: j.template_name || "Disparo",
+          name: (j as any).campaign_name || j.template_name || "Disparo",
+          customName: (j as any).campaign_name || null,
+          templateName: j.template_name || null,
           date: j.created_at,
           status: j.status,
           total: j.total_leads || 0,
@@ -216,7 +225,28 @@ interface Props {
 
 export function CampaignListMetrics({ rows, isLoading, title = "Métricas por lista" }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftName, setDraftName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const queryClient = useQueryClient();
   const visible = rows.filter((r) => r.sent > 0 || r.total > 0);
+
+  const saveName = async (id: string) => {
+    setSaving(true);
+    const value = draftName.trim();
+    const { error } = await supabase
+      .from("broadcast_jobs")
+      .update({ campaign_name: value || null } as any)
+      .eq("id", id);
+    setSaving(false);
+    if (error) {
+      toast.error("Não foi possível renomear a lista");
+      return;
+    }
+    toast.success(value ? "Nome da lista atualizado" : "Nome personalizado removido");
+    setEditingId(null);
+    queryClient.invalidateQueries({ queryKey: ["campaign-list-metrics"] });
+  };
 
   return (
     <div>
@@ -231,28 +261,92 @@ export function CampaignListMetrics({ rows, isLoading, title = "Métricas por li
             const isOpen = expandedId === c.id;
             return (
               <div key={c.id} className="rounded-lg border border-border/50 bg-card/40 overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setExpandedId(isOpen ? null : c.id)}
-                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-card/60 transition-colors text-left"
-                >
-                  {isOpen ? (
-                    <ChevronDown size={14} className="text-muted-foreground shrink-0" />
-                  ) : (
-                    <ChevronRight size={14} className="text-muted-foreground shrink-0" />
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">{c.name}</p>
-                    <p className="text-[10px] text-muted-foreground">
-                      {format(new Date(c.date), "dd/MM/yyyy HH:mm", { locale: ptBR })} · {c.category}
-                      {c.status ? ` · ${c.status}` : ""}
-                    </p>
+                {editingId === c.id ? (
+                  <div className="flex items-center gap-2 px-3 py-2">
+                    <Input
+                      autoFocus
+                      value={draftName}
+                      onChange={(e) => setDraftName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveName(c.id);
+                        if (e.key === "Escape") setEditingId(null);
+                      }}
+                      placeholder={c.templateName || "Nome da lista"}
+                      className="h-8 text-sm"
+                    />
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => saveName(c.id)}
+                      className="p-1.5 rounded-md hover:bg-card text-emerald-500"
+                      aria-label="Salvar nome"
+                    >
+                      <Check size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingId(null)}
+                      className="p-1.5 rounded-md hover:bg-card text-muted-foreground"
+                      aria-label="Cancelar"
+                    >
+                      <X size={14} />
+                    </button>
                   </div>
-                  <div className="text-right shrink-0">
+                ) : (
+                <div className="w-full flex items-center gap-2 px-3 py-2 hover:bg-card/60 transition-colors">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedId(isOpen ? null : c.id)}
+                    className="flex items-center gap-2 min-w-0 flex-1 text-left"
+                  >
+                    {isOpen ? (
+                      <ChevronDown size={14} className="text-muted-foreground shrink-0" />
+                    ) : (
+                      <ChevronRight size={14} className="text-muted-foreground shrink-0" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{c.name}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">
+                        {format(new Date(c.date), "dd/MM/yyyy HH:mm", { locale: ptBR })} · {c.category}
+                        {c.status ? ` · ${c.status}` : ""}
+                        {c.customName && c.templateName ? ` · template: ${c.templateName}` : ""}
+                      </p>
+                    </div>
+                  </button>
+                  <div className="hidden sm:flex items-center gap-3 shrink-0 text-right">
+                    <div>
+                      <p className="text-sm font-semibold tabular-nums">{c.sent.toLocaleString("pt-BR")}</p>
+                      <p className="text-[10px] text-muted-foreground">enviadas</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold tabular-nums text-sky-500">{c.readRate.toFixed(1)}%</p>
+                      <p className="text-[10px] text-muted-foreground">abertura</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold tabular-nums text-destructive">
+                        {c.errors.toLocaleString("pt-BR")}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">erros</p>
+                    </div>
+                  </div>
+                  <div className="sm:hidden text-right shrink-0">
                     <p className="text-sm font-semibold tabular-nums">{c.sent.toLocaleString("pt-BR")}</p>
                     <p className="text-[10px] text-muted-foreground">enviadas</p>
                   </div>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingId(c.id);
+                      setDraftName(c.customName || "");
+                    }}
+                    className="p-1.5 rounded-md hover:bg-card text-muted-foreground shrink-0"
+                    aria-label="Renomear lista"
+                    title="Dar um nome personalizado a esta lista"
+                  >
+                    <Pencil size={13} />
+                  </button>
+                </div>
+                )}
                 {isOpen && (
                   <div className="border-t border-border/50 px-3 py-3 space-y-3 bg-background/40">
                     <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
@@ -275,6 +369,9 @@ export function CampaignListMetrics({ rows, isLoading, title = "Métricas por li
                         <p className="text-[10px] text-muted-foreground uppercase">Erros</p>
                         <p className="text-sm font-semibold tabular-nums text-destructive">
                           {c.errors.toLocaleString("pt-BR")}
+                        </p>
+                        <p className="text-[10px] text-destructive">
+                          {(c.sent + c.errors > 0 ? (c.errors / (c.sent + c.errors)) * 100 : 0).toFixed(1)}%
                         </p>
                       </div>
                       <div>
