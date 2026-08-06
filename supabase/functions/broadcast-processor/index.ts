@@ -26,6 +26,15 @@ const PAYMENT_ISSUE_CODES = new Set([
 ]);
 // Removemos 131047 pois é janela de 24h por contato e não bloqueia a campanha inteira:
 PAYMENT_ISSUE_CODES.delete("131047");
+// Códigos POR DESTINATÁRIO: a Meta bloqueou apenas aquele contato.
+// Pulamos o lead e seguimos o disparo com o restante da lista.
+const SKIP_CODES = new Set([
+  "131049", // limite de marketing por usuário
+  "130472", // user experiments / destinatário fora do experimento
+  "131047", // janela de 24h / re-engajamento
+  "131026", // destinatário não pode receber
+  "131056", // pair rate limit
+]);
 
 function shuffleArray<T>(arr: T[]): T[] {
   const shuffled = [...arr];
