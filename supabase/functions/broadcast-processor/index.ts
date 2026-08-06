@@ -26,6 +26,15 @@ const PAYMENT_ISSUE_CODES = new Set([
 ]);
 // Removemos 131047 pois é janela de 24h por contato e não bloqueia a campanha inteira:
 PAYMENT_ISSUE_CODES.delete("131047");
+// Códigos POR DESTINATÁRIO: a Meta bloqueou apenas aquele contato.
+// Pulamos o lead e seguimos o disparo com o restante da lista.
+const SKIP_CODES = new Set([
+  "131049", // limite de marketing por usuário
+  "130472", // user experiments / destinatário fora do experimento
+  "131047", // janela de 24h / re-engajamento
+  "131026", // destinatário não pode receber
+  "131056", // pair rate limit
+]);
 
 function shuffleArray<T>(arr: T[]): T[] {
   const shuffled = [...arr];
@@ -715,33 +724,18 @@ Deno.serve(async (req) => {
             });
           }
 
-          if (errorCode === BLOCKED_CODE || errorCode === SPAM_RATE_LIMIT_CODE) {
-            // Blocked — stop sending to avoid further damage
-            logStatus = "blocked";
-            await supabase
-              .from("broadcast_jobs")
-              .update({
-                status: "paused_by_system",
-                pause_reason: `Número bloqueado ou rate-limited pela Meta (code: ${errorCode})`,
-                sent_count: (job.sent_count || 0) + sentInBatch,
-                error_count: (job.error_count || 0) + errorsInBatch + 1,
-                last_cursor: cursor + batchLeads.indexOf(lead),
-                last_error: errorMsg,
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", jobId);
-
-            // Log
+          if (errorCode === BLOCKED_CODE || errorCode === SPAM_RATE_LIMIT_CODE || SKIP_CODES.has(errorCode)) {
+            // Meta bloqueou ESTE destinatário — pula e segue com o restante.
             await supabase.from("message_logs").insert({
               job_id: jobId, user_id: job.user_id, lead_id: lead.id,
-              phone: cleanPhone, status: logStatus, error_code: errorCode,
-              error_message: errorMsg, account_id: currentAccount.id,
+              phone: cleanPhone, status: "skipped", error_code: errorCode,
+              meta_error_code: errorCode, error_message: errorMsg,
+              account_id: currentAccount.id,
             });
-
-            return new Response(JSON.stringify({ message: "Job paused: blocked", job_id: jobId }), {
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            });
+            consecutiveErrors = 0; // não conta como erro para a proteção anti-ban
+            continue;
           }
+
 
           if (errorCode === RATE_LIMIT_CODE) {
             // Rate limit — wait and retry

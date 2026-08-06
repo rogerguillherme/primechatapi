@@ -159,12 +159,13 @@ function classifyMetaError(code: string | null): { severity: "critical" | "warni
   switch (code) {
     case "131031": // Business Account locked
     case "368":    // Temporarily blocked for policy violations
-    case "131056": // Pair rate limit hit (severe)
-    case "130472": // User experiments / blocked
       return { severity: "critical", reason: "waba_locked" };
+    // Códigos POR DESTINATÁRIO — não pausam a conta/campanha, apenas pulam o contato.
+    case "131056": // Pair rate limit (par remetente/destinatário)
+    case "130472": // User experiments / destinatário fora do experimento
     case "131048": // Spam rate limit
-    case "131049": // Per-user marketing limit
-      return { severity: "critical", reason: "spam_restriction" };
+    case "131049": // Limite de marketing por usuário
+      return { severity: "warning", reason: "spam_restriction" };
     case "131026": // Message undeliverable (recipient hasn't opted in)
     case "131047": // Re-engagement message (24h window)
       return { severity: "warning", reason: "quality_yellow" };
