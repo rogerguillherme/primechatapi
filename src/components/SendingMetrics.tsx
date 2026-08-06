@@ -36,6 +36,7 @@ interface BroadcastGroup {
   delivered: number;
   read: number;
   failed: number;
+  cancelled?: number;
   leadIds: string[];
   type?: "broadcast" | "flow";
   flowId?: string;
@@ -323,7 +324,8 @@ export function SendingMetrics() {
             sent: group.completed,
             delivered: group.completed,
             read: 0,
-            failed: group.failed + group.cancelled,
+            failed: group.failed,
+            cancelled: group.cancelled,
             leadIds: group.leadIds,
             type: "flow",
             flowId: group.flowId,
@@ -526,6 +528,9 @@ function DispatchItem({ group, isExpanded, onToggle }: {
         <div className="flex items-center gap-1.5 shrink-0">
           <Badge variant="outline" className="text-[10px]">{group.sent} env</Badge>
           {group.failed > 0 && <Badge variant="destructive" className="text-[10px]">{group.failed} err</Badge>}
+          {(group.cancelled ?? 0) > 0 && (
+            <Badge variant="outline" className="text-[10px] text-muted-foreground border-border">{group.cancelled} cancelado{group.cancelled !== 1 ? "s" : ""}</Badge>
+          )}
         </div>
       </button>
 
@@ -551,7 +556,20 @@ function DispatchItem({ group, isExpanded, onToggle }: {
             </div>
           </div>
 
-          {group.failed > 0 && (
+          {(group.failed > 0 || (group.cancelled ?? 0) > 0) && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="text-center py-2 rounded-md bg-background border border-destructive/30">
+                <p className="text-lg font-bold text-destructive">{group.failed}</p>
+                <p className="text-[10px] text-muted-foreground">Erro real</p>
+              </div>
+              <div className="text-center py-2 rounded-md bg-background border border-border">
+                <p className="text-lg font-bold text-muted-foreground">{group.cancelled ?? 0}</p>
+                <p className="text-[10px] text-muted-foreground">Cancelado (não enviado)</p>
+              </div>
+            </div>
+          )}
+
+          {(group.failed > 0 || (group.cancelled ?? 0) > 0) && (
             <ExportErrorsButton group={group} />
           )}
 
