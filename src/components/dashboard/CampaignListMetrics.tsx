@@ -84,7 +84,17 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
       endDate?.toISOString() ?? "all",
     ],
     enabled: !!user,
-    refetchInterval: 60_000,
+    // Acompanha a evolução em tempo quase real quando há disparo em andamento
+    refetchInterval: (q) => {
+      const rows = (q.state.data as CampaignListMetricsResult | null)?.rows || [];
+      const active = rows.some((r) =>
+        ["running", "processing", "queued", "pending", "scheduled", "paused"].includes(
+          (r.status || "").toLowerCase()
+        )
+      );
+      return active ? 10_000 : 60_000;
+    },
+
     queryFn: async () => {
       if (!user) return null;
 
