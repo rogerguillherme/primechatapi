@@ -556,7 +556,20 @@ function DispatchItem({ group, isExpanded, onToggle }: {
             </div>
           </div>
 
-          {group.failed > 0 && (
+          {(group.failed > 0 || (group.cancelled ?? 0) > 0) && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="text-center py-2 rounded-md bg-background border border-destructive/30">
+                <p className="text-lg font-bold text-destructive">{group.failed}</p>
+                <p className="text-[10px] text-muted-foreground">Erro real</p>
+              </div>
+              <div className="text-center py-2 rounded-md bg-background border border-border">
+                <p className="text-lg font-bold text-muted-foreground">{group.cancelled ?? 0}</p>
+                <p className="text-[10px] text-muted-foreground">Cancelado (não enviado)</p>
+              </div>
+            </div>
+          )}
+
+          {(group.failed > 0 || (group.cancelled ?? 0) > 0) && (
             <ExportErrorsButton group={group} />
           )}
 
