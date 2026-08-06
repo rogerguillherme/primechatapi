@@ -84,7 +84,17 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
       endDate?.toISOString() ?? "all",
     ],
     enabled: !!user,
-    refetchInterval: 60_000,
+    // Acompanha a evolução em tempo quase real quando há disparo em andamento
+    refetchInterval: (q) => {
+      const rows = (q.state.data as CampaignListMetricsResult | null)?.rows || [];
+      const active = rows.some((r) =>
+        ["running", "processing", "queued", "pending", "scheduled", "paused"].includes(
+          (r.status || "").toLowerCase()
+        )
+      );
+      return active ? 10_000 : 60_000;
+    },
+
     queryFn: async () => {
       if (!user) return null;
 
@@ -319,12 +329,42 @@ export function CampaignListMetrics({ rows, isLoading, title = "Métricas por li
                         {c.status ? ` · ${c.status}` : ""}
                         {c.customName && c.templateName ? ` · template: ${c.templateName}` : ""}
                       </p>
+                      {/* Contador de evolução do disparo */}
+                      {(() => {
+                        const processed = Math.min(c.sent + c.errors, c.total || c.sent + c.errors);
+                        const total = c.total || processed;
+                        const pct = total > 0 ? Math.min(100, (processed / total) * 100) : 0;
+                        const running = ["running", "processing", "queued", "pending", "scheduled"].includes(
+                          (c.status || "").toLowerCase()
+                        );
+                        return (
+                          <div className="mt-1.5 flex items-center gap-2">
+                            <div className="h-1.5 flex-1 min-w-[60px] rounded-full bg-muted overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all duration-500 ${
+                                  running ? "bg-primary animate-pulse" : "bg-emerald-500"
+                                }`}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] tabular-nums text-muted-foreground shrink-0">
+                              {processed.toLocaleString("pt-BR")}/{total.toLocaleString("pt-BR")} ({pct.toFixed(0)}%)
+                            </span>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </button>
                   <div className="hidden sm:flex items-center gap-3 shrink-0 text-right">
                     <div>
                       <p className="text-sm font-semibold tabular-nums">{c.sent.toLocaleString("pt-BR")}</p>
                       <p className="text-[10px] text-muted-foreground">enviadas</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold tabular-nums">
+                        {Math.max(0, (c.total || 0) - c.sent - c.errors).toLocaleString("pt-BR")}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">restantes</p>
                     </div>
                     <div>
                       <p className="text-sm font-semibold tabular-nums text-sky-500">{c.readRate.toFixed(1)}%</p>
@@ -341,6 +381,7 @@ export function CampaignListMetrics({ rows, isLoading, title = "Métricas por li
                     <p className="text-sm font-semibold tabular-nums">{c.sent.toLocaleString("pt-BR")}</p>
                     <p className="text-[10px] text-muted-foreground">enviadas</p>
                   </div>
+
                   <button
                     type="button"
                     onClick={() => {
