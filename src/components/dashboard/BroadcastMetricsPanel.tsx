@@ -216,15 +216,18 @@ export function BroadcastMetricsPanel() {
 
 
   const chartData = useMemo(() => {
-    const jobs = data?.jobs || [];
+    const msgs = [...(data?.templateMsgs || []), ...(data?.flowMsgs || [])];
     const buckets = new Map<string, number>();
     for (let i = days - 1; i >= 0; i--) {
       const key = format(subDays(endDate, i), "yyyy-MM-dd");
       buckets.set(key, 0);
     }
-    for (const j of jobs) {
-      const key = format(new Date(j.created_at), "yyyy-MM-dd");
-      if (buckets.has(key)) buckets.set(key, (buckets.get(key) || 0) + (j.sent_count || 0));
+    for (const m of msgs) {
+      if (!m.created_at) continue;
+      const st = (m.status || "").toLowerCase();
+      if (["cancelled", "skipped", "pending", "queued"].includes(st)) continue;
+      const key = format(new Date(m.created_at), "yyyy-MM-dd");
+      if (buckets.has(key)) buckets.set(key, (buckets.get(key) || 0) + 1);
     }
     return Array.from(buckets.entries()).map(([date, sent]) => ({
       date,
@@ -232,6 +235,7 @@ export function BroadcastMetricsPanel() {
       sent,
     }));
   }, [data, days, endDate]);
+
 
 
   const stats = [
