@@ -93,7 +93,7 @@ export function BroadcastMetricsPanel() {
           : Promise.resolve({ data: [] as any[] }),
         supabase
           .from("message_logs")
-          .select("wa_message_id, status, delivered_at, read_at, failed_at")
+          .select("wa_message_id, status, created_at, delivered_at, read_at, failed_at")
           .eq("user_id", user.id)
           .gte("created_at", startIso)
           .lte("created_at", endIso)
