@@ -363,7 +363,7 @@ export function BroadcastMetricsPanel() {
             <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
               Carregando...
             </div>
-          ) : summary.sent === 0 ? (
+          ) : chartData.every((d) => d.sent === 0) ? (
             <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
               Sem disparos no período selecionado
             </div>
