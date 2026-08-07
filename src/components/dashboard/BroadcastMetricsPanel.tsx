@@ -194,6 +194,7 @@ export function BroadcastMetricsPanel() {
     const read = Math.max(fromMsgs.read, jRead);
     const errors = Math.max(fromMsgs.errors, jErrors);
 
+    if (jobs.length === 0 && sent > 0) costMkt = sent * PRICING.marketing;
     const totalUsd = costMkt + costUtl + costAuth;
     return {
       sent, delivered, read, errors,
