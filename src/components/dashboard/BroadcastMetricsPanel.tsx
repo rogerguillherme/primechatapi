@@ -207,12 +207,15 @@ export function BroadcastMetricsPanel() {
 
   // Per-list metrics + billing that discounts free 24h-window messages
   const { data: listData, isLoading: listLoading } = useCampaignListMetrics(startDate, endDate);
+  const listBillable = listData?.totals.billable || 0;
   const billing = {
-    billable: listData?.totals.billable || 0,
+    // Fallback: quando não há logs por lista, cobra pelas mensagens de template enviadas
+    billable: listBillable > 0 ? listBillable : summary.sent,
     freeInWindow: listData?.totals.freeInWindow || 0,
-    totalUsd: listData?.totals.costUsd || 0,
-    totalBrl: listData?.totals.costBrl || 0,
+    totalUsd: listBillable > 0 ? listData?.totals.costUsd || 0 : summary.totalUsd,
+    totalBrl: listBillable > 0 ? listData?.totals.costBrl || 0 : summary.totalBrl,
   };
+
 
 
   const chartData = useMemo(() => {
