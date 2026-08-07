@@ -93,20 +93,19 @@ export function BroadcastMetricsPanel() {
           : Promise.resolve({ data: [] as any[] }),
         supabase
           .from("message_logs")
-          .select("wa_message_id")
+          .select("wa_message_id, status, created_at, delivered_at, read_at, failed_at")
           .eq("user_id", user.id)
           .gte("created_at", startIso)
           .lte("created_at", endIso)
-          .not("wa_message_id", "is", null)
           .limit(20000),
         supabase
           .from("chat_messages")
-          .select("id, status, created_at, zapi_message_id, account_id, lead_id")
+          .select("id, status, created_at, delivered_at, read_at, zapi_message_id, account_id, lead_id")
           .eq("direction", "outbound")
           .gte("created_at", startIso)
           .lte("created_at", endIso)
           .order("created_at", { ascending: false })
-          .limit(2000),
+          .limit(20000),
       ]);
 
       const clicks = clicksRes.data || [];
@@ -117,14 +116,26 @@ export function BroadcastMetricsPanel() {
         clicksByJob.set(c.campaign_id, list);
       }
 
-      const broadcastWaIds = new Set((logsRes.data || []).map((l: any) => l.wa_message_id).filter(Boolean));
+      const logs = logsRes.data || [];
+      const broadcastWaIds = new Set(logs.map((l: any) => l.wa_message_id).filter(Boolean));
 
       // Flow messages: outbound chat_messages that are NOT part of a broadcast.
       const flowMsgs = (outboundRes.data || []).filter(
         (m: any) => !m.zapi_message_id || !broadcastWaIds.has(m.zapi_message_id)
       );
 
-      return { jobs, tplCat, days, clicksByJob, flowMsgs };
+      // Template/broadcast messages: from message_logs (real Meta status) plus
+      // any outbound chat_message linked to a broadcast.
+      const templateMsgs = [
+        ...logs,
+        ...(outboundRes.data || []).filter(
+          (m: any) => m.zapi_message_id && broadcastWaIds.has(m.zapi_message_id) && !logs.length
+        ),
+      ];
+
+      return { jobs, tplCat, days, clicksByJob, flowMsgs, templateMsgs };
+
+
 
     },
     enabled: !!user,
@@ -135,41 +146,55 @@ export function BroadcastMetricsPanel() {
 
 
 
-  const flowSummary = useMemo(() => {
-    const msgs = data?.flowMsgs || [];
+  /** Counts real delivery/read using timestamps first, status as fallback. */
+  const countMsgs = (msgs: any[]) => {
     let sent = 0, delivered = 0, read = 0, errors = 0;
     for (const m of msgs) {
+      const st = (m.status || "").toLowerCase();
+      const failed = st === "failed" || st === "error" || !!m.failed_at;
+      const isRead = !!m.read_at || st === "read";
+      const isDelivered = !!m.delivered_at || isRead || st === "delivered";
+      if (failed) { errors++; continue; }
+      if (st === "cancelled" || st === "skipped" || st === "pending" || st === "queued") continue;
       sent++;
-      if (m.status === "delivered" || m.status === "read") delivered++;
-      if (m.status === "read") read++;
-      if (m.status === "failed" || m.status === "error") errors++;
+      if (isDelivered) delivered++;
+      if (isRead) read++;
     }
     return {
       sent, delivered, read, errors,
       deliveryRate: sent > 0 ? (delivered / sent) * 100 : 0,
       readRate: sent > 0 ? (read / sent) * 100 : 0,
     };
-  }, [data]);
+  };
 
+  const flowSummary = useMemo(() => countMsgs(data?.flowMsgs || []), [data]);
 
   const summary = useMemo(() => {
     const jobs = data?.jobs || [];
     const tplCat = data?.tplCat || new Map();
-    let sent = 0, delivered = 0, read = 0, errors = 0;
-    let costMkt = 0, costUtl = 0, costAuth = 0;
+    const fromMsgs = countMsgs(data?.templateMsgs || []);
 
+    // Fallback: aggregated job counters (used only when there are no per-message logs)
+    let jSent = 0, jDelivered = 0, jRead = 0, jErrors = 0;
+    let costMkt = 0, costUtl = 0, costAuth = 0;
     for (const j of jobs) {
       const s = j.sent_count || 0;
-      sent += s;
-      delivered += j.delivered_count || 0;
-      read += j.read_count || 0;
-      errors += j.error_count || 0;
+      jSent += s;
+      jDelivered += j.delivered_count || 0;
+      jRead += j.read_count || 0;
+      jErrors += j.error_count || 0;
       const cat = (j.template_id && tplCat.get(j.template_id)) || "marketing";
       if (cat === "utility") costUtl += s * PRICING.utility;
       else if (cat === "authentication") costAuth += s * PRICING.authentication;
       else costMkt += s * PRICING.marketing;
     }
 
+    const sent = Math.max(fromMsgs.sent, jSent);
+    const delivered = Math.max(fromMsgs.delivered, jDelivered);
+    const read = Math.max(fromMsgs.read, jRead);
+    const errors = Math.max(fromMsgs.errors, jErrors);
+
+    if (jobs.length === 0 && sent > 0) costMkt = sent * PRICING.marketing;
     const totalUsd = costMkt + costUtl + costAuth;
     return {
       sent, delivered, read, errors,
@@ -180,26 +205,33 @@ export function BroadcastMetricsPanel() {
     };
   }, [data]);
 
+
   // Per-list metrics + billing that discounts free 24h-window messages
   const { data: listData, isLoading: listLoading } = useCampaignListMetrics(startDate, endDate);
+  const listBillable = listData?.totals.billable || 0;
   const billing = {
-    billable: listData?.totals.billable || 0,
+    // Fallback: quando não há logs por lista, cobra pelas mensagens de template enviadas
+    billable: listBillable > 0 ? listBillable : summary.sent,
     freeInWindow: listData?.totals.freeInWindow || 0,
-    totalUsd: listData?.totals.costUsd || 0,
-    totalBrl: listData?.totals.costBrl || 0,
+    totalUsd: listBillable > 0 ? listData?.totals.costUsd || 0 : summary.totalUsd,
+    totalBrl: listBillable > 0 ? listData?.totals.costBrl || 0 : summary.totalBrl,
   };
 
 
+
   const chartData = useMemo(() => {
-    const jobs = data?.jobs || [];
+    const msgs = [...(data?.templateMsgs || []), ...(data?.flowMsgs || [])];
     const buckets = new Map<string, number>();
     for (let i = days - 1; i >= 0; i--) {
       const key = format(subDays(endDate, i), "yyyy-MM-dd");
       buckets.set(key, 0);
     }
-    for (const j of jobs) {
-      const key = format(new Date(j.created_at), "yyyy-MM-dd");
-      if (buckets.has(key)) buckets.set(key, (buckets.get(key) || 0) + (j.sent_count || 0));
+    for (const m of msgs) {
+      if (!m.created_at) continue;
+      const st = (m.status || "").toLowerCase();
+      if (["cancelled", "skipped", "pending", "queued"].includes(st)) continue;
+      const key = format(new Date(m.created_at), "yyyy-MM-dd");
+      if (buckets.has(key)) buckets.set(key, (buckets.get(key) || 0) + 1);
     }
     return Array.from(buckets.entries()).map(([date, sent]) => ({
       date,
@@ -207,6 +239,7 @@ export function BroadcastMetricsPanel() {
       sent,
     }));
   }, [data, days, endDate]);
+
 
 
   const stats = [
@@ -334,7 +367,7 @@ export function BroadcastMetricsPanel() {
             <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
               Carregando...
             </div>
-          ) : summary.sent === 0 ? (
+          ) : chartData.every((d) => d.sent === 0) ? (
             <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
               Sem disparos no período selecionado
             </div>
