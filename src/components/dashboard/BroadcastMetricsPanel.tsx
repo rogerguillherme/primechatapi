@@ -146,40 +146,53 @@ export function BroadcastMetricsPanel() {
 
 
 
-  const flowSummary = useMemo(() => {
-    const msgs = data?.flowMsgs || [];
+  /** Counts real delivery/read using timestamps first, status as fallback. */
+  const countMsgs = (msgs: any[]) => {
     let sent = 0, delivered = 0, read = 0, errors = 0;
     for (const m of msgs) {
+      const st = (m.status || "").toLowerCase();
+      const failed = st === "failed" || st === "error" || !!m.failed_at;
+      const isRead = !!m.read_at || st === "read";
+      const isDelivered = !!m.delivered_at || isRead || st === "delivered";
+      if (failed) { errors++; continue; }
+      if (st === "cancelled" || st === "skipped" || st === "pending" || st === "queued") continue;
       sent++;
-      if (m.status === "delivered" || m.status === "read") delivered++;
-      if (m.status === "read") read++;
-      if (m.status === "failed" || m.status === "error") errors++;
+      if (isDelivered) delivered++;
+      if (isRead) read++;
     }
     return {
       sent, delivered, read, errors,
       deliveryRate: sent > 0 ? (delivered / sent) * 100 : 0,
       readRate: sent > 0 ? (read / sent) * 100 : 0,
     };
-  }, [data]);
+  };
 
+  const flowSummary = useMemo(() => countMsgs(data?.flowMsgs || []), [data]);
 
   const summary = useMemo(() => {
     const jobs = data?.jobs || [];
     const tplCat = data?.tplCat || new Map();
-    let sent = 0, delivered = 0, read = 0, errors = 0;
-    let costMkt = 0, costUtl = 0, costAuth = 0;
+    const fromMsgs = countMsgs(data?.templateMsgs || []);
 
+    // Fallback: aggregated job counters (used only when there are no per-message logs)
+    let jSent = 0, jDelivered = 0, jRead = 0, jErrors = 0;
+    let costMkt = 0, costUtl = 0, costAuth = 0;
     for (const j of jobs) {
       const s = j.sent_count || 0;
-      sent += s;
-      delivered += j.delivered_count || 0;
-      read += j.read_count || 0;
-      errors += j.error_count || 0;
+      jSent += s;
+      jDelivered += j.delivered_count || 0;
+      jRead += j.read_count || 0;
+      jErrors += j.error_count || 0;
       const cat = (j.template_id && tplCat.get(j.template_id)) || "marketing";
       if (cat === "utility") costUtl += s * PRICING.utility;
       else if (cat === "authentication") costAuth += s * PRICING.authentication;
       else costMkt += s * PRICING.marketing;
     }
+
+    const sent = Math.max(fromMsgs.sent, jSent);
+    const delivered = Math.max(fromMsgs.delivered, jDelivered);
+    const read = Math.max(fromMsgs.read, jRead);
+    const errors = Math.max(fromMsgs.errors, jErrors);
 
     const totalUsd = costMkt + costUtl + costAuth;
     return {
@@ -190,6 +203,7 @@ export function BroadcastMetricsPanel() {
       deliveryRate: sent > 0 ? (delivered / sent) * 100 : 0,
     };
   }, [data]);
+
 
   // Per-list metrics + billing that discounts free 24h-window messages
   const { data: listData, isLoading: listLoading } = useCampaignListMetrics(startDate, endDate);
