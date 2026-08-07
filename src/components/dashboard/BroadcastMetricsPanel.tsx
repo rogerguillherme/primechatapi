@@ -93,20 +93,19 @@ export function BroadcastMetricsPanel() {
           : Promise.resolve({ data: [] as any[] }),
         supabase
           .from("message_logs")
-          .select("wa_message_id")
+          .select("wa_message_id, status, delivered_at, read_at, failed_at")
           .eq("user_id", user.id)
           .gte("created_at", startIso)
           .lte("created_at", endIso)
-          .not("wa_message_id", "is", null)
           .limit(20000),
         supabase
           .from("chat_messages")
-          .select("id, status, created_at, zapi_message_id, account_id, lead_id")
+          .select("id, status, created_at, delivered_at, read_at, zapi_message_id, account_id, lead_id")
           .eq("direction", "outbound")
           .gte("created_at", startIso)
           .lte("created_at", endIso)
           .order("created_at", { ascending: false })
-          .limit(2000),
+          .limit(20000),
       ]);
 
       const clicks = clicksRes.data || [];
@@ -117,14 +116,26 @@ export function BroadcastMetricsPanel() {
         clicksByJob.set(c.campaign_id, list);
       }
 
-      const broadcastWaIds = new Set((logsRes.data || []).map((l: any) => l.wa_message_id).filter(Boolean));
+      const logs = logsRes.data || [];
+      const broadcastWaIds = new Set(logs.map((l: any) => l.wa_message_id).filter(Boolean));
 
       // Flow messages: outbound chat_messages that are NOT part of a broadcast.
       const flowMsgs = (outboundRes.data || []).filter(
         (m: any) => !m.zapi_message_id || !broadcastWaIds.has(m.zapi_message_id)
       );
 
-      return { jobs, tplCat, days, clicksByJob, flowMsgs };
+      // Template/broadcast messages: from message_logs (real Meta status) plus
+      // any outbound chat_message linked to a broadcast.
+      const templateMsgs = [
+        ...logs,
+        ...(outboundRes.data || []).filter(
+          (m: any) => m.zapi_message_id && broadcastWaIds.has(m.zapi_message_id) && !logs.length
+        ),
+      ];
+
+      return { jobs, tplCat, days, clicksByJob, flowMsgs, templateMsgs };
+
+
 
     },
     enabled: !!user,
