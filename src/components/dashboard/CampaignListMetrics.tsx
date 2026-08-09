@@ -169,11 +169,16 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
 
 
       const OK = new Set(["sent", "accepted", "delivered", "read"]);
-      const perJob = new Map<string, { billable: number; free: number; okTotal: number }>();
+      const perJob = new Map<
+        string,
+        { billable: number; free: number; okTotal: number; leads: Set<string> }
+      >();
       for (const log of logs) {
         if (!OK.has((log.status || "").toLowerCase())) continue;
-        const agg = perJob.get(log.job_id) || { billable: 0, free: 0, okTotal: 0 };
+        const agg =
+          perJob.get(log.job_id) || { billable: 0, free: 0, okTotal: 0, leads: new Set<string>() };
         agg.okTotal++;
+        if (log.lead_id) agg.leads.add(log.lead_id);
         const sentAt = new Date(log.sent_at || log.created_at).getTime();
         const inbound = log.lead_id ? inboundByLead.get(log.lead_id) : null;
         const inWindow =
@@ -182,6 +187,7 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
         else agg.billable++;
         perJob.set(log.job_id, agg);
       }
+
 
       const rows: CampaignListRow[] = jobs.map((j) => {
         const sent = j.sent_count || 0;
