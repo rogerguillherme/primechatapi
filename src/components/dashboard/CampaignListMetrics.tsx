@@ -135,7 +135,7 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
               .select("job_id, lead_id, status, sent_at, created_at")
               .eq("user_id", user.id)
               .in("job_id", jobIds)
-              .limit(20000)
+              .limit(8000)
           : Promise.resolve({ data: [] as any[] }),
       ]);
 
