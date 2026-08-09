@@ -202,6 +202,15 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
         const costUsd = billable * rate;
         const links = clicksByJob.get(j.id) || [];
         const totalClicks = links.reduce((s, l) => s + (l.click_count || 0), 0);
+        // Respostas: leads do disparo com inbound posterior ao início da campanha
+        const jobStart = new Date(j.created_at).getTime();
+        let replies = 0;
+        if (agg) {
+          for (const leadId of agg.leads) {
+            const inbound = inboundByLead.get(leadId);
+            if (inbound && new Date(inbound).getTime() >= jobStart) replies++;
+          }
+        }
         return {
           id: j.id,
           name: (j as any).campaign_name || j.template_name || "Disparo",
@@ -214,8 +223,11 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
           delivered,
           read,
           errors,
+          replies,
+          replyRate: sent > 0 ? (replies / sent) * 100 : 0,
           deliveryRate: sent > 0 ? (delivered / sent) * 100 : 0,
           readRate: sent > 0 ? (read / sent) * 100 : 0,
+
           billable,
           freeInWindow,
           costUsd,
