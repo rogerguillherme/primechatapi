@@ -400,6 +400,13 @@ export function CampaignListMetrics({ rows, isLoading, title = "Métricas por li
                       <p className="text-[10px] text-muted-foreground">abertura</p>
                     </div>
                     <div>
+                      <p className="text-sm font-semibold tabular-nums text-emerald-500">
+                        {c.replies.toLocaleString("pt-BR")}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">respostas</p>
+                    </div>
+
+                    <div>
                       <p className="text-sm font-semibold tabular-nums text-destructive">
                         {c.errors.toLocaleString("pt-BR")}
                       </p>
