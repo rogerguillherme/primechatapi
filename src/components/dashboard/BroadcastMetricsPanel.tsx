@@ -140,8 +140,11 @@ export function BroadcastMetricsPanel() {
 
     },
     enabled: !!user,
-    refetchInterval: 60_000,
+    staleTime: 20_000,
+    placeholderData: (prev) => prev,
+    refetchInterval: 30_000,
   });
+
 
   const isLoading = queryLoading && !!user;
 
