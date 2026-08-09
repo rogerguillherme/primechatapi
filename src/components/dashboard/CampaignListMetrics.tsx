@@ -114,7 +114,7 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
         )
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
-        .limit(100);
+        .limit(500);
       if (startDate) jobsQuery = jobsQuery.gte("created_at", startDate.toISOString());
       if (endDate) jobsQuery = jobsQuery.lte("created_at", endDate.toISOString());
 
