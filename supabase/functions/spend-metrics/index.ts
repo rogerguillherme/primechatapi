@@ -119,10 +119,12 @@ Deno.serve(async (req) => {
       global: { headers: { Authorization: `Bearer ${token}` } },
     });
     let userId: string | null = null;
-    const { data: claimsData } = await authClient.auth.getClaims(token);
-    if (claimsData?.claims?.sub) {
-      userId = claimsData.claims.sub as string;
-    } else {
+    const getClaims = (authClient.auth as any).getClaims?.bind(authClient.auth);
+    if (getClaims) {
+      const { data: claimsData } = await getClaims(token);
+      userId = claimsData?.claims?.sub ?? null;
+    }
+    if (!userId) {
       const { data: userData } = await authClient.auth.getUser(token);
       userId = userData?.user?.id ?? null;
     }
