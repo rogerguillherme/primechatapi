@@ -39,8 +39,12 @@ export interface CampaignListRow {
   delivered: number;
   read: number;
   errors: number;
+  /** Leads que responderam depois do disparo */
+  replies: number;
+  replyRate: number;
   deliveryRate: number;
   readRate: number;
+
   /** Sends that actually opened a new 24h conversation (paid) */
   billable: number;
   /** Sends delivered inside an already-open 24h window (free) */
@@ -60,6 +64,8 @@ export interface CampaignListMetricsResult {
     delivered: number;
     read: number;
     errors: number;
+    replies: number;
+
     billable: number;
     freeInWindow: number;
     costUsd: number;
@@ -108,7 +114,7 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
         )
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
-        .limit(100);
+        .limit(500);
       if (startDate) jobsQuery = jobsQuery.gte("created_at", startDate.toISOString());
       if (endDate) jobsQuery = jobsQuery.lte("created_at", endDate.toISOString());
 
@@ -163,11 +169,16 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
 
 
       const OK = new Set(["sent", "accepted", "delivered", "read"]);
-      const perJob = new Map<string, { billable: number; free: number; okTotal: number }>();
+      const perJob = new Map<
+        string,
+        { billable: number; free: number; okTotal: number; leads: Set<string> }
+      >();
       for (const log of logs) {
         if (!OK.has((log.status || "").toLowerCase())) continue;
-        const agg = perJob.get(log.job_id) || { billable: 0, free: 0, okTotal: 0 };
+        const agg =
+          perJob.get(log.job_id) || { billable: 0, free: 0, okTotal: 0, leads: new Set<string>() };
         agg.okTotal++;
+        if (log.lead_id) agg.leads.add(log.lead_id);
         const sentAt = new Date(log.sent_at || log.created_at).getTime();
         const inbound = log.lead_id ? inboundByLead.get(log.lead_id) : null;
         const inWindow =
@@ -176,6 +187,7 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
         else agg.billable++;
         perJob.set(log.job_id, agg);
       }
+
 
       const rows: CampaignListRow[] = jobs.map((j) => {
         const sent = j.sent_count || 0;
@@ -190,6 +202,15 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
         const costUsd = billable * rate;
         const links = clicksByJob.get(j.id) || [];
         const totalClicks = links.reduce((s, l) => s + (l.click_count || 0), 0);
+        // Respostas: leads do disparo com inbound posterior ao início da campanha
+        const jobStart = new Date(j.created_at).getTime();
+        let replies = 0;
+        if (agg) {
+          for (const leadId of agg.leads) {
+            const inbound = inboundByLead.get(leadId);
+            if (inbound && new Date(inbound).getTime() >= jobStart) replies++;
+          }
+        }
         return {
           id: j.id,
           name: (j as any).campaign_name || j.template_name || "Disparo",
@@ -202,8 +223,11 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
           delivered,
           read,
           errors,
+          replies,
+          replyRate: sent > 0 ? (replies / sent) * 100 : 0,
           deliveryRate: sent > 0 ? (delivered / sent) * 100 : 0,
           readRate: sent > 0 ? (read / sent) * 100 : 0,
+
           billable,
           freeInWindow,
           costUsd,
@@ -221,13 +245,15 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
           acc.delivered += r.delivered;
           acc.read += r.read;
           acc.errors += r.errors;
+          acc.replies += r.replies;
           acc.billable += r.billable;
           acc.freeInWindow += r.freeInWindow;
           acc.costUsd += r.costUsd;
           acc.costBrl += r.costBrl;
           return acc;
         },
-        { sent: 0, delivered: 0, read: 0, errors: 0, billable: 0, freeInWindow: 0, costUsd: 0, costBrl: 0 }
+        { sent: 0, delivered: 0, read: 0, errors: 0, replies: 0, billable: 0, freeInWindow: 0, costUsd: 0, costBrl: 0 }
+
       );
 
       return { rows, totals };
@@ -374,6 +400,13 @@ export function CampaignListMetrics({ rows, isLoading, title = "Métricas por li
                       <p className="text-[10px] text-muted-foreground">abertura</p>
                     </div>
                     <div>
+                      <p className="text-sm font-semibold tabular-nums text-emerald-500">
+                        {c.replies.toLocaleString("pt-BR")}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">respostas</p>
+                    </div>
+
+                    <div>
                       <p className="text-sm font-semibold tabular-nums text-destructive">
                         {c.errors.toLocaleString("pt-BR")}
                       </p>
@@ -401,17 +434,23 @@ export function CampaignListMetrics({ rows, isLoading, title = "Métricas por li
                 )}
                 {isOpen && (
                   <div className="border-t border-border/50 px-3 py-3 space-y-3 bg-background/40">
-                    <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-7 gap-2">
                       <div>
                         <p className="text-[10px] text-muted-foreground uppercase">Entregues</p>
                         <p className="text-sm font-semibold tabular-nums">{c.delivered.toLocaleString("pt-BR")}</p>
                         <p className="text-[10px] text-emerald-500">{c.deliveryRate.toFixed(1)}%</p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-muted-foreground uppercase">Abertura</p>
+                        <p className="text-[10px] text-muted-foreground uppercase">Lidos</p>
                         <p className="text-sm font-semibold tabular-nums">{c.read.toLocaleString("pt-BR")}</p>
                         <p className="text-[10px] text-sky-500">{c.readRate.toFixed(1)}%</p>
                       </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase">Responderam</p>
+                        <p className="text-sm font-semibold tabular-nums">{c.replies.toLocaleString("pt-BR")}</p>
+                        <p className="text-[10px] text-emerald-500">{c.replyRate.toFixed(1)}%</p>
+                      </div>
+
                       <div>
                         <p className="text-[10px] text-muted-foreground uppercase">Cliques</p>
                         <p className="text-sm font-semibold tabular-nums">{c.totalClicks.toLocaleString("pt-BR")}</p>
