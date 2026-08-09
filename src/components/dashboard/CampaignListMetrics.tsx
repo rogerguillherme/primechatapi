@@ -64,6 +64,8 @@ export interface CampaignListMetricsResult {
     delivered: number;
     read: number;
     errors: number;
+    replies: number;
+
     billable: number;
     freeInWindow: number;
     costUsd: number;
