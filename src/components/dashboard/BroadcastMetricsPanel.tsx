@@ -97,16 +97,17 @@ export function BroadcastMetricsPanel() {
           .eq("user_id", user.id)
           .gte("created_at", startIso)
           .lte("created_at", endIso)
-          .limit(20000),
+          .limit(8000),
         supabase
           .from("chat_messages")
-          .select("id, status, created_at, delivered_at, read_at, zapi_message_id, account_id, lead_id")
+          .select("status, created_at, delivered_at, read_at, zapi_message_id")
           .eq("direction", "outbound")
           .gte("created_at", startIso)
           .lte("created_at", endIso)
           .order("created_at", { ascending: false })
-          .limit(20000),
+          .limit(8000),
       ]);
+
 
       const clicks = clicksRes.data || [];
       const clicksByJob = new Map<string, any[]>();
