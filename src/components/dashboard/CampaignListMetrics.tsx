@@ -434,17 +434,23 @@ export function CampaignListMetrics({ rows, isLoading, title = "Métricas por li
                 )}
                 {isOpen && (
                   <div className="border-t border-border/50 px-3 py-3 space-y-3 bg-background/40">
-                    <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-7 gap-2">
                       <div>
                         <p className="text-[10px] text-muted-foreground uppercase">Entregues</p>
                         <p className="text-sm font-semibold tabular-nums">{c.delivered.toLocaleString("pt-BR")}</p>
                         <p className="text-[10px] text-emerald-500">{c.deliveryRate.toFixed(1)}%</p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-muted-foreground uppercase">Abertura</p>
+                        <p className="text-[10px] text-muted-foreground uppercase">Lidos</p>
                         <p className="text-sm font-semibold tabular-nums">{c.read.toLocaleString("pt-BR")}</p>
                         <p className="text-[10px] text-sky-500">{c.readRate.toFixed(1)}%</p>
                       </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase">Responderam</p>
+                        <p className="text-sm font-semibold tabular-nums">{c.replies.toLocaleString("pt-BR")}</p>
+                        <p className="text-[10px] text-emerald-500">{c.replyRate.toFixed(1)}%</p>
+                      </div>
+
                       <div>
                         <p className="text-[10px] text-muted-foreground uppercase">Cliques</p>
                         <p className="text-sm font-semibold tabular-nums">{c.totalClicks.toLocaleString("pt-BR")}</p>
