@@ -84,6 +84,8 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
       endDate?.toISOString() ?? "all",
     ],
     enabled: !!user,
+    staleTime: 8_000,
+    placeholderData: (prev) => prev,
     // Acompanha a evolução em tempo quase real quando há disparo em andamento
     refetchInterval: (q) => {
       const rows = (q.state.data as CampaignListMetricsResult | null)?.rows || [];
@@ -94,6 +96,7 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
       );
       return active ? 10_000 : 60_000;
     },
+
 
     queryFn: async () => {
       if (!user) return null;
@@ -132,7 +135,7 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
               .select("job_id, lead_id, status, sent_at, created_at")
               .eq("user_id", user.id)
               .in("job_id", jobIds)
-              .limit(20000)
+              .limit(8000)
           : Promise.resolve({ data: [] as any[] }),
       ]);
 
