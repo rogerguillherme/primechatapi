@@ -108,11 +108,27 @@ Deno.serve(async (req) => {
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
     const token = authHeader.replace("Bearer ", "");
-    const { data: userData, error: userErr } = await admin.auth.getUser(token);
-    if (userErr || !userData.user) return json({ error: "Invalid auth" }, 401);
-    const userId = userData.user.id;
+
+    // Validate the caller JWT with the publishable/anon client (signing-keys
+    // aware). getClaims verifies the token locally/via JWKS; getUser is the
+    // fallback for legacy tokens.
+    const authClient = createClient(SUPABASE_URL, ANON_KEY, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    });
+    let userId: string | null = null;
+    const getClaims = (authClient.auth as any).getClaims?.bind(authClient.auth);
+    if (getClaims) {
+      const { data: claimsData } = await getClaims(token);
+      userId = claimsData?.claims?.sub ?? null;
+    }
+    if (!userId) {
+      const { data: userData } = await authClient.auth.getUser(token);
+      userId = userData?.user?.id ?? null;
+    }
+    if (!userId) return json({ error: "Invalid auth" }, 401);
 
     const url = new URL(req.url);
     const monthOffset = Math.max(0, parseInt(url.searchParams.get("month_offset") || "0"));
