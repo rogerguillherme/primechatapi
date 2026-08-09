@@ -39,8 +39,12 @@ export interface CampaignListRow {
   delivered: number;
   read: number;
   errors: number;
+  /** Leads que responderam depois do disparo */
+  replies: number;
+  replyRate: number;
   deliveryRate: number;
   readRate: number;
+
   /** Sends that actually opened a new 24h conversation (paid) */
   billable: number;
   /** Sends delivered inside an already-open 24h window (free) */
