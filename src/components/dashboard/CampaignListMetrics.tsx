@@ -245,13 +245,15 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
           acc.delivered += r.delivered;
           acc.read += r.read;
           acc.errors += r.errors;
+          acc.replies += r.replies;
           acc.billable += r.billable;
           acc.freeInWindow += r.freeInWindow;
           acc.costUsd += r.costUsd;
           acc.costBrl += r.costBrl;
           return acc;
         },
-        { sent: 0, delivered: 0, read: 0, errors: 0, billable: 0, freeInWindow: 0, costUsd: 0, costBrl: 0 }
+        { sent: 0, delivered: 0, read: 0, errors: 0, replies: 0, billable: 0, freeInWindow: 0, costUsd: 0, costBrl: 0 }
+
       );
 
       return { rows, totals };
