@@ -261,7 +261,7 @@ export function LiveSendingProgress() {
       </div>
 
       <div className="space-y-1.5">
-        {rows.map((r) => {
+        {rows.slice(0, 5).map((r) => {
           const rowPct = r.total > 0 ? Math.min(100, (r.sent / r.total) * 100) : 0;
           return (
             <div key={r.id} className="rounded-lg border border-border/50 bg-card/40 px-3 py-2">
@@ -304,6 +304,11 @@ export function LiveSendingProgress() {
             </div>
           );
         })}
+        {rows.length > 5 && (
+          <p className="text-[10px] text-muted-foreground text-center pt-1">
+            +{(rows.length - 5).toLocaleString("pt-BR")} outros disparos não exibidos aqui
+          </p>
+        )}
       </div>
     </PremiumCard>
   );

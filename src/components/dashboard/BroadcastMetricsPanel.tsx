@@ -7,9 +7,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
-} from "recharts";
 import { Send, CheckCheck, Eye, AlertTriangle, DollarSign, CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, subDays, startOfDay, endOfDay, differenceInCalendarDays } from "date-fns";
@@ -41,7 +38,7 @@ export function BroadcastMetricsPanel() {
   const [customRange, setCustomRange] = useState<{ from?: Date; to?: Date }>({});
   
 
-  const { startDate, endDate, days } = useMemo(() => {
+  const { startDate, endDate } = useMemo(() => {
     if (period === "custom" && customRange.from) {
       const from = startOfDay(customRange.from);
       const to = endOfDay(customRange.to || customRange.from);
@@ -56,7 +53,7 @@ export function BroadcastMetricsPanel() {
       ? `${format(customRange.from, "dd/MM/yy", { locale: ptBR })} – ${format(customRange.to || customRange.from, "dd/MM/yy", { locale: ptBR })}`
       : "Personalizado";
 
-  const { data, isLoading: queryLoading } = useQuery({
+  const { data } = useQuery({
     queryKey: ["broadcast-metrics", user?.id, startDate.toISOString(), endDate.toISOString()],
     queryFn: async () => {
       if (!user) return null;
@@ -120,11 +117,6 @@ export function BroadcastMetricsPanel() {
       const logs = logsRes.data || [];
       const broadcastWaIds = new Set(logs.map((l: any) => l.wa_message_id).filter(Boolean));
 
-      // Flow messages: outbound chat_messages that are NOT part of a broadcast.
-      const flowMsgs = (outboundRes.data || []).filter(
-        (m: any) => !m.zapi_message_id || !broadcastWaIds.has(m.zapi_message_id)
-      );
-
       // Template/broadcast messages: from message_logs (real Meta status) plus
       // any outbound chat_message linked to a broadcast.
       const templateMsgs = [
@@ -134,21 +126,13 @@ export function BroadcastMetricsPanel() {
         ),
       ];
 
-      return { jobs, tplCat, days, clicksByJob, flowMsgs, templateMsgs };
-
-
-
+      return { jobs, tplCat, clicksByJob, templateMsgs };
     },
     enabled: !!user,
     staleTime: 20_000,
     placeholderData: (prev) => prev,
     refetchInterval: 30_000,
   });
-
-
-  const isLoading = queryLoading && !!user;
-
-
 
   /** Counts real delivery/read using timestamps first, status as fallback. */
   const countMsgs = (msgs: any[]) => {
@@ -170,8 +154,6 @@ export function BroadcastMetricsPanel() {
       readRate: sent > 0 ? (read / sent) * 100 : 0,
     };
   };
-
-  const flowSummary = useMemo(() => countMsgs(data?.flowMsgs || []), [data]);
 
   const summary = useMemo(() => {
     const jobs = data?.jobs || [];
@@ -223,29 +205,6 @@ export function BroadcastMetricsPanel() {
 
 
 
-  const chartData = useMemo(() => {
-    const msgs = [...(data?.templateMsgs || []), ...(data?.flowMsgs || [])];
-    const buckets = new Map<string, number>();
-    for (let i = days - 1; i >= 0; i--) {
-      const key = format(subDays(endDate, i), "yyyy-MM-dd");
-      buckets.set(key, 0);
-    }
-    for (const m of msgs) {
-      if (!m.created_at) continue;
-      const st = (m.status || "").toLowerCase();
-      if (["cancelled", "skipped", "pending", "queued"].includes(st)) continue;
-      const key = format(new Date(m.created_at), "yyyy-MM-dd");
-      if (buckets.has(key)) buckets.set(key, (buckets.get(key) || 0) + 1);
-    }
-    return Array.from(buckets.entries()).map(([date, sent]) => ({
-      date,
-      label: format(new Date(date), days <= 7 ? "EEE dd" : "dd/MM", { locale: ptBR }),
-      sent,
-    }));
-  }, [data, days, endDate]);
-
-
-
   const stats = [
     { label: "Enviadas", value: summary.sent.toLocaleString("pt-BR"), icon: Send, color: "text-primary" },
     { label: "Recebidos", value: summary.delivered.toLocaleString("pt-BR"), hint: `${summary.deliveryRate.toFixed(1)}% entrega`, icon: CheckCheck, color: "text-emerald-500" },
@@ -254,13 +213,6 @@ export function BroadcastMetricsPanel() {
     { label: "Gasto do envio", value: `R$ ${billing.totalBrl.toFixed(2)}`, hint: `${billing.billable.toLocaleString("pt-BR")} cobradas · ${billing.freeInWindow.toLocaleString("pt-BR")} grátis (24h)`, icon: DollarSign, color: "text-amber-500" },
   ];
 
-
-  const flowStats = [
-    { label: "Enviadas", value: flowSummary.sent.toLocaleString("pt-BR"), icon: Send, color: "text-primary" },
-    { label: "Recebidos", value: flowSummary.delivered.toLocaleString("pt-BR"), hint: `${flowSummary.deliveryRate.toFixed(1)}% entrega`, icon: CheckCheck, color: "text-emerald-500" },
-    { label: "Abertura", value: `${flowSummary.readRate.toFixed(1)}%`, hint: `${flowSummary.read.toLocaleString("pt-BR")} lidas`, icon: Eye, color: "text-sky-500" },
-    { label: "Falhas", value: flowSummary.errors.toLocaleString("pt-BR"), icon: AlertTriangle, color: "text-destructive" },
-  ];
 
   return (
     <PremiumCard className="p-5 sm:p-6 space-y-5">
@@ -311,91 +263,20 @@ export function BroadcastMetricsPanel() {
       </div>
 
 
-      {/* Aberturas 24h */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Aberturas de janela 24h (templates)
-          </p>
-          <span className="text-[10px] text-muted-foreground">Mensagens iniciais via template</span>
-        </div>
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-          {stats.map((s) => (
-            <div key={s.label} className="rounded-xl border border-border/60 bg-card/40 p-3">
-              <div className="flex items-center justify-between mb-1.5">
-                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{s.label}</p>
-                <s.icon size={14} className={cn(s.color)} />
-              </div>
-              <p className="text-2xl font-display font-bold tabular-nums leading-none">
-                {s.value}
-              </p>
-
-              {s.hint && <p className="text-[10px] text-muted-foreground mt-1">{s.hint}</p>}
+      {/* Resumo do período */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        {stats.map((s) => (
+          <div key={s.label} className="rounded-xl border border-border/60 bg-card/40 p-3">
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{s.label}</p>
+              <s.icon size={14} className={cn(s.color)} />
             </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Mensagens de fluxo */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Mensagens de fluxo
-          </p>
-          <span className="text-[10px] text-muted-foreground">Dentro da janela 24h · sem custo por mensagem</span>
-        </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {flowStats.map((s) => (
-            <div key={s.label} className="rounded-xl border border-border/60 bg-card/40 p-3">
-              <div className="flex items-center justify-between mb-1.5">
-                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{s.label}</p>
-                <s.icon size={14} className={cn(s.color)} />
-              </div>
-              <p className="text-2xl font-display font-bold tabular-nums leading-none">
-                {s.value}
-              </p>
-              {s.hint && <p className="text-[10px] text-muted-foreground mt-1">{s.hint}</p>}
-            </div>
-          ))}
-        </div>
-      </div>
-
-
-      {/* Daily chart */}
-      <div>
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-          Volume diário
-        </p>
-        <div className="h-[180px]">
-          {isLoading ? (
-            <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
-              Carregando...
-            </div>
-          ) : chartData.every((d) => d.sent === 0) ? (
-            <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
-              Sem disparos no período selecionado
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 4, right: 8, left: -12, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
-                <XAxis dataKey="label" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} allowDecimals={false} />
-                <Tooltip
-                  contentStyle={{
-                    background: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: 8,
-                    fontSize: 12,
-                  }}
-                  labelStyle={{ color: "hsl(var(--foreground))" }}
-                  formatter={(v: number) => [v.toLocaleString("pt-BR"), "Enviadas"]}
-                />
-                <Bar dataKey="sent" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
+            <p className="text-2xl font-display font-bold tabular-nums leading-none">
+              {s.value}
+            </p>
+            {s.hint && <p className="text-[10px] text-muted-foreground mt-1">{s.hint}</p>}
+          </div>
+        ))}
       </div>
 
       {/* Per-list metrics — progresso "em andamento" já aparece em
