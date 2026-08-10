@@ -180,6 +180,12 @@ function classifyMetaError(code: string | null): { severity: "critical" | "warni
     case "131031": // Business Account locked
     case "368":    // Temporarily blocked for policy violations
       return { severity: "critical", reason: "waba_locked" };
+    // Problema de cobrança/elegibilidade da BM: NENHUM envio será entregue.
+    // Precisa pausar imediatamente para não queimar a lista inteira.
+    case "131042": // Business eligibility payment issue
+    case "131044": // Message not sent (payment/eligibility)
+      return { severity: "critical", reason: "payment_issue" };
+
     // Códigos POR DESTINATÁRIO — não pausam a conta/campanha, apenas pulam o contato.
     case "131056": // Pair rate limit (par remetente/destinatário)
     case "130472": // User experiments / destinatário fora do experimento
