@@ -3,6 +3,7 @@
 // Subscribe events: messages.upsert, messages.update, connection.update
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { checkWebhookSecret } from "../_shared/webhook-secret.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -292,6 +293,14 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Aceita chamadas do próprio servidor Evolution (segredo na URL/header) ou
+    // o repasse interno feito por whatsapp-cloud-webhook (service role key).
+    const isInternalForward = req.headers.get("authorization") === `Bearer ${supabaseKey}`;
+    if (!isInternalForward && !checkWebhookSecret(req, "EVOLUTION_WEBHOOK_SECRET")) {
+      console.error("evolution-webhook: segredo ausente ou inválido");
+      return new Response("Forbidden", { status: 403, headers: corsHeaders });
+    }
 
     const url = new URL(req.url);
     // Some Evolution servers append the event name to the URL path/query, dirtying account_id (e.g. "uuid/messages-upsert").

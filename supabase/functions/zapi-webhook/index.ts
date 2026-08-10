@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { checkWebhookSecret } from "../_shared/webhook-secret.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -51,6 +52,11 @@ async function downloadAndStoreMedia(
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  if (!checkWebhookSecret(req, "ZAPI_WEBHOOK_SECRET")) {
+    console.error("zapi-webhook: segredo ausente ou inválido");
+    return new Response("Forbidden", { status: 403, headers: corsHeaders });
   }
 
   try {

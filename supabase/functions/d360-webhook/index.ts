@@ -1,3 +1,5 @@
+import { checkWebhookSecret } from "../_shared/webhook-secret.ts";
+
 // 360dialog webhook receiver
 // 360dialog forwards the same payload format used by Meta WhatsApp Cloud API
 // (entry[].changes[].value with messages/statuses/metadata).
@@ -28,6 +30,11 @@ Deno.serve(async (req) => {
 
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405, headers: corsHeaders });
+  }
+
+  if (!checkWebhookSecret(req, "D360_WEBHOOK_SECRET")) {
+    console.error("d360-webhook: segredo ausente ou inválido");
+    return new Response("Forbidden", { status: 403, headers: corsHeaders });
   }
 
   try {

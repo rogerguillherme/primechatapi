@@ -151,9 +151,40 @@ Deno.serve(async (req) => {
     console.log("broadcast-processor received request:", JSON.stringify(body));
     const { job_id } = body;
 
+    // ── AUTH ──
+    // verify_jwt está desligado (o self-chain abaixo não tem sessão de usuário),
+    // então a autenticação é feita aqui: ou é o encadeamento interno (segredo
+    // compartilhado), ou é um usuário autenticado agindo sobre o próprio job.
+    // Sem isso, qualquer pessoa sem login conseguia disparar a fila de
+    // QUALQUER cliente só chamando essa função sem job_id.
+    const internalSecret = Deno.env.get("BROADCAST_INTERNAL_SECRET");
+    const isInternalCall = !!internalSecret && req.headers.get("x-internal-secret") === internalSecret;
+
+    let callerUserId: string | null = null;
+    if (!isInternalCall) {
+      const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+      const callerClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: req.headers.get("authorization") || "" } },
+      });
+      const { data: { user } } = await callerClient.auth.getUser();
+      if (!user) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      callerUserId = user.id;
+    }
+
     let jobId = job_id;
 
     if (!jobId) {
+      if (!isInternalCall) {
+        return new Response(JSON.stringify({ error: "job_id is required" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       const { data: nextJob } = await supabase
         .from("broadcast_jobs")
         .select("id")
@@ -180,6 +211,13 @@ Deno.serve(async (req) => {
     if (jobError || !job) {
       return new Response(JSON.stringify({ error: "Job not found" }), {
         status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!isInternalCall && job.user_id !== callerUserId) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -532,6 +570,9 @@ Deno.serve(async (req) => {
     let lastError = "";
     let accountIndex = 0; // for round-robin
     const templateHeaderCache: Record<string, Promise<TemplateMediaHeader>> = {};
+    // Leads com erro retryable são reenfileirados no fim da lista (batch futuro)
+    // em vez de serem descartados silenciosamente — ver uso de retryMap abaixo.
+    const leadsToRequeue: string[] = [];
 
     for (const lead of batchLeads) {
       // ── AUTO-PAUSE CHECK ──
@@ -757,6 +798,7 @@ Deno.serve(async (req) => {
           const retries = retryMap[lead.id] || 0;
           if (retries < MAX_RETRIES && logStatus !== "invalid_number") {
             retryMap[lead.id] = retries + 1;
+            leadsToRequeue.push(lead.id);
           } else {
             errorsInBatch++;
             consecutiveErrors++;
@@ -814,6 +856,7 @@ Deno.serve(async (req) => {
         const retries = retryMap[lead.id] || 0;
         if (retries < MAX_RETRIES) {
           retryMap[lead.id] = retries + 1;
+          leadsToRequeue.push(lead.id);
         } else {
           errorsInBatch++;
           consecutiveErrors++;
@@ -823,8 +866,11 @@ Deno.serve(async (req) => {
     }
 
     // ── UPDATE JOB PROGRESS ──
+    // Leads que falharam com erro retryable voltam pro fim da fila em vez de
+    // serem perdidos — sem isso o job dava como "completo" tendo pulado gente.
+    const finalLeadIds = leadsToRequeue.length > 0 ? [...orderedLeadIds, ...leadsToRequeue] : orderedLeadIds;
     const newCursor = cursor + batchSize;
-    const isComplete = newCursor >= leadIds.length;
+    const isComplete = newCursor >= finalLeadIds.length;
     const newSent = (job.sent_count || 0) + sentInBatch;
     const newErrors = (job.error_count || 0) + errorsInBatch;
     const newTotal = newSent + newErrors;
@@ -836,6 +882,8 @@ Deno.serve(async (req) => {
         sent_count: newSent,
         error_count: newErrors,
         last_cursor: newCursor,
+        lead_ids: finalLeadIds,
+        total_leads: finalLeadIds.length,
         retry_map: retryMap,
         last_error: lastError || job.last_error,
         consecutive_errors: consecutiveErrors,
@@ -869,7 +917,7 @@ Deno.serve(async (req) => {
         sent_in_batch: sentInBatch,
         errors_in_batch: errorsInBatch,
         error_rate: errorRate,
-        progress: `${Math.min(newCursor, leadIds.length)}/${leadIds.length}`,
+        progress: `${Math.min(newCursor, finalLeadIds.length)}/${finalLeadIds.length}`,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
@@ -884,6 +932,7 @@ Deno.serve(async (req) => {
 
 async function chainNextBatch(supabaseUrl: string, jobId: string) {
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const internalSecret = Deno.env.get("BROADCAST_INTERNAL_SECRET") || "";
   try {
     // 1 second delay between batches
     await new Promise((r) => setTimeout(r, 1000));
@@ -893,6 +942,7 @@ async function chainNextBatch(supabaseUrl: string, jobId: string) {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${anonKey}`,
+        "x-internal-secret": internalSecret,
       },
       body: JSON.stringify({ job_id: jobId }),
     });

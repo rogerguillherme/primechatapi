@@ -6,7 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { Copy, Check, RefreshCw, Info } from "lucide-react";
 import { toast } from "sonner";
 
-const WEBHOOK_URL = `https://armfsrtrktsxcexsehpe.supabase.co/functions/v1/hubla-webhook`;
+// O segredo (HUBLA_WEBHOOK_SECRET) é definido nas secrets do Supabase e nunca
+// deve ficar em uma env var VITE_ (isso a exporia no bundle do navegador).
+// Troque SEU_SEGREDO_AQUI pelo valor real antes de colar no painel da Hubla.
+const WEBHOOK_URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/hubla-webhook?secret=SEU_SEGREDO_AQUI`;
 
 export function WebhookTab() {
   const [copied, setCopied] = useState(false);
@@ -68,7 +71,7 @@ export function WebhookTab() {
           <Info className="h-4 w-4 text-primary mt-0.5 shrink-0" />
           <div className="text-sm">
             <span className="font-medium">Como usar:</span>{" "}
-            <span className="text-muted-foreground">Configure esta URL no painel da Hubla para receber notificações em tempo real.</span>
+            <span className="text-muted-foreground">Substitua SEU_SEGREDO_AQUI pelo valor da secret HUBLA_WEBHOOK_SECRET (configurada no Supabase) e configure a URL resultante no painel da Hubla para receber notificações em tempo real.</span>
           </div>
         </div>
       </div>

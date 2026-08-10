@@ -209,7 +209,12 @@ export function PlatformIntegrationModal({ open, onOpenChange, platform }: Platf
   const queryClient = useQueryClient();
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const webhookUrl = `${supabaseUrl}/functions/v1/${platform.webhookUrlSuffix}`;
+  // Hubla não assina o payload, então exigimos um segredo (env var
+  // HUBLA_WEBHOOK_SECRET no Supabase) na própria URL — troque o placeholder
+  // abaixo pelo valor real antes de colar no painel da Hubla.
+  const webhookUrl = platform.id === "hubla"
+    ? `${supabaseUrl}/functions/v1/${platform.webhookUrlSuffix}?secret=SEU_SEGREDO_AQUI`
+    : `${supabaseUrl}/functions/v1/${platform.webhookUrlSuffix}`;
 
   const { data: recentLogs } = useQuery({
     queryKey: ["platform-logs", platform.id],

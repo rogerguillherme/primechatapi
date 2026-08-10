@@ -6,6 +6,26 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Verifica a assinatura HMAC-SHA256 que a Meta envia em todo POST
+// (X-Hub-Signature-256), usando o App Secret do app Meta.
+async function verifyMetaSignature(rawBody: string, signatureHeader: string | null, appSecret: string): Promise<boolean> {
+  if (!signatureHeader) return false;
+  const expectedHex = signatureHeader.replace(/^sha256=/, "");
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(appSecret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sigBuffer = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(rawBody));
+  const computedHex = Array.from(new Uint8Array(sigBuffer)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  if (computedHex.length !== expectedHex.length) return false;
+  let diff = 0;
+  for (let i = 0; i < computedHex.length; i++) diff |= computedHex.charCodeAt(i) ^ expectedHex.charCodeAt(i);
+  return diff === 0;
+}
+
 function formatCurrency(v: any): string {
   const n = typeof v === "number" ? v : parseFloat(String(v ?? "").replace(",", "."));
   if (!isFinite(n)) return String(v ?? "");
@@ -221,7 +241,24 @@ Deno.serve(async (req) => {
 
   // ── POST: Incoming messages ──
   try {
-    const payload = await req.json();
+    const rawBody = await req.text();
+
+    // Aceita apenas requisições assinadas pela Meta OU repasses internos
+    // (d360-webhook usa a service role key ao encaminhar pra cá).
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const isInternalForward = req.headers.get("authorization") === `Bearer ${serviceRoleKey}`;
+    if (!isInternalForward) {
+      const appSecret = Deno.env.get("META_APP_SECRET");
+      const validSignature = appSecret
+        ? await verifyMetaSignature(rawBody, req.headers.get("x-hub-signature-256"), appSecret)
+        : false;
+      if (!validSignature) {
+        console.error("whatsapp-cloud-webhook: assinatura ausente ou inválida");
+        return new Response("Forbidden", { status: 403, headers: corsHeaders });
+      }
+    }
+
+    const payload = JSON.parse(rawBody);
     console.log("WhatsApp Cloud webhook received:", JSON.stringify(payload));
 
     // Some Evolution instances can be pointed at this legacy webhook URL.
