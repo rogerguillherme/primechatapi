@@ -429,17 +429,12 @@ Deno.serve(async (req) => {
               .maybeSingle();
 
             if (failedLog?.job_id) {
-              const { data: jobNow } = await sb
-                .from("broadcast_jobs")
-                .select("error_count")
-                .eq("id", failedLog.job_id)
-                .maybeSingle();
-              if (jobNow) {
-                await sb.from("broadcast_jobs").update({
-                  error_count: (jobNow.error_count || 0) + 1,
-                  updated_at: new Date().toISOString(),
-                }).eq("id", failedLog.job_id);
-              }
+              // Incremento atômico — evita perder contagem quando vários
+              // status da Meta chegam quase juntos (comum em disparo em massa).
+              await sb.rpc("increment_broadcast_job_counters" as any, {
+                p_job_id: failedLog.job_id,
+                p_errors: 1,
+              });
             }
 
             // Trigger protection for critical/quality errors
@@ -474,22 +469,12 @@ Deno.serve(async (req) => {
           }
 
           if (logTracking?.job_id && (logTracking.delivered || logTracking.read)) {
-            const { data: jobMetrics } = await sb
-              .from("broadcast_jobs")
-              .select("delivered_count, read_count")
-              .eq("id", logTracking.job_id)
-              .maybeSingle();
-
-            if (jobMetrics) {
-              await sb
-                .from("broadcast_jobs")
-                .update({
-                  delivered_count: (jobMetrics.delivered_count || 0) + (logTracking.delivered ? 1 : 0),
-                  read_count: (jobMetrics.read_count || 0) + (logTracking.read ? 1 : 0),
-                  updated_at: new Date().toISOString(),
-                })
-                .eq("id", logTracking.job_id);
-            }
+            // Incremento atômico — mesma razão do error_count acima.
+            await sb.rpc("increment_broadcast_job_counters" as any, {
+              p_job_id: logTracking.job_id,
+              p_delivered: logTracking.delivered ? 1 : 0,
+              p_read: logTracking.read ? 1 : 0,
+            });
 
             const eventsToInsert = [] as Array<{
               campaign_id: string;

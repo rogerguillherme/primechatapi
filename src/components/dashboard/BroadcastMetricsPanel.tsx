@@ -398,46 +398,8 @@ export function BroadcastMetricsPanel() {
         </div>
       </div>
 
-      {/* Contador global de evolução dos disparos */}
-      {(() => {
-        const rows = listData?.rows || [];
-        const active = rows.filter((r) =>
-          ["running", "processing", "queued", "pending", "scheduled"].includes((r.status || "").toLowerCase())
-        );
-        const totalAll = rows.reduce((s, r) => s + (r.total || 0), 0);
-        const processedAll = rows.reduce((s, r) => s + Math.min(r.sent + r.errors, r.total || r.sent + r.errors), 0);
-        const pct = totalAll > 0 ? Math.min(100, (processedAll / totalAll) * 100) : 0;
-        if (totalAll === 0) return null;
-        return (
-          <div className="rounded-lg border border-border/50 bg-card/40 p-3 space-y-2">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Evolução dos disparos
-              </p>
-              <p className="text-xs tabular-nums">
-                <span className="font-semibold">{processedAll.toLocaleString("pt-BR")}</span>
-                <span className="text-muted-foreground"> / {totalAll.toLocaleString("pt-BR")} contatos</span>
-                <span className="text-muted-foreground"> · {pct.toFixed(1)}%</span>
-              </p>
-            </div>
-            <div className="h-2 rounded-full bg-muted overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${
-                  active.length > 0 ? "bg-primary animate-pulse" : "bg-emerald-500"
-                }`}
-                style={{ width: `${pct}%` }}
-              />
-            </div>
-            <p className="text-[10px] text-muted-foreground">
-              {active.length > 0
-                ? `${active.length} disparo(s) em andamento · ${Math.max(0, totalAll - processedAll).toLocaleString("pt-BR")} restantes`
-                : "Nenhum disparo em andamento no período"}
-            </p>
-          </div>
-        );
-      })()}
-
-      {/* Per-list metrics */}
+      {/* Per-list metrics — progresso "em andamento" já aparece em
+          LiveSendingProgress no topo do dashboard; aqui não repetimos. */}
       <CampaignListMetrics rows={listData?.rows || []} isLoading={listLoading} title="Métricas por lista" />
 
     </PremiumCard>

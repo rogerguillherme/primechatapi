@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { ChevronDown, ChevronRight, MousePointerClick, Pencil, Check, X } from "lucide-react";
+import { ChevronDown, ChevronRight, MousePointerClick, Pencil, Check, X, RotateCcw, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -270,13 +270,79 @@ interface Props {
   title?: string;
 }
 
+// Status de message_logs que valem reenvio: falhas transitórias.
+// Excluídos de propósito: invalid_number (número não existe), blocked_by_meta
+// (Meta bloqueou o destinatário/conta) e skipped (regra de política, ex.
+// janela 24h) — reenviar esses só desperdiça envio ou piora a reputação.
+const RESENDABLE_STATUSES = ["error", "rate_limited", "failed"];
+
 export function CampaignListMetrics({ rows, isLoading, title = "Métricas por lista" }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [resendingId, setResendingId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const visible = rows.filter((r) => r.sent > 0 || r.total > 0);
+
+  const resendFailed = async (jobId: string) => {
+    setResendingId(jobId);
+    try {
+      const { data: original } = await supabase
+        .from("broadcast_jobs")
+        .select("*")
+        .eq("id", jobId)
+        .maybeSingle();
+      if (!original) throw new Error("Disparo original não encontrado");
+
+      const { data: failedLogs } = await supabase
+        .from("message_logs")
+        .select("lead_id")
+        .eq("job_id", jobId)
+        .in("status", RESENDABLE_STATUSES);
+
+      const leadIds = Array.from(new Set((failedLogs || []).map((l: any) => l.lead_id).filter(Boolean)));
+      if (leadIds.length === 0) {
+        toast.info("Nenhum erro reenviável encontrado (números inválidos e bloqueios não são reenviados)");
+        return;
+      }
+
+      const { data: job, error } = await supabase
+        .from("broadcast_jobs")
+        .insert({
+          user_id: (original as any).user_id,
+          account_id: (original as any).account_id,
+          template_id: (original as any).template_id,
+          campaign_name: `${(original as any).campaign_name || (original as any).template_name || "Disparo"} (reenvio)`,
+          template_name: (original as any).template_name,
+          template_language: (original as any).template_language,
+          template_params: (original as any).template_params,
+          lead_ids: leadIds,
+          total_leads: leadIds.length,
+          status: "pending",
+          multi_number: (original as any).multi_number,
+          account_ids: (original as any).account_ids,
+          delay_min_seconds: (original as any).delay_min_seconds,
+          delay_max_seconds: (original as any).delay_max_seconds,
+          messages_per_second: (original as any).messages_per_second,
+        } as any)
+        .select()
+        .single();
+
+      if (error || !job) throw new Error(error?.message || "Erro ao criar reenvio");
+
+      await supabase.functions.invoke("broadcast-processor", { body: { job_id: (job as any).id } });
+
+      toast.success(`Reenvio iniciado para ${leadIds.length} contato(s)`);
+      queryClient.invalidateQueries({ queryKey: ["campaign-list-metrics"] });
+      queryClient.invalidateQueries({ queryKey: ["broadcast-metrics"] });
+      queryClient.invalidateQueries({ queryKey: ["live-sending-progress"] });
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao reenviar");
+    } finally {
+      setResendingId(null);
+    }
+  };
 
   const saveName = async (id: string) => {
     setSaving(true);
@@ -464,6 +530,25 @@ export function CampaignListMetrics({ rows, isLoading, title = "Métricas por li
                         <p className="text-[10px] text-destructive">
                           {(c.sent + c.errors > 0 ? (c.errors / (c.sent + c.errors)) * 100 : 0).toFixed(1)}%
                         </p>
+                        {c.errors > 0 &&
+                          !["running", "processing", "queued", "pending", "scheduled"].includes(
+                            (c.status || "").toLowerCase()
+                          ) && (
+                            <button
+                              type="button"
+                              disabled={resendingId === c.id}
+                              onClick={() => resendFailed(c.id)}
+                              className="mt-1 flex items-center gap-1 text-[10px] font-medium text-primary hover:underline disabled:opacity-50"
+                              title="Reenviar apenas os contatos que falharam (exclui números inválidos e bloqueios)"
+                            >
+                              {resendingId === c.id ? (
+                                <Loader2 size={11} className="animate-spin" />
+                              ) : (
+                                <RotateCcw size={11} />
+                              )}
+                              Reenviar erros
+                            </button>
+                          )}
                       </div>
                       <div>
                         <p className="text-[10px] text-muted-foreground uppercase">Cobradas</p>
