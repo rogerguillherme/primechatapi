@@ -313,10 +313,19 @@ Deno.serve(async (req) => {
           const updates: any = { status };
           if (status === "delivered") updates.delivered_at = ts;
           if (status === "read") { updates.read_at = ts; updates.delivered_at = ts; }
+          if (status === "failed") {
+            // Persiste o motivo da Meta também em chat_messages: envios de fluxo
+            // não criam linha em message_logs, então sem isso o motivo se perde.
+            const fErr = Array.isArray(statusUpdate.errors) ? statusUpdate.errors[0] : null;
+            updates.error_code = fErr?.code != null ? String(fErr.code) : null;
+            updates.error_title = fErr?.title || fErr?.message || null;
+            updates.error_details = fErr?.error_data?.details || fErr?.message || null;
+          }
 
           await sb.from("chat_messages")
             .update(updates)
             .eq("zapi_message_id", waMessageId);
+
 
           let logTracking:
             | { job_id: string; lead_id: string | null; phone: string; delivered: boolean; read: boolean }
