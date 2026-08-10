@@ -482,6 +482,9 @@ export type Database = {
           created_at: string
           delivered_at: string | null
           direction: string
+          error_code: string | null
+          error_details: string | null
+          error_title: string | null
           id: string
           lead_id: string
           media_type: string | null
@@ -496,6 +499,9 @@ export type Database = {
           created_at?: string
           delivered_at?: string | null
           direction: string
+          error_code?: string | null
+          error_details?: string | null
+          error_title?: string | null
           id?: string
           lead_id: string
           media_type?: string | null
@@ -510,6 +516,9 @@ export type Database = {
           created_at?: string
           delivered_at?: string | null
           direction?: string
+          error_code?: string | null
+          error_details?: string | null
+          error_title?: string | null
           id?: string
           lead_id?: string
           media_type?: string | null
