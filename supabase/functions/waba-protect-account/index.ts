@@ -158,6 +158,7 @@ Deno.serve(async (req) => {
 function titleFor(code: string): string {
   switch (code) {
     case "waba_locked": return "Conta WhatsApp temporariamente bloqueada pela Meta";
+    case "payment_issue": return "Problema de pagamento/elegibilidade na sua Business Manager";
     case "quality_red": return "Qualidade da sua conta caiu para VERMELHO";
     case "quality_yellow": return "Qualidade da sua conta caiu para AMARELO";
     case "spam_restriction": return "Restrição de spam aplicada pela Meta";
@@ -169,6 +170,8 @@ function titleFor(code: string): string {
 
 function messageFor(code: string): string {
   switch (code) {
+    case "payment_issue":
+      return "A Meta recusou os envios com o erro 131042 (Business eligibility payment issue). Pausamos os disparos automaticamente. Regularize o método de pagamento da Business Manager no Meta Business Suite → Cobrança e tente novamente.";
     case "waba_locked":
       return "Não é um problema da plataforma — a Meta restringiu sua WABA. Pausamos seus disparos automaticamente para proteger sua reputação. Acesse o Meta Business Suite → Account Quality → Solicitar revisão.";
     case "quality_red":
