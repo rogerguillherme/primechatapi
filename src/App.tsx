@@ -13,19 +13,23 @@ import InstagramDashboard from "./pages/InstagramDashboard";
 import InstagramCallbackPage from "./pages/InstagramCallback";
 import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
+import TrialSignup from "./pages/TrialSignup";
+import TrialExpired from "./pages/TrialExpired";
 import LandingPage from "./pages/LandingPage";
 import AdminUsers from "./pages/AdminUsers";
 import WabaHealth from "./pages/WabaHealth";
 import { Loader2 } from "lucide-react";
 import { BroadcastProgressFloat } from "@/components/BroadcastProgressFloat";
+import { useTrialStatus } from "@/hooks/use-trial-status";
 
 const queryClient = new QueryClient();
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();
+  const { isExpired, loading: trialLoading } = useTrialStatus();
   const location = useLocation();
 
-  if (loading) {
+  if (loading || (session && trialLoading)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -36,6 +40,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (!session) {
     const redirectTo = `${location.pathname}${location.search}${location.hash}`;
     return <Navigate to={`/auth?redirect=${encodeURIComponent(redirectTo)}`} replace />;
+  }
+
+  if (isExpired) {
+    return <Navigate to="/trial-expirado" replace />;
   }
 
   return <>{children}</>;
@@ -70,6 +78,8 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/auth" element={<Auth />} />
+      <Route path="/teste-gratis" element={<TrialSignup />} />
+      <Route path="/trial-expirado" element={<TrialExpired />} />
       <Route
         path="/"
         element={
