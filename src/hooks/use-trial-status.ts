@@ -14,11 +14,11 @@ export function useTrialStatus() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("trial_ends_at")
+        .select("*")
         .eq("user_id", user!.id)
         .single();
       if (error) throw error;
-      return data.trial_ends_at as string | null;
+      return ((data as Record<string, unknown>)?.trial_ends_at as string | null) ?? null;
     },
     enabled: !!session && !!user,
   });

@@ -1363,6 +1363,7 @@ export type Database = {
           origin: string | null
           phone: string
           photo_url: string | null
+          stage_id: string | null
           unsubscribe_reason: string | null
           unsubscribed: boolean
           unsubscribed_at: string | null
@@ -1392,6 +1393,7 @@ export type Database = {
           origin?: string | null
           phone: string
           photo_url?: string | null
+          stage_id?: string | null
           unsubscribe_reason?: string | null
           unsubscribed?: boolean
           unsubscribed_at?: string | null
@@ -1421,6 +1423,7 @@ export type Database = {
           origin?: string | null
           phone?: string
           photo_url?: string | null
+          stage_id?: string | null
           unsubscribe_reason?: string | null
           unsubscribed?: boolean
           unsubscribed_at?: string | null
@@ -1433,6 +1436,13 @@ export type Database = {
             columns: ["ai_agent_id"]
             isOneToOne: false
             referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "pipeline_stages"
             referencedColumns: ["id"]
           },
         ]
@@ -1690,6 +1700,36 @@ export type Database = {
           },
         ]
       }
+      pipeline_stages: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          name: string
+          owner_id: string
+          position: number
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          name: string
+          owner_id: string
+          position?: number
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+          owner_id?: string
+          position?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       product_items: {
         Row: {
           id: string
@@ -1786,6 +1826,36 @@ export type Database = {
           instagram_enabled?: boolean
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      team_members: {
+        Row: {
+          access_level: string
+          created_at: string
+          id: string
+          lead_scope: string
+          member_user_id: string
+          owner_id: string
+          updated_at: string
+        }
+        Insert: {
+          access_level?: string
+          created_at?: string
+          id?: string
+          lead_scope?: string
+          member_user_id: string
+          owner_id: string
+          updated_at?: string
+        }
+        Update: {
+          access_level?: string
+          created_at?: string
+          id?: string
+          lead_scope?: string
+          member_user_id?: string
+          owner_id?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -2419,6 +2489,8 @@ export type Database = {
         }
         Returns: boolean
       }
+      team_access_level: { Args: { _owner: string }; Returns: string }
+      team_lead_scope: { Args: { _owner: string }; Returns: string }
     }
     Enums: {
       app_role: "admin" | "user"
