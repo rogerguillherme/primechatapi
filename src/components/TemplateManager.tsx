@@ -247,7 +247,8 @@ export function TemplateManager({ autoSync = false, autoSyncIntervalMs = 120_000
    */
   const autoSyncRunning = useRef(false);
   useEffect(() => {
-    if (!autoSync) return;
+    if (!autoSync || accounts.length === 0) return;
+
 
     let cancelled = false;
 
