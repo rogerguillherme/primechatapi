@@ -75,12 +75,10 @@ export function DashboardHome({ onNavigateTab }: DashboardHomeProps) {
             else if (id.includes("campaign") || id.includes("readrate")) onNavigateTab?.("broadcast");
           }}
         />
-        {!isBroadcastView && isSuperAdmin && <SalesRanking />}
-        {isBroadcastView && isSuperAdmin && <SalesRanking />}
+        {isSuperAdmin && <SalesRanking />}
       </div>
 
-      {!isBroadcastView && <RecentOrders />}
-      {isBroadcastView && isSuperAdmin && <RecentOrders />}
+      {isSuperAdmin && <RecentOrders />}
     </div>
   );
 }
