@@ -2367,6 +2367,10 @@ export default function WhatsAppApi() {
           {/* Non-chat tabs get padding */}
           <TabsContent value="config" className="space-y-4 p-6 m-0 flex-1 overflow-y-auto">
 
+          {/* Preferência da tela inicial */}
+          <HomeViewSetting />
+
+
           {/* Existing accounts list */}
           <Card>
             <CardHeader>
