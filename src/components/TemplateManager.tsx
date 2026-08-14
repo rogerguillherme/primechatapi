@@ -277,7 +277,7 @@ export function TemplateManager({ autoSync = false, autoSyncIntervalMs = 120_000
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [autoSync, autoSyncIntervalMs, queryClient]);
+  }, [autoSync, autoSyncIntervalMs, queryClient, accounts.length]);
 
 
   return (
