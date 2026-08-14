@@ -1766,7 +1766,6 @@ export type Database = {
           display_name: string | null
           id: string
           instagram_enabled: boolean
-          trial_ends_at: string | null
           updated_at: string
           user_id: string
         }
@@ -1776,7 +1775,6 @@ export type Database = {
           display_name?: string | null
           id?: string
           instagram_enabled?: boolean
-          trial_ends_at?: string | null
           updated_at?: string
           user_id: string
         }
@@ -1786,7 +1784,6 @@ export type Database = {
           display_name?: string | null
           id?: string
           instagram_enabled?: boolean
-          trial_ends_at?: string | null
           updated_at?: string
           user_id?: string
         }
