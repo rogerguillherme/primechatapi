@@ -35,6 +35,7 @@ import {
   KeyRound, ChevronDown, Webhook, LogOut, Plug, Tag, ChevronLeft, ChevronRight,
   Instagram, GitBranch, TrendingUp, Bot, Volume2, Sparkles, DollarSign,
   QrCode, RefreshCw, Loader2, Smartphone, Filter, Upload, UserMinus,
+  Home, KanbanSquare, Menu, X,
 } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
@@ -82,7 +83,6 @@ import { AiAgentConfig } from "@/components/AiAgentConfig";
 import { FinancialTab } from "@/components/FinancialTab";
 import { CloudChatTab } from "@/components/CloudChatTab";
 import { DashboardHome } from "@/pages/DashboardHome";
-import { Home, KanbanSquare, Menu, X } from "lucide-react";
 import { HomeViewSetting } from "@/components/settings/HomeViewSetting";
 import { TemplateStudio } from "@/components/templates/TemplateStudio";
 import { LeadsKanban } from "@/components/kanban/LeadsKanban";
