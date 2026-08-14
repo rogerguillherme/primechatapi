@@ -47,7 +47,14 @@ const metaStatusConfig: Record<string, { label: string; variant: "default" | "se
   unknown: { label: "Não sincronizado", variant: "outline" },
 };
 
-export function TemplateManager() {
+export interface TemplateManagerProps {
+  /** Sincroniza automaticamente os templates da Meta em segundo plano. */
+  autoSync?: boolean;
+  /** Intervalo da sincronização automática em ms (padrão 2 minutos). */
+  autoSyncIntervalMs?: number;
+}
+
+export function TemplateManager({ autoSync = false, autoSyncIntervalMs = 120_000 }: TemplateManagerProps = {}) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { accounts } = useWhatsAppAccounts();
