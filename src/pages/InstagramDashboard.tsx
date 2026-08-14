@@ -111,7 +111,7 @@ export default function InstagramDashboard() {
         navCollapsed && "md:w-14"
       )}>
         <div className="p-3 border-b border-sidebar-border flex items-center justify-between">
-          {!sidebarCollapsed && (
+          {!navCollapsed && (
             <div className="flex items-center gap-2.5 animate-fade-in">
               <div className="w-8 h-8 rounded-lg bg-pink-500/20 flex items-center justify-center">
                 <Instagram size={16} className="text-pink-400" />
