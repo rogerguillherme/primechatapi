@@ -241,6 +241,44 @@ export function TemplateManager({ autoSync = false, autoSyncIntervalMs = 120_000
     return status === "unknown" || status === "REJECTED";
   };
 
+  /**
+   * Sincronização automática (silenciosa) com a Meta: busca novos templates e
+   * atualiza os status de aprovação sem exigir clique do usuário.
+   */
+  const autoSyncRunning = useRef(false);
+  useEffect(() => {
+    if (!autoSync) return;
+
+    let cancelled = false;
+
+    const silentSync = async () => {
+      if (autoSyncRunning.current || document.visibilityState === "hidden") return;
+      autoSyncRunning.current = true;
+      try {
+        const { error } = await supabase.functions.invoke("whatsapp-sync-templates", { body: {} });
+        if (error) throw error;
+        if (cancelled) return;
+        await queryClient.refetchQueries({ queryKey: ["user-templates"] });
+        queryClient.invalidateQueries({ queryKey: ["account-templates"] });
+        queryClient.invalidateQueries({ queryKey: ["broadcast-templates"] });
+      } catch (err) {
+        // Falha de sincronização automática não deve interromper a interface.
+        console.warn("Auto-sync de templates falhou:", err);
+      } finally {
+        autoSyncRunning.current = false;
+      }
+    };
+
+    silentSync();
+    const timer = window.setInterval(silentSync, Math.max(30_000, autoSyncIntervalMs));
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [autoSync, autoSyncIntervalMs, queryClient]);
+
+
   return (
     <>
       <Collapsible open={isOpen} onOpenChange={setIsOpen}>
