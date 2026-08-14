@@ -1201,7 +1201,7 @@ function BroadcastTab() {
   return (
     <div className="space-y-6">
       <Tabs defaultValue="queue" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="queue" className="gap-1.5">
             <Send size={14} /> Fila de Disparos
           </TabsTrigger>
@@ -1211,10 +1211,14 @@ function BroadcastTab() {
           <TabsTrigger value="whatsapp" className="gap-1.5">
             <MessageCircle size={14} /> Disparo WhatsApp
           </TabsTrigger>
+          <TabsTrigger value="templates" className="gap-1.5">
+            <FileText size={14} /> Templates
+          </TabsTrigger>
           <TabsTrigger value="import" className="gap-1.5">
             <Users size={14} /> Importar Contatos
           </TabsTrigger>
         </TabsList>
+
 
         <TabsContent value="queue" className="mt-4">
           <BroadcastQueue />
