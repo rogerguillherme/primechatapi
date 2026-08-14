@@ -82,7 +82,7 @@ import { AiAgentConfig } from "@/components/AiAgentConfig";
 import { FinancialTab } from "@/components/FinancialTab";
 import { CloudChatTab } from "@/components/CloudChatTab";
 import { DashboardHome } from "@/pages/DashboardHome";
-import { Home, KanbanSquare } from "lucide-react";
+import { Home, KanbanSquare, Menu, X } from "lucide-react";
 import { HomeViewSetting } from "@/components/settings/HomeViewSetting";
 import { TemplateStudio } from "@/components/templates/TemplateStudio";
 import { LeadsKanban } from "@/components/kanban/LeadsKanban";
@@ -2255,7 +2255,7 @@ export default function WhatsAppApi() {
               </div>
             )}
             <button
-              onClick={() => setSidebarCollapsed(!navCollapsed)}
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
               className="hidden md:block p-1.5 rounded-md text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
             >
               {navCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
