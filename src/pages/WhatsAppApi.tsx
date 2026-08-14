@@ -82,6 +82,8 @@ import { FinancialTab } from "@/components/FinancialTab";
 import { CloudChatTab } from "@/components/CloudChatTab";
 import { DashboardHome } from "@/pages/DashboardHome";
 import { Home, KanbanSquare } from "lucide-react";
+import { HomeViewSetting } from "@/components/settings/HomeViewSetting";
+import { TemplateStudio } from "@/components/templates/TemplateStudio";
 import { LeadsKanban } from "@/components/kanban/LeadsKanban";
 import { TeamManagement } from "@/components/team/TeamManagement";
 
