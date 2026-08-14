@@ -81,7 +81,9 @@ import { AiAgentConfig } from "@/components/AiAgentConfig";
 import { FinancialTab } from "@/components/FinancialTab";
 import { CloudChatTab } from "@/components/CloudChatTab";
 import { DashboardHome } from "@/pages/DashboardHome";
-import { Home } from "lucide-react";
+import { Home, KanbanSquare } from "lucide-react";
+import { LeadsKanban } from "@/components/kanban/LeadsKanban";
+import { TeamManagement } from "@/components/team/TeamManagement";
 
 const isUnauthorizedFunctionError = (error: unknown) =>
   error instanceof Error && error.message.includes("401");
@@ -2254,6 +2256,14 @@ export default function WhatsAppApi() {
             <TabsTrigger value="history" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
               <BarChart3 size={16} />
               {!sidebarCollapsed && <span>Histórico</span>}
+            </TabsTrigger>
+            <TabsTrigger value="kanban" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+              <KanbanSquare size={16} />
+              {!sidebarCollapsed && <span>Kanban</span>}
+            </TabsTrigger>
+            <TabsTrigger value="team" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+              <Users size={16} />
+              {!sidebarCollapsed && <span>Equipe</span>}
             </TabsTrigger>
             {!sidebarCollapsed && (
               <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 px-3 pt-3 pb-1 font-semibold">Automação</p>
