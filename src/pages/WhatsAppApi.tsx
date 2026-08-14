@@ -2783,6 +2783,18 @@ export default function WhatsAppApi() {
           <DashboardHome onNavigateTab={(t) => setActiveMainTab(t)} />
         </TabsContent>
 
+        {/* ── Kanban Tab ── */}
+        <TabsContent value="kanban" className="flex-1 overflow-hidden m-0 p-6">
+          <LeadsKanban />
+        </TabsContent>
+
+        {/* ── Team Tab ── */}
+        <TabsContent value="team" className="space-y-4 p-6 max-w-5xl overflow-y-auto flex-1 m-0">
+          <TeamManagement />
+        </TabsContent>
+
+
+
         {/* ── Webhook Tab (Event Webhooks) ── */}
         {/* ── Chat Tab ── */}
         <TabsContent value="chat" className="flex-1 overflow-hidden m-0 p-0">
