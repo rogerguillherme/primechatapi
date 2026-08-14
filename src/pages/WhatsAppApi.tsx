@@ -1666,10 +1666,14 @@ function BroadcastTab() {
       </div>
 
         </TabsContent>
+
+        {/* ── Sub-aba Templates (sincronização automática com a Meta) ── */}
+        <TabsContent value="templates" className="mt-4">
+          <TemplateManager autoSync />
+        </TabsContent>
       </Tabs>
 
-      {/* Template Manager */}
-      <TemplateManager />
+
 
     </div>
   );
