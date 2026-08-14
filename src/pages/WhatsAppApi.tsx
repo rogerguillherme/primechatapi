@@ -2802,6 +2802,11 @@ export default function WhatsAppApi() {
         </TabsContent>
 
         {/* ── Kanban Tab ── */}
+        {/* ── Templates Tab ── */}
+        <TabsContent value="templates" className="space-y-4 p-6 max-w-6xl overflow-y-auto flex-1 m-0">
+          <TemplateStudio />
+        </TabsContent>
+
         <TabsContent value="kanban" className="flex-1 overflow-hidden m-0 p-6">
           <LeadsKanban />
         </TabsContent>
