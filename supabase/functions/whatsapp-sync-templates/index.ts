@@ -61,11 +61,13 @@ Deno.serve(async (req) => {
     const { data: accounts, error: accErr } = await accountsQuery;
     if (accErr) throw new Error(`Failed to fetch accounts: ${accErr.message}`);
     if (!accounts?.length) {
+      // Sem contas conectadas não é erro: devolve resultado vazio para não quebrar a UI.
       return new Response(
-        JSON.stringify({ error: "Nenhuma conta encontrada" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ success: true, results: [], reason: "no_accounts" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
 
     const results: any[] = [];
 
