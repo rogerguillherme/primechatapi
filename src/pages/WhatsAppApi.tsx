@@ -40,6 +40,7 @@ import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { FlowBuilder } from "@/components/FlowBuilder";
 import { TemplateManager } from "@/components/TemplateManager";
 import { EvolutionBroadcastTab } from "@/components/EvolutionBroadcastTab";
@@ -81,7 +82,7 @@ import { AiAgentConfig } from "@/components/AiAgentConfig";
 import { FinancialTab } from "@/components/FinancialTab";
 import { CloudChatTab } from "@/components/CloudChatTab";
 import { DashboardHome } from "@/pages/DashboardHome";
-import { Home, KanbanSquare } from "lucide-react";
+import { Home, KanbanSquare, Menu, X } from "lucide-react";
 import { HomeViewSetting } from "@/components/settings/HomeViewSetting";
 import { TemplateStudio } from "@/components/templates/TemplateStudio";
 import { LeadsKanban } from "@/components/kanban/LeadsKanban";
@@ -1203,7 +1204,7 @@ function BroadcastTab() {
   return (
     <div className="space-y-6">
       <Tabs defaultValue="queue" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 h-auto">
           <TabsTrigger value="queue" className="gap-1.5">
             <Send size={14} /> Fila de Disparos
           </TabsTrigger>
@@ -1723,6 +1724,10 @@ export default function WhatsAppApi() {
   const [isDefault, setIsDefault] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const isMobile = useIsMobile();
+  // Em telas pequenas o menu nunca fica no modo "colapsado" (ícones): ele vira gaveta.
+  const navCollapsed = sidebarCollapsed && !isMobile;
   const [activeMainTab, setActiveMainTab] = useState("home");
   const [flowTriggerType, setFlowTriggerType] = useState<string | undefined>(undefined);
   const [flowEditId, setFlowEditId] = useState<string | undefined>(undefined);
@@ -2202,13 +2207,43 @@ export default function WhatsAppApi() {
   return (
     <div className="animate-fade-in relative">
       <SmokeBackground />
-      <Tabs value={activeMainTab} onValueChange={(v) => { setActiveMainTab(v); if (v !== "flows") setFlowTriggerType(undefined); }} className="relative z-10 flex h-screen gap-0" orientation="vertical">
+      <Tabs value={activeMainTab} onValueChange={(v) => { setActiveMainTab(v); setMobileNavOpen(false); if (v !== "flows") setFlowTriggerType(undefined); }} className="relative z-10 flex flex-col md:flex-row h-[100dvh] gap-0" orientation="vertical">
+        {/* Barra superior (mobile) */}
+        <div className="md:hidden shrink-0 glass-sidebar flex items-center gap-2 px-3 py-2.5 border-b border-white/10">
+          <button
+            onClick={() => setMobileNavOpen(true)}
+            aria-label="Abrir menu"
+            className="p-2 -ml-1 rounded-md text-white/80 hover:bg-white/10 transition-colors"
+          >
+            <Menu size={20} />
+          </button>
+          <div className="w-7 h-7 rounded-lg bg-whatsapp/20 flex items-center justify-center shrink-0">
+            <MessageCircle size={15} className="text-whatsapp" />
+          </div>
+          <h1 className="text-sm font-display font-bold text-white truncate">Prime Chat</h1>
+        </div>
+
+        {/* Overlay do menu mobile */}
+        {mobileNavOpen && (
+          <div
+            className="fixed inset-0 z-40 bg-black/60 md:hidden"
+            onClick={() => setMobileNavOpen(false)}
+            aria-hidden
+          />
+        )}
+
         {/* Sidebar */}
-        <div className={cn("shrink-0 glass-sidebar flex flex-col transition-all duration-300 relative", sidebarCollapsed ? "w-14" : "w-56")}>
+        <div className={cn(
+          "shrink-0 glass-sidebar flex-col transition-all duration-300",
+          "fixed inset-y-0 left-0 z-50 w-64 max-w-[85vw] overflow-y-auto",
+          "md:relative md:z-auto md:w-56 md:max-w-none md:overflow-y-auto",
+          mobileNavOpen ? "flex" : "hidden md:flex",
+          navCollapsed && "md:w-14"
+        )}>
           <div className="glass-sheen pointer-events-none absolute inset-0" />
           <div className="relative p-3 border-b border-white/10 flex items-center justify-between">
 
-            {!sidebarCollapsed && (
+            {!navCollapsed && (
               <div className="flex items-center gap-2.5 animate-fade-in">
                 <div className="w-8 h-8 rounded-lg bg-whatsapp/20 flex items-center justify-center">
                   <MessageCircle size={16} className="text-whatsapp" />
@@ -2221,111 +2256,118 @@ export default function WhatsAppApi() {
             )}
             <button
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="p-1.5 rounded-md text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+              className="hidden md:block p-1.5 rounded-md text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
             >
-              {sidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+              {navCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+            </button>
+            <button
+              onClick={() => setMobileNavOpen(false)}
+              aria-label="Fechar menu"
+              className="md:hidden p-1.5 rounded-md text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+            >
+              <X size={16} />
             </button>
           </div>
           {/* Platform selector */}
           <div className="px-2 pt-2 pb-1">
-            <div className={cn("flex items-center rounded-lg bg-white/10 p-0.5", sidebarCollapsed ? "flex-col gap-0.5" : "")}>
+            <div className={cn("flex items-center rounded-lg bg-white/10 p-0.5", navCollapsed ? "flex-col gap-0.5" : "")}>
               <button
                 className={cn(
                   "flex items-center gap-1.5 rounded-md text-xs font-medium transition-all bg-white/20 text-white shadow-sm",
-                  sidebarCollapsed ? "p-1.5 w-full justify-center" : "flex-1 px-2.5 py-1.5 justify-center"
+                  navCollapsed ? "p-1.5 w-full justify-center" : "flex-1 px-2.5 py-1.5 justify-center"
                 )}
               >
                 <MessageCircle size={13} />
-                {!sidebarCollapsed && "WhatsApp"}
+                {!navCollapsed && "WhatsApp"}
               </button>
               <button
                 onClick={() => navigate("/instagram")}
                 className={cn(
                   "flex items-center gap-1.5 rounded-md text-xs font-medium transition-all text-white/50 hover:text-white/80",
-                  sidebarCollapsed ? "p-1.5 w-full justify-center" : "flex-1 px-2.5 py-1.5 justify-center"
+                  navCollapsed ? "p-1.5 w-full justify-center" : "flex-1 px-2.5 py-1.5 justify-center"
                 )}
               >
                 <Instagram size={13} />
-                {!sidebarCollapsed && "Instagram"}
+                {!navCollapsed && "Instagram"}
               </button>
             </div>
           </div>
           <TabsList className="flex flex-col items-stretch bg-transparent h-auto p-2 gap-0.5">
-            <TabsTrigger value="home" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+            <TabsTrigger value="home" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
               <Home size={16} />
-              {!sidebarCollapsed && <span>Início</span>}
+              {!navCollapsed && <span>Início</span>}
             </TabsTrigger>
-            <TabsTrigger value="chat" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+            <TabsTrigger value="chat" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
               <MessageCircle size={16} />
-              {!sidebarCollapsed && <span>Conversas</span>}
+              {!navCollapsed && <span>Conversas</span>}
             </TabsTrigger>
-            <TabsTrigger value="broadcast" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+            <TabsTrigger value="broadcast" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
               <Send size={16} />
-              {!sidebarCollapsed && <span>Campanhas</span>}
+              {!navCollapsed && <span>Campanhas</span>}
             </TabsTrigger>
-            <TabsTrigger value="templates" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+            <TabsTrigger value="templates" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
               <FileText size={16} />
-              {!sidebarCollapsed && <span>Templates</span>}
+              {!navCollapsed && <span>Templates</span>}
             </TabsTrigger>
-            <TabsTrigger value="history" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+            <TabsTrigger value="history" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
               <BarChart3 size={16} />
-              {!sidebarCollapsed && <span>Histórico</span>}
+              {!navCollapsed && <span>Histórico</span>}
             </TabsTrigger>
-            <TabsTrigger value="kanban" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+            <TabsTrigger value="kanban" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
               <KanbanSquare size={16} />
-              {!sidebarCollapsed && <span>Kanban</span>}
+              {!navCollapsed && <span>Kanban</span>}
             </TabsTrigger>
-            <TabsTrigger value="team" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+            <TabsTrigger value="team" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
               <Users size={16} />
-              {!sidebarCollapsed && <span>Equipe</span>}
+              {!navCollapsed && <span>Equipe</span>}
             </TabsTrigger>
-            {!sidebarCollapsed && (
+            {!navCollapsed && (
               <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 px-3 pt-3 pb-1 font-semibold">Automação</p>
             )}
-            {sidebarCollapsed && <div className="h-px bg-sidebar-border/40 mx-2 my-2" />}
-            <TabsTrigger value="flows" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+            {navCollapsed && <div className="h-px bg-sidebar-border/40 mx-2 my-2" />}
+            <TabsTrigger value="flows" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
               <GitBranch size={16} />
-              {!sidebarCollapsed && <span>Fluxos</span>}
+              {!navCollapsed && <span>Fluxos</span>}
             </TabsTrigger>
-            <TabsTrigger value="ai-agent" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+            <TabsTrigger value="ai-agent" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
               <Bot size={16} />
-              {!sidebarCollapsed && <span className="flex items-center gap-1.5">Agente IA <span className="text-[9px] px-1 py-0.5 rounded bg-ai/20 text-ai font-bold">PRO</span></span>}
+              {!navCollapsed && <span className="flex items-center gap-1.5">Agente IA <span className="text-[9px] px-1 py-0.5 rounded bg-ai/20 text-ai font-bold">PRO</span></span>}
             </TabsTrigger>
-            <TabsTrigger value="ai-assistant" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+            <TabsTrigger value="ai-assistant" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
               <Sparkles size={16} />
-              {!sidebarCollapsed && <span>Assistente IA</span>}
+              {!navCollapsed && <span>Assistente IA</span>}
             </TabsTrigger>
-            <TabsTrigger value="voice-studio" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+            <TabsTrigger value="voice-studio" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
               <Volume2 size={16} />
-              {!sidebarCollapsed && <span className="flex items-center gap-1.5">Vozes IA <span className="text-[9px] px-1 py-0.5 rounded bg-ai/20 text-ai font-bold">SCALE</span></span>}
+              {!navCollapsed && <span className="flex items-center gap-1.5">Vozes IA <span className="text-[9px] px-1 py-0.5 rounded bg-ai/20 text-ai font-bold">SCALE</span></span>}
             </TabsTrigger>
-            {!sidebarCollapsed && (
+            {!navCollapsed && (
               <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 px-3 pt-3 pb-1 font-semibold">Análise</p>
             )}
-            {sidebarCollapsed && <div className="h-px bg-sidebar-border/40 mx-2 my-2" />}
-            <TabsTrigger value="analytics" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+            {navCollapsed && <div className="h-px bg-sidebar-border/40 mx-2 my-2" />}
+            <TabsTrigger value="analytics" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
               <TrendingUp size={16} />
-              {!sidebarCollapsed && <span>Performance</span>}
+              {!navCollapsed && <span>Performance</span>}
             </TabsTrigger>
-            <TabsTrigger value="financial" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+            <TabsTrigger value="financial" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
               <DollarSign size={16} />
-              {!sidebarCollapsed && <span>Financeiro</span>}
+              {!navCollapsed && <span>Financeiro</span>}
             </TabsTrigger>
-            {!sidebarCollapsed && (
+            {!navCollapsed && (
               <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 px-3 pt-3 pb-1 font-semibold">Sistema</p>
             )}
-            {sidebarCollapsed && <div className="h-px bg-sidebar-border/40 mx-2 my-2" />}
-            <TabsTrigger value="webhook" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+            {navCollapsed && <div className="h-px bg-sidebar-border/40 mx-2 my-2" />}
+            <TabsTrigger value="webhook" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
               <Webhook size={16} />
-              {!sidebarCollapsed && <span>Integrações</span>}
+              {!navCollapsed && <span>Integrações</span>}
             </TabsTrigger>
-            <TabsTrigger value="config" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+            <TabsTrigger value="config" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
               <Key size={16} />
-              {!sidebarCollapsed && <span>Configuração</span>}
+              {!navCollapsed && <span>Configuração</span>}
             </TabsTrigger>
           </TabsList>
           <div className="mt-auto border-t border-sidebar-border p-2 space-y-0.5">
-            {isAdmin && !sidebarCollapsed && (
+            {isAdmin && !navCollapsed && (
               <>
                 <button onClick={() => navigate("/auth/meta/callback")} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors">
                   <Plug size={16} /> Conexão Meta
@@ -2337,7 +2379,7 @@ export default function WhatsAppApi() {
                 )}
               </>
             )}
-            {isAdmin && sidebarCollapsed && (
+            {isAdmin && navCollapsed && (
               <>
                 <button onClick={() => navigate("/auth/meta/callback")} className="w-full flex justify-center py-2 rounded-lg text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors" title="Conexão Meta">
                   <Plug size={16} />
@@ -2349,14 +2391,14 @@ export default function WhatsAppApi() {
                 )}
               </>
             )}
-            {!sidebarCollapsed && (
+            {!navCollapsed && (
               <div className="flex items-center justify-between px-3 py-2">
                 <span className="text-xs text-sidebar-foreground/50 truncate">{user?.email}</span>
               </div>
             )}
-            <div className={cn("flex items-center gap-1", sidebarCollapsed ? "flex-col px-0" : "px-1")}>
-              {!sidebarCollapsed && <ThemeToggle collapsed={false} />}
-              {sidebarCollapsed && <ThemeToggle collapsed={true} />}
+            <div className={cn("flex items-center gap-1", navCollapsed ? "flex-col px-0" : "px-1")}>
+              {!navCollapsed && <ThemeToggle collapsed={false} />}
+              {navCollapsed && <ThemeToggle collapsed={true} />}
               <Button variant="ghost" size="icon" onClick={signOut} className="h-8 w-8 text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent" title="Sair">
                 <LogOut size={16} />
               </Button>
@@ -2365,9 +2407,9 @@ export default function WhatsAppApi() {
         </div>
 
         {/* Main content */}
-        <div className="flex-1 flex flex-col min-h-0">
+        <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-x-hidden">
           {/* Non-chat tabs get padding */}
-          <TabsContent value="config" className="space-y-4 p-6 m-0 flex-1 overflow-y-auto">
+          <TabsContent value="config" className="space-y-4 p-4 sm:p-6 m-0 flex-1 overflow-y-auto">
 
           {/* Preferência da tela inicial */}
           <HomeViewSetting />
@@ -2803,7 +2845,7 @@ export default function WhatsAppApi() {
 
         {/* ── Kanban Tab ── */}
         {/* ── Templates Tab ── */}
-        <TabsContent value="templates" className="space-y-4 p-6 max-w-6xl overflow-y-auto flex-1 m-0">
+        <TabsContent value="templates" className="space-y-4 p-4 sm:p-6 max-w-6xl overflow-y-auto flex-1 m-0">
           <TemplateStudio />
         </TabsContent>
 
@@ -2812,7 +2854,7 @@ export default function WhatsAppApi() {
         </TabsContent>
 
         {/* ── Team Tab ── */}
-        <TabsContent value="team" className="space-y-4 p-6 max-w-5xl overflow-y-auto flex-1 m-0">
+        <TabsContent value="team" className="space-y-4 p-4 sm:p-6 max-w-5xl overflow-y-auto flex-1 m-0">
           <TeamManagement />
         </TabsContent>
 
@@ -2824,19 +2866,19 @@ export default function WhatsAppApi() {
           <CloudChatTab />
         </TabsContent>
 
-        <TabsContent value="webhook" className="space-y-4 p-6 max-w-6xl overflow-y-auto flex-1 m-0">
+        <TabsContent value="webhook" className="space-y-4 p-4 sm:p-6 max-w-6xl overflow-y-auto flex-1 m-0">
           <WebhookEndpoints onCreateFlow={handleCreateFlowFromWebhook} onSelectFlow={handleSelectFlowFromWebhook} />
         </TabsContent>
 
 
         {/* ── Broadcast Tab ── */}
-        <TabsContent value="broadcast" className="space-y-4 p-6 max-w-6xl overflow-y-auto flex-1 m-0">
+        <TabsContent value="broadcast" className="space-y-4 p-4 sm:p-6 max-w-6xl overflow-y-auto flex-1 m-0">
           <BroadcastTab />
         </TabsContent>
 
 
         {/* ── Flows Tab ── */}
-        <TabsContent value="flows" className="space-y-4 p-6 max-w-6xl overflow-y-auto flex-1 m-0">
+        <TabsContent value="flows" className="space-y-4 p-4 sm:p-6 max-w-6xl overflow-y-auto flex-1 m-0">
           <FlowBuilder
             key={flowTriggerType || flowEditId || "default"}
             initialTriggerType={flowTriggerType}
@@ -2846,31 +2888,31 @@ export default function WhatsAppApi() {
         </TabsContent>
 
         {/* ── Analytics Tab ── */}
-        <TabsContent value="analytics" className="space-y-4 p-6 max-w-6xl overflow-y-auto flex-1 m-0">
+        <TabsContent value="analytics" className="space-y-4 p-4 sm:p-6 max-w-6xl overflow-y-auto flex-1 m-0">
           <CampaignAnalytics />
         </TabsContent>
 
         {/* ── History Tab ── */}
-        <TabsContent value="history" className="space-y-4 p-6 max-w-6xl overflow-y-auto flex-1 m-0">
+        <TabsContent value="history" className="space-y-4 p-4 sm:p-6 max-w-6xl overflow-y-auto flex-1 m-0">
           <SendingMetrics />
         </TabsContent>
 
         {/* ── AI Assistant Tab ── */}
-        <TabsContent value="ai-assistant" className="space-y-4 p-6 max-w-6xl overflow-y-auto flex-1 m-0">
+        <TabsContent value="ai-assistant" className="space-y-4 p-4 sm:p-6 max-w-6xl overflow-y-auto flex-1 m-0">
           <AiAssistantSettings />
         </TabsContent>
         {/* ── Voice Studio Tab ── */}
-        <TabsContent value="voice-studio" className="space-y-4 p-6 max-w-6xl overflow-y-auto flex-1 m-0">
+        <TabsContent value="voice-studio" className="space-y-4 p-4 sm:p-6 max-w-6xl overflow-y-auto flex-1 m-0">
           <VoiceStudio />
         </TabsContent>
 
         {/* ── AI Agent Tab ── */}
-        <TabsContent value="ai-agent" className="space-y-4 p-6 max-w-6xl overflow-y-auto flex-1 m-0">
+        <TabsContent value="ai-agent" className="space-y-4 p-4 sm:p-6 max-w-6xl overflow-y-auto flex-1 m-0">
           <AiAgentConfig />
         </TabsContent>
 
         {/* ── Financial Tab ── */}
-        <TabsContent value="financial" className="space-y-4 p-6 max-w-6xl overflow-y-auto flex-1 m-0">
+        <TabsContent value="financial" className="space-y-4 p-4 sm:p-6 max-w-6xl overflow-y-auto flex-1 m-0">
           <FinancialTab />
         </TabsContent>
         </div>
