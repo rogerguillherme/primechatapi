@@ -17,9 +17,13 @@ interface DashboardHomeProps {
 
 export function DashboardHome({ onNavigateTab }: DashboardHomeProps) {
   const { user } = useAuth();
-  const { isSuperAdmin } = useProfile();
+  const { isSuperAdmin, profile } = useProfile();
   const greeting = getGreeting();
   const name = user?.email?.split("@")[0] || "por aqui";
+
+  // Preferência definida em Configuração → Tela inicial.
+  const homeView: "broadcast" | "service" = profile?.home_view === "service" ? "service" : "broadcast";
+  const isBroadcastView = homeView === "broadcast";
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6 animate-fade-in">
@@ -29,7 +33,9 @@ export function DashboardHome({ onNavigateTab }: DashboardHomeProps) {
           {greeting}, <span className="capitalize">{name}</span> 👋
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Aqui está como seu negócio está performando hoje.
+          {isBroadcastView
+            ? "Acompanhe seus disparos e a performance de envio de hoje."
+            : "Acompanhe seu atendimento e suas vendas de hoje."}
         </p>
       </div>
 
@@ -47,18 +53,18 @@ export function DashboardHome({ onNavigateTab }: DashboardHomeProps) {
         <QuickActions onNavigate={(t) => onNavigateTab?.(t)} />
       )}
 
-      <LiveSendingProgress />
+      {isBroadcastView && <LiveSendingProgress />}
 
       <KpiGrid />
 
-
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2">
-          <BroadcastMetricsPanel />
+      {isBroadcastView && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2">
+            <BroadcastMetricsPanel />
+          </div>
+          <SpendByAccountPanel />
         </div>
-        <SpendByAccountPanel />
-      </div>
+      )}
 
       {/* Insights + Ranking */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -76,6 +82,7 @@ export function DashboardHome({ onNavigateTab }: DashboardHomeProps) {
     </div>
   );
 }
+
 
 function getGreeting() {
   const h = new Date().getHours();

@@ -82,6 +82,8 @@ import { FinancialTab } from "@/components/FinancialTab";
 import { CloudChatTab } from "@/components/CloudChatTab";
 import { DashboardHome } from "@/pages/DashboardHome";
 import { Home, KanbanSquare } from "lucide-react";
+import { HomeViewSetting } from "@/components/settings/HomeViewSetting";
+import { TemplateStudio } from "@/components/templates/TemplateStudio";
 import { LeadsKanban } from "@/components/kanban/LeadsKanban";
 import { TeamManagement } from "@/components/team/TeamManagement";
 
@@ -1201,7 +1203,7 @@ function BroadcastTab() {
   return (
     <div className="space-y-6">
       <Tabs defaultValue="queue" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="queue" className="gap-1.5">
             <Send size={14} /> Fila de Disparos
           </TabsTrigger>
@@ -1211,10 +1213,14 @@ function BroadcastTab() {
           <TabsTrigger value="whatsapp" className="gap-1.5">
             <MessageCircle size={14} /> Disparo WhatsApp
           </TabsTrigger>
+          <TabsTrigger value="templates" className="gap-1.5">
+            <FileText size={14} /> Templates
+          </TabsTrigger>
           <TabsTrigger value="import" className="gap-1.5">
             <Users size={14} /> Importar Contatos
           </TabsTrigger>
         </TabsList>
+
 
         <TabsContent value="queue" className="mt-4">
           <BroadcastQueue />
@@ -1666,10 +1672,14 @@ function BroadcastTab() {
       </div>
 
         </TabsContent>
+
+        {/* ── Sub-aba Templates (sincronização automática com a Meta) ── */}
+        <TabsContent value="templates" className="mt-4">
+          <TemplateManager autoSync />
+        </TabsContent>
       </Tabs>
 
-      {/* Template Manager */}
-      <TemplateManager />
+
 
     </div>
   );
@@ -2253,6 +2263,10 @@ export default function WhatsAppApi() {
               <Send size={16} />
               {!sidebarCollapsed && <span>Campanhas</span>}
             </TabsTrigger>
+            <TabsTrigger value="templates" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
+              <FileText size={16} />
+              {!sidebarCollapsed && <span>Templates</span>}
+            </TabsTrigger>
             <TabsTrigger value="history" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", sidebarCollapsed && "justify-center px-0")}>
               <BarChart3 size={16} />
               {!sidebarCollapsed && <span>Histórico</span>}
@@ -2354,6 +2368,10 @@ export default function WhatsAppApi() {
         <div className="flex-1 flex flex-col min-h-0">
           {/* Non-chat tabs get padding */}
           <TabsContent value="config" className="space-y-4 p-6 m-0 flex-1 overflow-y-auto">
+
+          {/* Preferência da tela inicial */}
+          <HomeViewSetting />
+
 
           {/* Existing accounts list */}
           <Card>
@@ -2784,6 +2802,11 @@ export default function WhatsAppApi() {
         </TabsContent>
 
         {/* ── Kanban Tab ── */}
+        {/* ── Templates Tab ── */}
+        <TabsContent value="templates" className="space-y-4 p-6 max-w-6xl overflow-y-auto flex-1 m-0">
+          <TemplateStudio />
+        </TabsContent>
+
         <TabsContent value="kanban" className="flex-1 overflow-hidden m-0 p-6">
           <LeadsKanban />
         </TabsContent>

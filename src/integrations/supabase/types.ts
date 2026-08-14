@@ -1804,6 +1804,7 @@ export type Database = {
           avatar_url: string | null
           created_at: string
           display_name: string | null
+          home_view: string
           id: string
           instagram_enabled: boolean
           updated_at: string
@@ -1813,6 +1814,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null
+          home_view?: string
           id?: string
           instagram_enabled?: boolean
           updated_at?: string
@@ -1822,6 +1824,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null
+          home_view?: string
           id?: string
           instagram_enabled?: boolean
           updated_at?: string
