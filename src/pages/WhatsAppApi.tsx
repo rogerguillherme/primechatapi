@@ -84,6 +84,8 @@ import { FinancialTab } from "@/components/FinancialTab";
 import { CloudChatTab } from "@/components/CloudChatTab";
 import { DashboardHome } from "@/pages/DashboardHome";
 import { HomeViewSetting } from "@/components/settings/HomeViewSetting";
+import { LeadDistributionSettings } from "@/components/settings/LeadDistributionSettings";
+
 import { TemplateStudio } from "@/components/templates/TemplateStudio";
 import { LeadsKanban } from "@/components/kanban/LeadsKanban";
 import { TeamManagement } from "@/components/team/TeamManagement";
@@ -2413,6 +2415,10 @@ export default function WhatsAppApi() {
 
           {/* Preferência da tela inicial */}
           <HomeViewSetting />
+
+          {/* Distribuição inteligente de leads (conta específica) */}
+          <LeadDistributionSettings />
+
 
 
           {/* Existing accounts list */}

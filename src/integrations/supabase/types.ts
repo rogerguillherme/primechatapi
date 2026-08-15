@@ -1303,6 +1303,90 @@ export type Database = {
         }
         Relationships: []
       }
+      lead_distribution_settings: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          in_service_stage_id: string | null
+          owner_id: string
+          trigger_mode: string
+          updated_at: string
+          waiting_stage_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          in_service_stage_id?: string | null
+          owner_id: string
+          trigger_mode?: string
+          updated_at?: string
+          waiting_stage_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          in_service_stage_id?: string | null
+          owner_id?: string
+          trigger_mode?: string
+          updated_at?: string
+          waiting_stage_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_distribution_settings_in_service_stage_id_fkey"
+            columns: ["in_service_stage_id"]
+            isOneToOne: false
+            referencedRelation: "pipeline_stages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_distribution_settings_waiting_stage_id_fkey"
+            columns: ["waiting_stage_id"]
+            isOneToOne: false
+            referencedRelation: "pipeline_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_distribution_targets: {
+        Row: {
+          active: boolean
+          assigned_count: number
+          created_at: string
+          id: string
+          last_assigned_at: string | null
+          member_user_id: string
+          owner_id: string
+          updated_at: string
+          weight_percent: number
+        }
+        Insert: {
+          active?: boolean
+          assigned_count?: number
+          created_at?: string
+          id?: string
+          last_assigned_at?: string | null
+          member_user_id: string
+          owner_id: string
+          updated_at?: string
+          weight_percent?: number
+        }
+        Update: {
+          active?: boolean
+          assigned_count?: number
+          created_at?: string
+          id?: string
+          last_assigned_at?: string | null
+          member_user_id?: string
+          owner_id?: string
+          updated_at?: string
+          weight_percent?: number
+        }
+        Relationships: []
+      }
       lead_labels: {
         Row: {
           created_at: string
@@ -2464,6 +2548,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      distribute_lead: { Args: { p_lead_id: string }; Returns: string }
       get_advanced_dashboard_stats: {
         Args: { p_user_id: string }
         Returns: {
