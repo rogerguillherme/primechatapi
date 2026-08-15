@@ -1807,6 +1807,7 @@ export type Database = {
           home_view: string
           id: string
           instagram_enabled: boolean
+          trial_ends_at: string | null
           updated_at: string
           user_id: string
         }
@@ -1817,6 +1818,7 @@ export type Database = {
           home_view?: string
           id?: string
           instagram_enabled?: boolean
+          trial_ends_at?: string | null
           updated_at?: string
           user_id: string
         }
@@ -1827,6 +1829,7 @@ export type Database = {
           home_view?: string
           id?: string
           instagram_enabled?: boolean
+          trial_ends_at?: string | null
           updated_at?: string
           user_id?: string
         }
