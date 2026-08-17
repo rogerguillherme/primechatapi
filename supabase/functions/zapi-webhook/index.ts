@@ -38,11 +38,11 @@ async function downloadAndStoreMedia(
       return mediaUrl;
     }
 
-    const { data: publicUrl } = supabase.storage
+    const { data: signed } = await supabase.storage
       .from("chat-media")
-      .getPublicUrl(path);
+      .createSignedUrl(path, 60 * 60 * 24 * 365);
 
-    return publicUrl.publicUrl;
+    return signed?.signedUrl || mediaUrl;
   } catch (e) {
     console.error("Error storing media:", e);
     return mediaUrl;
