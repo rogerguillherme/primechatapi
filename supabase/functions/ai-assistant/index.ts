@@ -375,7 +375,7 @@ async function runTool(name: string, args: any, admin: SupabaseClient, userId: s
           custom_message: args.message,
           is_entry: true,
         });
-        return { ok: true, flow_id: flow.id };
+        return { ok: true, flow_id: flow.id, flow_kind: args.flow_kind === "whatsapp" ? "whatsapp" : "api" };
       }
       default:
         return { error: `Ferramenta desconhecida: ${name}` };
