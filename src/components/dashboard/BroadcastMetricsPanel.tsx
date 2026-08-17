@@ -117,12 +117,13 @@ export function BroadcastMetricsPanel() {
       const logs = logsRes.data || [];
       const broadcastWaIds = new Set(logs.map((l: any) => l.wa_message_id).filter(Boolean));
 
-      // Template/broadcast messages: from message_logs (real Meta status) plus
-      // any outbound chat_message linked to a broadcast.
+      // Mensagens reais do período: logs de campanha (status real da Meta) +
+      // todas as mensagens outbound que não pertencem a esses logs — é aí que
+      // ficam os envios disparados por fluxo, que antes não eram contados.
       const templateMsgs = [
         ...logs,
         ...(outboundRes.data || []).filter(
-          (m: any) => m.zapi_message_id && broadcastWaIds.has(m.zapi_message_id) && !logs.length
+          (m: any) => !m.zapi_message_id || !broadcastWaIds.has(m.zapi_message_id)
         ),
       ];
 

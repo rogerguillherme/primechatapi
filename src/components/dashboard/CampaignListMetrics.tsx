@@ -239,7 +239,180 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
         };
       });
 
-      const totals = rows.reduce(
+      // ---------------------------------------------------------------
+      // Disparos por FLUXO (a maioria dos envios reais do sistema).
+      // broadcast_jobs cobre só as campanhas de template em lista; os
+      // envios disparados por fluxo vivem em flow_executions + chat_messages.
+      // Agrupamos as execuções em lotes (gap de 30min) para que dois
+      // disparos do mesmo fluxo não sejam somados como um só.
+      // ---------------------------------------------------------------
+      const BATCH_GAP_MS = 30 * 60 * 1000;
+      const MSG_TAIL_MS = 12 * 60 * 60 * 1000;
+
+      const flowsRes = await supabase.from("flows").select("id, name").eq("user_id", user.id);
+      const flowNames = new Map((flowsRes.data || []).map((f) => [f.id, f.name] as const));
+      const flowIds = Array.from(flowNames.keys());
+
+      let execs: any[] = [];
+      if (flowIds.length > 0) {
+        let execQuery = supabase
+          .from("flow_executions")
+          .select("flow_id, lead_id, status, started_at")
+          .in("flow_id", flowIds)
+          .order("started_at", { ascending: true })
+          .limit(30000);
+        if (startDate) execQuery = execQuery.gte("started_at", startDate.toISOString());
+        if (endDate) execQuery = execQuery.lte("started_at", endDate.toISOString());
+        execs = (await execQuery).data || [];
+      }
+
+      // Mensagens outbound reais no período (status vindo do webhook da Meta)
+      const msgsByLead = new Map<string, any[]>();
+      if (execs.length > 0) {
+        const fromIso = new Date(
+          (startDate ? startDate.getTime() : new Date(execs[0].started_at).getTime()) - 60 * 60 * 1000
+        ).toISOString();
+        const toIso = new Date((endDate ? endDate.getTime() : Date.now()) + MSG_TAIL_MS).toISOString();
+        const { data: msgs } = await supabase
+          .from("chat_messages")
+          .select("lead_id, status, created_at, delivered_at, read_at, error_code")
+          .eq("direction", "outbound")
+          .gte("created_at", fromIso)
+          .lte("created_at", toIso)
+          .order("created_at", { ascending: true })
+          .limit(30000);
+        for (const m of msgs || []) {
+          if (!m.lead_id) continue;
+          const list = msgsByLead.get(m.lead_id) || [];
+          list.push(m);
+          msgsByLead.set(m.lead_id, list);
+        }
+      }
+
+      interface Batch {
+        flowId: string;
+        startMs: number;
+        endMs: number;
+        leads: Set<string>;
+        total: number;
+      }
+      const batches: Batch[] = [];
+      const execByFlow = new Map<string, any[]>();
+      for (const e of execs) {
+        const list = execByFlow.get(e.flow_id) || [];
+        list.push(e);
+        execByFlow.set(e.flow_id, list);
+      }
+      for (const [flowId, list] of execByFlow) {
+        let current: Batch | null = null;
+        let lastStart = 0;
+        for (const e of list) {
+          const startMs = new Date(e.started_at).getTime();
+          if (!current || startMs - lastStart > BATCH_GAP_MS) {
+            current = { flowId, startMs, endMs: startMs, leads: new Set<string>(), total: 0 };
+            batches.push(current);
+          }
+          lastStart = startMs;
+          current.endMs = startMs;
+          current.total++;
+          if (e.lead_id) current.leads.add(e.lead_id);
+        }
+      }
+
+      // Completa last_inbound_at dos leads dos fluxos (para contar respostas)
+      const flowLeadIds = Array.from(
+        new Set(batches.flatMap((b) => Array.from(b.leads)).filter((id) => !inboundByLead.has(id)))
+      );
+      if (flowLeadIds.length > 0) {
+        const flowChunks: string[][] = [];
+        for (let i = 0; i < flowLeadIds.length; i += 1000) flowChunks.push(flowLeadIds.slice(i, i + 1000));
+        const res = await Promise.all(
+          flowChunks.map((chunk) => supabase.from("leads").select("id, last_inbound_at").in("id", chunk))
+        );
+        for (const r of res) for (const l of r.data || []) inboundByLead.set(l.id, l.last_inbound_at);
+      }
+
+      // Cada mensagem é atribuída a um único lote (evita contagem dupla)
+      const consumed = new Set<any>();
+      const flowRows: CampaignListRow[] = batches
+        .sort((a, b) => a.startMs - b.startMs)
+        .map((b) => {
+          let sent = 0;
+          let delivered = 0;
+          let read = 0;
+          let errors = 0;
+          let billable = 0;
+          let freeInWindow = 0;
+          let replies = 0;
+
+          for (const leadId of b.leads) {
+            const list = msgsByLead.get(leadId) || [];
+            let firstOfBatch = true;
+            for (const m of list) {
+              if (consumed.has(m)) continue;
+              const t = new Date(m.created_at).getTime();
+              if (t < b.startMs - 2 * 60 * 1000 || t > b.endMs + MSG_TAIL_MS) continue;
+              consumed.add(m);
+              const st = (m.status || "").toLowerCase();
+              const failed = st === "failed" || st === "error" || !!m.error_code;
+              if (failed) {
+                errors++;
+                continue;
+              }
+              if (["pending", "queued", "cancelled", "skipped"].includes(st)) continue;
+              sent++;
+              const isRead = !!m.read_at || st === "read";
+              const isDelivered = !!m.delivered_at || isRead || st === "delivered";
+              if (isDelivered) delivered++;
+              if (isRead) read++;
+              // Primeira mensagem do lote abre a janela de 24h (cobrada);
+              // as seguintes caem dentro da janela e são gratuitas.
+              if (firstOfBatch) {
+                billable++;
+                firstOfBatch = false;
+              } else {
+                freeInWindow++;
+              }
+            }
+            const inbound = inboundByLead.get(leadId);
+            if (inbound && new Date(inbound).getTime() >= b.startMs) replies++;
+          }
+
+          const cat: "utility" | "marketing" | "authentication" = "marketing";
+          const costUsd = billable * PRICING[cat];
+          return {
+            id: `flow:${b.flowId}:${b.startMs}`,
+            name: flowNames.get(b.flowId) || "Fluxo",
+            customName: null,
+            templateName: flowNames.get(b.flowId) || null,
+            date: new Date(b.startMs).toISOString(),
+            status: null,
+            total: b.total,
+            sent,
+            delivered,
+            read,
+            errors,
+            replies,
+            replyRate: sent > 0 ? (replies / sent) * 100 : 0,
+            deliveryRate: sent > 0 ? (delivered / sent) * 100 : 0,
+            readRate: sent > 0 ? (read / sent) * 100 : 0,
+            billable,
+            freeInWindow,
+            costUsd,
+            costBrl: costUsd * USD_TO_BRL,
+            category: cat,
+            links: [],
+            totalClicks: 0,
+            clickRate: 0,
+          };
+        })
+        .filter((r) => r.sent > 0 || r.errors > 0 || r.total > 0);
+
+      const allRows = [...rows, ...flowRows].sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
+
+      const totals = allRows.reduce(
         (acc, r) => {
           acc.sent += r.sent;
           acc.delivered += r.delivered;
@@ -256,7 +429,7 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
 
       );
 
-      return { rows, totals };
+      return { rows: allRows, totals };
     },
   });
 
