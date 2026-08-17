@@ -363,7 +363,8 @@ async function runTool(name: string, args: any, admin: SupabaseClient, userId: s
           description: args.description || null,
           active: !!args.active,
           trigger_type: args.trigger_type || "manual",
-          flow_kind: "whatsapp",
+          // Respeita a aba pedida pelo usuário; "api" é o padrão do app.
+          flow_kind: args.flow_kind === "whatsapp" ? "whatsapp" : "api",
         }).select("id").single();
         if (error) return { error: error.message };
         // Entry step
