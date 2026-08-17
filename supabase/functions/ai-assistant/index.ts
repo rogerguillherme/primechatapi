@@ -124,12 +124,18 @@ const tools = [
     type: "function",
     function: {
       name: "create_simple_flow",
-      description: "Cria um fluxo automatizado simples com uma mensagem inicial. Use quando o usuário descrever um fluxo curto de boas-vindas ou lembrete.",
+      description: "Cria um fluxo automatizado simples com uma mensagem inicial. Use quando o usuário descrever um fluxo curto de boas-vindas ou lembrete. SEMPRE respeite a aba pedida pelo usuário em flow_kind: 'api' = aba 'Fluxos API', 'whatsapp' = aba 'Fluxos WhatsApp'.",
       parameters: {
         type: "object",
         properties: {
           name: { type: "string" },
           description: { type: "string" },
+          flow_kind: {
+            type: "string",
+            enum: ["api", "whatsapp"],
+            description: "Aba onde o fluxo será criado: 'api' (Fluxos API, padrão) ou 'whatsapp' (Fluxos WhatsApp / Evolution). Use 'whatsapp' apenas se o usuário pedir explicitamente.",
+            default: "api",
+          },
           trigger_type: { type: "string", description: "manual | cart_abandoned | pix_generated | payment_approved", default: "manual" },
           message: { type: "string", description: "Texto da mensagem inicial (pode usar {nome})" },
           active: { type: "boolean", default: false },
@@ -172,7 +178,7 @@ Deno.serve(async (req) => {
 Você tem ferramentas para:
 - Consultar métricas, leads, disparos, fluxos, contas e templates.
 - Pausar/retomar disparos e ativar/desativar fluxos.
-- Criar fluxos simples de boas-vindas.
+- Criar fluxos simples de boas-vindas (a plataforma tem duas abas: "Fluxos API" (flow_kind="api") e "Fluxos WhatsApp" (flow_kind="whatsapp")).
 - Excluir leads (apenas após confirmação).
 
 Regras:
@@ -181,6 +187,7 @@ Regras:
 - Antes de qualquer ação destrutiva (excluir, pausar, desativar), confirme com o usuário.
 - Se faltar dado, chame uma tool ao invés de inventar.
 - Quando o usuário pedir "métricas", "como estou", "resumo", chame get_business_summary primeiro.
+- Ao criar fluxo, sempre defina flow_kind conforme a aba citada pelo usuário: "Fluxo API"/"API" → "api"; "Fluxo WhatsApp"/"Evolution"/"QR Code" → "whatsapp". Se não ficar claro, use "api" e informe em qual aba o fluxo foi criado.
 - Não mencione que você é uma IA — apresente-se como copiloto da equipe.`;
 
     const convo: Msg[] = [{ role: "system", content: systemPrompt }, ...messages];
@@ -357,7 +364,8 @@ async function runTool(name: string, args: any, admin: SupabaseClient, userId: s
           description: args.description || null,
           active: !!args.active,
           trigger_type: args.trigger_type || "manual",
-          flow_kind: "whatsapp",
+          // Respeita a aba pedida pelo usuário; "api" é o padrão do app.
+          flow_kind: args.flow_kind === "whatsapp" ? "whatsapp" : "api",
         }).select("id").single();
         if (error) return { error: error.message };
         // Entry step
@@ -368,7 +376,7 @@ async function runTool(name: string, args: any, admin: SupabaseClient, userId: s
           custom_message: args.message,
           is_entry: true,
         });
-        return { ok: true, flow_id: flow.id };
+        return { ok: true, flow_id: flow.id, flow_kind: args.flow_kind === "whatsapp" ? "whatsapp" : "api" };
       }
       default:
         return { error: `Ferramenta desconhecida: ${name}` };
