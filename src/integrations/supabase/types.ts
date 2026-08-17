@@ -2580,6 +2580,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      recover_stuck_flow_executions: { Args: never; Returns: number }
       team_access_level: { Args: { _owner: string }; Returns: string }
       team_lead_scope: { Args: { _owner: string }; Returns: string }
     }
