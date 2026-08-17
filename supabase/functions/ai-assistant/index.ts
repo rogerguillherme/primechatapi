@@ -124,12 +124,18 @@ const tools = [
     type: "function",
     function: {
       name: "create_simple_flow",
-      description: "Cria um fluxo automatizado simples com uma mensagem inicial. Use quando o usuário descrever um fluxo curto de boas-vindas ou lembrete.",
+      description: "Cria um fluxo automatizado simples com uma mensagem inicial. Use quando o usuário descrever um fluxo curto de boas-vindas ou lembrete. SEMPRE respeite a aba pedida pelo usuário em flow_kind: 'api' = aba 'Fluxos API', 'whatsapp' = aba 'Fluxos WhatsApp'.",
       parameters: {
         type: "object",
         properties: {
           name: { type: "string" },
           description: { type: "string" },
+          flow_kind: {
+            type: "string",
+            enum: ["api", "whatsapp"],
+            description: "Aba onde o fluxo será criado: 'api' (Fluxos API, padrão) ou 'whatsapp' (Fluxos WhatsApp / Evolution). Use 'whatsapp' apenas se o usuário pedir explicitamente.",
+            default: "api",
+          },
           trigger_type: { type: "string", description: "manual | cart_abandoned | pix_generated | payment_approved", default: "manual" },
           message: { type: "string", description: "Texto da mensagem inicial (pode usar {nome})" },
           active: { type: "boolean", default: false },
