@@ -319,6 +319,19 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
         }
       }
 
+      // Completa last_inbound_at dos leads dos fluxos (para contar respostas)
+      const flowLeadIds = Array.from(
+        new Set(batches.flatMap((b) => Array.from(b.leads)).filter((id) => !inboundByLead.has(id)))
+      );
+      if (flowLeadIds.length > 0) {
+        const flowChunks: string[][] = [];
+        for (let i = 0; i < flowLeadIds.length; i += 1000) flowChunks.push(flowLeadIds.slice(i, i + 1000));
+        const res = await Promise.all(
+          flowChunks.map((chunk) => supabase.from("leads").select("id, last_inbound_at").in("id", chunk))
+        );
+        for (const r of res) for (const l of r.data || []) inboundByLead.set(l.id, l.last_inbound_at);
+      }
+
       // Cada mensagem é atribuída a um único lote (evita contagem dupla)
       const consumed = new Set<any>();
       const flowRows: CampaignListRow[] = batches
