@@ -447,8 +447,10 @@ Deno.serve(async (req) => {
                 .from("chat-media")
                 .upload(path, bin, { contentType: mt, upsert: true });
               if (!upErr) {
-                const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path);
-                mediaUrl = pub.publicUrl;
+                const { data: signed } = await supabase.storage
+                  .from("chat-media")
+                  .createSignedUrl(path, 60 * 60 * 24 * 365);
+                mediaUrl = signed?.signedUrl ?? mediaUrl;
               } else {
                 console.error("Evolution media upload failed:", upErr.message);
               }

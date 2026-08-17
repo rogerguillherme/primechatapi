@@ -62,8 +62,11 @@ export async function resolveTemplateHeaderLink(
       return originalUrl;
     }
 
-    const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-    return data?.publicUrl || originalUrl;
+    // Bucket is private: Meta fetches the asset through a long-lived signed URL.
+    const { data } = await supabase.storage
+      .from(BUCKET)
+      .createSignedUrl(path, 60 * 60 * 24 * 365);
+    return data?.signedUrl || originalUrl;
   } catch (e) {
     console.error("Template header mirror: unexpected error", e);
     return originalUrl;

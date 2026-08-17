@@ -43,14 +43,16 @@ Deno.serve(async (req) => {
 
     if (uploadError) throw uploadError;
 
-    const { data: publicUrl } = supabase.storage
+    const { data: signed, error: signErr } = await supabase.storage
       .from("chat-media")
-      .getPublicUrl(path);
+      .createSignedUrl(path, 60 * 60 * 24 * 365);
+
+    if (signErr || !signed?.signedUrl) throw signErr || new Error("Falha ao gerar URL assinada");
 
     return new Response(
       JSON.stringify({
         success: true,
-        url: publicUrl.publicUrl,
+        url: signed.signedUrl,
         media_type: mediaType,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
