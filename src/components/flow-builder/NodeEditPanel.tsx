@@ -633,7 +633,7 @@ function DocumentUploadField({
         .from("chat-media")
         .upload(path, file, { contentType: "application/pdf", upsert: false });
       if (upErr) throw upErr;
-      const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path);
+      const { data: pub } = await supabase.storage.from("chat-media").createSignedUrl(path, 60 * 60 * 24 * 365);
       onChange(pub.publicUrl);
       // Default the WhatsApp display name to the original filename (without .pdf)
       const cleanName = file.name.replace(/\.pdf$/i, "");
@@ -775,7 +775,7 @@ function VideoUploadField({
         .from("chat-media")
         .upload(path, file, { contentType: file.type || "video/mp4", upsert: false });
       if (upErr) throw upErr;
-      const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path);
+      const { data: pub } = await supabase.storage.from("chat-media").createSignedUrl(path, 60 * 60 * 24 * 365);
       onChange(pub.publicUrl);
       toast.success("Vídeo carregado!");
     } catch (err: any) {
