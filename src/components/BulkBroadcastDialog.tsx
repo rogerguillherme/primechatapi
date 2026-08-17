@@ -205,11 +205,17 @@ export function BulkBroadcastDialog({ open, onOpenChange, accountId, accountName
     setUploading(true);
     try {
       const ext = file.name.split(".").pop();
-      const path = `bulk-broadcast/${Date.now()}.${ext}`;
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth?.user) throw new Error("Não autenticado");
+      // Bucket is private and scoped by user folder.
+      const path = `${auth.user.id}/bulk-broadcast/${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage.from("chat-media").upload(path, file);
       if (upErr) throw upErr;
-      const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path);
-      setImageUrl(pub.publicUrl);
+      const { data: signed, error: signErr } = await supabase.storage
+        .from("chat-media")
+        .createSignedUrl(path, 60 * 60 * 24 * 365);
+      if (signErr || !signed?.signedUrl) throw signErr || new Error("Falha ao gerar URL da imagem");
+      setImageUrl(signed.signedUrl);
       toast.success("Imagem carregada");
     } catch (err: any) {
       toast.error(err.message || "Erro no upload");

@@ -526,8 +526,11 @@ function ImageUploadField({
         .from("chat-media")
         .upload(path, file, { contentType: file.type, upsert: false });
       if (upErr) throw upErr;
-      const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path);
-      onChange(pub.publicUrl);
+      const { data: signed, error: signErr } = await supabase.storage
+        .from("chat-media")
+        .createSignedUrl(path, 60 * 60 * 24 * 365);
+      if (signErr || !signed?.signedUrl) throw signErr || new Error("Falha ao gerar URL da imagem");
+      onChange(signed.signedUrl);
       toast.success("Imagem carregada!");
     } catch (err: any) {
       toast.error(err.message || "Falha ao enviar imagem");
@@ -630,8 +633,8 @@ function DocumentUploadField({
         .from("chat-media")
         .upload(path, file, { contentType: "application/pdf", upsert: false });
       if (upErr) throw upErr;
-      const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path);
-      onChange(pub.publicUrl);
+      const { data: pub } = await supabase.storage.from("chat-media").createSignedUrl(path, 60 * 60 * 24 * 365);
+      onChange(pub!.signedUrl);
       // Default the WhatsApp display name to the original filename (without .pdf)
       const cleanName = file.name.replace(/\.pdf$/i, "");
       setLocalFileName(cleanName);
@@ -772,8 +775,8 @@ function VideoUploadField({
         .from("chat-media")
         .upload(path, file, { contentType: file.type || "video/mp4", upsert: false });
       if (upErr) throw upErr;
-      const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path);
-      onChange(pub.publicUrl);
+      const { data: pub } = await supabase.storage.from("chat-media").createSignedUrl(path, 60 * 60 * 24 * 365);
+      onChange(pub!.signedUrl);
       toast.success("Vídeo carregado!");
     } catch (err: any) {
       toast.error(err.message || "Falha ao enviar vídeo");

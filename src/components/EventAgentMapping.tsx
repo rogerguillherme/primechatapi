@@ -85,11 +85,15 @@ export function EventAgentMapping() {
     setUploading(evt);
     try {
       const ext = file.name.split(".").pop() || "png";
-      const path = `event-templates/${user.id}/${evt}-${Date.now()}.${ext}`;
+      // Bucket is private and scoped by user folder.
+      const path = `${user.id}/event-templates/${evt}-${Date.now()}.${ext}`;
       const { error } = await supabase.storage.from("chat-media").upload(path, file, { upsert: true });
       if (error) throw error;
-      const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path);
-      updateField(evt, "media_url", pub.publicUrl);
+      const { data: signed, error: signErr } = await supabase.storage
+        .from("chat-media")
+        .createSignedUrl(path, 60 * 60 * 24 * 365);
+      if (signErr || !signed?.signedUrl) throw signErr || new Error("Falha ao gerar URL da imagem");
+      updateField(evt, "media_url", signed.signedUrl);
       updateField(evt, "send_media", true);
       toast.success("Imagem enviada");
     } catch (e: any) {
