@@ -1215,8 +1215,11 @@ async function downloadCloudMedia(
       return null;
     }
 
-    const { data: publicUrl } = supabase.storage.from("chat-media").getPublicUrl(path);
-    return publicUrl.publicUrl;
+    // Private bucket: hand out a long-lived signed URL instead of a public one.
+    const { data: signed } = await supabase.storage
+      .from("chat-media")
+      .createSignedUrl(path, 60 * 60 * 24 * 365);
+    return signed?.signedUrl ?? null;
   } catch (e) {
     console.error("Error downloading cloud media:", e);
     return null;
