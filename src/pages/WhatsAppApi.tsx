@@ -1803,7 +1803,7 @@ export default function WhatsAppApi() {
   const defaultAccount = accounts?.find((a: any) => a.is_default) || accounts?.[0];
 
   const { data: limitsData } = useQuery({
-    queryKey: ["whatsapp-limits-inline", user?.id],
+    queryKey: ["whatsapp-limits", user?.id],
     enabled: isAuthenticated,
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke("whatsapp-limits");
@@ -1815,8 +1815,8 @@ export default function WhatsAppApi() {
       }
       return (data?.limits || []) as Array<{ account_id: string; messaging_limit_tier: string | null; quality_rating: string | null; error?: string }>;
     },
-    refetchInterval: isAuthenticated ? 60000 : false,
-    staleTime: 30000,
+    refetchInterval: isAuthenticated ? 300000 : false,
+    staleTime: 240000,
     retry: false,
   });
 
