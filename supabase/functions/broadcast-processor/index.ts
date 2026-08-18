@@ -74,19 +74,21 @@ function normalizeCampaignGroup(name: string | null | undefined): string {
 }
 
 /**
- * Chaves de bloqueio: template exato + grupo lógico de campanha.
- * Se qualquer uma já existir para o telefone, o lead é pulado.
+ * Chaves de bloqueio: SOMENTE o grupo lógico de campanha.
+ * O nome do template NÃO gera bloqueio — disparos manuais diferentes que usam
+ * o mesmo template são registrados separadamente (por job) e não se bloqueiam.
  */
 function buildDedupKeys(
-  templateName: string | null | undefined,
+  _templateName: string | null | undefined,
   campaignName: string | null | undefined,
+  jobId?: string | null,
 ): string[] {
-  const keys: string[] = [];
-  if (templateName) keys.push(`tpl:${String(templateName).trim().toLowerCase()}`);
   const group = normalizeCampaignGroup(campaignName);
-  if (group) keys.push(`camp:${group}`);
-  return keys;
+  if (group) return [`camp:${group}`];
+  // Sem nome de campanha (disparo manual/avulso): chave exclusiva do disparo.
+  return jobId ? [`job:${jobId}`] : [];
 }
+
 
 
 function randomDelay(minSec = 0.3, maxSec = 1.5): Promise<void> {
@@ -587,7 +589,7 @@ Deno.serve(async (req) => {
     // Um lead nunca recebe o mesmo template duas vezes, nem duas campanhas
     // que pertencem ao mesmo grupo lógico (ex.: "HOJE BM2 (10K)" e "HOJE BM2 (2K)").
     let dedupSkipped = 0;
-    const dedupKeys = buildDedupKeys(job.template_name, job.campaign_name);
+    const dedupKeys = buildDedupKeys(job.template_name, job.campaign_name, jobId);
     if (dedupKeys.length > 0 && batchLeads.length > 0) {
       const phones = batchLeads.map((l) => normalizePhone(l.phone));
       const { data: alreadySent } = await supabase
