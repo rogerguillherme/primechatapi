@@ -120,12 +120,33 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
 
       const [jobsRes, tplRes] = await Promise.all([
         jobsQuery,
-        supabase.from("chat_templates").select("id, category").eq("user_id", user.id),
+        supabase
+          .from("chat_templates")
+          .select("id, category, name, template_name")
+          .eq("user_id", user.id),
       ]);
 
       const jobs = jobsRes.data || [];
-      const tplCat = new Map((tplRes.data || []).map((t) => [t.id, inferCategory(t.category)]));
+      const templates = tplRes.data || [];
+      const tplCat = new Map(templates.map((t) => [t.id, inferCategory(t.category)]));
+      // Alguns jobs guardam apenas o nome do template (sem template_id):
+      // resolvemos a categoria também por nome para não cair no preço de marketing.
+      const tplCatByName = new Map<string, "utility" | "marketing" | "authentication">();
+      for (const t of templates) {
+        const cat = inferCategory(t.category);
+        for (const key of [t.template_name, t.name]) {
+          if (key) tplCatByName.set(key.toLowerCase(), cat);
+        }
+      }
+      const resolveCategory = (
+        templateId?: string | null,
+        templateName?: string | null
+      ): "utility" | "marketing" | "authentication" =>
+        (templateId ? tplCat.get(templateId) : undefined) ||
+        (templateName ? tplCatByName.get(templateName.toLowerCase()) : undefined) ||
+        "marketing";
       const jobIds = jobs.map((j) => j.id);
+
 
       // Clicks + billing logs in parallel (logs paginados: o PostgREST devolve
       // no máximo 1.000 linhas por requisição)
@@ -210,7 +231,7 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
         const delivered = j.delivered_count || 0;
         const read = j.read_count || 0;
         const errors = j.error_count || 0;
-        const cat = (j.template_id && tplCat.get(j.template_id)) || "marketing";
+        const cat = resolveCategory(j.template_id, j.template_name);
         const rate = PRICING[cat];
         const agg = perJob.get(j.id);
         const billable = agg ? agg.billable : sent;
@@ -268,6 +289,25 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
       const flowsRes = await supabase.from("flows").select("id, name").eq("user_id", user.id);
       const flowNames = new Map((flowsRes.data || []).map((f) => [f.id, f.name] as const));
       const flowIds = Array.from(flowNames.keys());
+
+      // Categoria de cobrança do fluxo = categoria do(s) template(s) usados nos
+      // seus passos. Sem isso todo envio de fluxo era cobrado como marketing.
+      const flowCategory = new Map<string, "utility" | "marketing" | "authentication">();
+      if (flowIds.length > 0) {
+        const { data: stepRows } = await supabase
+          .from("flow_steps")
+          .select("flow_id, template_id")
+          .in("flow_id", flowIds)
+          .not("template_id", "is", null);
+        for (const s of stepRows || []) {
+          const cat = s.template_id ? tplCat.get(s.template_id) : undefined;
+          if (!cat) continue;
+          // marketing domina (mais caro) quando o fluxo mistura categorias
+          const prev = flowCategory.get(s.flow_id);
+          if (!prev || cat === "marketing") flowCategory.set(s.flow_id, cat);
+        }
+      }
+
 
       let execs: any[] = [];
       if (flowIds.length > 0) {
@@ -379,7 +419,8 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
 
           for (const leadId of b.leads) {
             const list = msgsByLead.get(leadId) || [];
-            let firstOfBatch = true;
+            const inboundIso = inboundByLead.get(leadId);
+            const inboundMs = inboundIso ? new Date(inboundIso).getTime() : null;
             for (const m of list) {
               if (consumed.has(m)) continue;
               const t = new Date(m.created_at).getTime();
@@ -397,20 +438,17 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
               const isDelivered = !!m.delivered_at || isRead || st === "delivered";
               if (isDelivered) delivered++;
               if (isRead) read++;
-              // Primeira mensagem do lote abre a janela de 24h (cobrada);
-              // as seguintes caem dentro da janela e são gratuitas.
-              if (firstOfBatch) {
-                billable++;
-                firstOfBatch = false;
-              } else {
-                freeInWindow++;
-              }
+              // Só cobra o que saiu FORA da janela de 24h: se o lead respondeu
+              // até 24h antes do envio, a conversa já estava aberta (grátis).
+              const inWindow = inboundMs !== null && t - inboundMs >= 0 && t - inboundMs <= WINDOW_MS;
+              if (inWindow) freeInWindow++;
+              else billable++;
             }
             const inbound = inboundByLead.get(leadId);
             if (inbound && new Date(inbound).getTime() >= b.startMs) replies++;
           }
 
-          const cat: "utility" | "marketing" | "authentication" = "marketing";
+          const cat = flowCategory.get(b.flowId) || "marketing";
           const costUsd = billable * PRICING[cat];
           return {
             id: `flow:${b.flowId}:${b.startMs}`,

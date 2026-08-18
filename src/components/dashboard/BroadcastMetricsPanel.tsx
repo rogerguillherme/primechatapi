@@ -219,15 +219,16 @@ export function BroadcastMetricsPanel() {
   }, [data]);
 
 
-  // Per-list metrics + billing that discounts free 24h-window messages
+  // Per-list metrics + billing that discounts free 24h-window messages.
+  // O custo SEMPRE vem do cálculo por lista/fluxo (janela de 24h + categoria
+  // real do template); o fallback agregado é usado só sem dados por lista.
   const { data: listData, isLoading: listLoading } = useCampaignListMetrics(startDate, endDate);
-  const listBillable = listData?.totals.billable || 0;
+  const hasListData = (listData?.rows.length || 0) > 0;
   const billing = {
-    // Fallback: quando não há logs por lista, cobra pelas mensagens de template enviadas
-    billable: listBillable > 0 ? listBillable : summary.sent,
-    freeInWindow: listData?.totals.freeInWindow || 0,
-    totalUsd: listBillable > 0 ? listData?.totals.costUsd || 0 : summary.totalUsd,
-    totalBrl: listBillable > 0 ? listData?.totals.costBrl || 0 : summary.totalBrl,
+    billable: hasListData ? listData!.totals.billable : summary.sent,
+    freeInWindow: hasListData ? listData!.totals.freeInWindow : 0,
+    totalUsd: hasListData ? listData!.totals.costUsd : summary.totalUsd,
+    totalBrl: hasListData ? listData!.totals.costBrl : summary.totalBrl,
   };
 
 
