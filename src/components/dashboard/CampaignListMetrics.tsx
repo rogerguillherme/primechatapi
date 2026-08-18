@@ -120,12 +120,33 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
 
       const [jobsRes, tplRes] = await Promise.all([
         jobsQuery,
-        supabase.from("chat_templates").select("id, category").eq("user_id", user.id),
+        supabase
+          .from("chat_templates")
+          .select("id, category, name, template_name")
+          .eq("user_id", user.id),
       ]);
 
       const jobs = jobsRes.data || [];
-      const tplCat = new Map((tplRes.data || []).map((t) => [t.id, inferCategory(t.category)]));
+      const templates = tplRes.data || [];
+      const tplCat = new Map(templates.map((t) => [t.id, inferCategory(t.category)]));
+      // Alguns jobs guardam apenas o nome do template (sem template_id):
+      // resolvemos a categoria também por nome para não cair no preço de marketing.
+      const tplCatByName = new Map<string, "utility" | "marketing" | "authentication">();
+      for (const t of templates) {
+        const cat = inferCategory(t.category);
+        for (const key of [t.template_name, t.name]) {
+          if (key) tplCatByName.set(key.toLowerCase(), cat);
+        }
+      }
+      const resolveCategory = (
+        templateId?: string | null,
+        templateName?: string | null
+      ): "utility" | "marketing" | "authentication" =>
+        (templateId ? tplCat.get(templateId) : undefined) ||
+        (templateName ? tplCatByName.get(templateName.toLowerCase()) : undefined) ||
+        "marketing";
       const jobIds = jobs.map((j) => j.id);
+
 
       // Clicks + billing logs in parallel (logs paginados: o PostgREST devolve
       // no máximo 1.000 linhas por requisição)
