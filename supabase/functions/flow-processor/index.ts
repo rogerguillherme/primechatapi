@@ -8,7 +8,12 @@ const corsHeaders = {
 
 const READY_STATUSES = ["waiting_delay", "waiting_no_response"];
 const RETRY_DELAY_MS = 5000;
-const DUPLICATE_SEND_WINDOW_MS = 15000;
+// Janela para considerar um envio idêntico como duplicata. Ampliada para 6h
+// para impedir que um reprocessamento reenvie mensagens que já foram aceitas.
+const DUPLICATE_SEND_WINDOW_MS = 6 * 60 * 60 * 1000;
+// Somente envios que DERAM CERTO bloqueiam um novo envio; falhas (ex.: #131047)
+// devem poder ser reenviadas pelo número correto.
+const SUCCESS_STATUSES = ["sent", "delivered", "read", "pending"];
 
 function formatCurrency(v: any): string {
   const n = typeof v === "number" ? v : parseFloat(String(v ?? "").replace(",", "."));
@@ -144,20 +149,36 @@ Deno.serve(async (req) => {
           : null;
 
         if (!executionAccountId) {
-          // Prefer the last OUTBOUND account used for this lead (the number that
-          // initiated/continued the conversation), to avoid mixing numbers when
-          // the lead replied to a different account in the past.
-          const { data: recentOutbound } = await supabase
+          // A janela de 24h da Meta é POR NÚMERO (phone_number_id). Portanto o
+          // número correto para continuar a conversa é o que RECEBEU a última
+          // mensagem do lead (inbound) — usar o último outbound gera erro
+          // #131047 quando o lead respondeu em outro número.
+          const { data: recentInbound } = await supabase
             .from("chat_messages")
             .select("account_id")
             .eq("lead_id", lead.id)
-            .eq("direction", "outbound")
+            .eq("direction", "inbound")
             .not("account_id", "is", null)
             .order("created_at", { ascending: false })
             .limit(1)
             .maybeSingle();
 
-          executionAccountId = recentOutbound?.account_id || null;
+          executionAccountId = recentInbound?.account_id || null;
+
+          if (!executionAccountId) {
+            // Sem inbound conhecido: cai para o último outbound do lead.
+            const { data: recentOutbound } = await supabase
+              .from("chat_messages")
+              .select("account_id")
+              .eq("lead_id", lead.id)
+              .eq("direction", "outbound")
+              .not("account_id", "is", null)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            executionAccountId = recentOutbound?.account_id || null;
+          }
 
           if (!executionAccountId) {
             // Fallback: user's default WhatsApp account
@@ -427,10 +448,11 @@ async function sendStepMessage(
     const windowStart = new Date(Date.now() - DUPLICATE_SEND_WINDOW_MS).toISOString();
     const { data: recentDuplicate, error: duplicateError } = await supabase
       .from("chat_messages")
-      .select("id, created_at")
+      .select("id, created_at, status")
       .eq("lead_id", lead.id)
       .eq("direction", "outbound")
       .eq("content", expectedLogContent)
+      .in("status", SUCCESS_STATUSES)
       .gte("created_at", windowStart)
       .order("created_at", { ascending: false })
       .limit(1)
