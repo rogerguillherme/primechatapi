@@ -8,7 +8,12 @@ const corsHeaders = {
 
 const READY_STATUSES = ["waiting_delay", "waiting_no_response"];
 const RETRY_DELAY_MS = 5000;
-const DUPLICATE_SEND_WINDOW_MS = 15000;
+// Janela para considerar um envio idêntico como duplicata. Ampliada para 6h
+// para impedir que um reprocessamento reenvie mensagens que já foram aceitas.
+const DUPLICATE_SEND_WINDOW_MS = 6 * 60 * 60 * 1000;
+// Somente envios que DERAM CERTO bloqueiam um novo envio; falhas (ex.: #131047)
+// devem poder ser reenviadas pelo número correto.
+const SUCCESS_STATUSES = ["sent", "delivered", "read", "pending"];
 
 function formatCurrency(v: any): string {
   const n = typeof v === "number" ? v : parseFloat(String(v ?? "").replace(",", "."));
