@@ -775,6 +775,14 @@ function BroadcastTab() {
 
     const flowIdForDispatch = sendType === "flow" ? selectedFlowId : null;
 
+    // ── AGENDAMENTO ──
+    // Quando um horário é informado, as execuções do fluxo são criadas já com
+    // `next_action_at` no futuro. O cron do flow-processor as coleta no horário,
+    // então nada é enviado antes da hora marcada.
+    const scheduledIso = scheduleAt ? new Date(scheduleAt).toISOString() : null;
+    const scheduledBaseMs = scheduledIso ? new Date(scheduledIso).getTime() : Date.now();
+    const isScheduled = !!scheduledIso && scheduledBaseMs > Date.now();
+
     // Helper to start a flow for a single lead (used for small batches)
     const startFlowForLead = async (leadId: string, flowId: string, codigo?: string) => {
       // ── BLOQUEIO DE DUPLICIDADE (mesmo fluxo/campanha) ──
