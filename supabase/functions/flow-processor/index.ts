@@ -144,20 +144,36 @@ Deno.serve(async (req) => {
           : null;
 
         if (!executionAccountId) {
-          // Prefer the last OUTBOUND account used for this lead (the number that
-          // initiated/continued the conversation), to avoid mixing numbers when
-          // the lead replied to a different account in the past.
-          const { data: recentOutbound } = await supabase
+          // A janela de 24h da Meta é POR NÚMERO (phone_number_id). Portanto o
+          // número correto para continuar a conversa é o que RECEBEU a última
+          // mensagem do lead (inbound) — usar o último outbound gera erro
+          // #131047 quando o lead respondeu em outro número.
+          const { data: recentInbound } = await supabase
             .from("chat_messages")
             .select("account_id")
             .eq("lead_id", lead.id)
-            .eq("direction", "outbound")
+            .eq("direction", "inbound")
             .not("account_id", "is", null)
             .order("created_at", { ascending: false })
             .limit(1)
             .maybeSingle();
 
-          executionAccountId = recentOutbound?.account_id || null;
+          executionAccountId = recentInbound?.account_id || null;
+
+          if (!executionAccountId) {
+            // Sem inbound conhecido: cai para o último outbound do lead.
+            const { data: recentOutbound } = await supabase
+              .from("chat_messages")
+              .select("account_id")
+              .eq("lead_id", lead.id)
+              .eq("direction", "outbound")
+              .not("account_id", "is", null)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            executionAccountId = recentOutbound?.account_id || null;
+          }
 
           if (!executionAccountId) {
             // Fallback: user's default WhatsApp account
