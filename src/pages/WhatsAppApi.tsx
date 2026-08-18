@@ -846,6 +846,13 @@ function BroadcastTab() {
         metadata: { codigo: codigo || "", account_id: flowAccountId },
       });
       if (insertExecutionError) throw new Error(`Erro ao iniciar execução do fluxo: ${insertExecutionError.message}`);
+
+      if (user?.id && dedupKeysSingle.length > 0) {
+        await registerSentLeads(user.id, dedupKeysSingle, [leadId], phoneMapSingle, {
+          campaignName: flowNameSingle,
+        });
+      }
+
     };
 
     // Bulk flow dispatch: insert all executions, then trigger processor once
