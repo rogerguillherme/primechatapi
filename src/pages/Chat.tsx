@@ -90,19 +90,38 @@ export default function Chat() {
   const { data: leads, isLoading: leadsLoading, error: leadsError, refetch: refetchLeads } = useQuery({
     queryKey: ["chat-leads"],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("leads")
-        .select(
-          "id, name, phone, email, photo_url, chat_status, updated_at, last_inbound_at, last_outbound_at, last_message_content, last_message_at, last_message_direction, last_message_status, last_message_account_id, account_ids"
-        )
-        .order("updated_at", { ascending: false })
-        .limit(1000);
-      if (error) throw error;
-      return (data || []) as any[];
+      const cols =
+        "id, name, phone, email, photo_url, chat_status, updated_at, last_inbound_at, last_outbound_at, last_message_content, last_message_at, last_message_direction, last_message_status, last_message_account_id, account_ids";
+
+      // Two windows: most recent conversations overall + most recent inbound replies.
+      // High-volume broadcasts flood the "recent" window, so replies need their own slice.
+      const [recent, replies] = await Promise.all([
+        (supabase as any)
+          .from("leads")
+          .select(cols)
+          .order("last_message_at", { ascending: false, nullsFirst: false })
+          .limit(1000),
+        (supabase as any)
+          .from("leads")
+          .select(cols)
+          .not("last_inbound_at", "is", null)
+          .order("last_inbound_at", { ascending: false })
+          .limit(1000),
+      ]);
+
+      if (recent.error) throw recent.error;
+      if (replies.error) throw replies.error;
+
+      const byId = new Map<string, any>();
+      for (const lead of [...(recent.data || []), ...(replies.data || [])]) {
+        byId.set(lead.id, lead);
+      }
+      return Array.from(byId.values()) as any[];
     },
     staleTime: 15000,
     retry: 2,
   });
+
 
 
   const leadAccountMap = useMemo(() => {
