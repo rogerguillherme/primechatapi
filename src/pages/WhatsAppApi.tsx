@@ -407,6 +407,8 @@ function BroadcastTab() {
   const [isSending, setIsSending] = useState(false);
   const cancelRef = useRef(false);
   const [sendType, setSendType] = useState<"template" | "flow" | "custom">("template");
+  /** Horário programado (datetime-local). Vazio = enviar imediatamente. */
+  const [scheduleAt, setScheduleAt] = useState<string>("");
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [selectedFlowId, setSelectedFlowId] = useState<string | null>(null);
   const [customMessage, setCustomMessage] = useState("");
