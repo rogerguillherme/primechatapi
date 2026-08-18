@@ -1423,6 +1423,42 @@ export type Database = {
           },
         ]
       }
+      lead_send_dedup: {
+        Row: {
+          campaign_name: string | null
+          created_at: string
+          dedup_key: string
+          id: string
+          job_id: string | null
+          lead_id: string | null
+          phone: string
+          template_name: string | null
+          user_id: string
+        }
+        Insert: {
+          campaign_name?: string | null
+          created_at?: string
+          dedup_key: string
+          id?: string
+          job_id?: string | null
+          lead_id?: string | null
+          phone: string
+          template_name?: string | null
+          user_id: string
+        }
+        Update: {
+          campaign_name?: string | null
+          created_at?: string
+          dedup_key?: string
+          id?: string
+          job_id?: string | null
+          lead_id?: string | null
+          phone?: string
+          template_name?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       leads: {
         Row: {
           account_ids: string[]
