@@ -843,6 +843,25 @@ Deno.serve(async (req) => {
           account_id: currentAccount.id,
         });
 
+        // Registra dedup — impede reenvio do mesmo template/campanha para este lead
+        if (dedupKeys.length > 0) {
+          await supabase
+            .from("lead_send_dedup")
+            .upsert(
+              dedupKeys.map((key) => ({
+                user_id: job.user_id,
+                phone: normalizePhone(lead.phone),
+                dedup_key: key,
+                lead_id: lead.id,
+                job_id: jobId,
+                template_name: templateName,
+                campaign_name: job.campaign_name || null,
+              })),
+              { onConflict: "user_id,phone,dedup_key", ignoreDuplicates: true },
+            );
+        }
+
+
         const activityAt = new Date().toISOString();
 
         // Save outbound message
