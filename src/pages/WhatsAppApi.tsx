@@ -1702,7 +1702,9 @@ function BroadcastTab() {
               ) : (
                 <>
                   <Send size={16} />
-                  {sendType === "flow" ? `Iniciar fluxo para ${activeCount} contato(s)` : `Disparar para ${activeCount} contato(s)`}
+                  {sendType === "flow" && scheduleAt
+                    ? `Agendar fluxo para ${activeCount} contato(s)`
+                    : sendType === "flow" ? `Iniciar fluxo para ${activeCount} contato(s)` : `Disparar para ${activeCount} contato(s)`}
                 </>
               )}
             </Button>
