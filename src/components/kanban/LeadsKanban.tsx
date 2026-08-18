@@ -79,16 +79,28 @@ export function LeadsKanban() {
     enabled: !!ownerId,
     staleTime: 30_000,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("leads")
-        .select("id, name, phone, stage_id, assigned_to, last_message_content, last_message_at")
-        .eq("user_id", ownerId!)
-        .order("last_message_at", { ascending: false, nullsFirst: false })
-        .limit(1000);
-      if (error) throw error;
-      return (data ?? []) as KanbanLead[];
+      // Paginação: o PostgREST limita cada resposta, então buscamos em páginas
+      // até trazer TODOS os leads da conta (sem teto de 1000).
+      const PAGE = 1000;
+      const all: KanbanLead[] = [];
+      for (let page = 0; ; page++) {
+        const from = page * PAGE;
+        const { data, error } = await supabase
+          .from("leads")
+          .select("id, name, phone, stage_id, assigned_to, last_message_content, last_message_at")
+          .eq("user_id", ownerId!)
+          .order("last_message_at", { ascending: false, nullsFirst: false })
+          .range(from, from + PAGE - 1);
+        if (error) throw error;
+        const rows = (data ?? []) as KanbanLead[];
+        all.push(...rows);
+        if (rows.length < PAGE) break;
+        if (page > 300) break; // guarda de segurança (300k leads)
+      }
+      return all;
     },
   });
+
 
   const { data: members = [] } = useTeamMembers(!!team?.canManageTeam);
 
