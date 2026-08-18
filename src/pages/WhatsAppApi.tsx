@@ -777,6 +777,18 @@ function BroadcastTab() {
 
     // Helper to start a flow for a single lead (used for small batches)
     const startFlowForLead = async (leadId: string, flowId: string, codigo?: string) => {
+      // ── BLOQUEIO DE DUPLICIDADE (mesmo fluxo/campanha) ──
+      const flowNameSingle = flows?.find((f: any) => f.id === flowId)?.name || null;
+      const dedupKeysSingle = [flowDedupKey(flowNameSingle)].filter(Boolean) as string[];
+      let phoneMapSingle: Record<string, string> = {};
+      if (user?.id && dedupKeysSingle.length > 0) {
+        const res = await filterLeadsAlreadySent(user.id, dedupKeysSingle, [leadId]);
+        phoneMapSingle = res.phoneByLeadId;
+        if (res.blockedLeadIds.length > 0) {
+          throw new Error(`Lead já recebeu "${flowNameSingle}" (ou uma variação da mesma campanha).`);
+        }
+      }
+
       const { data: rootSteps, error: rootStepError } = await supabase
         .from("flow_steps")
         .select("*")
