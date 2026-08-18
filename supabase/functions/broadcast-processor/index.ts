@@ -589,7 +589,7 @@ Deno.serve(async (req) => {
     // Um lead nunca recebe o mesmo template duas vezes, nem duas campanhas
     // que pertencem ao mesmo grupo lógico (ex.: "HOJE BM2 (10K)" e "HOJE BM2 (2K)").
     let dedupSkipped = 0;
-    const dedupKeys = buildDedupKeys(job.template_name, job.campaign_name);
+    const dedupKeys = buildDedupKeys(job.template_name, job.campaign_name, jobId);
     if (dedupKeys.length > 0 && batchLeads.length > 0) {
       const phones = batchLeads.map((l) => normalizePhone(l.phone));
       const { data: alreadySent } = await supabase
