@@ -81,28 +81,54 @@ export function BroadcastMetricsPanel() {
 
       // Fetch click tracking + broadcast logs + outbound messages in parallel
       const jobIds = jobs.map((j) => j.id);
-      const [clicksRes, logsRes, outboundRes] = await Promise.all([
+
+      // O PostgREST limita cada resposta a 1.000 linhas, então paginamos por
+      // faixas até trazer todos os registros do período (senão o total de
+      // enviadas fica travado em ~1.000).
+      const PAGE = 1000;
+      const MAX_PAGES = 60; // teto de segurança: 60k mensagens por período
+      const fetchAllPages = async <T,>(
+        build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
+      ): Promise<T[]> => {
+        const all: T[] = [];
+        for (let page = 0; page < MAX_PAGES; page++) {
+          const from = page * PAGE;
+          const { data, error } = await build(from, from + PAGE - 1);
+          if (error) break;
+          const rows = data ?? [];
+          all.push(...rows);
+          if (rows.length < PAGE) break;
+        }
+        return all;
+      };
+
+      const [clicksRes, logs, outboundRows] = await Promise.all([
         jobIds.length > 0
           ? supabase
               .from("click_tracking_links")
               .select("campaign_id, original_url, short_code, click_count")
               .in("campaign_id", jobIds)
           : Promise.resolve({ data: [] as any[] }),
-        supabase
-          .from("message_logs")
-          .select("wa_message_id, status, created_at, delivered_at, read_at, failed_at")
-          .eq("user_id", user.id)
-          .gte("created_at", startIso)
-          .lte("created_at", endIso)
-          .limit(8000),
-        supabase
-          .from("chat_messages")
-          .select("status, created_at, delivered_at, read_at, zapi_message_id")
-          .eq("direction", "outbound")
-          .gte("created_at", startIso)
-          .lte("created_at", endIso)
-          .order("created_at", { ascending: false })
-          .limit(8000),
+        fetchAllPages<any>((from, to) =>
+          supabase
+            .from("message_logs")
+            .select("wa_message_id, status, created_at, delivered_at, read_at, failed_at")
+            .eq("user_id", user.id)
+            .gte("created_at", startIso)
+            .lte("created_at", endIso)
+            .order("created_at", { ascending: false })
+            .range(from, to),
+        ),
+        fetchAllPages<any>((from, to) =>
+          supabase
+            .from("chat_messages")
+            .select("status, created_at, delivered_at, read_at, zapi_message_id")
+            .eq("direction", "outbound")
+            .gte("created_at", startIso)
+            .lte("created_at", endIso)
+            .order("created_at", { ascending: false })
+            .range(from, to),
+        ),
       ]);
 
 
@@ -114,7 +140,7 @@ export function BroadcastMetricsPanel() {
         clicksByJob.set(c.campaign_id, list);
       }
 
-      const logs = logsRes.data || [];
+
       const broadcastWaIds = new Set(logs.map((l: any) => l.wa_message_id).filter(Boolean));
 
       // Mensagens reais do período: logs de campanha (status real da Meta) +
@@ -122,7 +148,7 @@ export function BroadcastMetricsPanel() {
       // ficam os envios disparados por fluxo, que antes não eram contados.
       const templateMsgs = [
         ...logs,
-        ...(outboundRes.data || []).filter(
+        ...outboundRows.filter(
           (m: any) => !m.zapi_message_id || !broadcastWaIds.has(m.zapi_message_id)
         ),
       ];

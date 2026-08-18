@@ -127,22 +127,38 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
       const tplCat = new Map((tplRes.data || []).map((t) => [t.id, inferCategory(t.category)]));
       const jobIds = jobs.map((j) => j.id);
 
-      // Clicks + billing logs in parallel
-      const [clicksRes, logsRes] = await Promise.all([
+      // Clicks + billing logs in parallel (logs paginados: o PostgREST devolve
+      // no máximo 1.000 linhas por requisição)
+      const PAGE = 1000;
+      const MAX_PAGES = 60;
+      const fetchAllLogs = async (): Promise<any[]> => {
+        if (jobIds.length === 0) return [];
+        const all: any[] = [];
+        for (let page = 0; page < MAX_PAGES; page++) {
+          const from = page * PAGE;
+          const { data, error } = await supabase
+            .from("message_logs")
+            .select("job_id, lead_id, status, sent_at, created_at")
+            .eq("user_id", user.id)
+            .in("job_id", jobIds)
+            .order("created_at", { ascending: false })
+            .range(from, from + PAGE - 1);
+          if (error) break;
+          const rows = data ?? [];
+          all.push(...rows);
+          if (rows.length < PAGE) break;
+        }
+        return all;
+      };
+
+      const [clicksRes, logs] = await Promise.all([
         jobIds.length > 0
           ? supabase
               .from("click_tracking_links")
               .select("campaign_id, original_url, short_code, click_count")
               .in("campaign_id", jobIds)
           : Promise.resolve({ data: [] as any[] }),
-        jobIds.length > 0
-          ? supabase
-              .from("message_logs")
-              .select("job_id, lead_id, status, sent_at, created_at")
-              .eq("user_id", user.id)
-              .in("job_id", jobIds)
-              .limit(8000)
-          : Promise.resolve({ data: [] as any[] }),
+        fetchAllLogs(),
       ]);
 
       const clicks = clicksRes.data || [];
@@ -153,7 +169,7 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
         clicksByJob.set(c.campaign_id, list);
       }
 
-      const logs = logsRes.data || [];
+
 
       // Leads' last inbound timestamp → 24h window reference (parallel chunks)
       const leadIds = Array.from(new Set(logs.map((l: any) => l.lead_id).filter(Boolean)));
@@ -255,15 +271,22 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
 
       let execs: any[] = [];
       if (flowIds.length > 0) {
-        let execQuery = supabase
-          .from("flow_executions")
-          .select("flow_id, lead_id, status, started_at")
-          .in("flow_id", flowIds)
-          .order("started_at", { ascending: true })
-          .limit(30000);
-        if (startDate) execQuery = execQuery.gte("started_at", startDate.toISOString());
-        if (endDate) execQuery = execQuery.lte("started_at", endDate.toISOString());
-        execs = (await execQuery).data || [];
+        for (let page = 0; page < MAX_PAGES; page++) {
+          const from = page * PAGE;
+          let execQuery = supabase
+            .from("flow_executions")
+            .select("flow_id, lead_id, status, started_at")
+            .in("flow_id", flowIds)
+            .order("started_at", { ascending: true })
+            .range(from, from + PAGE - 1);
+          if (startDate) execQuery = execQuery.gte("started_at", startDate.toISOString());
+          if (endDate) execQuery = execQuery.lte("started_at", endDate.toISOString());
+          const { data, error } = await execQuery;
+          if (error) break;
+          const rows = data ?? [];
+          execs.push(...rows);
+          if (rows.length < PAGE) break;
+        }
       }
 
       // Mensagens outbound reais no período (status vindo do webhook da Meta)
@@ -273,20 +296,29 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
           (startDate ? startDate.getTime() : new Date(execs[0].started_at).getTime()) - 60 * 60 * 1000
         ).toISOString();
         const toIso = new Date((endDate ? endDate.getTime() : Date.now()) + MSG_TAIL_MS).toISOString();
-        const { data: msgs } = await supabase
-          .from("chat_messages")
-          .select("lead_id, status, created_at, delivered_at, read_at, error_code")
-          .eq("direction", "outbound")
-          .gte("created_at", fromIso)
-          .lte("created_at", toIso)
-          .order("created_at", { ascending: true })
-          .limit(30000);
-        for (const m of msgs || []) {
+        const msgs: any[] = [];
+        for (let page = 0; page < MAX_PAGES; page++) {
+          const from = page * PAGE;
+          const { data, error } = await supabase
+            .from("chat_messages")
+            .select("lead_id, status, created_at, delivered_at, read_at, error_code")
+            .eq("direction", "outbound")
+            .gte("created_at", fromIso)
+            .lte("created_at", toIso)
+            .order("created_at", { ascending: true })
+            .range(from, from + PAGE - 1);
+          if (error) break;
+          const rows = data ?? [];
+          msgs.push(...rows);
+          if (rows.length < PAGE) break;
+        }
+        for (const m of msgs) {
           if (!m.lead_id) continue;
           const list = msgsByLead.get(m.lead_id) || [];
           list.push(m);
           msgsByLead.set(m.lead_id, list);
         }
+
       }
 
       interface Batch {
