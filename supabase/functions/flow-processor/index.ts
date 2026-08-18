@@ -448,10 +448,11 @@ async function sendStepMessage(
     const windowStart = new Date(Date.now() - DUPLICATE_SEND_WINDOW_MS).toISOString();
     const { data: recentDuplicate, error: duplicateError } = await supabase
       .from("chat_messages")
-      .select("id, created_at")
+      .select("id, created_at, status")
       .eq("lead_id", lead.id)
       .eq("direction", "outbound")
       .eq("content", expectedLogContent)
+      .in("status", SUCCESS_STATUSES)
       .gte("created_at", windowStart)
       .order("created_at", { ascending: false })
       .limit(1)
