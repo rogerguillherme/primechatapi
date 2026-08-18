@@ -127,22 +127,38 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
       const tplCat = new Map((tplRes.data || []).map((t) => [t.id, inferCategory(t.category)]));
       const jobIds = jobs.map((j) => j.id);
 
-      // Clicks + billing logs in parallel
-      const [clicksRes, logsRes] = await Promise.all([
+      // Clicks + billing logs in parallel (logs paginados: o PostgREST devolve
+      // no máximo 1.000 linhas por requisição)
+      const PAGE = 1000;
+      const MAX_PAGES = 60;
+      const fetchAllLogs = async (): Promise<any[]> => {
+        if (jobIds.length === 0) return [];
+        const all: any[] = [];
+        for (let page = 0; page < MAX_PAGES; page++) {
+          const from = page * PAGE;
+          const { data, error } = await supabase
+            .from("message_logs")
+            .select("job_id, lead_id, status, sent_at, created_at")
+            .eq("user_id", user.id)
+            .in("job_id", jobIds)
+            .order("created_at", { ascending: false })
+            .range(from, from + PAGE - 1);
+          if (error) break;
+          const rows = data ?? [];
+          all.push(...rows);
+          if (rows.length < PAGE) break;
+        }
+        return all;
+      };
+
+      const [clicksRes, logs] = await Promise.all([
         jobIds.length > 0
           ? supabase
               .from("click_tracking_links")
               .select("campaign_id, original_url, short_code, click_count")
               .in("campaign_id", jobIds)
           : Promise.resolve({ data: [] as any[] }),
-        jobIds.length > 0
-          ? supabase
-              .from("message_logs")
-              .select("job_id, lead_id, status, sent_at, created_at")
-              .eq("user_id", user.id)
-              .in("job_id", jobIds)
-              .limit(8000)
-          : Promise.resolve({ data: [] as any[] }),
+        fetchAllLogs(),
       ]);
 
       const clicks = clicksRes.data || [];
@@ -153,7 +169,7 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
         clicksByJob.set(c.campaign_id, list);
       }
 
-      const logs = logsRes.data || [];
+
 
       // Leads' last inbound timestamp → 24h window reference (parallel chunks)
       const leadIds = Array.from(new Set(logs.map((l: any) => l.lead_id).filter(Boolean)));
