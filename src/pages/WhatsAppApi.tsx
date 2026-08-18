@@ -934,6 +934,12 @@ function BroadcastTab() {
           insertErrors += batch.length;
         } else {
           insertedCount += batch.length;
+          // Registra para bloquear reenvio futuro do mesmo fluxo/campanha
+          if (user?.id && dedupKeys.length > 0) {
+            await registerSentLeads(user.id, dedupKeys, batch, phoneByLeadId, {
+              campaignName: flowName,
+            });
+          }
         }
       }
 
@@ -942,7 +948,8 @@ function BroadcastTab() {
         console.error("Failed to invoke flow-processor:", e)
       );
 
-      return { insertedCount, insertErrors };
+      return { insertedCount, insertErrors, blockedCount };
+
     };
 
     // Helper: generate Brazilian phone variants (with/without 9th digit)
