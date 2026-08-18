@@ -616,7 +616,7 @@ Deno.serve(async (req) => {
         .update({ last_cursor: newCursor, status: isComplete ? "completed" : "processing", updated_at: new Date().toISOString() })
         .eq("id", jobId);
       if (!isComplete) await chainNextBatch(supabaseUrl, jobId);
-      return new Response(JSON.stringify({ message: "Batch skipped", blacklistedSkipped }), {
+      return new Response(JSON.stringify({ message: "Batch skipped", blacklistedSkipped, dedupSkipped }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
