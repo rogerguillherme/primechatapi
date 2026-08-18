@@ -419,7 +419,8 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
 
           for (const leadId of b.leads) {
             const list = msgsByLead.get(leadId) || [];
-            let firstOfBatch = true;
+            const inboundIso = inboundByLead.get(leadId);
+            const inboundMs = inboundIso ? new Date(inboundIso).getTime() : null;
             for (const m of list) {
               if (consumed.has(m)) continue;
               const t = new Date(m.created_at).getTime();
@@ -437,20 +438,17 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
               const isDelivered = !!m.delivered_at || isRead || st === "delivered";
               if (isDelivered) delivered++;
               if (isRead) read++;
-              // Primeira mensagem do lote abre a janela de 24h (cobrada);
-              // as seguintes caem dentro da janela e são gratuitas.
-              if (firstOfBatch) {
-                billable++;
-                firstOfBatch = false;
-              } else {
-                freeInWindow++;
-              }
+              // Só cobra o que saiu FORA da janela de 24h: se o lead respondeu
+              // até 24h antes do envio, a conversa já estava aberta (grátis).
+              const inWindow = inboundMs !== null && t - inboundMs >= 0 && t - inboundMs <= WINDOW_MS;
+              if (inWindow) freeInWindow++;
+              else billable++;
             }
             const inbound = inboundByLead.get(leadId);
             if (inbound && new Date(inbound).getTime() >= b.startMs) replies++;
           }
 
-          const cat: "utility" | "marketing" | "authentication" = "marketing";
+          const cat = flowCategory.get(b.flowId) || "marketing";
           const costUsd = billable * PRICING[cat];
           return {
             id: `flow:${b.flowId}:${b.startMs}`,
