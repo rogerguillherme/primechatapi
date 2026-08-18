@@ -835,7 +835,31 @@ function BroadcastTab() {
     };
 
     // Bulk flow dispatch: insert all executions, then trigger processor once
-    const startFlowBulk = async (leadIds: string[], flowId: string, codigoMap?: Record<string, string>) => {
+    const startFlowBulk = async (leadIdsInput: string[], flowId: string, codigoMap?: Record<string, string>) => {
+      // ── BLOQUEIO DE DUPLICIDADE ──
+      // Um lead nunca recebe o mesmo fluxo/template duas vezes. Fluxos que são
+      // variações de volume da mesma campanha (ex.: "HOJE BM2 (10K)" e
+      // "HOJE BM2 (2K)") compartilham a mesma chave, então quem recebeu um
+      // não recebe o outro.
+      const flowName = flows?.find((f: any) => f.id === flowId)?.name || null;
+      const dedupKeys = [flowDedupKey(flowName)].filter(Boolean) as string[];
+      let leadIds = leadIdsInput;
+      let phoneByLeadId: Record<string, string> = {};
+      let blockedCount = 0;
+
+      if (user?.id && dedupKeys.length > 0) {
+        const res = await filterLeadsAlreadySent(user.id, dedupKeys, leadIdsInput);
+        leadIds = res.allowedLeadIds;
+        phoneByLeadId = res.phoneByLeadId;
+        blockedCount = res.blockedLeadIds.length;
+        if (blockedCount > 0) {
+          toast.info(`${blockedCount} lead(s) ignorado(s): já receberam "${flowName}" (ou uma variação da mesma campanha).`);
+        }
+        if (leadIds.length === 0) {
+          return { insertedCount: 0, insertErrors: 0, blockedCount };
+        }
+      }
+
       const { data: rootSteps, error: rootStepError } = await supabase
         .from("flow_steps")
         .select("*")
