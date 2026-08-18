@@ -539,6 +539,30 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ── DEDUP FILTER (mesmo template / mesma campanha lógica) ──
+    // Um lead nunca recebe o mesmo template duas vezes, nem duas campanhas
+    // que pertencem ao mesmo grupo lógico (ex.: "HOJE BM2 (10K)" e "HOJE BM2 (2K)").
+    let dedupSkipped = 0;
+    const dedupKeys = buildDedupKeys(job.template_name, job.campaign_name);
+    if (dedupKeys.length > 0 && batchLeads.length > 0) {
+      const phones = batchLeads.map((l) => normalizePhone(l.phone));
+      const { data: alreadySent } = await supabase
+        .from("lead_send_dedup")
+        .select("phone")
+        .eq("user_id", job.user_id)
+        .in("dedup_key", dedupKeys)
+        .in("phone", phones);
+
+      const sentSet = new Set((alreadySent || []).map((r: any) => r.phone));
+      const before = batchLeads.length;
+      batchLeads = batchLeads.filter((l) => !sentSet.has(normalizePhone(l.phone)));
+      dedupSkipped = before - batchLeads.length;
+      if (dedupSkipped > 0) {
+        console.log(`Dedup: skipped ${dedupSkipped} leads already sent (keys: ${dedupKeys.join(", ")})`);
+      }
+    }
+
+
 
     if (!batchLeads || batchLeads.length === 0) {
       const newCursor = cursor + batchSize;
