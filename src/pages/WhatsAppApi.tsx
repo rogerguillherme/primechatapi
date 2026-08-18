@@ -37,7 +37,7 @@ import {
   KeyRound, ChevronDown, Webhook, LogOut, Plug, Tag, ChevronLeft, ChevronRight,
   Instagram, GitBranch, TrendingUp, Bot, Volume2, Sparkles, DollarSign,
   QrCode, RefreshCw, Loader2, Smartphone, Filter, Upload, UserMinus,
-  Home, KanbanSquare, Menu, X,
+  Home, KanbanSquare, Menu, X, Clock,
 } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
@@ -407,6 +407,8 @@ function BroadcastTab() {
   const [isSending, setIsSending] = useState(false);
   const cancelRef = useRef(false);
   const [sendType, setSendType] = useState<"template" | "flow" | "custom">("template");
+  /** Horário programado (datetime-local). Vazio = enviar imediatamente. */
+  const [scheduleAt, setScheduleAt] = useState<string>("");
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [selectedFlowId, setSelectedFlowId] = useState<string | null>(null);
   const [customMessage, setCustomMessage] = useState("");
@@ -775,6 +777,14 @@ function BroadcastTab() {
 
     const flowIdForDispatch = sendType === "flow" ? selectedFlowId : null;
 
+    // ── AGENDAMENTO ──
+    // Quando um horário é informado, as execuções do fluxo são criadas já com
+    // `next_action_at` no futuro. O cron do flow-processor as coleta no horário,
+    // então nada é enviado antes da hora marcada.
+    const scheduledIso = scheduleAt ? new Date(scheduleAt).toISOString() : null;
+    const scheduledBaseMs = scheduledIso ? new Date(scheduledIso).getTime() : Date.now();
+    const isScheduled = !!scheduledIso && scheduledBaseMs > Date.now();
+
     // Helper to start a flow for a single lead (used for small batches)
     const startFlowForLead = async (leadId: string, flowId: string, codigo?: string) => {
       // ── BLOQUEIO DE DUPLICIDADE (mesmo fluxo/campanha) ──
@@ -825,10 +835,10 @@ function BroadcastTab() {
 
       const firstStepNextActionAt =
         firstStep.step_type === "delay"
-          ? new Date(Date.now() + (firstStep.delay_minutes || 0) * 60 * 1000).toISOString()
+          ? new Date(scheduledBaseMs + (firstStep.delay_minutes || 0) * 60 * 1000).toISOString()
           : firstStep.step_type === "no_response"
-            ? new Date(Date.now() + (firstStep.timeout_minutes || 10) * 60 * 1000).toISOString()
-            : new Date().toISOString();
+            ? new Date(scheduledBaseMs + (firstStep.timeout_minutes || 10) * 60 * 1000).toISOString()
+            : new Date(scheduledBaseMs).toISOString();
 
       await supabase
         .from("flow_executions")
@@ -916,10 +926,10 @@ function BroadcastTab() {
 
       const firstStepNextActionAt =
         firstStep.step_type === "delay"
-          ? new Date(Date.now() + (firstStep.delay_minutes || 0) * 60 * 1000).toISOString()
+          ? new Date(scheduledBaseMs + (firstStep.delay_minutes || 0) * 60 * 1000).toISOString()
           : firstStep.step_type === "no_response"
-            ? new Date(Date.now() + (firstStep.timeout_minutes || 10) * 60 * 1000).toISOString()
-            : new Date().toISOString();
+            ? new Date(scheduledBaseMs + (firstStep.timeout_minutes || 10) * 60 * 1000).toISOString()
+            : new Date(scheduledBaseMs).toISOString();
 
       // Cancel existing active executions for all leads in bulk
       const CANCEL_BATCH = 200;
@@ -964,10 +974,13 @@ function BroadcastTab() {
         }
       }
 
-      // Trigger flow-processor once (it will process pending executions)
-      supabase.functions.invoke("flow-processor", { body: { auto: true } }).catch((e: any) =>
-        console.error("Failed to invoke flow-processor:", e)
-      );
+      // Disparos imediatos acordam o processor na hora; agendados ficam
+      // aguardando o cron do flow-processor atingir o horário marcado.
+      if (!isScheduled) {
+        supabase.functions.invoke("flow-processor", { body: { auto: true } }).catch((e: any) =>
+          console.error("Failed to invoke flow-processor:", e)
+        );
+      }
 
       return { insertedCount, insertErrors, blockedCount };
 
@@ -1606,6 +1619,31 @@ function BroadcastTab() {
                 {(!flows || flows.length === 0) && (
                   <p className="text-xs text-muted-foreground">Nenhum fluxo ativo encontrado. Crie um fluxo abaixo primeiro.</p>
                 )}
+
+                {/* Agendamento por horário específico */}
+                <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+                  <Label className="flex items-center gap-1.5">
+                    <Clock size={14} /> Enviar em horário programado (opcional)
+                  </Label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="datetime-local"
+                      value={scheduleAt}
+                      onChange={(e) => setScheduleAt(e.target.value)}
+                      className="rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                    {scheduleAt && (
+                      <Button variant="ghost" size="sm" onClick={() => setScheduleAt("")}>
+                        Limpar
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    {scheduleAt
+                      ? `As mensagens só sairão a partir de ${new Date(scheduleAt).toLocaleString("pt-BR")} (horário do seu dispositivo).`
+                      : "Deixe vazio para iniciar o fluxo imediatamente."}
+                  </p>
+                </div>
               </div>
             )}
 
@@ -1664,7 +1702,9 @@ function BroadcastTab() {
               ) : (
                 <>
                   <Send size={16} />
-                  {sendType === "flow" ? `Iniciar fluxo para ${activeCount} contato(s)` : `Disparar para ${activeCount} contato(s)`}
+                  {sendType === "flow" && scheduleAt
+                    ? `Agendar fluxo para ${activeCount} contato(s)`
+                    : sendType === "flow" ? `Iniciar fluxo para ${activeCount} contato(s)` : `Disparar para ${activeCount} contato(s)`}
                 </>
               )}
             </Button>
