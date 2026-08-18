@@ -230,7 +230,7 @@ export function LeadsKanban() {
           <div>
             <h2 className="text-lg font-semibold">Kanban de Leads</h2>
             <p className="text-xs text-muted-foreground">
-              {leads.length} leads · arraste os cartões entre as etapas
+              {leadsLoading ? "carregando…" : `${leads.length.toLocaleString("pt-BR")} leads`} · arraste os cartões entre as etapas
             </p>
           </div>
         </div>
