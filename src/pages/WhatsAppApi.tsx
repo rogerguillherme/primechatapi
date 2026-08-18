@@ -1619,6 +1619,31 @@ function BroadcastTab() {
                 {(!flows || flows.length === 0) && (
                   <p className="text-xs text-muted-foreground">Nenhum fluxo ativo encontrado. Crie um fluxo abaixo primeiro.</p>
                 )}
+
+                {/* Agendamento por horário específico */}
+                <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+                  <Label className="flex items-center gap-1.5">
+                    <Clock size={14} /> Enviar em horário programado (opcional)
+                  </Label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="datetime-local"
+                      value={scheduleAt}
+                      onChange={(e) => setScheduleAt(e.target.value)}
+                      className="rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                    {scheduleAt && (
+                      <Button variant="ghost" size="sm" onClick={() => setScheduleAt("")}>
+                        Limpar
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    {scheduleAt
+                      ? `As mensagens só sairão a partir de ${new Date(scheduleAt).toLocaleString("pt-BR")} (horário do seu dispositivo).`
+                      : "Deixe vazio para iniciar o fluxo imediatamente."}
+                  </p>
+                </div>
               </div>
             )}
 
