@@ -45,6 +45,50 @@ function shuffleArray<T>(arr: T[]): T[] {
   return shuffled;
 }
 
+// ============================================================
+// DEDUP HELPERS — um lead nunca recebe o mesmo template/campanha 2x
+// ============================================================
+function normalizePhone(phone: string | null | undefined): string {
+  return String(phone || "").replace(/\D/g, "");
+}
+
+/**
+ * Normaliza o nome da campanha para agrupar variações da MESMA campanha.
+ * Remove sufixos de volume/lote: "(10K)", "(2K)", "- parte 2", "lote 3",
+ * "(reenvio)", números soltos no fim, acentos e caixa.
+ * Ex.: "HOJE BM2 (10K)" e "HOJE BM2 (2K)" → "hoje bm2"
+ */
+function normalizeCampaignGroup(name: string | null | undefined): string {
+  if (!name) return "";
+  return String(name)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, " ")            // remove tudo entre parênteses: (10K), (2K), (reenvio)
+    .replace(/\b\d+\s*(k|mil|m)\b/g, " ")  // 10k, 2 mil
+    .replace(/\b(parte|lote|batch|bloco|copia|copy|reenvio|teste)\b\s*\d*/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+\d+$/, "")                // número solto no final
+    .trim();
+}
+
+/**
+ * Chaves de bloqueio: template exato + grupo lógico de campanha.
+ * Se qualquer uma já existir para o telefone, o lead é pulado.
+ */
+function buildDedupKeys(
+  templateName: string | null | undefined,
+  campaignName: string | null | undefined,
+): string[] {
+  const keys: string[] = [];
+  if (templateName) keys.push(`tpl:${String(templateName).trim().toLowerCase()}`);
+  const group = normalizeCampaignGroup(campaignName);
+  if (group) keys.push(`camp:${group}`);
+  return keys;
+}
+
+
 function randomDelay(minSec = 0.3, maxSec = 1.5): Promise<void> {
   const minMs = Math.max(0, minSec) * 1000;
   const maxMs = Math.max(minMs, maxSec * 1000);
