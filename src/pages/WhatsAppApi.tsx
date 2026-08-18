@@ -835,10 +835,10 @@ function BroadcastTab() {
 
       const firstStepNextActionAt =
         firstStep.step_type === "delay"
-          ? new Date(Date.now() + (firstStep.delay_minutes || 0) * 60 * 1000).toISOString()
+          ? new Date(scheduledBaseMs + (firstStep.delay_minutes || 0) * 60 * 1000).toISOString()
           : firstStep.step_type === "no_response"
-            ? new Date(Date.now() + (firstStep.timeout_minutes || 10) * 60 * 1000).toISOString()
-            : new Date().toISOString();
+            ? new Date(scheduledBaseMs + (firstStep.timeout_minutes || 10) * 60 * 1000).toISOString()
+            : new Date(scheduledBaseMs).toISOString();
 
       await supabase
         .from("flow_executions")
@@ -926,10 +926,10 @@ function BroadcastTab() {
 
       const firstStepNextActionAt =
         firstStep.step_type === "delay"
-          ? new Date(Date.now() + (firstStep.delay_minutes || 0) * 60 * 1000).toISOString()
+          ? new Date(scheduledBaseMs + (firstStep.delay_minutes || 0) * 60 * 1000).toISOString()
           : firstStep.step_type === "no_response"
-            ? new Date(Date.now() + (firstStep.timeout_minutes || 10) * 60 * 1000).toISOString()
-            : new Date().toISOString();
+            ? new Date(scheduledBaseMs + (firstStep.timeout_minutes || 10) * 60 * 1000).toISOString()
+            : new Date(scheduledBaseMs).toISOString();
 
       // Cancel existing active executions for all leads in bulk
       const CANCEL_BATCH = 200;
@@ -974,10 +974,13 @@ function BroadcastTab() {
         }
       }
 
-      // Trigger flow-processor once (it will process pending executions)
-      supabase.functions.invoke("flow-processor", { body: { auto: true } }).catch((e: any) =>
-        console.error("Failed to invoke flow-processor:", e)
-      );
+      // Disparos imediatos acordam o processor na hora; agendados ficam
+      // aguardando o cron do flow-processor atingir o horário marcado.
+      if (!isScheduled) {
+        supabase.functions.invoke("flow-processor", { body: { auto: true } }).catch((e: any) =>
+          console.error("Failed to invoke flow-processor:", e)
+        );
+      }
 
       return { insertedCount, insertErrors, blockedCount };
 
