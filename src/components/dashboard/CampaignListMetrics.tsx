@@ -290,6 +290,25 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
       const flowNames = new Map((flowsRes.data || []).map((f) => [f.id, f.name] as const));
       const flowIds = Array.from(flowNames.keys());
 
+      // Categoria de cobrança do fluxo = categoria do(s) template(s) usados nos
+      // seus passos. Sem isso todo envio de fluxo era cobrado como marketing.
+      const flowCategory = new Map<string, "utility" | "marketing" | "authentication">();
+      if (flowIds.length > 0) {
+        const { data: stepRows } = await supabase
+          .from("flow_steps")
+          .select("flow_id, template_id")
+          .in("flow_id", flowIds)
+          .not("template_id", "is", null);
+        for (const s of stepRows || []) {
+          const cat = s.template_id ? tplCat.get(s.template_id) : undefined;
+          if (!cat) continue;
+          // marketing domina (mais caro) quando o fluxo mistura categorias
+          const prev = flowCategory.get(s.flow_id);
+          if (!prev || cat === "marketing") flowCategory.set(s.flow_id, cat);
+        }
+      }
+
+
       let execs: any[] = [];
       if (flowIds.length > 0) {
         for (let page = 0; page < MAX_PAGES; page++) {
