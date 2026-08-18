@@ -231,7 +231,7 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
         const delivered = j.delivered_count || 0;
         const read = j.read_count || 0;
         const errors = j.error_count || 0;
-        const cat = (j.template_id && tplCat.get(j.template_id)) || "marketing";
+        const cat = resolveCategory(j.template_id, j.template_name);
         const rate = PRICING[cat];
         const agg = perJob.get(j.id);
         const billable = agg ? agg.billable : sent;
