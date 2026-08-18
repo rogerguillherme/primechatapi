@@ -45,6 +45,50 @@ function shuffleArray<T>(arr: T[]): T[] {
   return shuffled;
 }
 
+// ============================================================
+// DEDUP HELPERS — um lead nunca recebe o mesmo template/campanha 2x
+// ============================================================
+function normalizePhone(phone: string | null | undefined): string {
+  return String(phone || "").replace(/\D/g, "");
+}
+
+/**
+ * Normaliza o nome da campanha para agrupar variações da MESMA campanha.
+ * Remove sufixos de volume/lote: "(10K)", "(2K)", "- parte 2", "lote 3",
+ * "(reenvio)", números soltos no fim, acentos e caixa.
+ * Ex.: "HOJE BM2 (10K)" e "HOJE BM2 (2K)" → "hoje bm2"
+ */
+function normalizeCampaignGroup(name: string | null | undefined): string {
+  if (!name) return "";
+  return String(name)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, " ")            // remove tudo entre parênteses: (10K), (2K), (reenvio)
+    .replace(/\b\d+\s*(k|mil|m)\b/g, " ")  // 10k, 2 mil
+    .replace(/\b(parte|lote|batch|bloco|copia|copy|reenvio|teste)\b\s*\d*/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+\d+$/, "")                // número solto no final
+    .trim();
+}
+
+/**
+ * Chaves de bloqueio: template exato + grupo lógico de campanha.
+ * Se qualquer uma já existir para o telefone, o lead é pulado.
+ */
+function buildDedupKeys(
+  templateName: string | null | undefined,
+  campaignName: string | null | undefined,
+): string[] {
+  const keys: string[] = [];
+  if (templateName) keys.push(`tpl:${String(templateName).trim().toLowerCase()}`);
+  const group = normalizeCampaignGroup(campaignName);
+  if (group) keys.push(`camp:${group}`);
+  return keys;
+}
+
+
 function randomDelay(minSec = 0.3, maxSec = 1.5): Promise<void> {
   const minMs = Math.max(0, minSec) * 1000;
   const maxMs = Math.max(minMs, maxSec * 1000);
@@ -539,6 +583,30 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ── DEDUP FILTER (mesmo template / mesma campanha lógica) ──
+    // Um lead nunca recebe o mesmo template duas vezes, nem duas campanhas
+    // que pertencem ao mesmo grupo lógico (ex.: "HOJE BM2 (10K)" e "HOJE BM2 (2K)").
+    let dedupSkipped = 0;
+    const dedupKeys = buildDedupKeys(job.template_name, job.campaign_name);
+    if (dedupKeys.length > 0 && batchLeads.length > 0) {
+      const phones = batchLeads.map((l) => normalizePhone(l.phone));
+      const { data: alreadySent } = await supabase
+        .from("lead_send_dedup")
+        .select("phone")
+        .eq("user_id", job.user_id)
+        .in("dedup_key", dedupKeys)
+        .in("phone", phones);
+
+      const sentSet = new Set((alreadySent || []).map((r: any) => r.phone));
+      const before = batchLeads.length;
+      batchLeads = batchLeads.filter((l) => !sentSet.has(normalizePhone(l.phone)));
+      dedupSkipped = before - batchLeads.length;
+      if (dedupSkipped > 0) {
+        console.log(`Dedup: skipped ${dedupSkipped} leads already sent (keys: ${dedupKeys.join(", ")})`);
+      }
+    }
+
+
 
     if (!batchLeads || batchLeads.length === 0) {
       const newCursor = cursor + batchSize;
@@ -548,7 +616,7 @@ Deno.serve(async (req) => {
         .update({ last_cursor: newCursor, status: isComplete ? "completed" : "processing", updated_at: new Date().toISOString() })
         .eq("id", jobId);
       if (!isComplete) await chainNextBatch(supabaseUrl, jobId);
-      return new Response(JSON.stringify({ message: "Batch skipped", blacklistedSkipped }), {
+      return new Response(JSON.stringify({ message: "Batch skipped", blacklistedSkipped, dedupSkipped }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -818,6 +886,25 @@ Deno.serve(async (req) => {
           phone: cleanPhone, status: "sent", wa_message_id: waMessageId,
           account_id: currentAccount.id,
         });
+
+        // Registra dedup — impede reenvio do mesmo template/campanha para este lead
+        if (dedupKeys.length > 0) {
+          await supabase
+            .from("lead_send_dedup")
+            .upsert(
+              dedupKeys.map((key) => ({
+                user_id: job.user_id,
+                phone: normalizePhone(lead.phone),
+                dedup_key: key,
+                lead_id: lead.id,
+                job_id: jobId,
+                template_name: templateName,
+                campaign_name: job.campaign_name || null,
+              })),
+              { onConflict: "user_id,phone,dedup_key", ignoreDuplicates: true },
+            );
+        }
+
 
         const activityAt = new Date().toISOString();
 

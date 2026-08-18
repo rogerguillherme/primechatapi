@@ -6,6 +6,8 @@ import { SmokeBackground } from "@/components/SmokeBackground";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { flowDedupKey, filterLeadsAlreadySent, registerSentLeads } from "@/lib/sendDedup";
+
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -775,6 +777,18 @@ function BroadcastTab() {
 
     // Helper to start a flow for a single lead (used for small batches)
     const startFlowForLead = async (leadId: string, flowId: string, codigo?: string) => {
+      // ── BLOQUEIO DE DUPLICIDADE (mesmo fluxo/campanha) ──
+      const flowNameSingle = flows?.find((f: any) => f.id === flowId)?.name || null;
+      const dedupKeysSingle = [flowDedupKey(flowNameSingle)].filter(Boolean) as string[];
+      let phoneMapSingle: Record<string, string> = {};
+      if (user?.id && dedupKeysSingle.length > 0) {
+        const res = await filterLeadsAlreadySent(user.id, dedupKeysSingle, [leadId]);
+        phoneMapSingle = res.phoneByLeadId;
+        if (res.blockedLeadIds.length > 0) {
+          throw new Error(`Lead já recebeu "${flowNameSingle}" (ou uma variação da mesma campanha).`);
+        }
+      }
+
       const { data: rootSteps, error: rootStepError } = await supabase
         .from("flow_steps")
         .select("*")
@@ -832,10 +846,41 @@ function BroadcastTab() {
         metadata: { codigo: codigo || "", account_id: flowAccountId },
       });
       if (insertExecutionError) throw new Error(`Erro ao iniciar execução do fluxo: ${insertExecutionError.message}`);
+
+      if (user?.id && dedupKeysSingle.length > 0) {
+        await registerSentLeads(user.id, dedupKeysSingle, [leadId], phoneMapSingle, {
+          campaignName: flowNameSingle,
+        });
+      }
+
     };
 
     // Bulk flow dispatch: insert all executions, then trigger processor once
-    const startFlowBulk = async (leadIds: string[], flowId: string, codigoMap?: Record<string, string>) => {
+    const startFlowBulk = async (leadIdsInput: string[], flowId: string, codigoMap?: Record<string, string>) => {
+      // ── BLOQUEIO DE DUPLICIDADE ──
+      // Um lead nunca recebe o mesmo fluxo/template duas vezes. Fluxos que são
+      // variações de volume da mesma campanha (ex.: "HOJE BM2 (10K)" e
+      // "HOJE BM2 (2K)") compartilham a mesma chave, então quem recebeu um
+      // não recebe o outro.
+      const flowName = flows?.find((f: any) => f.id === flowId)?.name || null;
+      const dedupKeys = [flowDedupKey(flowName)].filter(Boolean) as string[];
+      let leadIds = leadIdsInput;
+      let phoneByLeadId: Record<string, string> = {};
+      let blockedCount = 0;
+
+      if (user?.id && dedupKeys.length > 0) {
+        const res = await filterLeadsAlreadySent(user.id, dedupKeys, leadIdsInput);
+        leadIds = res.allowedLeadIds;
+        phoneByLeadId = res.phoneByLeadId;
+        blockedCount = res.blockedLeadIds.length;
+        if (blockedCount > 0) {
+          toast.info(`${blockedCount} lead(s) ignorado(s): já receberam "${flowName}" (ou uma variação da mesma campanha).`);
+        }
+        if (leadIds.length === 0) {
+          return { insertedCount: 0, insertErrors: 0, blockedCount };
+        }
+      }
+
       const { data: rootSteps, error: rootStepError } = await supabase
         .from("flow_steps")
         .select("*")
@@ -910,6 +955,12 @@ function BroadcastTab() {
           insertErrors += batch.length;
         } else {
           insertedCount += batch.length;
+          // Registra para bloquear reenvio futuro do mesmo fluxo/campanha
+          if (user?.id && dedupKeys.length > 0) {
+            await registerSentLeads(user.id, dedupKeys, batch, phoneByLeadId, {
+              campaignName: flowName,
+            });
+          }
         }
       }
 
@@ -918,7 +969,8 @@ function BroadcastTab() {
         console.error("Failed to invoke flow-processor:", e)
       );
 
-      return { insertedCount, insertErrors };
+      return { insertedCount, insertErrors, blockedCount };
+
     };
 
     // Helper: generate Brazilian phone variants (with/without 9th digit)
