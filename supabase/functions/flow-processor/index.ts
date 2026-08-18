@@ -80,17 +80,28 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const BATCH_LIMIT = 10;
+    const BATCH_LIMIT = 40;
+    const POOL_LIMIT = 400;
     const now = new Date().toISOString();
 
-    // Early-return: only query account if there's actual work to do
-    const { data: readyExecutions } = await supabase
+    // Busca um pool maior e embaralha antes de processar. Isso reduz a
+    // contenção quando várias invocações concorrentes tentam reivindicar
+    // exatamente as mesmas execuções (o que travava o throughput em ~1/run).
+    const { data: readyPool } = await supabase
       .from("flow_executions")
       .select("*, current_step:flow_steps!current_step_id(*)")
       .in("status", READY_STATUSES)
       .lte("next_action_at", now)
       .order("next_action_at", { ascending: true })
-      .limit(BATCH_LIMIT);
+      .limit(POOL_LIMIT);
+
+    const shuffled = (readyPool || []).slice();
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    const readyExecutions = shuffled.slice(0, BATCH_LIMIT);
+
 
     if (!readyExecutions || readyExecutions.length === 0) {
       return new Response(
