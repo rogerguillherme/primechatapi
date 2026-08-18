@@ -249,8 +249,6 @@ export function CloudChatTab() {
       .channel("cloud-chat-global-rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_messages" }, () => {
         queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
-        queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
-        queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, () => {
         queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
@@ -323,7 +321,7 @@ export function CloudChatTab() {
     // Slow safety polling (only when this lead is open) — covers rare realtime gaps
     const interval = setInterval(() => {
       queryClient.invalidateQueries({ queryKey });
-    }, 10000);
+    }, 30_000);
 
     return () => {
       supabase.removeChannel(channel);

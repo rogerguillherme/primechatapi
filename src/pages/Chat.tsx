@@ -282,7 +282,7 @@ export default function Chat() {
     },
   });
 
-  // Realtime + polling fallback
+  // Realtime with a slow polling fallback for rare subscription gaps.
   useEffect(() => {
     const channel = supabase
       .channel("chat-realtime")
@@ -294,7 +294,6 @@ export default function Chat() {
           if (row?.lead_id === selectedLeadId) {
             queryClient.invalidateQueries({ queryKey: ["chat-messages", selectedLeadId] });
           }
-          queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
           queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
         }
       )
@@ -308,10 +307,11 @@ export default function Chat() {
       .subscribe();
 
     const interval = setInterval(() => {
-      queryClient.invalidateQueries({ queryKey: ["chat-messages", selectedLeadId] });
+      if (selectedLeadId) {
+        queryClient.invalidateQueries({ queryKey: ["chat-messages", selectedLeadId] });
+      }
       queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
-      queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
-    }, 5000);
+    }, 30_000);
 
     return () => {
       supabase.removeChannel(channel);

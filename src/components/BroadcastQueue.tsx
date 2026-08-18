@@ -157,7 +157,7 @@ export function BroadcastQueue() {
     return () => { supabase.removeChannel(channel); };
   }, [Object.keys(activeJobs).join(",")]);
 
-  // Also poll for delivery/read counts on active jobs
+  // Slow fallback for rare realtime subscription gaps.
   useEffect(() => {
     const processingJobs = Object.values(activeJobs).filter(
       (j) => j.status === "processing" || j.status === "pending"
@@ -183,7 +183,7 @@ export function BroadcastQueue() {
           }
         }
       }
-    }, 3000);
+    }, 30_000);
 
     return () => clearInterval(interval);
   }, [Object.keys(activeJobs).join(",")]);
