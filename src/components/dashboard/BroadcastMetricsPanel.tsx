@@ -148,7 +148,7 @@ export function BroadcastMetricsPanel() {
       // ficam os envios disparados por fluxo, que antes não eram contados.
       const templateMsgs = [
         ...logs,
-        ...(outboundRes.data || []).filter(
+        ...outboundRows.filter(
           (m: any) => !m.zapi_message_id || !broadcastWaIds.has(m.zapi_message_id)
         ),
       ];
