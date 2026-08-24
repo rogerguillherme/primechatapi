@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Shield, User, Loader2, ArrowLeft, RefreshCw, Instagram } from "lucide-react";
+import { Plus, Pencil, Trash2, Shield, User, Loader2, ArrowLeft, RefreshCw, Instagram, Clock, Infinity as InfinityIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 interface AppUser {
@@ -23,6 +23,22 @@ interface AppUser {
   display_name: string;
   role: string;
   instagram_enabled: boolean;
+  access_expires_at: string | null;
+}
+
+/** Converte ISO -> valor aceito por <input type="datetime-local"> (hora local). */
+function isoToLocalInput(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function formatAccessDate(iso: string): string {
+  return new Date(iso).toLocaleString("pt-BR", {
+    day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+  });
 }
 
 class AdminFetchError extends Error {
@@ -111,7 +127,7 @@ export default function AdminUsers() {
   const { user } = useAuth();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
-  const [form, setForm] = useState({ email: "", password: "", display_name: "", role: "user", instagram_enabled: false });
+  const [form, setForm] = useState({ email: "", password: "", display_name: "", role: "user", instagram_enabled: false, access_unlimited: true, access_expires_at: "" });
 
   const isSuperAdmin = user?.email === "admin@primechat.com";
 
@@ -159,18 +175,26 @@ export default function AdminUsers() {
   const closeDialog = () => {
     setDialogOpen(false);
     setEditingUser(null);
-    setForm({ email: "", password: "", display_name: "", role: "user", instagram_enabled: false });
+    setForm({ email: "", password: "", display_name: "", role: "user", instagram_enabled: false, access_unlimited: true, access_expires_at: "" });
   };
 
   const openCreate = () => {
     setEditingUser(null);
-    setForm({ email: "", password: "", display_name: "", role: "user", instagram_enabled: false });
+    setForm({ email: "", password: "", display_name: "", role: "user", instagram_enabled: false, access_unlimited: true, access_expires_at: "" });
     setDialogOpen(true);
   };
 
   const openEdit = (u: AppUser) => {
     setEditingUser(u);
-    setForm({ email: u.email, password: "", display_name: u.display_name, role: u.role, instagram_enabled: u.instagram_enabled });
+    setForm({
+      email: u.email,
+      password: "",
+      display_name: u.display_name,
+      role: u.role,
+      instagram_enabled: u.instagram_enabled,
+      access_unlimited: !u.access_expires_at,
+      access_expires_at: isoToLocalInput(u.access_expires_at),
+    });
     setDialogOpen(true);
   };
 
@@ -185,6 +209,21 @@ export default function AdminUsers() {
 
     const normalizedPassword = form.password.trim();
 
+    // Acesso livre => NULL; com data => ISO. Validamos antes de enviar.
+    let accessExpiresAt: string | null = null;
+    if (!form.access_unlimited) {
+      if (!form.access_expires_at) {
+        toast.error("Informe a data limite de acesso ou marque como acesso livre");
+        return;
+      }
+      const parsed = new Date(form.access_expires_at);
+      if (Number.isNaN(parsed.getTime())) {
+        toast.error("Data limite de acesso inválida");
+        return;
+      }
+      accessExpiresAt = parsed.toISOString();
+    }
+
     if (editingUser) {
       updateMutation.mutate({
         user_id: editingUser.id,
@@ -193,9 +232,17 @@ export default function AdminUsers() {
         display_name: form.display_name,
         role: form.role,
         instagram_enabled: form.instagram_enabled,
+        access_expires_at: accessExpiresAt,
       });
     } else {
-      createMutation.mutate({ ...form, password: normalizedPassword });
+      createMutation.mutate({
+        email: form.email,
+        display_name: form.display_name,
+        role: form.role,
+        instagram_enabled: form.instagram_enabled,
+        password: normalizedPassword,
+        access_expires_at: accessExpiresAt,
+      });
     }
   };
 
@@ -259,6 +306,7 @@ export default function AdminUsers() {
                   <TableHead>Email</TableHead>
                   <TableHead>Cargo</TableHead>
                   <TableHead className="text-center">Instagram</TableHead>
+                  <TableHead>Acesso</TableHead>
                   <TableHead>Último acesso</TableHead>
                   <TableHead className="w-[100px]">Ações</TableHead>
                 </TableRow>
@@ -279,6 +327,21 @@ export default function AdminUsers() {
                         checked={u.instagram_enabled}
                         onCheckedChange={(v) => updateMutation.mutate({ user_id: u.id, instagram_enabled: v })}
                       />
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {!u.access_expires_at ? (
+                        <Badge variant="secondary" className="gap-1">
+                          <InfinityIcon size={12} /> Livre
+                        </Badge>
+                      ) : new Date(u.access_expires_at) < new Date() ? (
+                        <Badge variant="destructive" className="gap-1">
+                          <Clock size={12} /> Expirou {formatAccessDate(u.access_expires_at)}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="gap-1">
+                          <Clock size={12} /> Até {formatAccessDate(u.access_expires_at)}
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {u.last_sign_in_at
@@ -312,7 +375,7 @@ export default function AdminUsers() {
                 ))}
                 {users.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                       Nenhum usuário encontrado
                     </TableCell>
                   </TableRow>
@@ -378,6 +441,36 @@ export default function AdminUsers() {
                 checked={form.instagram_enabled}
                 onCheckedChange={(v) => setForm({ ...form, instagram_enabled: v })}
               />
+            </div>
+            <div className="space-y-3 rounded-lg border p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Clock size={16} className="text-primary" />
+                  <div>
+                    <p className="text-sm font-medium">Acesso livre</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Sem data limite. Desative para definir até quando a conta pode acessar.
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  checked={form.access_unlimited}
+                  onCheckedChange={(v) => setForm({ ...form, access_unlimited: v })}
+                />
+              </div>
+              {!form.access_unlimited && (
+                <div className="space-y-1.5">
+                  <Label>Acesso válido até</Label>
+                  <Input
+                    type="datetime-local"
+                    value={form.access_expires_at}
+                    onChange={(e) => setForm({ ...form, access_expires_at: e.target.value })}
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Após essa data o usuário é bloqueado ao entrar no sistema.
+                  </p>
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={closeDialog}>Cancelar</Button>
