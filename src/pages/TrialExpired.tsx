@@ -13,9 +13,9 @@ export default function TrialExpired() {
           <div className="mx-auto w-12 h-12 rounded-xl bg-muted flex items-center justify-center">
             <Clock className="h-6 w-6 text-muted-foreground" />
           </div>
-          <CardTitle className="text-2xl font-display">Seu teste grátis acabou</CardTitle>
+          <CardTitle className="text-2xl font-display">Seu acesso expirou</CardTitle>
           <CardDescription>
-            Os 7 dias de teste terminaram. Fale com a gente para continuar usando o Prime Chat.
+            O período de acesso desta conta chegou ao fim. Fale com a gente para liberar novamente o Prime Chat.
           </CardDescription>
         </CardHeader>
         <CardContent>
