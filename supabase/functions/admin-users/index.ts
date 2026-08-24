@@ -83,9 +83,15 @@ serve(async (req) => {
       const roleMap = new Map<string, string>();
       roles?.forEach((r: any) => roleMap.set(r.user_id, r.role));
 
-      const { data: profiles } = await supabaseAdmin.from("profiles").select("user_id, instagram_enabled");
+      const { data: profiles } = await supabaseAdmin
+        .from("profiles")
+        .select("user_id, instagram_enabled, trial_ends_at");
       const igMap = new Map<string, boolean>();
-      profiles?.forEach((p: any) => igMap.set(p.user_id, !!p.instagram_enabled));
+      const expiryMap = new Map<string, string | null>();
+      profiles?.forEach((p: any) => {
+        igMap.set(p.user_id, !!p.instagram_enabled);
+        expiryMap.set(p.user_id, p.trial_ends_at ?? null);
+      });
 
       const mapped = users.map((u: any) => ({
         id: u.id,
@@ -95,6 +101,7 @@ serve(async (req) => {
         display_name: u.user_metadata?.full_name || u.user_metadata?.name || "",
         role: roleMap.get(u.id) || "user",
         instagram_enabled: igMap.get(u.id) || false,
+        access_expires_at: expiryMap.get(u.id) ?? null,
       }));
 
       return jsonResponse(mapped);
@@ -102,7 +109,12 @@ serve(async (req) => {
 
     // CREATE USER
     if (req.method === "POST" && action === "create") {
-      const { email, password, display_name, role } = await req.json();
+      const { email, password, display_name, role, access_expires_at } = await req.json();
+
+      // Validação: quando informada, a data de expiração precisa ser válida.
+      if (access_expires_at != null && Number.isNaN(new Date(access_expires_at).getTime())) {
+        return expectedErrorResponse("Data de expiração de acesso inválida");
+      }
       const { data, error } = await supabaseAdmin.auth.admin.createUser({
         email,
         password,
@@ -125,6 +137,15 @@ serve(async (req) => {
         });
       }
 
+      if (data.user) {
+        // trial_ends_at guarda o limite de acesso da conta (NULL = acesso livre).
+        const { error: expErr } = await supabaseAdmin
+          .from("profiles")
+          .update({ trial_ends_at: access_expires_at ?? null })
+          .eq("user_id", data.user.id);
+        if (expErr) console.error("Error setting access expiry:", expErr.message);
+      }
+
       return jsonResponse({ success: true, user: data.user });
     }
 
@@ -138,6 +159,12 @@ serve(async (req) => {
       }
 
       const { user_id, email, password, display_name, role, instagram_enabled } = body;
+      const hasAccessExpiry = Object.prototype.hasOwnProperty.call(body, "access_expires_at");
+      const accessExpiresAt: string | null = body.access_expires_at ?? null;
+
+      if (hasAccessExpiry && accessExpiresAt != null && Number.isNaN(new Date(accessExpiresAt).getTime())) {
+        return expectedErrorResponse("Data de expiração de acesso inválida");
+      }
 
       if (!user_id) {
         return jsonResponse({ error: "user_id é obrigatório" }, 400);
@@ -180,6 +207,14 @@ serve(async (req) => {
           .update({ instagram_enabled })
           .eq("user_id", user_id);
         if (profErr) console.error("Error updating instagram_enabled:", profErr.message);
+      }
+
+      if (hasAccessExpiry) {
+        const { error: expErr } = await supabaseAdmin
+          .from("profiles")
+          .update({ trial_ends_at: accessExpiresAt })
+          .eq("user_id", user_id);
+        if (expErr) console.error("Error updating access expiry:", expErr.message);
       }
 
       return jsonResponse({ success: true });
