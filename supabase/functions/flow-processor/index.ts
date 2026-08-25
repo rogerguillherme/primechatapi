@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { applyStepLabels } from "../_shared/flow-matching.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -217,6 +218,16 @@ Deno.serve(async (req) => {
             updated_at: new Date().toISOString(),
           }).eq("id", exec.id);
           exec.metadata = { ...(exec.metadata || {}), account_id: executionAccountId };
+        }
+
+        // Etiquetas configuradas neste passo (rastreia por onde o lead passou)
+        await applyStepLabels(supabase, currentStep, lead?.id);
+
+        // TAG: passo dedicado a etiquetar — as etiquetas já foram aplicadas acima
+        if (currentStep.step_type === "tag") {
+          await advanceToNextStep(exec, currentStep, lead, supabase, supabaseUrl, supabaseKey, executionAccountId);
+          processed++;
+          continue;
         }
 
         if (currentStep.step_type === "no_response" || exec.status === "waiting_no_response") {
@@ -607,7 +618,8 @@ async function advanceToNextStep(
     nextStep.step_type === "message" ||
     nextStep.step_type === "interactive_buttons" ||
     nextStep.step_type === "cta_url" ||
-    nextStep.step_type === "blacklist"
+    nextStep.step_type === "blacklist" ||
+    nextStep.step_type === "tag"
   ) {
     await supabase.from("flow_executions").update({
       current_step_id: nextStep.id,

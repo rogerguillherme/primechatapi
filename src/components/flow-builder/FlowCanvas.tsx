@@ -22,13 +22,14 @@ import { CtaUrlNode } from "./nodes/CtaUrlNode";
 import { NoResponseNode } from "./nodes/NoResponseNode";
 import { AiAgentNode } from "./nodes/AiAgentNode";
 import { BlacklistNode } from "./nodes/BlacklistNode";
+import { TagNode } from "./nodes/TagNode";
 import { NodeEditPanel } from "./NodeEditPanel";
 import { InsertStepEdge, type InsertableStepType } from "./InsertStepEdge";
 import { SequenceComposer, type GeneratedSequenceStep } from "./SequenceComposer";
 import { Button } from "@/components/ui/button";
 import {
   MessageSquare, Clock, GitBranch, MousePointerClick, ExternalLink, Braces, TimerOff, Bot, Ban,
-  Layers,
+  Layers, Tag,
 } from "lucide-react";
 
 const nodeTypes: NodeTypes = {
@@ -41,6 +42,7 @@ const nodeTypes: NodeTypes = {
   no_response: NoResponseNode,
   ai_agent: AiAgentNode,
   blacklist: BlacklistNode,
+  tag: TagNode,
 };
 
 const edgeTypes: EdgeTypes = {
@@ -63,7 +65,11 @@ const createDefaultNodeData = (type: InsertableStepType): Record<string, unknown
     return { delay_minutes: 60 };
   }
   if (type === "condition") {
-    return { trigger_value: "" };
+    // match_mode: "exact" (igual), "contains" (parecida) ou "ai" (IA avalia a resposta)
+    return { trigger_value: "", match_mode: "exact", ai_match_description: "" };
+  }
+  if (type === "tag") {
+    return { label_ids: [] };
   }
   if (type === "interactive_buttons") {
     return { custom_message: "", buttons: [{ id: crypto.randomUUID(), title: "" }] };
@@ -389,7 +395,7 @@ export function FlowCanvas({
           <Clock size={12} /> Delay
         </Button>
         <Button variant="outline" size="sm" onClick={() => addNode("condition")} className="gap-1.5 text-xs h-8">
-          <GitBranch size={12} /> Condição
+          <GitBranch size={12} /> Resposta do Lead
         </Button>
         <Button variant="outline" size="sm" onClick={() => addNode("interactive_buttons")} className="gap-1.5 text-xs h-8">
           <MousePointerClick size={12} /> Botões
@@ -402,6 +408,9 @@ export function FlowCanvas({
         </Button>
         <Button variant="outline" size="sm" onClick={() => addNode("ai_agent")} className="gap-1.5 text-xs h-8">
           <Bot size={12} /> Agente IA
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => addNode("tag")} className="gap-1.5 text-xs h-8">
+          <Tag size={12} /> Etiqueta
         </Button>
         <Button variant="outline" size="sm" onClick={() => addNode("blacklist")} className="gap-1.5 text-xs h-8 text-destructive hover:text-destructive">
           <Ban size={12} /> Blacklist

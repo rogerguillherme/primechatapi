@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { X, Plus, Trash2, Upload, Image as ImageIcon, Loader2, FileText, Video as VideoIcon } from "lucide-react";
 import { useAiAgents } from "@/hooks/use-ai-agents";
+import { useChatLabels } from "@/hooks/use-chat-labels";
 import { useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -31,6 +32,7 @@ export function NodeEditPanel({ node, templates, onUpdate, onClose, variationEna
     no_response: "Sem Resposta",
     ai_agent: "Agente IA",
     blacklist: "Blacklist",
+    tag: "Etiqueta",
   };
 
   return (
@@ -150,20 +152,68 @@ export function NodeEditPanel({ node, templates, onUpdate, onClose, variationEna
         )}
 
         {type === "condition" && (
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label className="text-xs">Como comparar a resposta do lead</Label>
+              <Select
+                value={(data.match_mode as string) || "exact"}
+                onValueChange={(v) => onUpdate({ match_mode: v })}
+              >
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="exact">Exatamente igual</SelectItem>
+                  <SelectItem value="contains">Parecida (contém / aproximada)</SelectItem>
+                  <SelectItem value="ai">Parecida com avaliação da IA</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                {(data.match_mode as string) === "ai"
+                  ? "A IA lê a resposta do lead e decide se ela corresponde à intenção descrita abaixo."
+                  : (data.match_mode as string) === "contains"
+                  ? "Aceita respostas que contenham a palavra ou sejam muito parecidas (ignora acentos e erros leves)."
+                  : "O texto do lead precisa ser idêntico a uma das palavras abaixo."}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs">Palavras / payloads que ativam (uma por linha ou separadas por vírgula)</Label>
+              <textarea
+                value={(data.trigger_value as string) || ""}
+                onChange={(e) => onUpdate({ trigger_value: e.target.value })}
+                placeholder={"Ex:\nsim\nquero saber mais\nok"}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm min-h-[80px] resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                rows={4}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Também usadas como referência quando a IA avalia a resposta.
+              </p>
+            </div>
+
+            {(data.match_mode as string) === "ai" && (
+              <div className="space-y-2">
+                <Label className="text-xs">O que a IA deve considerar como "resposta correta"</Label>
+                <textarea
+                  value={(data.ai_match_description as string) || ""}
+                  onChange={(e) => onUpdate({ ai_match_description: e.target.value })}
+                  placeholder="Ex: o lead demonstrou interesse em participar, mesmo que com outras palavras"
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm min-h-[70px] resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  rows={3}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {type === "tag" && (
           <div className="space-y-2">
-            <Label className="text-xs">Palavras / payloads que ativam (uma por linha ou separadas por vírgula)</Label>
-            <textarea
-              value={(data.trigger_value as string) || ""}
-              onChange={(e) => onUpdate({ trigger_value: e.target.value })}
-              placeholder={"Ex:\nsim\nquero saber mais\nok"}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm min-h-[80px] resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              rows={4}
-            />
             <p className="text-[11px] text-muted-foreground">
-              O fluxo avança se a resposta do lead corresponder a qualquer uma das palavras (separe por vírgula, ponto-e-vírgula ou nova linha).
+              Ao passar por este passo, as etiquetas selecionadas são aplicadas ao lead.
             </p>
           </div>
         )}
+
 
         {type === "interactive_buttons" && (
           <>
@@ -312,7 +362,68 @@ export function NodeEditPanel({ node, templates, onUpdate, onClose, variationEna
             </div>
           </div>
         )}
+
+        {type !== "blacklist" && (
+          <StepLabelsField
+            selected={(data.label_ids as string[]) || []}
+            onChange={(ids) => onUpdate({ label_ids: ids })}
+          />
+        )}
       </div>
+    </div>
+  );
+}
+
+/** Etiquetas aplicadas ao lead quando ele passa por este passo do fluxo. */
+function StepLabelsField({
+  selected,
+  onChange,
+}: {
+  selected: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  const { labels, isLoading } = useChatLabels();
+
+  const toggle = (id: string) => {
+    onChange(selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id]);
+  };
+
+  return (
+    <div className="space-y-2 border-t border-border pt-4">
+      <Label className="text-xs">Etiquetas ao passar por este passo</Label>
+      {isLoading ? (
+        <p className="text-[11px] text-muted-foreground">Carregando etiquetas...</p>
+      ) : labels.length === 0 ? (
+        <p className="text-[11px] text-muted-foreground">
+          Nenhuma etiqueta criada ainda. Crie etiquetas nas configurações do chat.
+        </p>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {labels.map((l) => {
+            const active = selected.includes(l.id);
+            return (
+              <button
+                key={l.id}
+                type="button"
+                onClick={() => toggle(l.id)}
+                className={`text-[11px] px-2 py-1 rounded-md border transition-colors ${
+                  active ? "text-background" : "text-foreground bg-background hover:bg-muted"
+                }`}
+                style={
+                  active
+                    ? { backgroundColor: l.color, borderColor: l.color }
+                    : { borderColor: l.color }
+                }
+              >
+                {l.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <p className="text-[11px] text-muted-foreground">
+        Útil para acompanhar por quais etapas do fluxo cada lead passou.
+      </p>
     </div>
   );
 }
