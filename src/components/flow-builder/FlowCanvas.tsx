@@ -24,9 +24,11 @@ import { AiAgentNode } from "./nodes/AiAgentNode";
 import { BlacklistNode } from "./nodes/BlacklistNode";
 import { NodeEditPanel } from "./NodeEditPanel";
 import { InsertStepEdge, type InsertableStepType } from "./InsertStepEdge";
+import { SequenceComposer, type GeneratedSequenceStep } from "./SequenceComposer";
 import { Button } from "@/components/ui/button";
 import {
   MessageSquare, Clock, GitBranch, MousePointerClick, ExternalLink, Braces, TimerOff, Bot, Ban,
+  Layers,
 } from "lucide-react";
 
 const nodeTypes: NodeTypes = {
