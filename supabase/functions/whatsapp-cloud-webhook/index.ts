@@ -183,8 +183,10 @@ async function resolveMatchedFlowStep(
     return branchSteps[0];
   }
 
-  // Fallback: if there are multiple children and one has NO trigger_value, it's the default branch
-  const defaultBranch = branchSteps.find(s => !s.trigger_value || s.trigger_value.trim() === "");
+  // Fallback: if there are multiple children and one has NO trigger_value, it's the default branch.
+  // A "no_response" child is a timeout branch, not a reply branch; when the lead replies,
+  // the timeout must stop instead of being selected again as the next matched step.
+  const defaultBranch = branchSteps.find((s) => s.step_type !== "no_response" && (!s.trigger_value || s.trigger_value.trim() === ""));
   if (defaultBranch) return defaultBranch;
 
   return null;
