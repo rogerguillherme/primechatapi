@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Send, FileText, Smile, Check, CheckCheck, Paperclip, AlertCircle, Bot } from "lucide-react";
+import { Send, FileText, Smile, Check, CheckCheck, Paperclip, AlertCircle, Bot, User, Columns3, Zap, Workflow } from "lucide-react";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,8 @@ import { useToast } from "@/hooks/use-toast";
 import { ChatMediaBubble } from "@/components/ChatMediaBubble";
 import { AudioRecorder } from "@/components/AudioRecorder";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
+import { ContactInfoSheet } from "@/components/chat/ContactInfoSheet";
+import { startFlowForLead } from "@/lib/startFlowForLead";
 
 interface LeadChatDrawerProps {
   lead: { id: string; name: string; phone: string } | null;
@@ -43,6 +45,8 @@ function formatDateSeparator(date: Date) {
 export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps) {
   const [message, setMessage] = useState("");
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+  const [contactOpen, setContactOpen] = useState(false);
+  const [contactTab, setContactTab] = useState<"info" | "edit">("info");
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -120,7 +124,75 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
     },
   });
 
+  // ── Etapas do Kanban: permitem mover o lead direto do cabeçalho da conversa ──
+  const { data: pipelineStages = [] } = useQuery({
+    queryKey: ["pipeline-stages-chat"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pipeline_stages")
+        .select("id, name, color, position")
+        .order("position");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: open,
+  });
+
+  const moveStageMutation = useMutation({
+    mutationFn: async (stageId: string) => {
+      if (!lead) throw new Error("Nenhuma conversa selecionada");
+      const { error } = await supabase.from("leads").update({ stage_id: stageId }).eq("id", lead.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: "Lead movido de etapa" });
+      queryClient.invalidateQueries({ queryKey: ["kanban-leads"] });
+      queryClient.invalidateQueries({ queryKey: ["contact-info-lead", lead?.id] });
+    },
+    onError: (err: any) => {
+      toast({ title: "Erro ao mover", description: err.message, variant: "destructive" });
+    },
+  });
+
+  // ── Atalhos: mensagens rápidas ou ativação de fluxos já criados ──
+  const { data: shortcuts = [] } = useQuery({
+    queryKey: ["chat-shortcuts-active"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("chat_shortcuts")
+        .select("*")
+        .eq("active", true)
+        .order("command");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: open,
+  });
+
+  const runShortcut = useCallback(async (shortcut: any) => {
+    if (!lead) return;
+    if (shortcut.action_type === "flow") {
+      try {
+        await startFlowForLead({
+          flowId: shortcut.flow_id,
+          leadId: lead.id,
+          accountId: selectedAccountId || defaultAccount?.id || null,
+        });
+        toast({ title: `Fluxo /${shortcut.command} iniciado` });
+      } catch (err: any) {
+        toast({ title: "Erro ao iniciar fluxo", description: err.message, variant: "destructive" });
+      }
+      return;
+    }
+    const text = (shortcut.message || "")
+      .replace(/\{nome\}/gi, lead.name || "")
+      .replace(/\{telefone\}/gi, lead.phone || "");
+    setMessage(text);
+    textareaRef.current?.focus();
+  }, [lead, selectedAccountId, defaultAccount, toast]);
+
   const { templates } = useUserTemplates(open);
+
 
   const { data: accountTemplates = [] } = useQuery({
     queryKey: ["account-templates"],
@@ -266,10 +338,57 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
               <div className={cn("w-10 h-10 rounded-full flex items-center justify-center text-white font-medium text-sm", getAvatarColor(lead.name))}>
                 {getInitials(lead.name)}
               </div>
-              <div className="flex-1 min-w-0">
+              <button
+                type="button"
+                onClick={() => { setContactTab("info"); setContactOpen(true); }}
+                className="flex-1 min-w-0 text-left rounded-md px-1 py-0.5 hover:bg-sidebar-foreground/10 transition-colors"
+                title="Ver dados do contato"
+              >
                 <p className="font-medium text-[15px] text-sidebar-foreground truncate">{lead.name}</p>
                 <p className="text-xs text-sidebar-foreground/50">{lead.phone}</p>
-              </div>
+              </button>
+
+              {/* Dados do contato */}
+              <button
+                type="button"
+                onClick={() => { setContactTab("info"); setContactOpen(true); }}
+                title="Dados do contato"
+                className="h-8 w-8 rounded-md inline-flex items-center justify-center border border-sidebar-foreground/20 text-sidebar-foreground/70 hover:bg-sidebar-foreground/10 transition-colors"
+              >
+                <User size={15} />
+              </button>
+
+              {/* Mover para etapa do Kanban */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    title="Mover para etapa do Kanban"
+                    className="h-8 w-8 rounded-md inline-flex items-center justify-center border border-sidebar-foreground/20 text-sidebar-foreground/70 hover:bg-sidebar-foreground/10 transition-colors"
+                  >
+                    <Columns3 size={15} />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 max-h-72 overflow-y-auto">
+                  <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">Mover para etapa</div>
+                  {pipelineStages.length === 0 ? (
+                    <div className="px-2 py-3 text-xs text-muted-foreground">Nenhuma etapa criada.</div>
+                  ) : pipelineStages.map((stage: any) => (
+                    <DropdownMenuItem
+                      key={stage.id}
+                      onClick={() => moveStageMutation.mutate(stage.id)}
+                      className="gap-2"
+                    >
+                      <span
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                        style={{ background: stage.color || "hsl(var(--primary))" }}
+                      />
+                      <span className="truncate">{stage.name}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
               {aiMode === "selected" && (
                 <button
                   type="button"
@@ -420,6 +539,39 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
             onChange={handleFileSelect}
           />
           <div className="flex items-end gap-1.5">
+            {/* Atalhos: mensagem rápida ou fluxo */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  title="Atalhos (mensagens rápidas e fluxos)"
+                  className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 mb-[2px]"
+                >
+                  <Zap size={20} />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-72 max-h-72 overflow-y-auto">
+                <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">Atalhos</div>
+                {shortcuts.length === 0 ? (
+                  <div className="px-2 py-3 text-xs text-muted-foreground">
+                    Nenhum atalho criado. Configure em Configurações → Atalhos do chat.
+                  </div>
+                ) : shortcuts.map((s: any) => (
+                  <DropdownMenuItem key={s.id} onClick={() => runShortcut(s)} className="gap-2 items-start">
+                    {s.action_type === "flow"
+                      ? <Workflow size={14} className="mt-0.5 text-primary flex-shrink-0" />
+                      : <Zap size={14} className="mt-0.5 text-amber-500 flex-shrink-0" />}
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">/{s.command}</p>
+                      <p className="text-xs text-muted-foreground line-clamp-2">
+                        {s.action_type === "flow" ? "Ativar fluxo" : s.message}
+                      </p>
+                    </div>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
              {templates && templates.length > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -495,6 +647,13 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
             )}
           </div>
         </div>
+
+        <ContactInfoSheet
+          leadId={lead?.id ?? null}
+          open={contactOpen}
+          onOpenChange={setContactOpen}
+          defaultTab={contactTab}
+        />
       </SheetContent>
     </Sheet>
   );
