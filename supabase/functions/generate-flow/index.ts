@@ -58,6 +58,12 @@ type MediaMirrorResult = {
   fileName: string;
 };
 
+type CompiledDataCrazyFlow = {
+  steps: FlowStep[];
+  name: string;
+  description: string | null;
+};
+
 const AUDIO_EXTENSIONS: Record<string, string> = {
   "audio/mpeg": "mp3",
   "audio/mp3": "mp3",
@@ -393,7 +399,7 @@ async function compileDataCrazyAutomation(
   return steps;
 }
 
-async function tryCompileDataCrazyAttachments(attachments: Attachment[]): Promise<FlowStep[] | null> {
+async function tryCompileDataCrazyAttachments(attachments: Attachment[]): Promise<CompiledDataCrazyFlow | null> {
   const jsonAttachment = attachments.find((attachment) =>
     attachment.kind === "text" &&
     typeof attachment.text === "string" &&
@@ -411,8 +417,96 @@ async function tryCompileDataCrazyAttachments(attachments: Attachment[]): Promis
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey);
-  const steps = await compileDataCrazyAutomation(automations[0], supabase);
-  return steps.length > 0 ? steps : null;
+  const automation = automations[0];
+  const steps = await compileDataCrazyAutomation(automation, supabase);
+  return steps.length > 0
+    ? {
+      steps,
+      name: getString(automation.name) || "Fluxo importado",
+      description: getString(automation.description) || null,
+    }
+    : null;
+}
+
+async function resolvePersistTargetUser(req: Request, supabase: ReturnType<typeof createClient>, requestedUserId: string): Promise<string> {
+  const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+  if (!token) throw new Response(JSON.stringify({ error: "Login necessário para salvar o fluxo importado." }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+  const { data: authData, error } = await supabase.auth.getUser(token);
+  const requester = authData?.user;
+  if (error || !requester) throw new Response(JSON.stringify({ error: "Sessão inválida para salvar o fluxo importado." }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+  if (requester.id === requestedUserId) return requestedUserId;
+
+  const { data: isAdmin } = await supabase.rpc("has_role", { _user_id: requester.id, _role: "admin" });
+  if (isAdmin === true) return requestedUserId;
+
+  throw new Response(JSON.stringify({ error: "Sem permissão para salvar fluxo em outra conta." }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+}
+
+async function persistCompiledFlow(params: {
+  req: Request;
+  targetUserId: string;
+  flowName: string;
+  flowDescription: string | null;
+  flowKind: "api" | "whatsapp";
+  steps: FlowStep[];
+}): Promise<string> {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceRoleKey) throw new Error("Backend não configurado para salvar fluxos.");
+
+  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const ownerUserId = await resolvePersistTargetUser(params.req, supabase, params.targetUserId);
+
+  const { data: flow, error: flowError } = await supabase
+    .from("flows")
+    .insert({
+      user_id: ownerUserId,
+      name: params.flowName,
+      description: params.flowDescription,
+      active: true,
+      trigger_type: "manual",
+      flow_kind: params.flowKind,
+    })
+    .select("id")
+    .single();
+
+  if (flowError || !flow?.id) throw flowError || new Error("Falha ao criar fluxo.");
+
+  const stepIds = params.steps.map(() => crypto.randomUUID());
+  const payload = params.steps.map((step, index) => ({
+    id: stepIds[index],
+    flow_id: flow.id,
+    step_order: index,
+    step_type: step.type,
+    template_id: typeof step.data.template_id === "string" ? step.data.template_id : null,
+    custom_message: typeof step.data.custom_message === "string" ? step.data.custom_message : null,
+    delay_minutes: typeof step.data.delay_minutes === "number" ? step.data.delay_minutes : 0,
+    trigger_value: typeof step.data.trigger_value === "string" ? step.data.trigger_value : null,
+    parent_step_id: index === 0 ? null : stepIds[index - 1],
+    is_entry: index === 0,
+    buttons: Array.isArray(step.data.buttons) ? step.data.buttons : [],
+    timeout_minutes: typeof step.data.timeout_minutes === "number" ? step.data.timeout_minutes : null,
+    ai_agent_id: typeof step.data.agent_id === "string" ? step.data.agent_id : null,
+    ai_prompt: typeof step.data.ai_prompt === "string" ? step.data.ai_prompt : null,
+    max_interactions: typeof step.data.max_interactions === "number" ? step.data.max_interactions : null,
+    message_variations: Array.isArray(step.data.message_variations) ? step.data.message_variations : [],
+    template_variations: Array.isArray(step.data.template_variations) ? step.data.template_variations : [],
+    delay_min_seconds: typeof step.data.delay_min_seconds === "number" ? step.data.delay_min_seconds : null,
+    delay_max_seconds: typeof step.data.delay_max_seconds === "number" ? step.data.delay_max_seconds : null,
+    media_url: typeof step.data.media_url === "string" ? step.data.media_url : null,
+    media_type: typeof step.data.media_type === "string" ? step.data.media_type : null,
+    file_name: typeof step.data.file_name === "string" ? step.data.file_name : null,
+    match_mode: typeof step.data.match_mode === "string" ? step.data.match_mode : "exact",
+    ai_match_description: typeof step.data.ai_match_description === "string" ? step.data.ai_match_description : null,
+    label_ids: Array.isArray(step.data.label_ids) ? step.data.label_ids : [],
+  }));
+
+  const { error: stepsError } = await supabase.from("flow_steps").insert(payload);
+  if (stepsError) throw stepsError;
+
+  return flow.id as string;
 }
 
 type TranscriptionResult =
