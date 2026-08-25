@@ -381,6 +381,42 @@ export function CloudChatTab() {
     onError: (err: any) => toast.error(err.message || "Erro ao mover lead"),
   });
 
+  // ── TRANSFERIR ATENDIMENTO ──
+  const { user } = useAuth();
+  const { data: teamCtx } = useTeamContext();
+  // A listagem de membros só existe para o dono da conta (RLS/edge function).
+  const { data: teamMembers } = useTeamMembers(!!teamCtx?.isOwner);
+
+  /** Lista de atendentes disponíveis: o dono/eu + colaboradores. */
+  const agents = useMemo(() => {
+    const list: { id: string; label: string }[] = [];
+    if (user?.id) list.push({ id: user.id, label: `Eu (${user.email ?? "minha conta"})` });
+    for (const m of teamMembers || []) {
+      if (m.member_user_id === user?.id) continue;
+      list.push({ id: m.member_user_id, label: m.display_name || m.email });
+    }
+    return list;
+  }, [teamMembers, user?.id, user?.email]);
+
+  const transferLead = useMutation({
+    mutationFn: async (assignedTo: string | null) => {
+      if (!selectedLeadId) throw new Error("Nenhuma conversa selecionada");
+      const { error } = await supabase
+        .from("leads")
+        .update({ assigned_to: assignedTo })
+        .eq("id", selectedLeadId);
+      if (error) throw error;
+    },
+    onSuccess: (_d, assignedTo) => {
+      toast.success(assignedTo ? "Atendimento transferido" : "Atendente removido");
+      queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
+      queryClient.invalidateQueries({ queryKey: ["kanban-leads"] });
+      queryClient.invalidateQueries({ queryKey: ["contact-info-lead", selectedLeadId] });
+    },
+    onError: (err: any) => toast.error(err.message || "Erro ao transferir atendimento"),
+  });
+
+
   // ── ATALHOS DO CHAT ──
   const { data: shortcuts } = useQuery({
     queryKey: ["chat-shortcuts-active"],
