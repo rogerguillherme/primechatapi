@@ -99,6 +99,7 @@ export function FlowCanvas({
   nodes, edges, onNodesChange, onEdgesChange, setNodes, setEdges, templates, variationEnabled,
 }: FlowCanvasProps) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [sequenceOpen, setSequenceOpen] = useState(false);
 
   const onConnect = useCallback(
     (params: Connection) => {
