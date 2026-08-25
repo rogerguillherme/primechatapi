@@ -355,6 +355,41 @@ export default function Chat() {
 
   const selectedLead = leads?.find((l) => l.id === selectedLeadId);
 
+  // Etapas do Kanban usadas para mover o lead direto do cabeçalho da conversa.
+  const { data: pipelineStages } = useQuery({
+    queryKey: ["pipeline-stages-chat"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pipeline_stages")
+        .select("id, name, color, position")
+        .order("position");
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const moveLeadStage = useMutation({
+    mutationFn: async (stageId: string) => {
+      if (!selectedLeadId) throw new Error("Nenhuma conversa selecionada");
+      const { error } = await supabase
+        .from("leads")
+        .update({ stage_id: stageId })
+        .eq("id", selectedLeadId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: "Lead movido de etapa" });
+      queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
+      queryClient.invalidateQueries({ queryKey: ["kanban-leads"] });
+      queryClient.invalidateQueries({ queryKey: ["contact-info-lead", selectedLeadId] });
+    },
+    onError: (err: any) => {
+      toast({ title: "Erro ao mover", description: err.message, variant: "destructive" });
+    },
+  });
+
+
+
   const sendMutation = useMutation({
     mutationFn: async ({ text, mediaUrl, mediaType, fileName }: { text?: string; mediaUrl?: string; mediaType?: string; fileName?: string }) => {
       if (!selectedLead) throw new Error("No lead selected");
