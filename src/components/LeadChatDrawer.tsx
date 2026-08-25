@@ -539,6 +539,39 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
             onChange={handleFileSelect}
           />
           <div className="flex items-end gap-1.5">
+            {/* Atalhos: mensagem rápida ou fluxo */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  title="Atalhos (mensagens rápidas e fluxos)"
+                  className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 mb-[2px]"
+                >
+                  <Zap size={20} />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-72 max-h-72 overflow-y-auto">
+                <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">Atalhos</div>
+                {shortcuts.length === 0 ? (
+                  <div className="px-2 py-3 text-xs text-muted-foreground">
+                    Nenhum atalho criado. Configure em Configurações → Atalhos do chat.
+                  </div>
+                ) : shortcuts.map((s: any) => (
+                  <DropdownMenuItem key={s.id} onClick={() => runShortcut(s)} className="gap-2 items-start">
+                    {s.action_type === "flow"
+                      ? <Workflow size={14} className="mt-0.5 text-primary flex-shrink-0" />
+                      : <Zap size={14} className="mt-0.5 text-amber-500 flex-shrink-0" />}
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">/{s.command}</p>
+                      <p className="text-xs text-muted-foreground line-clamp-2">
+                        {s.action_type === "flow" ? "Ativar fluxo" : s.message}
+                      </p>
+                    </div>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
              {templates && templates.length > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
