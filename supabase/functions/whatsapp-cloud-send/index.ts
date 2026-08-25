@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { applyStageAutomations } from "../_shared/stage-automations.ts";
 import { resolveTemplateHeaderLink } from "../_shared/template-media.ts";
 
 const corsHeaders = {
@@ -733,8 +734,12 @@ Deno.serve(async (req) => {
       } else if (media_type === "audio") {
         body = { messaging_product: "whatsapp", to: cleanPhone, type: "audio", audio: { link: media_url } };
       } else {
-        const docFileName = (typeof file_name === "string" && file_name.trim())
-          ? (file_name.trim().toLowerCase().endsWith(".pdf") ? file_name.trim() : `${file_name.trim()}.pdf`)
+        // Preserva o nome/extensão original do arquivo (qualquer tipo, não só PDF).
+        const rawName = typeof file_name === "string" ? file_name.trim() : "";
+        const hasExt = /\.[a-z0-9]{2,5}$/i.test(rawName);
+        const urlExt = (media_url.split("?")[0].split(".").pop() || "").toLowerCase();
+        const docFileName = rawName
+          ? (hasExt ? rawName : (urlExt ? `${rawName}.${urlExt}` : rawName))
           : undefined;
         body = { messaging_product: "whatsapp", to: cleanPhone, type: "document", document: { link: media_url, caption: message || undefined, filename: docFileName } };
       }
@@ -844,6 +849,15 @@ Deno.serve(async (req) => {
           status: "failed",
           account_id: account_id || resolvedAccountId || null,
         });
+
+        // Regras de Kanban que reagem a falhas de envio.
+        const { data: failLead } = await supabase
+          .from("leads").select("user_id").eq("id", lead_id).maybeSingle();
+        await applyStageAutomations(supabase, {
+          userId: failLead?.user_id ?? null,
+          leadId: lead_id,
+          trigger: "send_failed",
+        });
       }
 
       const isKnownError = isTemplateNotFound || isParamsMismatch || isGenericUserError || isAuthError || isOutsideWindow || isInvalidPhone || isRateLimit;
@@ -887,6 +901,16 @@ Deno.serve(async (req) => {
       if (leadUpdateError) {
         console.error("Failed to update lead outbound activity:", leadUpdateError);
       }
+
+      // Regras de Kanban que reagem a mensagens enviadas.
+      const { data: sentLead } = await supabase
+        .from("leads").select("user_id").eq("id", lead_id).maybeSingle();
+      await applyStageAutomations(supabase, {
+        userId: sentLead?.user_id ?? null,
+        leadId: lead_id,
+        trigger: "outbound_message",
+        messageText: contentText,
+      });
     }
 
     return new Response(

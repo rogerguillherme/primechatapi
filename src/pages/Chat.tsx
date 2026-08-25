@@ -16,7 +16,7 @@ import {
   Search, Send, MessageSquare, FileText, User, Smile, Check, CheckCheck,
   MoreVertical, Phone, Video, ArrowLeft, Image, Paperclip, Mic,
   ShoppingBag, Clock, MessageCircleReply, RotateCcw, AlertCircle,
-  Bot, Users, PowerOff,
+  Bot, Users, PowerOff, Info, Pencil, Columns3,
 } from "lucide-react";
 import { format, isToday, isYesterday, isSameDay, addDays, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -30,6 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 import { DeleteOldLeadsDialog } from "@/components/chat/DeleteOldLeadsDialog";
 import { Trash2 } from "lucide-react";
+import { ContactInfoSheet } from "@/components/chat/ContactInfoSheet";
 
 type ChatTab = "novos_pedidos" | "aguardando_respostas" | "respondidas" | "reembolso";
 
@@ -79,6 +80,8 @@ export default function Chat() {
   const [activeTab, setActiveTab] = useState<ChatTab>("aguardando_respostas");
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [filterAccountId, setFilterAccountId] = useState<string | null>(null);
+  const [contactOpen, setContactOpen] = useState(false);
+  const [contactTab, setContactTab] = useState<"info" | "edit">("info");
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const queryClient = useQueryClient();
@@ -353,8 +356,43 @@ export default function Chat() {
 
   const selectedLead = leads?.find((l) => l.id === selectedLeadId);
 
+  // Etapas do Kanban usadas para mover o lead direto do cabeçalho da conversa.
+  const { data: pipelineStages } = useQuery({
+    queryKey: ["pipeline-stages-chat"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pipeline_stages")
+        .select("id, name, color, position")
+        .order("position");
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const moveLeadStage = useMutation({
+    mutationFn: async (stageId: string) => {
+      if (!selectedLeadId) throw new Error("Nenhuma conversa selecionada");
+      const { error } = await supabase
+        .from("leads")
+        .update({ stage_id: stageId })
+        .eq("id", selectedLeadId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: "Lead movido de etapa" });
+      queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
+      queryClient.invalidateQueries({ queryKey: ["kanban-leads"] });
+      queryClient.invalidateQueries({ queryKey: ["contact-info-lead", selectedLeadId] });
+    },
+    onError: (err: any) => {
+      toast({ title: "Erro ao mover", description: err.message, variant: "destructive" });
+    },
+  });
+
+
+
   const sendMutation = useMutation({
-    mutationFn: async ({ text, mediaUrl, mediaType }: { text?: string; mediaUrl?: string; mediaType?: string }) => {
+    mutationFn: async ({ text, mediaUrl, mediaType, fileName }: { text?: string; mediaUrl?: string; mediaType?: string; fileName?: string }) => {
       if (!selectedLead) throw new Error("No lead selected");
       const { data, error } = await supabase.functions.invoke("whatsapp-cloud-send", {
         body: {
@@ -363,6 +401,7 @@ export default function Chat() {
           lead_id: selectedLead.id,
           media_url: mediaUrl || undefined,
           media_type: mediaType || undefined,
+          file_name: fileName || undefined,
           account_id: selectedAccountId || undefined,
         },
       });
@@ -381,6 +420,16 @@ export default function Chat() {
 
   const uploadAndSendMedia = useCallback(async (file: File) => {
     if (!selectedLead) return;
+    // A Meta limita anexos a 100 MB; barramos antes do upload para evitar custo desnecessário.
+    const MAX_BYTES = 95 * 1024 * 1024;
+    if (file.size > MAX_BYTES) {
+      toast({
+        title: "Arquivo muito grande",
+        description: "O WhatsApp aceita anexos de até 95 MB.",
+        variant: "destructive",
+      });
+      return;
+    }
     try {
       const formData = new FormData();
       formData.append("file", file);
@@ -391,7 +440,11 @@ export default function Chat() {
       });
       if (error) throw error;
 
-      sendMutation.mutate({ mediaUrl: data.url, mediaType: data.media_type });
+      sendMutation.mutate({
+        mediaUrl: data.url,
+        mediaType: data.media_type,
+        fileName: data.file_name || file.name,
+      });
     } catch (err: any) {
       toast({ title: "Erro no upload", description: err.message, variant: "destructive" });
     }
@@ -405,10 +458,11 @@ export default function Chat() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) uploadAndSendMedia(file);
+    const files = Array.from(e.target.files || []);
+    for (const file of files) uploadAndSendMedia(file);
     if (e.target) e.target.value = "";
   }, [uploadAndSendMedia]);
+
 
   const handleSend = () => {
     const text = message.trim();
@@ -804,9 +858,59 @@ export default function Chat() {
                   <Bot size={18} />
                 </button>
 
-                <button className="p-2 rounded-full hover:bg-white/10 text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors">
-                  <Search size={18} />
+                {/* Dados do contato */}
+                <button
+                  onClick={() => { setContactTab("info"); setContactOpen(true); }}
+                  title="Ver dados do contato"
+                  className="p-2 rounded-full hover:bg-white/10 text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors"
+                >
+                  <Info size={18} />
                 </button>
+
+                {/* Editar contato */}
+                <button
+                  onClick={() => { setContactTab("edit"); setContactOpen(true); }}
+                  title="Editar contato"
+                  className="p-2 rounded-full hover:bg-white/10 text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors"
+                >
+                  <Pencil size={18} />
+                </button>
+
+                {/* Mover para outra etapa do Kanban */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      title="Mover para outra etapa do Kanban"
+                      className="p-2 rounded-full hover:bg-white/10 text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors"
+                    >
+                      <Columns3 size={18} />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                      Mover para etapa
+                    </div>
+                    {(pipelineStages || []).length === 0 && (
+                      <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                        Nenhuma etapa criada no Kanban
+                      </div>
+                    )}
+                    {(pipelineStages || []).map((stage) => (
+                      <DropdownMenuItem
+                        key={stage.id}
+                        onClick={() => moveLeadStage.mutate(stage.id)}
+                        className="gap-2"
+                      >
+                        <span
+                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: stage.color || "hsl(var(--primary))" }}
+                        />
+                        <span className="flex-1 truncate">{stage.name}</span>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
 
                 {/* Global AI mode menu */}
                 <DropdownMenu>
@@ -977,7 +1081,9 @@ export default function Chat() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*,video/*,audio/*"
+                accept="*/*"
+                multiple
+
                 className="hidden"
                 onChange={handleFileSelect}
               />
@@ -1055,6 +1161,14 @@ export default function Chat() {
           </div>
         )}
       </div>
+
+      {/* Dados / edição do contato + mudança de etapa */}
+      <ContactInfoSheet
+        leadId={selectedLeadId}
+        open={contactOpen}
+        onOpenChange={setContactOpen}
+        defaultTab={contactTab}
+      />
     </div>
   );
 }

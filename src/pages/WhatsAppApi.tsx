@@ -88,6 +88,7 @@ import { DashboardHome } from "@/pages/DashboardHome";
 import { HomeViewSetting } from "@/components/settings/HomeViewSetting";
 import { LeadDistributionSettings } from "@/components/settings/LeadDistributionSettings";
 import { ShareLinksSettings } from "@/components/settings/ShareLinksSettings";
+import { StageAutomationsSettings } from "@/components/settings/StageAutomationsSettings";
 
 import { TemplateStudio } from "@/components/templates/TemplateStudio";
 import { LeadsKanban } from "@/components/kanban/LeadsKanban";
@@ -2514,6 +2515,9 @@ export default function WhatsAppApi() {
 
           {/* Links de compartilhamento do número (frase, etiqueta e coluna) */}
           <ShareLinksSettings />
+
+          {/* Fluxos automáticos de mudança de coluna no Kanban */}
+          <StageAutomationsSettings />
 
 
 

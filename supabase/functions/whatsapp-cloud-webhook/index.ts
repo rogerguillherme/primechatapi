@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { applyStageAutomations } from "../_shared/stage-automations.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -835,6 +836,18 @@ Deno.serve(async (req) => {
         } catch (e) {
           console.error("[share-link] attribution failed:", e);
         }
+      }
+
+      // ── STAGE AUTOMATIONS ──
+      // Regras configuradas pelo usuário movem o lead de coluna do Kanban
+      // quando ele responde ou quando a mensagem contém palavras-chave.
+      if (lead && resolvedUserId) {
+        await applyStageAutomations(supabase, {
+          userId: resolvedUserId,
+          leadId: lead.id,
+          trigger: "inbound_message",
+          messageText: text || null,
+        });
       }
 
 
