@@ -270,10 +270,6 @@ function makeDelayStep(seconds: number): FlowStep {
   };
 }
 
-function appendDelayStep(steps: FlowStep[], seconds: number): void {
-  steps.push(makeDelayStep(seconds));
-}
-
 function dataCrazyDelaySeconds(block: DataCrazyBlock): number {
   const options = asObject(block.options);
   const delay = asObject(options?.delay);
@@ -391,7 +387,7 @@ async function compileDataCrazyAutomation(
   };
 
   const walk = async (blockId: string, parentRef: string | null, isEntry: boolean): Promise<string | null> => {
-    if (!blockId || visited.has(blockId)) return;
+    if (!blockId || visited.has(blockId)) return parentRef;
     visited.add(blockId);
 
     const block = blockById.get(blockId);
