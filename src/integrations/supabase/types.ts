@@ -801,6 +801,7 @@ export type Database = {
       flow_steps: {
         Row: {
           ai_agent_id: string | null
+          ai_match_description: string | null
           ai_prompt: string | null
           buttons: Json | null
           created_at: string
@@ -812,6 +813,8 @@ export type Database = {
           flow_id: string
           id: string
           is_entry: boolean
+          label_ids: string[]
+          match_mode: string
           max_interactions: number | null
           media_type: string | null
           media_url: string | null
@@ -826,6 +829,7 @@ export type Database = {
         }
         Insert: {
           ai_agent_id?: string | null
+          ai_match_description?: string | null
           ai_prompt?: string | null
           buttons?: Json | null
           created_at?: string
@@ -837,6 +841,8 @@ export type Database = {
           flow_id: string
           id?: string
           is_entry?: boolean
+          label_ids?: string[]
+          match_mode?: string
           max_interactions?: number | null
           media_type?: string | null
           media_url?: string | null
@@ -851,6 +857,7 @@ export type Database = {
         }
         Update: {
           ai_agent_id?: string | null
+          ai_match_description?: string | null
           ai_prompt?: string | null
           buttons?: Json | null
           created_at?: string
@@ -862,6 +869,8 @@ export type Database = {
           flow_id?: string
           id?: string
           is_entry?: boolean
+          label_ids?: string[]
+          match_mode?: string
           max_interactions?: number | null
           media_type?: string | null
           media_url?: string | null
