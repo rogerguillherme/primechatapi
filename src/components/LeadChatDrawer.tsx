@@ -338,10 +338,57 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
               <div className={cn("w-10 h-10 rounded-full flex items-center justify-center text-white font-medium text-sm", getAvatarColor(lead.name))}>
                 {getInitials(lead.name)}
               </div>
-              <div className="flex-1 min-w-0">
+              <button
+                type="button"
+                onClick={() => { setContactTab("info"); setContactOpen(true); }}
+                className="flex-1 min-w-0 text-left rounded-md px-1 py-0.5 hover:bg-sidebar-foreground/10 transition-colors"
+                title="Ver dados do contato"
+              >
                 <p className="font-medium text-[15px] text-sidebar-foreground truncate">{lead.name}</p>
                 <p className="text-xs text-sidebar-foreground/50">{lead.phone}</p>
-              </div>
+              </button>
+
+              {/* Dados do contato */}
+              <button
+                type="button"
+                onClick={() => { setContactTab("info"); setContactOpen(true); }}
+                title="Dados do contato"
+                className="h-8 w-8 rounded-md inline-flex items-center justify-center border border-sidebar-foreground/20 text-sidebar-foreground/70 hover:bg-sidebar-foreground/10 transition-colors"
+              >
+                <User size={15} />
+              </button>
+
+              {/* Mover para etapa do Kanban */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    title="Mover para etapa do Kanban"
+                    className="h-8 w-8 rounded-md inline-flex items-center justify-center border border-sidebar-foreground/20 text-sidebar-foreground/70 hover:bg-sidebar-foreground/10 transition-colors"
+                  >
+                    <Columns3 size={15} />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 max-h-72 overflow-y-auto">
+                  <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">Mover para etapa</div>
+                  {pipelineStages.length === 0 ? (
+                    <div className="px-2 py-3 text-xs text-muted-foreground">Nenhuma etapa criada.</div>
+                  ) : pipelineStages.map((stage: any) => (
+                    <DropdownMenuItem
+                      key={stage.id}
+                      onClick={() => moveStageMutation.mutate(stage.id)}
+                      className="gap-2"
+                    >
+                      <span
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                        style={{ background: stage.color || "hsl(var(--primary))" }}
+                      />
+                      <span className="truncate">{stage.name}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
               {aiMode === "selected" && (
                 <button
                   type="button"
