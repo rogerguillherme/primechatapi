@@ -61,6 +61,75 @@ SAÍDA: responda SOMENTE com o array JSON válido (sem markdown, sem comentário
 Cada item do array: { "type": "<tipo>", "data": { ... } }.
 IDs de botão: strings hexadecimais curtas e únicas (ex.: "a1b2c3").`;
 
+const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
+
+/**
+ * Transcreve um áudio em uma chamada isolada.
+ * Isolar a transcrição evita que o modelo misture bytes do áudio
+ * (base64) no texto das mensagens do fluxo.
+ */
+async function transcribeAudio(
+  base64: string,
+  format: string,
+  apiKey: string,
+): Promise<string> {
+  try {
+    const res = await fetch(GATEWAY_URL, {
+      method: "POST",
+      headers: { "Lovable-API-Key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "google/gemini-3-flash-preview",
+        temperature: 0,
+        messages: [
+          {
+            role: "system",
+            content:
+              "Transcreva o áudio literalmente, em português, preservando a ordem e as pausas como quebras de linha. Responda somente com a transcrição, sem comentários.",
+          },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Transcreva este áudio:" },
+              { type: "input_audio", input_audio: { data: base64, format } },
+            ],
+          },
+        ],
+      }),
+    });
+    if (!res.ok) {
+      console.error("transcription failed:", res.status, (await res.text()).slice(0, 300));
+      return "";
+    }
+    const data = await res.json();
+    const text: string = data?.choices?.[0]?.message?.content ?? "";
+    return sanitizeText(text).trim();
+  } catch (err) {
+    console.error("transcription error:", err);
+    return "";
+  }
+}
+
+/** Remove caracteres de controle e blocos binários/base64 longos. */
+function sanitizeText(value: string): string {
+  return value
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
+    .replace(/data:[a-z0-9/+.-]+;base64,[A-Za-z0-9+/=]+/gi, "")
+    .replace(/\b[A-Za-z0-9+/]{200,}={0,2}\b/g, "");
+}
+
+/** Aplica a limpeza recursivamente em todo o objeto de dados do passo. */
+function sanitizeDeep(value: unknown): unknown {
+  if (typeof value === "string") return sanitizeText(value);
+  if (Array.isArray(value)) return value.map(sanitizeDeep);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, sanitizeDeep(v)]),
+    );
+  }
+  return value;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
