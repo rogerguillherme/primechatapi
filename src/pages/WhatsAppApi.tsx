@@ -1828,16 +1828,19 @@ export default function WhatsAppApi() {
   const [activeMainTab, setActiveMainTab] = useState("home");
   const [flowTriggerType, setFlowTriggerType] = useState<string | undefined>(undefined);
   const [flowEditId, setFlowEditId] = useState<string | undefined>(undefined);
+  const [flowEditorOpen, setFlowEditorOpen] = useState(false);
 
   const handleCreateFlowFromWebhook = useCallback((triggerType: string) => {
     setFlowEditId(undefined);
     setFlowTriggerType(triggerType);
+    setFlowEditorOpen(true);
     setActiveMainTab("flows");
   }, []);
 
   const handleSelectFlowFromWebhook = useCallback((flowId: string, triggerType: string) => {
     setFlowTriggerType(undefined);
     setFlowEditId(flowId);
+    setFlowEditorOpen(true);
     setActiveMainTab("flows");
   }, []);
 
@@ -2990,12 +2993,21 @@ export default function WhatsAppApi() {
 
 
         {/* ── Flows Tab ── */}
-        <TabsContent value="flows" className="space-y-4 p-4 sm:p-6 max-w-6xl overflow-y-auto flex-1 m-0">
+        <TabsContent
+          value="flows"
+          className={cn(
+            "flex-1 m-0",
+            flowEditorOpen
+              ? "h-full overflow-hidden p-0 max-w-none"
+              : "space-y-4 p-4 sm:p-6 max-w-6xl overflow-y-auto"
+          )}
+        >
           <FlowBuilder
             key={flowTriggerType || flowEditId || "default"}
             initialTriggerType={flowTriggerType}
             initialFlowId={flowEditId}
-            onEditorClose={() => { setFlowEditId(undefined); setFlowTriggerType(undefined); }}
+            onEditorOpen={() => setFlowEditorOpen(true)}
+            onEditorClose={() => { setFlowEditorOpen(false); setFlowEditId(undefined); setFlowTriggerType(undefined); }}
           />
         </TabsContent>
 

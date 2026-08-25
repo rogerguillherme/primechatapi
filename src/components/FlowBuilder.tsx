@@ -979,7 +979,7 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
 }
 
 /* ── Main FlowBuilder Component ── */
-export function FlowBuilder({ initialTriggerType, initialFlowId, onEditorClose }: { initialTriggerType?: string; initialFlowId?: string; onEditorClose?: () => void }) {
+export function FlowBuilder({ initialTriggerType, initialFlowId, onEditorClose, onEditorOpen }: { initialTriggerType?: string; initialFlowId?: string; onEditorClose?: () => void; onEditorOpen?: () => void }) {
   const { user } = useAuth();
   const [editingFlow, setEditingFlow] = useState<Flow | null | undefined>(
     initialTriggerType ? null : undefined
@@ -1002,6 +1002,12 @@ export function FlowBuilder({ initialTriggerType, initialFlowId, onEditorClose }
     loadFlow();
   }, [initialFlowId, user]);
 
+  useEffect(() => {
+    if (editingFlow !== undefined) {
+      onEditorOpen?.();
+    }
+  }, [editingFlow, onEditorOpen]);
+
   const handleBack = () => {
     setEditingFlow(undefined);
     onEditorClose?.();
@@ -1009,7 +1015,7 @@ export function FlowBuilder({ initialTriggerType, initialFlowId, onEditorClose }
 
   if (editingFlow !== undefined) {
     return (
-      <div className="relative min-h-[calc(100vh-4rem)]">
+      <div className="relative h-full w-full">
         <FlowEditorView
           flow={editingFlow}
           onBack={handleBack}
