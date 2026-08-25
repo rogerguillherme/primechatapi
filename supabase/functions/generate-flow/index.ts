@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,6 +19,52 @@ type Attachment = {
   text?: string;
   dataUrl?: string;
   kind?: "text" | "pdf" | "image" | "audio";
+};
+
+type FlowStep = {
+  type: "message" | "delay" | "condition" | "interactive_buttons" | "cta_url" | "no_response" | "ai_agent" | "tag";
+  data: Record<string, unknown>;
+  ref?: string;
+  parentRef?: string | null;
+  isEntry?: boolean;
+};
+
+type DataCrazyMessage = {
+  name?: string;
+  group?: string;
+  stepId?: string;
+  options?: Record<string, unknown>;
+};
+
+type DataCrazyBlock = {
+  id?: string;
+  type?: string;
+  options?: Record<string, unknown>;
+};
+
+type DataCrazyAutomation = {
+  name?: string;
+  description?: string;
+  blocks?: DataCrazyBlock[];
+};
+
+type DataCrazyMediaCandidate = {
+  url: string;
+  fileName: string;
+  mimeType: string;
+  platform?: string;
+};
+
+type MediaMirrorResult = {
+  signedUrl: string;
+  mimeType: string;
+  fileName: string;
+};
+
+type CompiledDataCrazyFlow = {
+  steps: FlowStep[];
+  name: string;
+  description: string | null;
 };
 
 const AUDIO_EXTENSIONS: Record<string, string> = {
@@ -87,6 +134,418 @@ Cada item do array: { "type": "<tipo>", "data": { ... } }.
 IDs de botão: strings hexadecimais curtas e únicas (ex.: "a1b2c3").`;
 
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
+
+const mimeToMediaType = (mimeType: string): "image" | "video" | "audio" | "document" => {
+  const base = getBaseMimeType(mimeType);
+  if (base.startsWith("image/")) return "image";
+  if (base.startsWith("video/")) return "video";
+  if (base.startsWith("audio/")) return "audio";
+  return "document";
+};
+
+const safeFileName = (name: string, mimeType: string): string => {
+  const clean = (name || "midia").replace(/[^a-zA-Z0-9._ -]/g, "_").trim() || "midia";
+  if (/\.[a-z0-9]{2,5}$/i.test(clean)) return clean;
+  const ext = mimeType.includes("jpeg") ? "jpg"
+    : mimeType.includes("png") ? "png"
+      : mimeType.includes("webp") ? "webp"
+        : mimeType.includes("mp4") ? "mp4"
+          : mimeType.includes("mpeg") ? "mp3"
+            : mimeType.includes("ogg") ? "ogg"
+              : mimeType.includes("wav") ? "wav"
+                : "bin";
+  return `${clean}.${ext}`;
+};
+
+const getString = (value: unknown): string => typeof value === "string" ? value : "";
+const getNumber = (value: unknown): number => typeof value === "number" && Number.isFinite(value) ? value : 0;
+
+const normalizeDataCrazyText = (text: string): string =>
+  sanitizeText(text)
+    .replace(/\{\s*Primeiro nome do lead\s*\|\s*leadFirstName\s*\}/gi, "{nome}")
+    .replace(/\{\s*Nome do lead\s*\|\s*leadName\s*\}/gi, "{nome_completo}")
+    .replace(/\{\s*Telefone do lead\s*\|\s*leadPhone\s*\}/gi, "{telefone}");
+
+const parseJsonMaybe = (text: string): unknown => {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+};
+
+const asObject = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+
+const asMessages = (value: unknown): DataCrazyMessage[] =>
+  Array.isArray(value) ? value.filter((item): item is DataCrazyMessage => !!item && typeof item === "object") : [];
+
+const asBlocks = (value: unknown): DataCrazyBlock[] =>
+  Array.isArray(value) ? value.filter((item): item is DataCrazyBlock => !!item && typeof item === "object") : [];
+
+const asAutomations = (value: unknown): DataCrazyAutomation[] =>
+  Array.isArray(value) ? value.filter((item): item is DataCrazyAutomation => !!item && typeof item === "object") : [];
+
+function extractDataCrazyAutomations(parsed: unknown): DataCrazyAutomation[] {
+  const root = asObject(parsed);
+  const data = asObject(root?.data);
+  const direct = asAutomations(root?.automations);
+  const nested = asAutomations(data?.automations);
+  return nested.length > 0 ? nested : direct;
+}
+
+function pickDataCrazyMedia(options: Record<string, unknown>): DataCrazyMediaCandidate | null {
+  const platforms = Array.isArray(options.platforms)
+    ? options.platforms.filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
+    : [];
+
+  const platformPreferred = platforms.find((item) => getString(item.platform).toUpperCase() === "WHATSAPP" && getString(item.url))
+    || platforms.find((item) => getString(item.url));
+
+  const url = getString(platformPreferred?.url) || getString(options.url);
+  if (!url) return null;
+
+  const mimeType = getString(platformPreferred?.mimeType) || getString(options.mimeType) || "application/octet-stream";
+  const fileName = getString(platformPreferred?.filename) || getString(options.filename) || safeFileName("midia", mimeType);
+
+  return {
+    url,
+    mimeType,
+    fileName: safeFileName(fileName, mimeType),
+    platform: getString(platformPreferred?.platform) || undefined,
+  };
+}
+
+async function mirrorDataCrazyMedia(
+  candidate: DataCrazyMediaCandidate,
+  supabase: ReturnType<typeof createClient>,
+  cache: Map<string, MediaMirrorResult>,
+): Promise<MediaMirrorResult> {
+  const cached = cache.get(candidate.url);
+  if (cached) return cached;
+
+  try {
+    const source = await fetch(candidate.url, {
+      headers: { "User-Agent": "PrimeChat-FlowImporter/1.0" },
+    });
+    if (!source.ok) throw new Error(`download ${source.status}`);
+
+    const sourceType = getBaseMimeType(source.headers.get("content-type") || "") || candidate.mimeType;
+    const mimeType = getBaseMimeType(sourceType) || candidate.mimeType || "application/octet-stream";
+    const fileName = safeFileName(candidate.fileName, mimeType);
+    const extension = getFileExtension(fileName) || "bin";
+    const path = `flow-imports/${crypto.randomUUID()}.${extension}`;
+    const bytes = await source.arrayBuffer();
+
+    const { error: uploadError } = await supabase.storage
+      .from("chat-media")
+      .upload(path, bytes, { contentType: mimeType, upsert: false });
+    if (uploadError) throw uploadError;
+
+    const { data: signed, error: signError } = await supabase.storage
+      .from("chat-media")
+      .createSignedUrl(path, 60 * 60 * 24 * 365);
+    if (signError || !signed?.signedUrl) throw signError || new Error("Falha ao gerar URL assinada");
+
+    const result = { signedUrl: signed.signedUrl, mimeType, fileName };
+    cache.set(candidate.url, result);
+    return result;
+  } catch (error) {
+    console.error("Falha ao espelhar mídia do Data Crazy; mantendo URL original:", candidate.url, error);
+    const fallback = {
+      signedUrl: candidate.url,
+      mimeType: candidate.mimeType || "application/octet-stream",
+      fileName: candidate.fileName,
+    };
+    cache.set(candidate.url, fallback);
+    return fallback;
+  }
+}
+
+function makeDelayStep(seconds: number): FlowStep {
+  const safeSeconds = Math.max(1, Math.round(seconds || 1));
+  return {
+    type: "delay",
+    data: { delay_minutes: 0, delay_min_seconds: safeSeconds, delay_max_seconds: safeSeconds },
+  };
+}
+
+function dataCrazyDelaySeconds(block: DataCrazyBlock): number {
+  const options = asObject(block.options);
+  const delay = asObject(options?.delay);
+  const delayOptions = asObject(delay?.options);
+  const seconds = getNumber(delayOptions?.seconds) || getNumber(options?.seconds);
+  const minutes = getNumber(delayOptions?.minutes) || getNumber(options?.minutes);
+  const hours = getNumber(delayOptions?.hours) || getNumber(options?.hours);
+  const days = getNumber(delayOptions?.days) || getNumber(options?.days);
+  return seconds + minutes * 60 + hours * 3600 + days * 86400;
+}
+
+async function dataCrazyMessageToSteps(
+  message: DataCrazyMessage,
+  supabase: ReturnType<typeof createClient>,
+  mediaCache: Map<string, MediaMirrorResult>,
+): Promise<FlowStep[]> {
+  const options = asObject(message.options) || {};
+  const name = getString(message.name);
+  const ref = getString(message.stepId) || crypto.randomUUID();
+
+  if (name === "delay-message") {
+    return [{ ...makeDelayStep(getNumber(options.seconds) || 1), ref }];
+  }
+
+  if (name === "send-text-message") {
+    const text = normalizeDataCrazyText(getString(options.text));
+    const buttons = Array.isArray(options.buttons)
+      ? options.buttons.map((button) => asObject(button)).filter(Boolean)
+      : [];
+
+    if (buttons.length > 0) {
+      return [{
+        type: "interactive_buttons",
+        ref,
+        data: {
+          custom_message: text,
+          buttons: buttons.slice(0, 3).map((button, index) => ({
+            id: crypto.randomUUID().replace(/-/g, "").slice(0, 8),
+            title: (getString(button?.title) || getString(button?.text) || `Opção ${index + 1}`).slice(0, 20),
+          })),
+        },
+      }];
+    }
+
+    if (text.trim()) {
+      return [{
+        type: "message",
+        ref,
+        data: {
+          custom_message: text,
+          template_id: null,
+          media_url: null,
+          media_type: null,
+          message_variations: [],
+          template_variations: [],
+        },
+      }];
+    }
+    return [];
+  }
+
+  if (name === "send-file-message") {
+    const media = pickDataCrazyMedia(options);
+    if (!media) return [];
+    const mirrored = await mirrorDataCrazyMedia(media, supabase, mediaCache);
+    return [{
+      type: "message",
+      ref,
+      data: {
+        custom_message: normalizeDataCrazyText(getString(options.text)),
+        template_id: null,
+        media_url: mirrored.signedUrl,
+        media_type: mimeToMediaType(mirrored.mimeType),
+        file_name: mirrored.fileName,
+        message_variations: [],
+        template_variations: [],
+      },
+    }];
+  }
+
+  if (name === "text-input-message") {
+    const timeoutSeconds = getNumber(options.timeoutInSeconds);
+    return [{
+      type: "no_response",
+      ref,
+      data: { timeout_minutes: Math.max(1, Math.ceil((timeoutSeconds || 600) / 60)) },
+    }];
+  }
+
+  return [];
+}
+
+async function compileDataCrazyAutomation(
+  automation: DataCrazyAutomation,
+  supabase: ReturnType<typeof createClient>,
+): Promise<FlowStep[]> {
+  const blocks = asBlocks(automation.blocks);
+  const blockById = new Map(blocks.map((block) => [getString(block.id), block]).filter(([id]) => id));
+  const visited = new Set<string>();
+  const mediaCache = new Map<string, MediaMirrorResult>();
+  const steps: FlowStep[] = [];
+
+  const firstTrigger = blocks.find((block) => block.type === "trigger" && getString(asObject(block.options)?.nextBlockId));
+  const firstChat = blocks.find((block) => block.type === "chat");
+
+  const pushLinkedStep = (step: FlowStep, parentRef: string | null, isEntry: boolean): string => {
+    const ref = step.ref || crypto.randomUUID();
+    steps.push({
+      ...step,
+      ref,
+      parentRef,
+      isEntry,
+    });
+    return ref;
+  };
+
+  const walk = async (blockId: string, parentRef: string | null, isEntry: boolean): Promise<string | null> => {
+    if (!blockId || visited.has(blockId)) return parentRef;
+    visited.add(blockId);
+
+    const block = blockById.get(blockId);
+    if (!block) return parentRef;
+    const options = asObject(block.options) || {};
+    let currentParentRef = parentRef;
+    let nextIsEntry = isEntry;
+
+    if (block.type === "delay") {
+      currentParentRef = pushLinkedStep(
+        { ...makeDelayStep(dataCrazyDelaySeconds(block) || 1), ref: `block:${blockId}:delay` },
+        currentParentRef,
+        nextIsEntry,
+      );
+      nextIsEntry = false;
+    }
+
+    if (block.type === "chat") {
+      for (const message of asMessages(options.messages)) {
+        const convertedSteps = await dataCrazyMessageToSteps(message, supabase, mediaCache);
+        let lastInsertedRef: string | null = null;
+        for (const step of convertedSteps) {
+          lastInsertedRef = pushLinkedStep(step, currentParentRef, nextIsEntry);
+          currentParentRef = lastInsertedRef;
+          nextIsEntry = false;
+        }
+        const messageOptions = asObject(message.options) || {};
+        const timeoutNextBlockId = getString(messageOptions.timeoutNextBlockId);
+        if (message.name === "text-input-message" && timeoutNextBlockId && lastInsertedRef) {
+          await walk(timeoutNextBlockId, lastInsertedRef, false);
+        }
+      }
+    }
+
+    return await walk(getString(options.nextBlockId), currentParentRef, nextIsEntry) || currentParentRef;
+  };
+
+  await walk(getString(asObject(firstTrigger?.options)?.nextBlockId) || getString(firstChat?.id), null, true);
+  return steps;
+}
+
+async function tryCompileDataCrazyAttachments(attachments: Attachment[]): Promise<CompiledDataCrazyFlow | null> {
+  const jsonAttachment = attachments.find((attachment) =>
+    attachment.kind === "text" &&
+    typeof attachment.text === "string" &&
+    (attachment.name?.toLowerCase().endsWith(".json") || attachment.text.includes('"automations"'))
+  );
+  if (!jsonAttachment?.text) return null;
+
+  const automations = extractDataCrazyAutomations(parseJsonMaybe(jsonAttachment.text));
+  if (automations.length === 0) return null;
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error("Storage do backend não configurado para importar mídias do fluxo.");
+  }
+
+  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const automation = automations[0];
+  const steps = await compileDataCrazyAutomation(automation, supabase);
+  return steps.length > 0
+    ? {
+      steps,
+      name: getString(automation.name) || "Fluxo importado",
+      description: getString(automation.description) || null,
+    }
+    : null;
+}
+
+async function resolvePersistTargetUser(req: Request, supabase: ReturnType<typeof createClient>, requestedUserId: string): Promise<string> {
+  const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+  if (!token) throw new Response(JSON.stringify({ error: "Login necessário para salvar o fluxo importado." }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+  const { data: authData, error } = await supabase.auth.getUser(token);
+  const requester = authData?.user;
+  if (error || !requester) throw new Response(JSON.stringify({ error: "Sessão inválida para salvar o fluxo importado." }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+  if (requester.id === requestedUserId) return requestedUserId;
+
+  const { data: isAdmin } = await supabase.rpc("has_role", { _user_id: requester.id, _role: "admin" });
+  if (isAdmin === true) return requestedUserId;
+
+  throw new Response(JSON.stringify({ error: "Sem permissão para salvar fluxo em outra conta." }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+}
+
+async function persistCompiledFlow(params: {
+  req: Request;
+  targetUserId: string;
+  flowName: string;
+  flowDescription: string | null;
+  flowKind: "api" | "whatsapp";
+  steps: FlowStep[];
+}): Promise<string> {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceRoleKey) throw new Error("Backend não configurado para salvar fluxos.");
+
+  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const ownerUserId = await resolvePersistTargetUser(params.req, supabase, params.targetUserId);
+
+  const { data: flow, error: flowError } = await supabase
+    .from("flows")
+    .insert({
+      user_id: ownerUserId,
+      name: params.flowName,
+      description: params.flowDescription,
+      active: true,
+      trigger_type: "manual",
+      flow_kind: params.flowKind,
+    })
+    .select("id")
+    .single();
+
+  if (flowError || !flow?.id) throw flowError || new Error("Falha ao criar fluxo.");
+
+  const hasExplicitGraph = params.steps.some((step) => step.ref || step.parentRef !== undefined || step.isEntry !== undefined);
+  const stepIds = params.steps.map(() => crypto.randomUUID());
+  const refToId = new Map<string, string>();
+  params.steps.forEach((step, index) => {
+    refToId.set(step.ref || `step:${index}`, stepIds[index]);
+  });
+
+  const payload = params.steps.map((step, index) => ({
+    id: stepIds[index],
+    flow_id: flow.id,
+    step_order: index,
+    step_type: step.type,
+    template_id: typeof step.data.template_id === "string" ? step.data.template_id : null,
+    custom_message: typeof step.data.custom_message === "string" ? step.data.custom_message : null,
+    delay_minutes: typeof step.data.delay_minutes === "number" ? step.data.delay_minutes : 0,
+    trigger_value: typeof step.data.trigger_value === "string" ? step.data.trigger_value : null,
+    parent_step_id: hasExplicitGraph
+      ? (step.parentRef ? refToId.get(step.parentRef) || null : null)
+      : (index === 0 ? null : stepIds[index - 1]),
+    is_entry: hasExplicitGraph ? step.isEntry === true : index === 0,
+    buttons: Array.isArray(step.data.buttons) ? step.data.buttons : [],
+    timeout_minutes: typeof step.data.timeout_minutes === "number" ? step.data.timeout_minutes : null,
+    ai_agent_id: typeof step.data.agent_id === "string" ? step.data.agent_id : null,
+    ai_prompt: typeof step.data.ai_prompt === "string" ? step.data.ai_prompt : null,
+    max_interactions: typeof step.data.max_interactions === "number" ? step.data.max_interactions : null,
+    message_variations: Array.isArray(step.data.message_variations) ? step.data.message_variations : [],
+    template_variations: Array.isArray(step.data.template_variations) ? step.data.template_variations : [],
+    delay_min_seconds: typeof step.data.delay_min_seconds === "number" ? step.data.delay_min_seconds : null,
+    delay_max_seconds: typeof step.data.delay_max_seconds === "number" ? step.data.delay_max_seconds : null,
+    media_url: typeof step.data.media_url === "string" ? step.data.media_url : null,
+    media_type: typeof step.data.media_type === "string" ? step.data.media_type : null,
+    file_name: typeof step.data.file_name === "string" ? step.data.file_name : null,
+    match_mode: typeof step.data.match_mode === "string" ? step.data.match_mode : "exact",
+    ai_match_description: typeof step.data.ai_match_description === "string" ? step.data.ai_match_description : null,
+    label_ids: Array.isArray(step.data.label_ids) ? step.data.label_ids : [],
+  }));
+
+  const { error: stepsError } = await supabase.from("flow_steps").insert(payload);
+  if (stepsError) throw stepsError;
+
+  return flow.id as string;
+}
 
 type TranscriptionResult =
   | { ok: true; text: string }
@@ -253,6 +712,29 @@ serve(async (req) => {
       return json({ error: "Envie uma descrição ou um documento." }, 400);
     }
 
+    const dataCrazyFlow = await tryCompileDataCrazyAttachments(attachments);
+    if (dataCrazyFlow) {
+      if (body?.persist === true) {
+        const targetUserId = typeof body?.target_user_id === "string" ? body.target_user_id : "";
+        if (!targetUserId) return json({ error: "Conta de destino não informada." }, 400);
+        const requestedName = typeof body?.flow_name === "string" && body.flow_name.trim()
+          ? body.flow_name.trim()
+          : dataCrazyFlow.name;
+        const flowKind = body?.flow_kind === "whatsapp" ? "whatsapp" : "api";
+        const flowId = await persistCompiledFlow({
+          req,
+          targetUserId,
+          flowName: requestedName,
+          flowDescription: dataCrazyFlow.description,
+          flowKind,
+          steps: dataCrazyFlow.steps,
+        });
+        return json({ steps: dataCrazyFlow.steps, flow_id: flowId, persisted: true });
+      }
+
+      return json({ steps: dataCrazyFlow.steps, name: dataCrazyFlow.name, description: dataCrazyFlow.description });
+    }
+
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) return json({ error: "LOVABLE_API_KEY não configurada." }, 500);
 
@@ -386,6 +868,7 @@ serve(async (req) => {
 
     return json({ steps: normalized });
   } catch (error) {
+    if (error instanceof Response) return error;
     console.error("generate-flow error:", error);
     return json({ error: error instanceof Error ? error.message : "Erro inesperado." }, 500);
   }

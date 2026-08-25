@@ -755,16 +755,57 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
   const handleAiGenerate = useCallback((steps: any[]) => {
     // Keep trigger, add AI-generated nodes
     const triggerNode = nodes.find((n) => n.id === "trigger") || createTriggerNode();
+    const hasImportedGraph = steps.some((s: any) => s?.ref || s?.parentRef !== undefined || s?.isEntry !== undefined);
 
     const newNodes: Node[] = steps.map((s: any, i: number) => ({
-      id: crypto.randomUUID(),
+      id: s.ref || crypto.randomUUID(),
       type: s.type,
-      position: { x: 350 + i * 350, y: 200 },
+      position: { x: 350 + i * 350, y: s.parentRef ? 380 : 200 },
       data: s.data || {},
     }));
 
     const allNodes = [triggerNode, ...newNodes];
     const allEdges: Edge[] = [];
+
+    if (hasImportedGraph) {
+      const nodeByRef = new Map(newNodes.map((node) => [node.id, node]));
+      const incomingCount = new Map<string, number>();
+
+      steps.forEach((step: any) => {
+        const targetId = step.ref;
+        if (!targetId || !nodeByRef.has(targetId)) return;
+
+        if (step.isEntry === true || !step.parentRef) {
+          allEdges.push({
+            id: `e-trigger-${targetId}`,
+            source: "trigger",
+            target: targetId,
+            ...defaultEdgeOptions,
+          });
+          return;
+        }
+
+        if (nodeByRef.has(step.parentRef)) {
+          const count = incomingCount.get(step.parentRef) || 0;
+          incomingCount.set(step.parentRef, count + 1);
+          const parentNode = nodeByRef.get(step.parentRef);
+          const targetNode = nodeByRef.get(targetId);
+          if (parentNode && targetNode && count > 0) {
+            targetNode.position = { ...targetNode.position, y: parentNode.position.y + count * 180 };
+          }
+          allEdges.push({
+            id: `e-${step.parentRef}-${targetId}`,
+            source: step.parentRef,
+            target: targetId,
+            ...defaultEdgeOptions,
+          });
+        }
+      });
+
+      setNodes(allNodes);
+      setEdges(allEdges);
+      return;
+    }
 
     if (newNodes.length > 0) {
       allEdges.push({
