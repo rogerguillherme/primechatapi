@@ -1,5 +1,5 @@
 import { Handle, Position } from "@xyflow/react";
-import { MessageSquare, Trash2, Image as ImageIcon, FileText, Video as VideoIcon } from "lucide-react";
+import { MessageSquare, Trash2, Image as ImageIcon, FileText, Video as VideoIcon, Mic } from "lucide-react";
 
 interface MessageNodeData {
   label?: string;
@@ -15,6 +15,7 @@ export function MessageNode({ id, data }: { id: string; data: MessageNodeData })
   const hasImage = data.media_url && data.media_type === "image";
   const hasDocument = data.media_url && data.media_type === "document";
   const hasVideo = data.media_url && data.media_type === "video";
+  const hasAudio = data.media_url && data.media_type === "audio";
   return (
     <div className="bg-background border border-border rounded-xl shadow-md min-w-[260px] max-w-[300px] overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 border-b border-border">
@@ -25,6 +26,7 @@ export function MessageNode({ id, data }: { id: string; data: MessageNodeData })
         {hasImage && <ImageIcon size={11} className="text-emerald-600" />}
         {hasDocument && <FileText size={11} className="text-emerald-600" />}
         {hasVideo && <VideoIcon size={11} className="text-emerald-600" />}
+        {hasAudio && <Mic size={11} className="text-emerald-600" />}
         <button
           onClick={() => data.onDelete?.(id)}
           className="text-muted-foreground hover:text-destructive transition-colors p-0.5"
@@ -46,6 +48,12 @@ export function MessageNode({ id, data }: { id: string; data: MessageNodeData })
           <video src={data.media_url as string} className="w-full max-h-32 object-cover" muted />
         </div>
       )}
+      {hasAudio && (
+        <div className="bg-muted/40 border-b border-border px-3 py-2 flex items-center gap-2">
+          <Mic size={14} className="text-emerald-600" />
+          <span className="text-[11px] text-muted-foreground truncate">Áudio anexado</span>
+        </div>
+      )}
       {hasDocument && (
         <div className="bg-muted/40 border-b border-border px-3 py-2 flex items-center gap-2">
           <FileText size={14} className="text-emerald-600" />
@@ -56,7 +64,7 @@ export function MessageNode({ id, data }: { id: string; data: MessageNodeData })
       )}
       <div className="p-3">
         <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap line-clamp-4">
-          {data.custom_message || (hasImage || hasDocument || hasVideo ? "(somente arquivo)" : "Clique para editar a mensagem...")}
+          {data.custom_message || (hasImage || hasDocument || hasVideo || hasAudio ? "(somente arquivo)" : "Clique para editar a mensagem...")}
         </p>
       </div>
       <Handle type="target" position={Position.Left} className="!w-3 !h-3 !bg-emerald-500 !border-2 !border-background" />
