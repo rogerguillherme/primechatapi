@@ -306,7 +306,10 @@ export function LeadsKanban() {
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: col.color }} />
                       <span className="text-sm font-medium truncate">{col.name}</span>
-                      <Badge variant="secondary" className="shrink-0">{colLeads.length}</Badge>
+                      <Badge variant="secondary" className="shrink-0">
+                        {colInfo.total.toLocaleString("pt-BR")}
+                      </Badge>
+
                     </div>
                     {canManageStages && col.stageId && (
                       <div className="flex gap-0.5">
