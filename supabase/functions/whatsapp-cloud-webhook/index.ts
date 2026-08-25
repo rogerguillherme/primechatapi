@@ -797,6 +797,47 @@ Deno.serve(async (req) => {
         account_id: resolvedAccountId,
       });
 
+      // ── SHARE LINK ATTRIBUTION ──
+      // Links de compartilhamento (wa.me com frase pré-preenchida) definem a
+      // etiqueta e a coluna (etapa) que o lead deve receber ao entrar.
+      if (text && lead && resolvedUserId) {
+        try {
+          const norm = (v: string) =>
+            v.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+          const incoming = norm(text);
+
+          const { data: shareLinks } = await supabase
+            .from("share_links")
+            .select("id, message, label_id, stage_id, click_count")
+            .eq("user_id", resolvedUserId)
+            .eq("active", true);
+
+          const matched = (shareLinks ?? []).find((sl: any) => {
+            const phrase = norm(sl.message || "");
+            return phrase.length >= 8 && incoming.includes(phrase);
+          });
+
+          if (matched) {
+            console.log(`[share-link] match ${matched.id} for lead ${lead.id}`);
+            if (matched.stage_id) {
+              await supabase.from("leads").update({ stage_id: matched.stage_id }).eq("id", lead.id);
+            }
+            if (matched.label_id) {
+              await supabase
+                .from("lead_labels")
+                .insert({ lead_id: lead.id, label_id: matched.label_id });
+            }
+            await supabase
+              .from("share_links")
+              .update({ click_count: (matched.click_count ?? 0) + 1 })
+              .eq("id", matched.id);
+          }
+        } catch (e) {
+          console.error("[share-link] attribution failed:", e);
+        }
+      }
+
+
       // ── AUTO UNSUBSCRIBE ENGINE ──
       // Detect opt-out keywords in inbound text. If matched: blacklist the lead,
       // cancel active flow executions, remove from pending broadcasts and optionally

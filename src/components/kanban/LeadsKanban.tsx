@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTeamContext, useTeamMembers, ACCESS_LEVEL_LABELS } from "@/hooks/use-team";
@@ -39,13 +39,24 @@ interface KanbanLead {
 
 const STAGE_COLORS = ["#6366f1", "#0ea5e9", "#22c55e", "#f59e0b", "#ef4444", "#a855f7", "#14b8a6"];
 
+// Colunas iniciais espelham as etapas do chat, para que os dois módulos falem
+// a mesma língua. Colunas extras podem ser criadas livremente pelo usuário.
 const DEFAULT_STAGES = [
-  { name: "Novo", color: "#6366f1" },
-  { name: "Em contato", color: "#0ea5e9" },
-  { name: "Negociação", color: "#f59e0b" },
-  { name: "Ganho", color: "#22c55e" },
-  { name: "Perdido", color: "#ef4444" },
+  { name: "Aguardando", color: "#f59e0b" },
+  { name: "Respondidas", color: "#22c55e" },
+  { name: "Novos Pedidos", color: "#0ea5e9" },
+  { name: "Reembolso", color: "#ef4444" },
 ];
+
+// Quantidade de cartões carregados por coluna. Contas com dezenas de milhares de
+// leads travavam ao buscar tudo de uma vez; aqui buscamos apenas o topo de cada
+// coluna e exibimos o total real via contagem no servidor.
+const CARDS_PER_COLUMN = 100;
+
+interface ColumnData {
+  leads: KanbanLead[];
+  total: number;
+}
 
 export function LeadsKanban() {
   const queryClient = useQueryClient();
@@ -74,33 +85,42 @@ export function LeadsKanban() {
     },
   });
 
-  const { data: leads = [], isLoading: leadsLoading } = useQuery<KanbanLead[]>({
-    queryKey: ["kanban-leads", ownerId],
-    enabled: !!ownerId,
+  const stageKey = stages.map((s) => s.id).join(",");
+
+  const { data: columnData, isLoading: leadsLoading } = useQuery<Record<string, ColumnData>>({
+    queryKey: ["kanban-columns", ownerId, stageKey],
+    enabled: !!ownerId && !stagesLoading,
     staleTime: 30_000,
     queryFn: async () => {
-      // Paginação: o PostgREST limita cada resposta, então buscamos em páginas
-      // até trazer TODOS os leads da conta (sem teto de 1000).
-      const PAGE = 1000;
-      const all: KanbanLead[] = [];
-      for (let page = 0; ; page++) {
-        const from = page * PAGE;
-        const { data, error } = await supabase
-          .from("leads")
-          .select("id, name, phone, stage_id, assigned_to, last_message_content, last_message_at")
-          .eq("user_id", ownerId!)
-          .order("last_message_at", { ascending: false, nullsFirst: false })
-          .range(from, from + PAGE - 1);
-        if (error) throw error;
-        const rows = (data ?? []) as KanbanLead[];
-        all.push(...rows);
-        if (rows.length < PAGE) break;
-        if (page > 300) break; // guarda de segurança (300k leads)
-      }
-      return all;
+      const targets: Array<{ key: string; stageId: string | null }> = [
+        { key: "none", stageId: null },
+        ...stages.map((s) => ({ key: s.id, stageId: s.id })),
+      ];
+
+      const results = await Promise.all(
+        targets.map(async ({ key, stageId }) => {
+          const base = () => {
+            let q = supabase
+              .from("leads")
+              .select("id, name, phone, stage_id, assigned_to, last_message_content, last_message_at", {
+                count: "exact",
+              })
+              .eq("user_id", ownerId!);
+            q = stageId ? q.eq("stage_id", stageId) : q.is("stage_id", null);
+            return q;
+          };
+
+          const { data, error, count } = await base()
+            .order("last_message_at", { ascending: false, nullsFirst: false })
+            .range(0, CARDS_PER_COLUMN - 1);
+          if (error) throw error;
+          return [key, { leads: (data ?? []) as KanbanLead[], total: count ?? 0 }] as const;
+        }),
+      );
+
+      return Object.fromEntries(results);
     },
   });
-
 
   const { data: members = [] } = useTeamMembers(!!team?.canManageTeam);
 
@@ -110,16 +130,11 @@ export function LeadsKanban() {
     return map;
   }, [members]);
 
-  const leadsByStage = useMemo(() => {
-    const map = new Map<string, KanbanLead[]>();
-    map.set("none", []);
-    stages.forEach((s) => map.set(s.id, []));
-    leads.forEach((l) => {
-      const key = l.stage_id && map.has(l.stage_id) ? l.stage_id : "none";
-      map.get(key)!.push(l);
-    });
-    return map;
-  }, [leads, stages]);
+  const totalLeads = useMemo(
+    () => Object.values(columnData ?? {}).reduce((sum, c) => sum + c.total, 0),
+    [columnData],
+  );
+
 
   const saveStage = useMutation({
     mutationFn: async () => {
@@ -166,6 +181,17 @@ export function LeadsKanban() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // Semeia automaticamente as colunas espelhando as etapas do chat na primeira
+  // visita, para o Kanban nunca aparecer vazio.
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (seededRef.current) return;
+    if (!ownerId || stagesLoading || stages.length > 0 || !canManageStages) return;
+    seededRef.current = true;
+    createDefaults.mutate();
+  }, [ownerId, stagesLoading, stages.length, canManageStages, createDefaults]);
+
+
   const deleteStage = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("pipeline_stages").delete().eq("id", id);
@@ -174,7 +200,7 @@ export function LeadsKanban() {
     onSuccess: () => {
       toast.success("Etapa removida");
       queryClient.invalidateQueries({ queryKey: ["pipeline-stages", ownerId] });
-      queryClient.invalidateQueries({ queryKey: ["kanban-leads", ownerId] });
+      queryClient.invalidateQueries({ queryKey: ["kanban-columns", ownerId] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -184,7 +210,7 @@ export function LeadsKanban() {
       const { error } = await supabase.from("leads").update({ stage_id: stageId }).eq("id", leadId);
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["kanban-leads", ownerId] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["kanban-columns", ownerId] }),
     onError: (e: Error) => toast.error(`Não foi possível mover o lead: ${e.message}`),
   });
 
@@ -195,7 +221,7 @@ export function LeadsKanban() {
     },
     onSuccess: () => {
       toast.success("Responsável atualizado");
-      queryClient.invalidateQueries({ queryKey: ["kanban-leads", ownerId] });
+      queryClient.invalidateQueries({ queryKey: ["kanban-columns", ownerId] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -203,7 +229,8 @@ export function LeadsKanban() {
   const handleDrop = (stageId: string | null) => {
     setDragOverStage(null);
     if (!draggingLeadId || !canEdit) return;
-    const lead = leads.find((l) => l.id === draggingLeadId);
+    const all = Object.values(columnData ?? {}).flatMap((c) => c.leads);
+    const lead = all.find((l) => l.id === draggingLeadId);
     setDraggingLeadId(null);
     if (!lead || (lead.stage_id ?? null) === stageId) return;
     moveLead.mutate({ leadId: lead.id, stageId });
@@ -230,8 +257,9 @@ export function LeadsKanban() {
           <div>
             <h2 className="text-lg font-semibold">Kanban de Leads</h2>
             <p className="text-xs text-muted-foreground">
-              {leadsLoading ? "carregando…" : `${leads.length.toLocaleString("pt-BR")} leads`} · arraste os cartões entre as etapas
+              {totalLeads.toLocaleString("pt-BR")} leads · arraste os cartões entre as etapas
             </p>
+
           </div>
         </div>
         {canManageStages && (
@@ -268,7 +296,9 @@ export function LeadsKanban() {
         <div className="flex-1 min-h-0 overflow-x-auto pb-3">
           <div className="flex gap-3 h-full min-h-[400px]">
             {columns.map((col) => {
-              const colLeads = leadsByStage.get(col.id) ?? [];
+              const colInfo = columnData?.[col.id] ?? { leads: [], total: 0 };
+              const colLeads = colInfo.leads;
+
               return (
                 <div
                   key={col.id}
@@ -287,7 +317,10 @@ export function LeadsKanban() {
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: col.color }} />
                       <span className="text-sm font-medium truncate">{col.name}</span>
-                      <Badge variant="secondary" className="shrink-0">{colLeads.length}</Badge>
+                      <Badge variant="secondary" className="shrink-0">
+                        {colInfo.total.toLocaleString("pt-BR")}
+                      </Badge>
+
                     </div>
                     {canManageStages && col.stageId && (
                       <div className="flex gap-0.5">
@@ -401,11 +434,12 @@ export function LeadsKanban() {
                     {colLeads.length === 0 && (
                       <p className="text-xs text-muted-foreground text-center py-6">Nenhum lead</p>
                     )}
-                    {colLeads.length > 200 && (
+                    {colInfo.total > colLeads.length && (
                       <p className="text-[11px] text-muted-foreground text-center py-2">
-                        +{colLeads.length - 200} leads não exibidos
+                        +{(colInfo.total - colLeads.length).toLocaleString("pt-BR")} leads não exibidos
                       </p>
                     )}
+
                   </div>
                 </div>
               );

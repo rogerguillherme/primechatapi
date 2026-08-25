@@ -1955,6 +1955,73 @@ export type Database = {
         }
         Relationships: []
       }
+      share_links: {
+        Row: {
+          account_id: string | null
+          active: boolean
+          click_count: number
+          created_at: string
+          id: string
+          label_id: string | null
+          message: string
+          name: string
+          phone: string
+          stage_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_id?: string | null
+          active?: boolean
+          click_count?: number
+          created_at?: string
+          id?: string
+          label_id?: string | null
+          message?: string
+          name: string
+          phone: string
+          stage_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_id?: string | null
+          active?: boolean
+          click_count?: number
+          created_at?: string
+          id?: string
+          label_id?: string | null
+          message?: string
+          name?: string
+          phone?: string
+          stage_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "share_links_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "share_links_label_id_fkey"
+            columns: ["label_id"]
+            isOneToOne: false
+            referencedRelation: "chat_labels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "share_links_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "pipeline_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       team_members: {
         Row: {
           access_level: string

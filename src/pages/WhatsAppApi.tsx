@@ -87,6 +87,7 @@ import { CloudChatTab } from "@/components/CloudChatTab";
 import { DashboardHome } from "@/pages/DashboardHome";
 import { HomeViewSetting } from "@/components/settings/HomeViewSetting";
 import { LeadDistributionSettings } from "@/components/settings/LeadDistributionSettings";
+import { ShareLinksSettings } from "@/components/settings/ShareLinksSettings";
 
 import { TemplateStudio } from "@/components/templates/TemplateStudio";
 import { LeadsKanban } from "@/components/kanban/LeadsKanban";
@@ -2510,6 +2511,11 @@ export default function WhatsAppApi() {
 
           {/* Distribuição inteligente de leads (conta específica) */}
           <LeadDistributionSettings />
+
+          {/* Links de compartilhamento do número (frase, etiqueta e coluna) */}
+          <ShareLinksSettings />
+
+
 
 
 
