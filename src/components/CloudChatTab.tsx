@@ -983,6 +983,45 @@ export function CloudChatTab() {
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
+
+              {/* Transferir atendimento para outro atendente */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    title="Transferir para outro atendente"
+                    className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <UserPlus size={18} />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Transferir atendimento</div>
+                  {agents.length <= 1 && (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                      Nenhum outro atendente. Convide sua equipe em Configurações › Equipe.
+                    </div>
+                  )}
+                  {agents.map((a) => (
+                    <DropdownMenuItem
+                      key={a.id}
+                      onClick={() => transferLead.mutate(a.id)}
+                      disabled={transferLead.isPending || selectedLead?.assigned_to === a.id}
+                      className="gap-2"
+                    >
+                      <Users size={14} className="opacity-60 shrink-0" />
+                      <span className="flex-1 truncate">{a.label}</span>
+                      {selectedLead?.assigned_to === a.id && <Check size={14} className="opacity-60" />}
+                    </DropdownMenuItem>
+                  ))}
+                  {selectedLead?.assigned_to && (
+                    <DropdownMenuItem onClick={() => transferLead.mutate(null)} className="gap-2 text-destructive">
+                      <X size={14} className="shrink-0" />
+                      Remover atendente
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
               <Button
                 type="button"
                 size="sm"
