@@ -18,8 +18,11 @@ import {
   Search, Send, MessageSquare, FileText, Check, CheckCheck,
   MoreVertical, ArrowLeft, Paperclip, Clock, MessageCircleReply,
   ShoppingBag, RotateCcw, Tag, X, AlertCircle, Bot, Users, PowerOff, Megaphone,
+  Info, Pencil, Columns3, Zap, Workflow,
 } from "lucide-react";
 import { BulkBroadcastDialog } from "@/components/BulkBroadcastDialog";
+import { ContactInfoSheet } from "@/components/chat/ContactInfoSheet";
+import { startFlowForLead } from "@/lib/startFlowForLead";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -71,6 +74,11 @@ export function CloudChatTab() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Painel de dados/edição do contato e atalhos do chat
+  const [contactOpen, setContactOpen] = useState(false);
+  const [contactTab, setContactTab] = useState<"info" | "edit">("info");
+  const [shortcutQuery, setShortcutQuery] = useState<string | null>(null);
+  const [shortcutIndex, setShortcutIndex] = useState(0);
   const queryClient = useQueryClient();
   const { accounts, defaultAccount } = useWhatsAppAccounts();
   const { templates } = useUserTemplates();
@@ -342,6 +350,55 @@ export function CloudChatTab() {
   const selectedLead = leads?.find((l) => l.id === selectedLeadId);
   const leadAiEnabled = !!selectedLead?.ai_enabled;
 
+  // ── ETAPAS DO KANBAN ──
+  const { data: pipelineStages } = useQuery({
+    queryKey: ["pipeline-stages-chat"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pipeline_stages")
+        .select("id, name, color, position")
+        .order("position");
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const moveLeadStage = useMutation({
+    mutationFn: async (stageId: string) => {
+      if (!selectedLeadId) throw new Error("Nenhuma conversa selecionada");
+      const { error } = await supabase.from("leads").update({ stage_id: stageId }).eq("id", selectedLeadId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Lead movido de etapa");
+      queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
+      queryClient.invalidateQueries({ queryKey: ["kanban-leads"] });
+      queryClient.invalidateQueries({ queryKey: ["contact-info-lead", selectedLeadId] });
+    },
+    onError: (err: any) => toast.error(err.message || "Erro ao mover lead"),
+  });
+
+  // ── ATALHOS DO CHAT ──
+  const { data: shortcuts } = useQuery({
+    queryKey: ["chat-shortcuts-active"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("chat_shortcuts")
+        .select("id, command, description, action_type, message, flow_id")
+        .eq("active", true)
+        .order("command");
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const matchedShortcuts = useMemo(() => {
+    if (shortcutQuery === null) return [];
+    const q = shortcutQuery.toLowerCase();
+    return (shortcuts || []).filter((s: any) => s.command.toLowerCase().startsWith(q)).slice(0, 8);
+  }, [shortcuts, shortcutQuery]);
+
+
   const replyNowWithAi = useMutation({
     mutationFn: async () => {
       if (!selectedLead) throw new Error("Nenhum contato selecionado");
@@ -431,7 +488,67 @@ export function CloudChatTab() {
     sendMutation.mutate({ text });
   };
 
+  /** Executa um atalho: dispara fluxo ou preenche mensagem rápida com variáveis resolvidas. */
+  const runShortcut = useCallback(async (shortcut: any) => {
+    setShortcutQuery(null);
+    if (!selectedLead) return;
+
+    if (shortcut.action_type === "flow") {
+      try {
+        await startFlowForLead({
+          flowId: shortcut.flow_id,
+          leadId: selectedLead.id,
+          accountId: selectedAccountId || defaultAccount?.id || null,
+        });
+        setMessage("");
+        toast.success(`Fluxo /${shortcut.command} iniciado`);
+      } catch (err: any) {
+        toast.error(err.message || "Erro ao iniciar fluxo");
+      }
+      return;
+    }
+
+    const text = (shortcut.message || "")
+      .replace(/\{nome\}/gi, selectedLead.name || "")
+      .replace(/\{telefone\}/gi, selectedLead.phone || "");
+    setMessage(text);
+    textareaRef.current?.focus();
+  }, [selectedLead, selectedAccountId, defaultAccount]);
+
+  const handleMessageChange = (value: string) => {
+    setMessage(value);
+    const match = /^\/([\w-]*)$/.exec(value);
+    if (match) {
+      setShortcutQuery(match[1]);
+      setShortcutIndex(0);
+    } else if (shortcutQuery !== null) {
+      setShortcutQuery(null);
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (shortcutQuery !== null && matchedShortcuts.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setShortcutIndex((i) => (i + 1) % matchedShortcuts.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setShortcutIndex((i) => (i - 1 + matchedShortcuts.length) % matchedShortcuts.length);
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        runShortcut(matchedShortcuts[shortcutIndex]);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setShortcutQuery(null);
+        return;
+      }
+    }
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
@@ -782,6 +899,51 @@ export function CloudChatTab() {
                   ))}
                 </select>
               )}
+
+              {/* Dados do contato */}
+              <button
+                onClick={() => { setContactTab("info"); setContactOpen(true); }}
+                title="Ver dados do contato"
+                className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Info size={18} />
+              </button>
+
+              {/* Editar contato */}
+              <button
+                onClick={() => { setContactTab("edit"); setContactOpen(true); }}
+                title="Editar contato"
+                className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Pencil size={18} />
+              </button>
+
+              {/* Mover para outra etapa do Kanban */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    title="Mover para outra etapa do Kanban"
+                    className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Columns3 size={18} />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Mover para etapa</div>
+                  {(pipelineStages || []).length === 0 && (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">Nenhuma etapa criada no Kanban</div>
+                  )}
+                  {(pipelineStages || []).map((stage: any) => (
+                    <DropdownMenuItem key={stage.id} onClick={() => moveLeadStage.mutate(stage.id)} className="gap-2">
+                      <span
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: stage.color || "hsl(var(--primary))" }}
+                      />
+                      <span className="flex-1 truncate">{stage.name}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button
                 type="button"
                 size="sm"
@@ -880,18 +1042,80 @@ export function CloudChatTab() {
                   <button onClick={() => fileInputRef.current?.click()} className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground">
                     <Paperclip size={20} />
                   </button>
+
+                  {/* Atalhos: mensagens rápidas e fluxos */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        title="Atalhos (mensagens rápidas e fluxos)"
+                        className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground"
+                      >
+                        <Zap size={20} />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-72">
+                      <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">
+                        Atalhos
+                      </div>
+                      {(shortcuts || []).length === 0 && (
+                        <div className="px-2 py-2 text-xs text-muted-foreground">
+                          Nenhum atalho criado. Crie em Configurações → Atalhos do chat.
+                        </div>
+                      )}
+                      {(shortcuts || []).map((s: any) => (
+                        <DropdownMenuItem key={s.id} onClick={() => runShortcut(s)} className="gap-2 items-start">
+                          {s.action_type === "flow"
+                            ? <Workflow size={15} className="mt-0.5 text-primary flex-shrink-0" />
+                            : <Zap size={15} className="mt-0.5 text-primary flex-shrink-0" />}
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">/{s.command}</p>
+                            <p className="text-xs text-muted-foreground line-clamp-2">
+                              {s.description || (s.action_type === "flow" ? "Inicia um fluxo" : s.message)}
+                            </p>
+                          </div>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
-                <div className="flex-1 bg-background rounded-lg border border-border overflow-hidden">
-                  <textarea
-                    ref={textareaRef}
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Digite uma mensagem"
-                    className="w-full px-3 py-[9px] text-sm bg-transparent outline-none resize-none placeholder:text-muted-foreground max-h-[120px]"
-                    rows={1}
-                    style={{ minHeight: "38px" }}
-                  />
+                <div className="relative flex-1">
+                  {shortcutQuery !== null && matchedShortcuts.length > 0 && (
+                    <div className="absolute bottom-full mb-2 left-0 right-0 z-30 rounded-lg border border-border bg-popover shadow-lg overflow-hidden">
+                      {matchedShortcuts.map((s: any, i: number) => (
+                        <button
+                          key={s.id}
+                          onClick={() => runShortcut(s)}
+                          onMouseEnter={() => setShortcutIndex(i)}
+                          className={cn(
+                            "w-full text-left flex items-start gap-2 px-3 py-2",
+                            i === shortcutIndex ? "bg-accent" : "hover:bg-accent/60"
+                          )}
+                        >
+                          {s.action_type === "flow"
+                            ? <Workflow size={15} className="mt-0.5 text-primary flex-shrink-0" />
+                            : <Zap size={15} className="mt-0.5 text-primary flex-shrink-0" />}
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">/{s.command}</p>
+                            <p className="text-xs text-muted-foreground line-clamp-1">
+                              {s.description || (s.action_type === "flow" ? "Inicia um fluxo" : s.message)}
+                            </p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="bg-background rounded-lg border border-border overflow-hidden">
+                    <textarea
+                      ref={textareaRef}
+                      value={message}
+                      onChange={(e) => handleMessageChange(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder="Digite uma mensagem ou / para atalhos"
+                      className="w-full px-3 py-[9px] text-sm bg-transparent outline-none resize-none placeholder:text-muted-foreground max-h-[120px]"
+                      rows={1}
+                      style={{ minHeight: "38px" }}
+                    />
+                  </div>
                 </div>
                 {message.trim() ? (
                   <button onClick={handleSend} disabled={sendMutation.isPending} className="p-2.5 rounded-full shrink-0 mb-[3px] bg-primary text-primary-foreground hover:opacity-90">
@@ -926,6 +1150,13 @@ export function CloudChatTab() {
           />
         );
       })()}
+
+      <ContactInfoSheet
+        leadId={selectedLeadId}
+        open={contactOpen}
+        onOpenChange={setContactOpen}
+        defaultTab={contactTab}
+      />
     </div>
   );
 }
