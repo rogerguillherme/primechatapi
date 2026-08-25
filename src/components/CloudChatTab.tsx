@@ -1150,6 +1150,13 @@ export function CloudChatTab() {
           />
         );
       })()}
+
+      <ContactInfoSheet
+        leadId={selectedLeadId}
+        open={contactOpen}
+        onOpenChange={setContactOpen}
+        defaultTab={contactTab}
+      />
     </div>
   );
 }
