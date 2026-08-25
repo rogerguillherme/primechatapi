@@ -820,9 +820,59 @@ export default function Chat() {
                   <Bot size={18} />
                 </button>
 
-                <button className="p-2 rounded-full hover:bg-white/10 text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors">
-                  <Search size={18} />
+                {/* Dados do contato */}
+                <button
+                  onClick={() => { setContactTab("info"); setContactOpen(true); }}
+                  title="Ver dados do contato"
+                  className="p-2 rounded-full hover:bg-white/10 text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors"
+                >
+                  <Info size={18} />
                 </button>
+
+                {/* Editar contato */}
+                <button
+                  onClick={() => { setContactTab("edit"); setContactOpen(true); }}
+                  title="Editar contato"
+                  className="p-2 rounded-full hover:bg-white/10 text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors"
+                >
+                  <Pencil size={18} />
+                </button>
+
+                {/* Mover para outra etapa do Kanban */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      title="Mover para outra etapa do Kanban"
+                      className="p-2 rounded-full hover:bg-white/10 text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors"
+                    >
+                      <Columns3 size={18} />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                      Mover para etapa
+                    </div>
+                    {(pipelineStages || []).length === 0 && (
+                      <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                        Nenhuma etapa criada no Kanban
+                      </div>
+                    )}
+                    {(pipelineStages || []).map((stage) => (
+                      <DropdownMenuItem
+                        key={stage.id}
+                        onClick={() => moveLeadStage.mutate(stage.id)}
+                        className="gap-2"
+                      >
+                        <span
+                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: stage.color || "hsl(var(--primary))" }}
+                        />
+                        <span className="flex-1 truncate">{stage.name}</span>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
 
                 {/* Global AI mode menu */}
                 <DropdownMenu>
