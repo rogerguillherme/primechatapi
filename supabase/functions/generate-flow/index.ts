@@ -263,8 +263,9 @@ serve(async (req) => {
       .filter((s): s is Record<string, any> => !!s && typeof s === "object")
       .map((s) => ({
         type: typeof s.type === "string" ? s.type : "message",
-        data: s.data && typeof s.data === "object" ? s.data : {},
+        data: sanitizeDeep(s.data && typeof s.data === "object" ? s.data : {}) as Record<string, unknown>,
       }));
+
 
     return json({ steps: normalized });
   } catch (error) {
