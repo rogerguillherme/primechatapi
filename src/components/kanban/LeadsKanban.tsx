@@ -423,11 +423,12 @@ export function LeadsKanban() {
                     {colLeads.length === 0 && (
                       <p className="text-xs text-muted-foreground text-center py-6">Nenhum lead</p>
                     )}
-                    {colLeads.length > 200 && (
+                    {colInfo.total > colLeads.length && (
                       <p className="text-[11px] text-muted-foreground text-center py-2">
-                        +{colLeads.length - 200} leads não exibidos
+                        +{(colInfo.total - colLeads.length).toLocaleString("pt-BR")} leads não exibidos
                       </p>
                     )}
+
                   </div>
                 </div>
               );
