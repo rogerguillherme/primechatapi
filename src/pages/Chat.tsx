@@ -16,7 +16,7 @@ import {
   Search, Send, MessageSquare, FileText, User, Smile, Check, CheckCheck,
   MoreVertical, Phone, Video, ArrowLeft, Image, Paperclip, Mic,
   ShoppingBag, Clock, MessageCircleReply, RotateCcw, AlertCircle,
-  Bot, Users, PowerOff,
+  Bot, Users, PowerOff, Info, Pencil, Columns3,
 } from "lucide-react";
 import { format, isToday, isYesterday, isSameDay, addDays, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
