@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { applyStageAutomations } from "../_shared/stage-automations.ts";
 import { resolveTemplateHeaderLink } from "../_shared/template-media.ts";
 
 const corsHeaders = {
@@ -848,6 +849,15 @@ Deno.serve(async (req) => {
           status: "failed",
           account_id: account_id || resolvedAccountId || null,
         });
+
+        // Regras de Kanban que reagem a falhas de envio.
+        const { data: failLead } = await supabase
+          .from("leads").select("user_id").eq("id", lead_id).maybeSingle();
+        await applyStageAutomations(supabase, {
+          userId: failLead?.user_id ?? null,
+          leadId: lead_id,
+          trigger: "send_failed",
+        });
       }
 
       const isKnownError = isTemplateNotFound || isParamsMismatch || isGenericUserError || isAuthError || isOutsideWindow || isInvalidPhone || isRateLimit;
@@ -891,6 +901,16 @@ Deno.serve(async (req) => {
       if (leadUpdateError) {
         console.error("Failed to update lead outbound activity:", leadUpdateError);
       }
+
+      // Regras de Kanban que reagem a mensagens enviadas.
+      const { data: sentLead } = await supabase
+        .from("leads").select("user_id").eq("id", lead_id).maybeSingle();
+      await applyStageAutomations(supabase, {
+        userId: sentLead?.user_id ?? null,
+        leadId: lead_id,
+        trigger: "outbound_message",
+        messageText: contentText,
+      });
     }
 
     return new Response(
