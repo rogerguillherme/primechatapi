@@ -580,6 +580,11 @@ serve(async (req) => {
       return json({ error: "Envie uma descrição ou um documento." }, 400);
     }
 
+    const dataCrazySteps = await tryCompileDataCrazyAttachments(attachments);
+    if (dataCrazySteps) {
+      return json({ steps: dataCrazySteps });
+    }
+
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) return json({ error: "LOVABLE_API_KEY não configurada." }, 500);
 
