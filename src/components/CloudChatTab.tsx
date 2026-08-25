@@ -18,8 +18,11 @@ import {
   Search, Send, MessageSquare, FileText, Check, CheckCheck,
   MoreVertical, ArrowLeft, Paperclip, Clock, MessageCircleReply,
   ShoppingBag, RotateCcw, Tag, X, AlertCircle, Bot, Users, PowerOff, Megaphone,
+  Info, Pencil, Columns3, Zap, Workflow,
 } from "lucide-react";
 import { BulkBroadcastDialog } from "@/components/BulkBroadcastDialog";
+import { ContactInfoSheet } from "@/components/chat/ContactInfoSheet";
+import { startFlowForLead } from "@/lib/startFlowForLead";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
