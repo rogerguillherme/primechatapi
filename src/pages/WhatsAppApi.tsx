@@ -1828,6 +1828,7 @@ export default function WhatsAppApi() {
   const [activeMainTab, setActiveMainTab] = useState("home");
   const [flowTriggerType, setFlowTriggerType] = useState<string | undefined>(undefined);
   const [flowEditId, setFlowEditId] = useState<string | undefined>(undefined);
+  const [flowEditorOpen, setFlowEditorOpen] = useState(false);
 
   const handleCreateFlowFromWebhook = useCallback((triggerType: string) => {
     setFlowEditId(undefined);
