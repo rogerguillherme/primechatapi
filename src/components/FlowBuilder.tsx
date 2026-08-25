@@ -14,7 +14,12 @@ import { toast } from "sonner";
 import {
   Plus, Trash2, GitBranch, ChevronRight, Play, Pause, ArrowLeft, Save,
   Sparkles, Send, Loader2, Bot, X, MessageCircle, Code2, Settings2, Copy,
+  Paperclip, FileText,
 } from "lucide-react";
+import {
+  extractFlowDocument, ACCEPT_ATTR, type ExtractedAttachment,
+} from "@/lib/flow-document-extract";
+
 import { FlowCanvas } from "@/components/flow-builder/FlowCanvas";
 import { FlowSettingsDrawer, DEFAULT_FLOW_SETTINGS, type FlowSettings } from "@/components/flow-builder/FlowSettingsDrawer";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -324,24 +329,69 @@ function AiFlowChat({ onGenerate }: { onGenerate: (steps: any[]) => void }) {
   const [open, setOpen] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [attachments, setAttachments] = useState<ExtractedAttachment[]>([]);
+  const [isReadingFile, setIsReadingFile] = useState(false);
   const [messages, setMessages] = useState<{ role: "user" | "ai"; content: string }[]>([
-    { role: "ai", content: "Descreva o fluxo de automação que deseja criar e eu vou gerar para você! Ex: 'Fluxo de boas-vindas com mensagem, delay de 1 hora e botões de sim/não'" },
+    { role: "ai", content: "Descreva o fluxo ou anexe o documento com o roteiro (PDF, DOCX, TXT, MD, CSV, XLSX, PPTX, ODT, imagem ou áudio). Eu reproduzo as mensagens exatamente como estão escritas." },
   ]);
 
+  const handlePickFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setIsReadingFile(true);
+    try {
+      for (const file of Array.from(files)) {
+        try {
+          const extracted = await extractFlowDocument(file);
+          setAttachments((prev) => [...prev.filter((a) => a.name !== extracted.name), extracted]);
+          toast.success(`Documento pronto: ${extracted.name}`);
+        } catch (e: any) {
+          toast.error(e?.message || `Não foi possível ler ${file.name}`);
+        }
+      }
+    } finally {
+      setIsReadingFile(false);
+    }
+  };
+
   const handleSend = async () => {
-    if (!prompt.trim() || isGenerating) return;
+    if (isGenerating) return;
     const userMsg = prompt.trim();
+    if (!userMsg && attachments.length === 0) return;
+
     setPrompt("");
-    setMessages((prev) => [...prev, { role: "user", content: userMsg }]);
+    const attachedNow = attachments;
+    setAttachments([]);
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "user",
+        content: [userMsg, attachedNow.map((a) => `📎 ${a.name}`).join("\n")].filter(Boolean).join("\n\n"),
+      },
+    ]);
     setIsGenerating(true);
 
     try {
       const { data, error } = await supabase.functions.invoke("generate-flow", {
-        body: { description: userMsg },
+        body: {
+          description: userMsg,
+          attachments: attachedNow.map(({ name, mimeType, text, dataUrl, kind }) => ({
+            name, mimeType, text, dataUrl, kind,
+          })),
+        },
       });
 
-      if (error) throw error;
+      // Edge Functions retornam erro HTTP com corpo JSON; extraímos a mensagem real.
+      if (error) {
+        let detail = error.message;
+        try {
+          const parsed = await (error as any)?.context?.json?.();
+          if (parsed?.error) detail = parsed.error;
+        } catch { /* mantém a mensagem original */ }
+        throw new Error(detail);
+      }
       if (data?.error) throw new Error(data.error);
+
+
 
       const steps = data.steps || [];
       const summary = steps.map((s: any, i: number) => {
@@ -421,7 +471,27 @@ function AiFlowChat({ onGenerate }: { onGenerate: (steps: any[]) => void }) {
       </div>
 
       {/* Input */}
-      <div className="p-2 border-t border-border">
+      <div className="p-2 border-t border-border space-y-2">
+        {attachments.length > 0 && (
+          <div className="space-y-1">
+            {attachments.map((att) => (
+              <div key={att.name} className="flex items-center gap-2 text-xs bg-muted rounded-md px-2 py-1">
+                <FileText size={12} className="text-primary shrink-0" />
+                <span className="truncate flex-1" title={att.name}>{att.name}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 shrink-0"
+                  aria-label={`Remover ${att.name}`}
+                  onClick={() => setAttachments((prev) => prev.filter((a) => a.name !== att.name))}
+                >
+                  <X size={11} />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -429,10 +499,28 @@ function AiFlowChat({ onGenerate }: { onGenerate: (steps: any[]) => void }) {
           }}
           className="flex gap-2"
         >
+          <label className="shrink-0">
+            <input
+              type="file"
+              multiple
+              accept={ACCEPT_ATTR}
+              className="sr-only"
+              onChange={(e) => {
+                handlePickFiles(e.target.files);
+                e.target.value = "";
+              }}
+            />
+            <span
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted cursor-pointer"
+              title="Anexar documento do roteiro"
+            >
+              {isReadingFile ? <Loader2 size={14} className="animate-spin" /> : <Paperclip size={14} />}
+            </span>
+          </label>
           <Textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            placeholder="Descreva seu fluxo..."
+            placeholder="Descreva ou anexe o roteiro..."
             className="text-xs min-h-[36px] max-h-[80px] resize-none"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -441,11 +529,17 @@ function AiFlowChat({ onGenerate }: { onGenerate: (steps: any[]) => void }) {
               }
             }}
           />
-          <Button type="submit" size="icon" className="h-9 w-9 shrink-0" disabled={isGenerating || !prompt.trim()}>
+          <Button
+            type="submit"
+            size="icon"
+            className="h-9 w-9 shrink-0"
+            disabled={isGenerating || isReadingFile || (!prompt.trim() && attachments.length === 0)}
+          >
             <Send size={14} />
           </Button>
         </form>
       </div>
+
     </div>
   );
 }
