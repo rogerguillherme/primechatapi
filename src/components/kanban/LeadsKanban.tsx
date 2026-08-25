@@ -181,6 +181,17 @@ export function LeadsKanban() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // Semeia automaticamente as colunas espelhando as etapas do chat na primeira
+  // visita, para o Kanban nunca aparecer vazio.
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (seededRef.current) return;
+    if (!ownerId || stagesLoading || stages.length > 0 || !canManageStages) return;
+    seededRef.current = true;
+    createDefaults.mutate();
+  }, [ownerId, stagesLoading, stages.length, canManageStages, createDefaults]);
+
+
   const deleteStage = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("pipeline_stages").delete().eq("id", id);
