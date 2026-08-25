@@ -544,6 +544,53 @@ export type Database = {
           },
         ]
       }
+      chat_shortcuts: {
+        Row: {
+          action_type: string
+          active: boolean
+          command: string
+          created_at: string
+          description: string | null
+          flow_id: string | null
+          id: string
+          message: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          action_type?: string
+          active?: boolean
+          command: string
+          created_at?: string
+          description?: string | null
+          flow_id?: string | null
+          id?: string
+          message?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          action_type?: string
+          active?: boolean
+          command?: string
+          created_at?: string
+          description?: string | null
+          flow_id?: string | null
+          id?: string
+          message?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_shortcuts_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "flows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_templates: {
         Row: {
           category: string | null

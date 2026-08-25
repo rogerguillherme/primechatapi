@@ -89,6 +89,7 @@ import { HomeViewSetting } from "@/components/settings/HomeViewSetting";
 import { LeadDistributionSettings } from "@/components/settings/LeadDistributionSettings";
 import { ShareLinksSettings } from "@/components/settings/ShareLinksSettings";
 import { StageAutomationsSettings } from "@/components/settings/StageAutomationsSettings";
+import { ChatShortcutsSettings } from "@/components/settings/ChatShortcutsSettings";
 
 import { TemplateStudio } from "@/components/templates/TemplateStudio";
 import { LeadsKanban } from "@/components/kanban/LeadsKanban";
@@ -2518,6 +2519,9 @@ export default function WhatsAppApi() {
 
           {/* Fluxos automáticos de mudança de coluna no Kanban */}
           <StageAutomationsSettings />
+
+          {/* Atalhos digitáveis do chat (/fluxo1, /oi ...) */}
+          <ChatShortcutsSettings />
 
 
 
