@@ -516,6 +516,9 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
             media_url: s.media_url ?? null,
             media_type: s.media_type ?? null,
             file_name: s.file_name ?? null,
+            match_mode: s.match_mode || "exact",
+            ai_match_description: s.ai_match_description || "",
+            label_ids: Array.isArray(s.label_ids) ? s.label_ids : [],
             // For blacklist: reason is stored in custom_message
             ...(s.step_type === "blacklist" ? { reason: s.custom_message || "opt-out via fluxo" } : {}),
           },
@@ -863,6 +866,13 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
         media_url: e.node.type === "message" ? ((e.node.data.media_url as string) || null) : null,
         media_type: e.node.type === "message" ? ((e.node.data.media_type as string) || null) : null,
         file_name: e.node.type === "message" ? ((e.node.data.file_name as string) || null) : null,
+        // Modo de comparação da resposta do lead (apenas em passos de condição)
+        match_mode: e.node.type === "condition" ? ((e.node.data.match_mode as string) || "exact") : "exact",
+        ai_match_description: e.node.type === "condition"
+          ? ((e.node.data.ai_match_description as string) || null)
+          : null,
+        // Etiquetas aplicadas ao lead quando ele passa por este passo
+        label_ids: Array.isArray(e.node.data.label_ids) ? (e.node.data.label_ids as string[]) : [],
       }));
 
       const { error: stepsError } = await supabase
