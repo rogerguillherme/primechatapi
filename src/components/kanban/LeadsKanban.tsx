@@ -39,13 +39,24 @@ interface KanbanLead {
 
 const STAGE_COLORS = ["#6366f1", "#0ea5e9", "#22c55e", "#f59e0b", "#ef4444", "#a855f7", "#14b8a6"];
 
+// Colunas iniciais espelham as etapas do chat, para que os dois módulos falem
+// a mesma língua. Colunas extras podem ser criadas livremente pelo usuário.
 const DEFAULT_STAGES = [
-  { name: "Novo", color: "#6366f1" },
-  { name: "Em contato", color: "#0ea5e9" },
-  { name: "Negociação", color: "#f59e0b" },
-  { name: "Ganho", color: "#22c55e" },
-  { name: "Perdido", color: "#ef4444" },
+  { name: "Aguardando", color: "#f59e0b" },
+  { name: "Respondidas", color: "#22c55e" },
+  { name: "Novos Pedidos", color: "#0ea5e9" },
+  { name: "Reembolso", color: "#ef4444" },
 ];
+
+// Quantidade de cartões carregados por coluna. Contas com dezenas de milhares de
+// leads travavam ao buscar tudo de uma vez; aqui buscamos apenas o topo de cada
+// coluna e exibimos o total real via contagem no servidor.
+const CARDS_PER_COLUMN = 100;
+
+interface ColumnData {
+  leads: KanbanLead[];
+  total: number;
+}
 
 export function LeadsKanban() {
   const queryClient = useQueryClient();
@@ -74,33 +85,42 @@ export function LeadsKanban() {
     },
   });
 
-  const { data: leads = [], isLoading: leadsLoading } = useQuery<KanbanLead[]>({
-    queryKey: ["kanban-leads", ownerId],
-    enabled: !!ownerId,
+  const stageKey = stages.map((s) => s.id).join(",");
+
+  const { data: columnData, isLoading: leadsLoading } = useQuery<Record<string, ColumnData>>({
+    queryKey: ["kanban-columns", ownerId, stageKey],
+    enabled: !!ownerId && !stagesLoading,
     staleTime: 30_000,
     queryFn: async () => {
-      // Paginação: o PostgREST limita cada resposta, então buscamos em páginas
-      // até trazer TODOS os leads da conta (sem teto de 1000).
-      const PAGE = 1000;
-      const all: KanbanLead[] = [];
-      for (let page = 0; ; page++) {
-        const from = page * PAGE;
-        const { data, error } = await supabase
-          .from("leads")
-          .select("id, name, phone, stage_id, assigned_to, last_message_content, last_message_at")
-          .eq("user_id", ownerId!)
-          .order("last_message_at", { ascending: false, nullsFirst: false })
-          .range(from, from + PAGE - 1);
-        if (error) throw error;
-        const rows = (data ?? []) as KanbanLead[];
-        all.push(...rows);
-        if (rows.length < PAGE) break;
-        if (page > 300) break; // guarda de segurança (300k leads)
-      }
-      return all;
+      const targets: Array<{ key: string; stageId: string | null }> = [
+        { key: "none", stageId: null },
+        ...stages.map((s) => ({ key: s.id, stageId: s.id })),
+      ];
+
+      const results = await Promise.all(
+        targets.map(async ({ key, stageId }) => {
+          const base = () => {
+            let q = supabase
+              .from("leads")
+              .select("id, name, phone, stage_id, assigned_to, last_message_content, last_message_at", {
+                count: "exact",
+              })
+              .eq("user_id", ownerId!);
+            q = stageId ? q.eq("stage_id", stageId) : q.is("stage_id", null);
+            return q;
+          };
+
+          const { data, error, count } = await base()
+            .order("last_message_at", { ascending: false, nullsFirst: false })
+            .range(0, CARDS_PER_COLUMN - 1);
+          if (error) throw error;
+          return [key, { leads: (data ?? []) as KanbanLead[], total: count ?? 0 }] as const;
+        }),
+      );
+
+      return Object.fromEntries(results);
     },
   });
-
 
   const { data: members = [] } = useTeamMembers(!!team?.canManageTeam);
 
@@ -110,16 +130,11 @@ export function LeadsKanban() {
     return map;
   }, [members]);
 
-  const leadsByStage = useMemo(() => {
-    const map = new Map<string, KanbanLead[]>();
-    map.set("none", []);
-    stages.forEach((s) => map.set(s.id, []));
-    leads.forEach((l) => {
-      const key = l.stage_id && map.has(l.stage_id) ? l.stage_id : "none";
-      map.get(key)!.push(l);
-    });
-    return map;
-  }, [leads, stages]);
+  const totalLeads = useMemo(
+    () => Object.values(columnData ?? {}).reduce((sum, c) => sum + c.total, 0),
+    [columnData],
+  );
+
 
   const saveStage = useMutation({
     mutationFn: async () => {
