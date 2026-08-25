@@ -647,6 +647,13 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
             )}
           </div>
         </div>
+
+        <ContactInfoSheet
+          leadId={lead?.id ?? null}
+          open={contactOpen}
+          onOpenChange={setContactOpen}
+          defaultTab={contactTab}
+        />
       </SheetContent>
     </Sheet>
   );
