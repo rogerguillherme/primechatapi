@@ -1042,18 +1042,80 @@ export function CloudChatTab() {
                   <button onClick={() => fileInputRef.current?.click()} className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground">
                     <Paperclip size={20} />
                   </button>
+
+                  {/* Atalhos: mensagens rápidas e fluxos */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        title="Atalhos (mensagens rápidas e fluxos)"
+                        className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground"
+                      >
+                        <Zap size={20} />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-72">
+                      <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">
+                        Atalhos
+                      </div>
+                      {(shortcuts || []).length === 0 && (
+                        <div className="px-2 py-2 text-xs text-muted-foreground">
+                          Nenhum atalho criado. Crie em Configurações → Atalhos do chat.
+                        </div>
+                      )}
+                      {(shortcuts || []).map((s: any) => (
+                        <DropdownMenuItem key={s.id} onClick={() => runShortcut(s)} className="gap-2 items-start">
+                          {s.action_type === "flow"
+                            ? <Workflow size={15} className="mt-0.5 text-primary flex-shrink-0" />
+                            : <Zap size={15} className="mt-0.5 text-primary flex-shrink-0" />}
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">/{s.command}</p>
+                            <p className="text-xs text-muted-foreground line-clamp-2">
+                              {s.description || (s.action_type === "flow" ? "Inicia um fluxo" : s.message)}
+                            </p>
+                          </div>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
-                <div className="flex-1 bg-background rounded-lg border border-border overflow-hidden">
-                  <textarea
-                    ref={textareaRef}
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Digite uma mensagem"
-                    className="w-full px-3 py-[9px] text-sm bg-transparent outline-none resize-none placeholder:text-muted-foreground max-h-[120px]"
-                    rows={1}
-                    style={{ minHeight: "38px" }}
-                  />
+                <div className="relative flex-1">
+                  {shortcutQuery !== null && matchedShortcuts.length > 0 && (
+                    <div className="absolute bottom-full mb-2 left-0 right-0 z-30 rounded-lg border border-border bg-popover shadow-lg overflow-hidden">
+                      {matchedShortcuts.map((s: any, i: number) => (
+                        <button
+                          key={s.id}
+                          onClick={() => runShortcut(s)}
+                          onMouseEnter={() => setShortcutIndex(i)}
+                          className={cn(
+                            "w-full text-left flex items-start gap-2 px-3 py-2",
+                            i === shortcutIndex ? "bg-accent" : "hover:bg-accent/60"
+                          )}
+                        >
+                          {s.action_type === "flow"
+                            ? <Workflow size={15} className="mt-0.5 text-primary flex-shrink-0" />
+                            : <Zap size={15} className="mt-0.5 text-primary flex-shrink-0" />}
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">/{s.command}</p>
+                            <p className="text-xs text-muted-foreground line-clamp-1">
+                              {s.description || (s.action_type === "flow" ? "Inicia um fluxo" : s.message)}
+                            </p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="bg-background rounded-lg border border-border overflow-hidden">
+                    <textarea
+                      ref={textareaRef}
+                      value={message}
+                      onChange={(e) => handleMessageChange(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder="Digite uma mensagem ou / para atalhos"
+                      className="w-full px-3 py-[9px] text-sm bg-transparent outline-none resize-none placeholder:text-muted-foreground max-h-[120px]"
+                      rows={1}
+                      style={{ minHeight: "38px" }}
+                    />
+                  </div>
                 </div>
                 {message.trim() ? (
                   <button onClick={handleSend} disabled={sendMutation.isPending} className="p-2.5 rounded-full shrink-0 mb-[3px] bg-primary text-primary-foreground hover:opacity-90">
