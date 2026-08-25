@@ -112,14 +112,26 @@ serve(async (req) => {
       } else if (kind === "image") {
         content.push({ type: "image_url", image_url: { url: att.dataUrl } });
       } else if (kind === "audio") {
+        // Áudio é transcrito em uma chamada dedicada ANTES da compilação.
+        // Enviar o áudio junto com a instrução de compilar fazia o modelo
+        // devolver trechos binários/base64 ("códigos") dentro das mensagens.
         const base64 = att.dataUrl.split(",")[1] ?? "";
         if (!base64) continue;
+        const transcript = await transcribeAudio(
+          base64,
+          AUDIO_FORMATS[mime] || "mp3",
+          LOVABLE_API_KEY,
+        );
+        if (!transcript) {
+          return json({ error: `Não foi possível transcrever o áudio "${att.name || "anexo"}". Tente enviar em MP3 ou cole o texto do roteiro.` }, 422);
+        }
         content.push({
-          type: "input_audio",
-          input_audio: { data: base64, format: AUDIO_FORMATS[mime] || "mp3" },
+          type: "text",
+          text: `ROTEIRO — transcrição do áudio "${att.name || "anexo"}" (reproduza literalmente):\n<<<DOCUMENTO\n${transcript}\nDOCUMENTO>>>`,
         });
       }
     }
+
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
