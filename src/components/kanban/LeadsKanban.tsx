@@ -189,7 +189,7 @@ export function LeadsKanban() {
     onSuccess: () => {
       toast.success("Etapa removida");
       queryClient.invalidateQueries({ queryKey: ["pipeline-stages", ownerId] });
-      queryClient.invalidateQueries({ queryKey: ["kanban-leads", ownerId] });
+      queryClient.invalidateQueries({ queryKey: ["kanban-columns", ownerId] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -199,7 +199,7 @@ export function LeadsKanban() {
       const { error } = await supabase.from("leads").update({ stage_id: stageId }).eq("id", leadId);
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["kanban-leads", ownerId] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["kanban-columns", ownerId] }),
     onError: (e: Error) => toast.error(`Não foi possível mover o lead: ${e.message}`),
   });
 
@@ -210,7 +210,7 @@ export function LeadsKanban() {
     },
     onSuccess: () => {
       toast.success("Responsável atualizado");
-      queryClient.invalidateQueries({ queryKey: ["kanban-leads", ownerId] });
+      queryClient.invalidateQueries({ queryKey: ["kanban-columns", ownerId] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
