@@ -124,7 +124,75 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
     },
   });
 
+  // ── Etapas do Kanban: permitem mover o lead direto do cabeçalho da conversa ──
+  const { data: pipelineStages = [] } = useQuery({
+    queryKey: ["pipeline-stages-chat"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pipeline_stages")
+        .select("id, name, color, position")
+        .order("position");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: open,
+  });
+
+  const moveStageMutation = useMutation({
+    mutationFn: async (stageId: string) => {
+      if (!lead) throw new Error("Nenhuma conversa selecionada");
+      const { error } = await supabase.from("leads").update({ stage_id: stageId }).eq("id", lead.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: "Lead movido de etapa" });
+      queryClient.invalidateQueries({ queryKey: ["kanban-leads"] });
+      queryClient.invalidateQueries({ queryKey: ["contact-info-lead", lead?.id] });
+    },
+    onError: (err: any) => {
+      toast({ title: "Erro ao mover", description: err.message, variant: "destructive" });
+    },
+  });
+
+  // ── Atalhos: mensagens rápidas ou ativação de fluxos já criados ──
+  const { data: shortcuts = [] } = useQuery({
+    queryKey: ["chat-shortcuts-active"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("chat_shortcuts")
+        .select("*")
+        .eq("active", true)
+        .order("command");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: open,
+  });
+
+  const runShortcut = useCallback(async (shortcut: any) => {
+    if (!lead) return;
+    if (shortcut.action_type === "flow") {
+      try {
+        await startFlowForLead({
+          flowId: shortcut.flow_id,
+          leadId: lead.id,
+          accountId: selectedAccountId || defaultAccount?.id || null,
+        });
+        toast({ title: `Fluxo /${shortcut.command} iniciado` });
+      } catch (err: any) {
+        toast({ title: "Erro ao iniciar fluxo", description: err.message, variant: "destructive" });
+      }
+      return;
+    }
+    const text = (shortcut.message || "")
+      .replace(/\{nome\}/gi, lead.name || "")
+      .replace(/\{telefone\}/gi, lead.phone || "");
+    setMessage(text);
+    textareaRef.current?.focus();
+  }, [lead, selectedAccountId, defaultAccount, toast]);
+
   const { templates } = useUserTemplates(open);
+
 
   const { data: accountTemplates = [] } = useQuery({
     queryKey: ["account-templates"],
