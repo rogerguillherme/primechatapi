@@ -150,20 +150,68 @@ export function NodeEditPanel({ node, templates, onUpdate, onClose, variationEna
         )}
 
         {type === "condition" && (
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label className="text-xs">Como comparar a resposta do lead</Label>
+              <Select
+                value={(data.match_mode as string) || "exact"}
+                onValueChange={(v) => onUpdate({ match_mode: v })}
+              >
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="exact">Exatamente igual</SelectItem>
+                  <SelectItem value="contains">Parecida (contém / aproximada)</SelectItem>
+                  <SelectItem value="ai">Parecida com avaliação da IA</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                {(data.match_mode as string) === "ai"
+                  ? "A IA lê a resposta do lead e decide se ela corresponde à intenção descrita abaixo."
+                  : (data.match_mode as string) === "contains"
+                  ? "Aceita respostas que contenham a palavra ou sejam muito parecidas (ignora acentos e erros leves)."
+                  : "O texto do lead precisa ser idêntico a uma das palavras abaixo."}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs">Palavras / payloads que ativam (uma por linha ou separadas por vírgula)</Label>
+              <textarea
+                value={(data.trigger_value as string) || ""}
+                onChange={(e) => onUpdate({ trigger_value: e.target.value })}
+                placeholder={"Ex:\nsim\nquero saber mais\nok"}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm min-h-[80px] resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                rows={4}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Também usadas como referência quando a IA avalia a resposta.
+              </p>
+            </div>
+
+            {(data.match_mode as string) === "ai" && (
+              <div className="space-y-2">
+                <Label className="text-xs">O que a IA deve considerar como "resposta correta"</Label>
+                <textarea
+                  value={(data.ai_match_description as string) || ""}
+                  onChange={(e) => onUpdate({ ai_match_description: e.target.value })}
+                  placeholder="Ex: o lead demonstrou interesse em participar, mesmo que com outras palavras"
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm min-h-[70px] resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  rows={3}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {type === "tag" && (
           <div className="space-y-2">
-            <Label className="text-xs">Palavras / payloads que ativam (uma por linha ou separadas por vírgula)</Label>
-            <textarea
-              value={(data.trigger_value as string) || ""}
-              onChange={(e) => onUpdate({ trigger_value: e.target.value })}
-              placeholder={"Ex:\nsim\nquero saber mais\nok"}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm min-h-[80px] resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              rows={4}
-            />
             <p className="text-[11px] text-muted-foreground">
-              O fluxo avança se a resposta do lead corresponder a qualquer uma das palavras (separe por vírgula, ponto-e-vírgula ou nova linha).
+              Ao passar por este passo, as etiquetas selecionadas são aplicadas ao lead.
             </p>
           </div>
         )}
+
 
         {type === "interactive_buttons" && (
           <>
