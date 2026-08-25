@@ -75,7 +75,8 @@ Deno.serve(async (req) => {
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
             body: JSON.stringify({
               account_id, lead_id: lead.id, phone: lead.phone,
-              cta_url: { display_text, url, body },
+              message: body,
+              cta_url: { display_text, url },
             }),
           });
           const d = await r.json().catch(() => ({}));
