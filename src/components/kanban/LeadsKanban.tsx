@@ -285,7 +285,9 @@ export function LeadsKanban() {
         <div className="flex-1 min-h-0 overflow-x-auto pb-3">
           <div className="flex gap-3 h-full min-h-[400px]">
             {columns.map((col) => {
-              const colLeads = leadsByStage.get(col.id) ?? [];
+              const colInfo = columnData?.[col.id] ?? { leads: [], total: 0 };
+              const colLeads = colInfo.leads;
+
               return (
                 <div
                   key={col.id}
