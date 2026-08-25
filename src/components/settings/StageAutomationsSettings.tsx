@@ -14,14 +14,13 @@ import {
 import { Loader2, Plus, Trash2, Workflow } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-type TriggerType = "inbound_message" | "keyword" | "outbound_message" | "send_failed" | "order_approved";
+type TriggerType = "inbound_message" | "keyword" | "outbound_message" | "send_failed";
 
 const TRIGGERS: { value: TriggerType; label: string; hint: string }[] = [
   { value: "inbound_message", label: "Lead respondeu", hint: "Qualquer mensagem recebida do lead" },
   { value: "keyword", label: "Palavra-chave recebida", hint: "A mensagem do lead contém uma das palavras" },
   { value: "outbound_message", label: "Mensagem enviada", hint: "Quando enviamos uma mensagem para o lead" },
   { value: "send_failed", label: "Falha no envio", hint: "Quando a Meta recusa a mensagem" },
-  { value: "order_approved", label: "Compra aprovada", hint: "Quando um pedido do lead é aprovado" },
 ];
 
 interface StageAutomation {
