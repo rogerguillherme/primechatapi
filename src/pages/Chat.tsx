@@ -30,6 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 import { DeleteOldLeadsDialog } from "@/components/chat/DeleteOldLeadsDialog";
 import { Trash2 } from "lucide-react";
+import { ContactInfoSheet } from "@/components/chat/ContactInfoSheet";
 
 type ChatTab = "novos_pedidos" | "aguardando_respostas" | "respondidas" | "reembolso";
 
@@ -1160,6 +1161,14 @@ export default function Chat() {
           </div>
         )}
       </div>
+
+      {/* Dados / edição do contato + mudança de etapa */}
+      <ContactInfoSheet
+        leadId={selectedLeadId}
+        open={contactOpen}
+        onOpenChange={setContactOpen}
+        defaultTab={contactTab}
+      />
     </div>
   );
 }
