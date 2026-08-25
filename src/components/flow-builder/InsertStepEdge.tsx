@@ -15,6 +15,7 @@ import {
   TimerOff,
   Bot,
   Ban,
+  Tag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -26,7 +27,8 @@ export type InsertableStepType =
   | "cta_url"
   | "no_response"
   | "ai_agent"
-  | "blacklist";
+  | "blacklist"
+  | "tag";
 
 type InsertStepOption = {
   type: InsertableStepType;
@@ -41,13 +43,15 @@ type InsertStepEdgeData = {
 const insertStepOptions: InsertStepOption[] = [
   { type: "message", label: "Mensagem", Icon: MessageSquare },
   { type: "delay", label: "Delay", Icon: Clock },
-  { type: "condition", label: "Condição", Icon: GitBranch },
+  { type: "condition", label: "Resposta do lead", Icon: GitBranch },
   { type: "interactive_buttons", label: "Botões", Icon: MousePointerClick },
   { type: "cta_url", label: "Link", Icon: ExternalLink },
   { type: "no_response", label: "Sem resposta", Icon: TimerOff },
   { type: "ai_agent", label: "Agente IA", Icon: Bot },
+  { type: "tag", label: "Etiqueta", Icon: Tag },
   { type: "blacklist", label: "Blacklist", Icon: Ban },
 ];
+
 
 export function InsertStepEdge(props: EdgeProps) {
   const {
