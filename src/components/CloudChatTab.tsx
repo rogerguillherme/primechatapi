@@ -488,7 +488,67 @@ export function CloudChatTab() {
     sendMutation.mutate({ text });
   };
 
+  /** Executa um atalho: dispara fluxo ou preenche mensagem rápida com variáveis resolvidas. */
+  const runShortcut = useCallback(async (shortcut: any) => {
+    setShortcutQuery(null);
+    if (!selectedLead) return;
+
+    if (shortcut.action_type === "flow") {
+      try {
+        await startFlowForLead({
+          flowId: shortcut.flow_id,
+          leadId: selectedLead.id,
+          accountId: selectedAccountId || defaultAccount?.id || null,
+        });
+        setMessage("");
+        toast.success(`Fluxo /${shortcut.command} iniciado`);
+      } catch (err: any) {
+        toast.error(err.message || "Erro ao iniciar fluxo");
+      }
+      return;
+    }
+
+    const text = (shortcut.message || "")
+      .replace(/\{nome\}/gi, selectedLead.name || "")
+      .replace(/\{telefone\}/gi, selectedLead.phone || "");
+    setMessage(text);
+    textareaRef.current?.focus();
+  }, [selectedLead, selectedAccountId, defaultAccount]);
+
+  const handleMessageChange = (value: string) => {
+    setMessage(value);
+    const match = /^\/([\w-]*)$/.exec(value);
+    if (match) {
+      setShortcutQuery(match[1]);
+      setShortcutIndex(0);
+    } else if (shortcutQuery !== null) {
+      setShortcutQuery(null);
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (shortcutQuery !== null && matchedShortcuts.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setShortcutIndex((i) => (i + 1) % matchedShortcuts.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setShortcutIndex((i) => (i - 1 + matchedShortcuts.length) % matchedShortcuts.length);
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        runShortcut(matchedShortcuts[shortcutIndex]);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setShortcutQuery(null);
+        return;
+      }
+    }
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
