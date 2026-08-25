@@ -350,6 +350,55 @@ export function CloudChatTab() {
   const selectedLead = leads?.find((l) => l.id === selectedLeadId);
   const leadAiEnabled = !!selectedLead?.ai_enabled;
 
+  // ── ETAPAS DO KANBAN ──
+  const { data: pipelineStages } = useQuery({
+    queryKey: ["pipeline-stages-chat"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pipeline_stages")
+        .select("id, name, color, position")
+        .order("position");
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const moveLeadStage = useMutation({
+    mutationFn: async (stageId: string) => {
+      if (!selectedLeadId) throw new Error("Nenhuma conversa selecionada");
+      const { error } = await supabase.from("leads").update({ stage_id: stageId }).eq("id", selectedLeadId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Lead movido de etapa");
+      queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
+      queryClient.invalidateQueries({ queryKey: ["kanban-leads"] });
+      queryClient.invalidateQueries({ queryKey: ["contact-info-lead", selectedLeadId] });
+    },
+    onError: (err: any) => toast.error(err.message || "Erro ao mover lead"),
+  });
+
+  // ── ATALHOS DO CHAT ──
+  const { data: shortcuts } = useQuery({
+    queryKey: ["chat-shortcuts-active"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("chat_shortcuts")
+        .select("id, command, description, action_type, message, flow_id")
+        .eq("active", true)
+        .order("command");
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const matchedShortcuts = useMemo(() => {
+    if (shortcutQuery === null) return [];
+    const q = shortcutQuery.toLowerCase();
+    return (shortcuts || []).filter((s: any) => s.command.toLowerCase().startsWith(q)).slice(0, 8);
+  }, [shortcuts, shortcutQuery]);
+
+
   const replyNowWithAi = useMutation({
     mutationFn: async () => {
       if (!selectedLead) throw new Error("Nenhum contato selecionado");
