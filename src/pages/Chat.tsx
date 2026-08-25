@@ -31,6 +31,8 @@ import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 import { DeleteOldLeadsDialog } from "@/components/chat/DeleteOldLeadsDialog";
 import { Trash2 } from "lucide-react";
 import { ContactInfoSheet } from "@/components/chat/ContactInfoSheet";
+import { startFlowForLead } from "@/lib/startFlowForLead";
+import { Zap, Workflow } from "lucide-react";
 
 type ChatTab = "novos_pedidos" | "aguardando_respostas" | "respondidas" | "reembolso";
 
@@ -82,6 +84,8 @@ export default function Chat() {
   const [filterAccountId, setFilterAccountId] = useState<string | null>(null);
   const [contactOpen, setContactOpen] = useState(false);
   const [contactTab, setContactTab] = useState<"info" | "edit">("info");
+  const [shortcutQuery, setShortcutQuery] = useState<string | null>(null);
+  const [shortcutIndex, setShortcutIndex] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const queryClient = useQueryClient();
@@ -391,6 +395,27 @@ export default function Chat() {
 
 
 
+  // ── ATALHOS DO CHAT ──
+  // Atalhos digitáveis ("/fluxo1") que enviam uma mensagem rápida ou ativam um fluxo.
+  const { data: shortcuts } = useQuery({
+    queryKey: ["chat-shortcuts-active"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("chat_shortcuts")
+        .select("id, command, description, action_type, message, flow_id")
+        .eq("active", true)
+        .order("command");
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const matchedShortcuts = useMemo(() => {
+    if (shortcutQuery === null) return [];
+    const q = shortcutQuery.toLowerCase();
+    return (shortcuts || []).filter((s: any) => s.command.toLowerCase().startsWith(q)).slice(0, 8);
+  }, [shortcuts, shortcutQuery]);
+
   const sendMutation = useMutation({
     mutationFn: async ({ text, mediaUrl, mediaType, fileName }: { text?: string; mediaUrl?: string; mediaType?: string; fileName?: string }) => {
       if (!selectedLead) throw new Error("No lead selected");
@@ -464,6 +489,45 @@ export default function Chat() {
   }, [uploadAndSendMedia]);
 
 
+  const runShortcut = useCallback(async (shortcut: any) => {
+    setShortcutQuery(null);
+    if (!selectedLead) return;
+
+    if (shortcut.action_type === "flow") {
+      try {
+        await startFlowForLead({
+          flowId: shortcut.flow_id,
+          leadId: selectedLead.id,
+          accountId: selectedAccountId || defaultAccount?.id || null,
+        });
+        setMessage("");
+        toast({ title: `Fluxo /${shortcut.command} iniciado` });
+      } catch (err: any) {
+        toast({ title: "Erro ao iniciar fluxo", description: err.message, variant: "destructive" });
+      }
+      return;
+    }
+
+    // Mensagem rápida: resolve variáveis simples e joga no campo para revisão antes do envio.
+    const text = (shortcut.message || "")
+      .replace(/\{nome\}/gi, selectedLead.name || "")
+      .replace(/\{telefone\}/gi, selectedLead.phone || "");
+    setMessage(text);
+    textareaRef.current?.focus();
+  }, [selectedLead, selectedAccountId, defaultAccount, toast]);
+
+  const handleMessageChange = (value: string) => {
+    setMessage(value);
+    // Abre a lista de atalhos apenas quando a mensagem inteira começa com "/".
+    const match = /^\/([\w-]*)$/.exec(value);
+    if (match) {
+      setShortcutQuery(match[1]);
+      setShortcutIndex(0);
+    } else if (shortcutQuery !== null) {
+      setShortcutQuery(null);
+    }
+  };
+
   const handleSend = () => {
     const text = message.trim();
     if (!text) return;
@@ -471,6 +535,28 @@ export default function Chat() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (shortcutQuery !== null && matchedShortcuts.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setShortcutIndex((i) => (i + 1) % matchedShortcuts.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setShortcutIndex((i) => (i - 1 + matchedShortcuts.length) % matchedShortcuts.length);
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        runShortcut(matchedShortcuts[shortcutIndex]);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setShortcutQuery(null);
+        return;
+      }
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -1117,17 +1203,48 @@ export default function Chat() {
                 </div>
 
                 {/* Message input */}
-                <div className="flex-1 bg-card rounded-lg border border-border shadow-sm overflow-hidden">
+                <div className="flex-1 relative">
+                  {/* Lista de atalhos ("/") */}
+                  {shortcutQuery !== null && matchedShortcuts.length > 0 && (
+                    <div className="absolute bottom-full mb-2 left-0 right-0 z-20 rounded-lg border border-border bg-popover shadow-lg overflow-hidden">
+                      <div className="px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground border-b border-border">
+                        Atalhos
+                      </div>
+                      {matchedShortcuts.map((s: any, i: number) => (
+                        <button
+                          key={s.id}
+                          onMouseEnter={() => setShortcutIndex(i)}
+                          onClick={() => runShortcut(s)}
+                          className={cn(
+                            "w-full flex items-start gap-2 px-3 py-2 text-left transition-colors",
+                            i === shortcutIndex ? "bg-accent" : "hover:bg-accent/60"
+                          )}
+                        >
+                          {s.action_type === "flow"
+                            ? <Workflow size={15} className="mt-0.5 text-primary flex-shrink-0" />
+                            : <Zap size={15} className="mt-0.5 text-primary flex-shrink-0" />}
+                          <span className="min-w-0">
+                            <span className="block text-sm font-medium">/{s.command}</span>
+                            <span className="block text-xs text-muted-foreground line-clamp-1">
+                              {s.description || (s.action_type === "flow" ? "Ativa um fluxo" : s.message)}
+                            </span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
                   <textarea
                     ref={textareaRef}
                     value={message}
-                    onChange={(e) => setMessage(e.target.value)}
+                    onChange={(e) => handleMessageChange(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder="Digite uma mensagem"
+                    placeholder="Digite uma mensagem ou / para atalhos"
                     className="w-full px-3 py-[9px] text-[15px] bg-transparent outline-none resize-none placeholder:text-muted-foreground max-h-[120px]"
                     rows={1}
                     style={{ minHeight: "38px" }}
                   />
+                  </div>
                 </div>
 
                 {/* Send or Audio */}
