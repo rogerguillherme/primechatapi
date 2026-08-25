@@ -732,7 +732,44 @@ Deno.serve(async (req) => {
       } else if (media_type === "video") {
         body = { messaging_product: "whatsapp", to: cleanPhone, type: "video", video: { link: media_url, caption: message || undefined } };
       } else if (media_type === "audio") {
-        body = { messaging_product: "whatsapp", to: cleanPhone, type: "audio", audio: { link: media_url } };
+        // Enviar por `link` faz a Meta reutilizar o handle do arquivo e o WhatsApp
+        // marca a mensagem como "encaminhada". Fazendo upload a cada envio,
+        // geramos um media id novo e a mensagem chega como enviada normalmente.
+        let audioPayload: Record<string, string> = { link: media_url };
+        if (!isD360) {
+          try {
+            const fileRes = await fetch(media_url);
+            if (!fileRes.ok) throw new Error(`download ${fileRes.status}`);
+            const rawType = (fileRes.headers.get("content-type") || "").split(";")[0].trim();
+            const ext = (media_url.split("?")[0].split(".").pop() || "").toLowerCase();
+            const mime = rawType && rawType.startsWith("audio/")
+              ? rawType
+              : ext === "mp3"
+                ? "audio/mpeg"
+                : ext === "m4a"
+                  ? "audio/mp4"
+                  : "audio/ogg";
+            const blob = new Blob([await fileRes.arrayBuffer()], { type: mime });
+            const form = new FormData();
+            form.append("messaging_product", "whatsapp");
+            form.append("type", mime);
+            form.append("file", blob, `audio.${mime === "audio/mpeg" ? "mp3" : mime === "audio/mp4" ? "m4a" : "ogg"}`);
+            const upRes = await fetch(
+              `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/media`,
+              { method: "POST", headers: { Authorization: `Bearer ${ACCESS_TOKEN}` }, body: form },
+            );
+            const upJson = await upRes.json().catch(() => null);
+            if (upRes.ok && upJson?.id) {
+              audioPayload = { id: upJson.id };
+            } else {
+              console.error("Falha no upload de áudio, usando link:", upRes.status, JSON.stringify(upJson));
+            }
+          } catch (e) {
+            console.error("Erro ao subir áudio para a Meta, usando link:", e);
+          }
+        }
+        body = { messaging_product: "whatsapp", to: cleanPhone, type: "audio", audio: audioPayload };
+
       } else {
         // Preserva o nome/extensão original do arquivo (qualquer tipo, não só PDF).
         const rawName = typeof file_name === "string" ? file_name.trim() : "";
