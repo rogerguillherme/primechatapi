@@ -354,7 +354,7 @@ export default function Chat() {
   const selectedLead = leads?.find((l) => l.id === selectedLeadId);
 
   const sendMutation = useMutation({
-    mutationFn: async ({ text, mediaUrl, mediaType }: { text?: string; mediaUrl?: string; mediaType?: string }) => {
+    mutationFn: async ({ text, mediaUrl, mediaType, fileName }: { text?: string; mediaUrl?: string; mediaType?: string; fileName?: string }) => {
       if (!selectedLead) throw new Error("No lead selected");
       const { data, error } = await supabase.functions.invoke("whatsapp-cloud-send", {
         body: {
@@ -363,6 +363,7 @@ export default function Chat() {
           lead_id: selectedLead.id,
           media_url: mediaUrl || undefined,
           media_type: mediaType || undefined,
+          file_name: fileName || undefined,
           account_id: selectedAccountId || undefined,
         },
       });
@@ -381,6 +382,16 @@ export default function Chat() {
 
   const uploadAndSendMedia = useCallback(async (file: File) => {
     if (!selectedLead) return;
+    // A Meta limita anexos a 100 MB; barramos antes do upload para evitar custo desnecessário.
+    const MAX_BYTES = 95 * 1024 * 1024;
+    if (file.size > MAX_BYTES) {
+      toast({
+        title: "Arquivo muito grande",
+        description: "O WhatsApp aceita anexos de até 95 MB.",
+        variant: "destructive",
+      });
+      return;
+    }
     try {
       const formData = new FormData();
       formData.append("file", file);
@@ -391,7 +402,11 @@ export default function Chat() {
       });
       if (error) throw error;
 
-      sendMutation.mutate({ mediaUrl: data.url, mediaType: data.media_type });
+      sendMutation.mutate({
+        mediaUrl: data.url,
+        mediaType: data.media_type,
+        fileName: data.file_name || file.name,
+      });
     } catch (err: any) {
       toast({ title: "Erro no upload", description: err.message, variant: "destructive" });
     }
@@ -405,10 +420,11 @@ export default function Chat() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) uploadAndSendMedia(file);
+    const files = Array.from(e.target.files || []);
+    for (const file of files) uploadAndSendMedia(file);
     if (e.target) e.target.value = "";
   }, [uploadAndSendMedia]);
+
 
   const handleSend = () => {
     const text = message.trim();
