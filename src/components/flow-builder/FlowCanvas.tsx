@@ -421,6 +421,12 @@ export function FlowCanvas({
           variationEnabled={variationEnabled}
         />
       )}
+
+      <SequenceComposer
+        open={sequenceOpen}
+        onOpenChange={setSequenceOpen}
+        onGenerate={addSequence}
+      />
     </div>
   );
 }
