@@ -45,6 +45,8 @@ function formatDateSeparator(date: Date) {
 export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps) {
   const [message, setMessage] = useState("");
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+  const [contactOpen, setContactOpen] = useState(false);
+  const [contactTab, setContactTab] = useState<"info" | "edit">("info");
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
