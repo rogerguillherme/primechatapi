@@ -993,7 +993,9 @@ export default function Chat() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*,video/*,audio/*"
+                accept="*/*"
+                multiple
+
                 className="hidden"
                 onChange={handleFileSelect}
               />
