@@ -1349,6 +1349,13 @@ async function downloadCloudMedia(
   }
 }
 
+/** Espera total de um passo de delay: minutos + segundos (delay_min_seconds). */
+function stepDelayMs(step: any): number {
+  const minutes = Number(step?.delay_minutes) || 0;
+  const seconds = Number(step?.delay_min_seconds) || 0;
+  return (minutes * 60 + seconds) * 1000;
+}
+
 async function processFlowStep(step: any, execution: any, lead: any, supabase: any, fallbackAccountId?: string | null) {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -1457,7 +1464,7 @@ async function processFlowStep(step: any, execution: any, lead: any, supabase: a
     await supabase.from("flow_executions").update({
       current_step_id: step.id,
       status: "waiting_delay",
-      next_action_at: new Date(Date.now() + step.delay_minutes * 60 * 1000).toISOString(),
+      next_action_at: new Date(Date.now() + stepDelayMs(step)).toISOString(),
     }).eq("id", execution.id);
     // Trigger flow-processor to handle the delay
     await triggerFlowProcessor(supabaseUrl, supabaseKey);

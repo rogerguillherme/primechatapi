@@ -259,7 +259,7 @@ export function EvolutionBroadcastTab() {
 
     const nextAt =
       firstStep.step_type === "delay"
-        ? new Date(Date.now() + (firstStep.delay_minutes || 0) * 60_000).toISOString()
+        ? new Date(Date.now() + ((firstStep.delay_minutes || 0) * 60 + (firstStep.delay_min_seconds || 0)) * 1000).toISOString()
         : firstStep.step_type === "no_response"
           ? new Date(Date.now() + (firstStep.timeout_minutes || 10) * 60_000).toISOString()
           : new Date().toISOString();
