@@ -24,6 +24,9 @@ type Attachment = {
 type FlowStep = {
   type: "message" | "delay" | "condition" | "interactive_buttons" | "cta_url" | "no_response" | "ai_agent" | "tag";
   data: Record<string, unknown>;
+  ref?: string;
+  parentRef?: string | null;
+  isEntry?: boolean;
 };
 
 type DataCrazyMessage = {
@@ -259,12 +262,16 @@ async function mirrorDataCrazyMedia(
   }
 }
 
-function appendDelayStep(steps: FlowStep[], seconds: number): void {
+function makeDelayStep(seconds: number): FlowStep {
   const safeSeconds = Math.max(1, Math.round(seconds || 1));
-  steps.push({
+  return {
     type: "delay",
     data: { delay_minutes: 0, delay_min_seconds: safeSeconds, delay_max_seconds: safeSeconds },
-  });
+  };
+}
+
+function appendDelayStep(steps: FlowStep[], seconds: number): void {
+  steps.push(makeDelayStep(seconds));
 }
 
 function dataCrazyDelaySeconds(block: DataCrazyBlock): number {
@@ -278,18 +285,17 @@ function dataCrazyDelaySeconds(block: DataCrazyBlock): number {
   return seconds + minutes * 60 + hours * 3600 + days * 86400;
 }
 
-async function appendDataCrazyMessageStep(
-  steps: FlowStep[],
+async function dataCrazyMessageToSteps(
   message: DataCrazyMessage,
   supabase: ReturnType<typeof createClient>,
   mediaCache: Map<string, MediaMirrorResult>,
-): Promise<void> {
+): Promise<FlowStep[]> {
   const options = asObject(message.options) || {};
   const name = getString(message.name);
+  const ref = getString(message.stepId) || crypto.randomUUID();
 
   if (name === "delay-message") {
-    appendDelayStep(steps, getNumber(options.seconds) || 1);
-    return;
+    return [{ ...makeDelayStep(getNumber(options.seconds) || 1), ref }];
   }
 
   if (name === "send-text-message") {
@@ -299,8 +305,9 @@ async function appendDataCrazyMessageStep(
       : [];
 
     if (buttons.length > 0) {
-      steps.push({
+      return [{
         type: "interactive_buttons",
+        ref,
         data: {
           custom_message: text,
           buttons: buttons.slice(0, 3).map((button, index) => ({
@@ -308,13 +315,13 @@ async function appendDataCrazyMessageStep(
             title: (getString(button?.title) || getString(button?.text) || `Opção ${index + 1}`).slice(0, 20),
           })),
         },
-      });
-      return;
+      }];
     }
 
     if (text.trim()) {
-      steps.push({
+      return [{
         type: "message",
+        ref,
         data: {
           custom_message: text,
           template_id: null,
@@ -323,17 +330,18 @@ async function appendDataCrazyMessageStep(
           message_variations: [],
           template_variations: [],
         },
-      });
+      }];
     }
-    return;
+    return [];
   }
 
   if (name === "send-file-message") {
     const media = pickDataCrazyMedia(options);
-    if (!media) return;
+    if (!media) return [];
     const mirrored = await mirrorDataCrazyMedia(media, supabase, mediaCache);
-    steps.push({
+    return [{
       type: "message",
+      ref,
       data: {
         custom_message: normalizeDataCrazyText(getString(options.text)),
         template_id: null,
@@ -343,17 +351,19 @@ async function appendDataCrazyMessageStep(
         message_variations: [],
         template_variations: [],
       },
-    });
-    return;
+    }];
   }
 
   if (name === "text-input-message") {
     const timeoutSeconds = getNumber(options.timeoutInSeconds);
-    steps.push({
+    return [{
       type: "no_response",
+      ref,
       data: { timeout_minutes: Math.max(1, Math.ceil((timeoutSeconds || 600) / 60)) },
-    });
+    }];
   }
+
+  return [];
 }
 
 async function compileDataCrazyAutomation(
@@ -369,33 +379,57 @@ async function compileDataCrazyAutomation(
   const firstTrigger = blocks.find((block) => block.type === "trigger" && getString(asObject(block.options)?.nextBlockId));
   const firstChat = blocks.find((block) => block.type === "chat");
 
-  const walk = async (blockId: string): Promise<void> => {
+  const pushLinkedStep = (step: FlowStep, parentRef: string | null, isEntry: boolean): string => {
+    const ref = step.ref || crypto.randomUUID();
+    steps.push({
+      ...step,
+      ref,
+      parentRef,
+      isEntry,
+    });
+    return ref;
+  };
+
+  const walk = async (blockId: string, parentRef: string | null, isEntry: boolean): Promise<string | null> => {
     if (!blockId || visited.has(blockId)) return;
     visited.add(blockId);
 
     const block = blockById.get(blockId);
-    if (!block) return;
+    if (!block) return parentRef;
     const options = asObject(block.options) || {};
+    let currentParentRef = parentRef;
+    let nextIsEntry = isEntry;
 
     if (block.type === "delay") {
-      appendDelayStep(steps, dataCrazyDelaySeconds(block) || 1);
+      currentParentRef = pushLinkedStep(
+        { ...makeDelayStep(dataCrazyDelaySeconds(block) || 1), ref: `block:${blockId}:delay` },
+        currentParentRef,
+        nextIsEntry,
+      );
+      nextIsEntry = false;
     }
 
     if (block.type === "chat") {
       for (const message of asMessages(options.messages)) {
-        await appendDataCrazyMessageStep(steps, message, supabase, mediaCache);
+        const convertedSteps = await dataCrazyMessageToSteps(message, supabase, mediaCache);
+        let lastInsertedRef: string | null = null;
+        for (const step of convertedSteps) {
+          lastInsertedRef = pushLinkedStep(step, currentParentRef, nextIsEntry);
+          currentParentRef = lastInsertedRef;
+          nextIsEntry = false;
+        }
         const messageOptions = asObject(message.options) || {};
         const timeoutNextBlockId = getString(messageOptions.timeoutNextBlockId);
-        if (message.name === "text-input-message" && timeoutNextBlockId) {
-          await walk(timeoutNextBlockId);
+        if (message.name === "text-input-message" && timeoutNextBlockId && lastInsertedRef) {
+          await walk(timeoutNextBlockId, lastInsertedRef, false);
         }
       }
     }
 
-    await walk(getString(options.nextBlockId));
+    return await walk(getString(options.nextBlockId), currentParentRef, nextIsEntry) || currentParentRef;
   };
 
-  await walk(getString(asObject(firstTrigger?.options)?.nextBlockId) || getString(firstChat?.id));
+  await walk(getString(asObject(firstTrigger?.options)?.nextBlockId) || getString(firstChat?.id), null, true);
   return steps;
 }
 
@@ -474,7 +508,13 @@ async function persistCompiledFlow(params: {
 
   if (flowError || !flow?.id) throw flowError || new Error("Falha ao criar fluxo.");
 
+  const hasExplicitGraph = params.steps.some((step) => step.ref || step.parentRef !== undefined || step.isEntry !== undefined);
   const stepIds = params.steps.map(() => crypto.randomUUID());
+  const refToId = new Map<string, string>();
+  params.steps.forEach((step, index) => {
+    refToId.set(step.ref || `step:${index}`, stepIds[index]);
+  });
+
   const payload = params.steps.map((step, index) => ({
     id: stepIds[index],
     flow_id: flow.id,
@@ -484,8 +524,10 @@ async function persistCompiledFlow(params: {
     custom_message: typeof step.data.custom_message === "string" ? step.data.custom_message : null,
     delay_minutes: typeof step.data.delay_minutes === "number" ? step.data.delay_minutes : 0,
     trigger_value: typeof step.data.trigger_value === "string" ? step.data.trigger_value : null,
-    parent_step_id: index === 0 ? null : stepIds[index - 1],
-    is_entry: index === 0,
+    parent_step_id: hasExplicitGraph
+      ? (step.parentRef ? refToId.get(step.parentRef) || null : null)
+      : (index === 0 ? null : stepIds[index - 1]),
+    is_entry: hasExplicitGraph ? step.isEntry === true : index === 0,
     buttons: Array.isArray(step.data.buttons) ? step.data.buttons : [],
     timeout_minutes: typeof step.data.timeout_minutes === "number" ? step.data.timeout_minutes : null,
     ai_agent_id: typeof step.data.agent_id === "string" ? step.data.agent_id : null,
