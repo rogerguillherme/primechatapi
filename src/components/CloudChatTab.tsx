@@ -74,6 +74,11 @@ export function CloudChatTab() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Painel de dados/edição do contato e atalhos do chat
+  const [contactOpen, setContactOpen] = useState(false);
+  const [contactTab, setContactTab] = useState<"info" | "edit">("info");
+  const [shortcutQuery, setShortcutQuery] = useState<string | null>(null);
+  const [shortcutIndex, setShortcutIndex] = useState(0);
   const queryClient = useQueryClient();
   const { accounts, defaultAccount } = useWhatsAppAccounts();
   const { templates } = useUserTemplates();
