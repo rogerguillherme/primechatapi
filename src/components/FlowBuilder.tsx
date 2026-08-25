@@ -329,24 +329,69 @@ function AiFlowChat({ onGenerate }: { onGenerate: (steps: any[]) => void }) {
   const [open, setOpen] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [attachments, setAttachments] = useState<ExtractedAttachment[]>([]);
+  const [isReadingFile, setIsReadingFile] = useState(false);
   const [messages, setMessages] = useState<{ role: "user" | "ai"; content: string }[]>([
-    { role: "ai", content: "Descreva o fluxo de automação que deseja criar e eu vou gerar para você! Ex: 'Fluxo de boas-vindas com mensagem, delay de 1 hora e botões de sim/não'" },
+    { role: "ai", content: "Descreva o fluxo ou anexe o documento com o roteiro (PDF, DOCX, TXT, MD, CSV, XLSX, PPTX, ODT, imagem ou áudio). Eu reproduzo as mensagens exatamente como estão escritas." },
   ]);
 
+  const handlePickFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setIsReadingFile(true);
+    try {
+      for (const file of Array.from(files)) {
+        try {
+          const extracted = await extractFlowDocument(file);
+          setAttachments((prev) => [...prev.filter((a) => a.name !== extracted.name), extracted]);
+          toast.success(`Documento pronto: ${extracted.name}`);
+        } catch (e: any) {
+          toast.error(e?.message || `Não foi possível ler ${file.name}`);
+        }
+      }
+    } finally {
+      setIsReadingFile(false);
+    }
+  };
+
   const handleSend = async () => {
-    if (!prompt.trim() || isGenerating) return;
+    if (isGenerating) return;
     const userMsg = prompt.trim();
+    if (!userMsg && attachments.length === 0) return;
+
     setPrompt("");
-    setMessages((prev) => [...prev, { role: "user", content: userMsg }]);
+    const attachedNow = attachments;
+    setAttachments([]);
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "user",
+        content: [userMsg, attachedNow.map((a) => `📎 ${a.name}`).join("\n")].filter(Boolean).join("\n\n"),
+      },
+    ]);
     setIsGenerating(true);
 
     try {
       const { data, error } = await supabase.functions.invoke("generate-flow", {
-        body: { description: userMsg },
+        body: {
+          description: userMsg,
+          attachments: attachedNow.map(({ name, mimeType, text, dataUrl, kind }) => ({
+            name, mimeType, text, dataUrl, kind,
+          })),
+        },
       });
 
-      if (error) throw error;
+      // Edge Functions retornam erro HTTP com corpo JSON; extraímos a mensagem real.
+      if (error) {
+        let detail = error.message;
+        try {
+          const parsed = await (error as any)?.context?.json?.();
+          if (parsed?.error) detail = parsed.error;
+        } catch { /* mantém a mensagem original */ }
+        throw new Error(detail);
+      }
       if (data?.error) throw new Error(data.error);
+
+
 
       const steps = data.steps || [];
       const summary = steps.map((s: any, i: number) => {
