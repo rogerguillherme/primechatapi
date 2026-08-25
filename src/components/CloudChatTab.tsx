@@ -18,11 +18,14 @@ import {
   Search, Send, MessageSquare, FileText, Check, CheckCheck,
   MoreVertical, ArrowLeft, Paperclip, Clock, MessageCircleReply,
   ShoppingBag, RotateCcw, Tag, X, AlertCircle, Bot, Users, PowerOff, Megaphone,
-  Info, Pencil, Columns3, Zap, Workflow,
+  Info, Pencil, Columns3, Zap, Workflow, UserPlus,
 } from "lucide-react";
 import { BulkBroadcastDialog } from "@/components/BulkBroadcastDialog";
 import { ContactInfoSheet } from "@/components/chat/ContactInfoSheet";
 import { startFlowForLead } from "@/lib/startFlowForLead";
+import { useTeamContext, useTeamMembers } from "@/hooks/use-team";
+import { useAuth } from "@/contexts/AuthContext";
+
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -133,7 +136,7 @@ export function CloudChatTab() {
       const { data } = await (supabase as any)
         .from("leads")
         .select(
-          "id, name, phone, email, photo_url, chat_status, ai_enabled, updated_at, last_message_content, last_message_at, last_message_direction, last_message_status, last_message_account_id, account_ids"
+          "id, name, phone, email, photo_url, chat_status, ai_enabled, assigned_to, updated_at, last_message_content, last_message_at, last_message_direction, last_message_status, last_message_account_id, account_ids"
         )
         .order("updated_at", { ascending: false, nullsFirst: false })
         .limit(5000);
@@ -377,6 +380,42 @@ export function CloudChatTab() {
     },
     onError: (err: any) => toast.error(err.message || "Erro ao mover lead"),
   });
+
+  // ── TRANSFERIR ATENDIMENTO ──
+  const { user } = useAuth();
+  const { data: teamCtx } = useTeamContext();
+  // A listagem de membros só existe para o dono da conta (RLS/edge function).
+  const { data: teamMembers } = useTeamMembers(!!teamCtx?.isOwner);
+
+  /** Lista de atendentes disponíveis: o dono/eu + colaboradores. */
+  const agents = useMemo(() => {
+    const list: { id: string; label: string }[] = [];
+    if (user?.id) list.push({ id: user.id, label: `Eu (${user.email ?? "minha conta"})` });
+    for (const m of teamMembers || []) {
+      if (m.member_user_id === user?.id) continue;
+      list.push({ id: m.member_user_id, label: m.display_name || m.email });
+    }
+    return list;
+  }, [teamMembers, user?.id, user?.email]);
+
+  const transferLead = useMutation({
+    mutationFn: async (assignedTo: string | null) => {
+      if (!selectedLeadId) throw new Error("Nenhuma conversa selecionada");
+      const { error } = await supabase
+        .from("leads")
+        .update({ assigned_to: assignedTo })
+        .eq("id", selectedLeadId);
+      if (error) throw error;
+    },
+    onSuccess: (_d, assignedTo) => {
+      toast.success(assignedTo ? "Atendimento transferido" : "Atendente removido");
+      queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
+      queryClient.invalidateQueries({ queryKey: ["kanban-leads"] });
+      queryClient.invalidateQueries({ queryKey: ["contact-info-lead", selectedLeadId] });
+    },
+    onError: (err: any) => toast.error(err.message || "Erro ao transferir atendimento"),
+  });
+
 
   // ── ATALHOS DO CHAT ──
   const { data: shortcuts } = useQuery({
@@ -944,6 +983,45 @@ export function CloudChatTab() {
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
+
+              {/* Transferir atendimento para outro atendente */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    title="Transferir para outro atendente"
+                    className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <UserPlus size={18} />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Transferir atendimento</div>
+                  {agents.length <= 1 && (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                      Nenhum outro atendente. Convide sua equipe em Configurações › Equipe.
+                    </div>
+                  )}
+                  {agents.map((a) => (
+                    <DropdownMenuItem
+                      key={a.id}
+                      onClick={() => transferLead.mutate(a.id)}
+                      disabled={transferLead.isPending || selectedLead?.assigned_to === a.id}
+                      className="gap-2"
+                    >
+                      <Users size={14} className="opacity-60 shrink-0" />
+                      <span className="flex-1 truncate">{a.label}</span>
+                      {selectedLead?.assigned_to === a.id && <Check size={14} className="opacity-60" />}
+                    </DropdownMenuItem>
+                  ))}
+                  {selectedLead?.assigned_to && (
+                    <DropdownMenuItem onClick={() => transferLead.mutate(null)} className="gap-2 text-destructive">
+                      <X size={14} className="shrink-0" />
+                      Remover atendente
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
               <Button
                 type="button"
                 size="sm"
