@@ -2022,6 +2022,60 @@ export type Database = {
           },
         ]
       }
+      stage_automations: {
+        Row: {
+          active: boolean
+          created_at: string
+          from_stage_id: string | null
+          id: string
+          keywords: string[]
+          name: string
+          to_stage_id: string
+          trigger_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          from_stage_id?: string | null
+          id?: string
+          keywords?: string[]
+          name: string
+          to_stage_id: string
+          trigger_type?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          from_stage_id?: string | null
+          id?: string
+          keywords?: string[]
+          name?: string
+          to_stage_id?: string
+          trigger_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stage_automations_from_stage_id_fkey"
+            columns: ["from_stage_id"]
+            isOneToOne: false
+            referencedRelation: "pipeline_stages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stage_automations_to_stage_id_fkey"
+            columns: ["to_stage_id"]
+            isOneToOne: false
+            referencedRelation: "pipeline_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       team_members: {
         Row: {
           access_level: string
