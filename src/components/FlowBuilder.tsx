@@ -14,7 +14,12 @@ import { toast } from "sonner";
 import {
   Plus, Trash2, GitBranch, ChevronRight, Play, Pause, ArrowLeft, Save,
   Sparkles, Send, Loader2, Bot, X, MessageCircle, Code2, Settings2, Copy,
+  Paperclip, FileText,
 } from "lucide-react";
+import {
+  extractFlowDocument, ACCEPT_ATTR, type ExtractedAttachment,
+} from "@/lib/flow-document-extract";
+
 import { FlowCanvas } from "@/components/flow-builder/FlowCanvas";
 import { FlowSettingsDrawer, DEFAULT_FLOW_SETTINGS, type FlowSettings } from "@/components/flow-builder/FlowSettingsDrawer";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
