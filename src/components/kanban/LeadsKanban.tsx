@@ -218,7 +218,8 @@ export function LeadsKanban() {
   const handleDrop = (stageId: string | null) => {
     setDragOverStage(null);
     if (!draggingLeadId || !canEdit) return;
-    const lead = leads.find((l) => l.id === draggingLeadId);
+    const all = Object.values(columnData ?? {}).flatMap((c) => c.leads);
+    const lead = all.find((l) => l.id === draggingLeadId);
     setDraggingLeadId(null);
     if (!lead || (lead.stage_id ?? null) === stageId) return;
     moveLead.mutate({ leadId: lead.id, stageId });
@@ -245,8 +246,9 @@ export function LeadsKanban() {
           <div>
             <h2 className="text-lg font-semibold">Kanban de Leads</h2>
             <p className="text-xs text-muted-foreground">
-              {leadsLoading ? "carregando…" : `${leads.length.toLocaleString("pt-BR")} leads`} · arraste os cartões entre as etapas
+              {totalLeads.toLocaleString("pt-BR")} leads · arraste os cartões entre as etapas
             </p>
+
           </div>
         </div>
         {canManageStages && (
