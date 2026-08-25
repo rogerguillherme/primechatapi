@@ -957,3 +957,123 @@ function VideoUploadField({
     </div>
   );
 }
+
+/**
+ * Campo de áudio da etapa de mensagem.
+ *
+ * Aceita upload de arquivo (MP3/OGG/M4A) ou gravação direta pelo microfone.
+ * Só aparece quando nenhuma outra mídia está anexada — a Meta permite apenas
+ * um tipo de mídia por mensagem.
+ */
+function AudioUploadField({
+  mediaUrl,
+  mediaType,
+  onChange,
+}: {
+  mediaUrl: string | null;
+  mediaType?: string | null;
+  onChange: (url: string | null) => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  // Esconde se outro tipo de mídia já está anexado
+  if (mediaUrl && mediaType && mediaType !== "audio") return null;
+
+  const isAudioAttached = !!mediaUrl && mediaType === "audio";
+
+  const uploadBlob = async (file: File | Blob, ext: string, contentType: string) => {
+    setUploading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Não autenticado");
+      const path = `${user.id}/flow-audio-${crypto.randomUUID()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("chat-media")
+        .upload(path, file, { contentType, upsert: false });
+      if (upErr) throw upErr;
+      const { data: pub } = await supabase.storage
+        .from("chat-media")
+        .createSignedUrl(path, 60 * 60 * 24 * 365);
+      onChange(pub!.signedUrl);
+      toast.success("Áudio carregado!");
+    } catch (err: any) {
+      toast.error(err.message || "Falha ao enviar áudio");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleFile = async (file: File) => {
+    if (!file.type.startsWith("audio/")) {
+      toast.error("Selecione um arquivo de áudio.");
+      return;
+    }
+    if (file.size > 16 * 1024 * 1024) {
+      toast.error("Áudio muito grande (máximo 16MB pelo WhatsApp).");
+      return;
+    }
+    const ext = file.name.split(".").pop() || "mp3";
+    await uploadBlob(file, ext, file.type || "audio/mpeg");
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs flex items-center gap-1.5">
+        <Mic size={12} /> Áudio (opcional)
+      </Label>
+      {isAudioAttached ? (
+        <div className="relative rounded-md border border-border bg-muted/30 p-2 pr-9">
+          <audio src={mediaUrl!} controls className="w-full h-9" />
+          <Button
+            variant="destructive"
+            size="icon"
+            className="absolute top-1 right-1 h-6 w-6"
+            onClick={() => onChange(null)}
+          >
+            <Trash2 size={12} />
+          </Button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
+            className="flex-1 gap-2 text-xs h-9 border-dashed"
+          >
+            {uploading ? (
+              <><Loader2 size={12} className="animate-spin" /> Enviando...</>
+            ) : (
+              <><Upload size={12} /> Enviar áudio</>
+            )}
+          </Button>
+          <div className="shrink-0">
+            <AudioRecorder
+              disabled={uploading}
+              onRecorded={(blob) => uploadBlob(blob, "ogg", "audio/ogg")}
+            />
+          </div>
+        </div>
+      )}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="audio/mpeg,audio/ogg,audio/mp4,audio/aac,audio/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleFile(file);
+          e.target.value = "";
+        }}
+      />
+      {!isAudioAttached && (
+        <p className="text-[11px] text-muted-foreground">
+          MP3/OGG (opus) até 16MB, ou grave pelo microfone. Áudio é enviado sem legenda pelo WhatsApp.
+        </p>
+      )}
+    </div>
+  );
+}
