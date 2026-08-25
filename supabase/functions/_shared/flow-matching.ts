@@ -120,7 +120,7 @@ export async function aiMatchesStep(step: any, replyText: string): Promise<boole
         "X-Lovable-AIG-SDK": "fetch",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash",
+        model: "google/gemini-3-flash-preview",
         messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" },
       }),
