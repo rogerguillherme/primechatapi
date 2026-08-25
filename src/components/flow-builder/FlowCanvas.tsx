@@ -24,9 +24,11 @@ import { AiAgentNode } from "./nodes/AiAgentNode";
 import { BlacklistNode } from "./nodes/BlacklistNode";
 import { NodeEditPanel } from "./NodeEditPanel";
 import { InsertStepEdge, type InsertableStepType } from "./InsertStepEdge";
+import { SequenceComposer, type GeneratedSequenceStep } from "./SequenceComposer";
 import { Button } from "@/components/ui/button";
 import {
   MessageSquare, Clock, GitBranch, MousePointerClick, ExternalLink, Braces, TimerOff, Bot, Ban,
+  Layers,
 } from "lucide-react";
 
 const nodeTypes: NodeTypes = {
@@ -97,6 +99,7 @@ export function FlowCanvas({
   nodes, edges, onNodesChange, onEdgesChange, setNodes, setEdges, templates, variationEnabled,
 }: FlowCanvasProps) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [sequenceOpen, setSequenceOpen] = useState(false);
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -289,6 +292,53 @@ export function FlowCanvas({
     [edges, insertNodeOnEdge]
   );
 
+  /**
+   * Insere uma sequência inteira (formato "Data Crazy") como passos encadeados.
+   * A âncora é o nó selecionado; sem seleção, encadeia a partir do gatilho.
+   */
+  const addSequence = useCallback(
+    (steps: GeneratedSequenceStep[]) => {
+      if (!steps.length) return;
+
+      const anchorNode = selectedNodeId
+        ? nodes.find((n) => n.id === selectedNodeId) ?? null
+        : nodes.find((n) => n.id === "trigger") ?? nodes[nodes.length - 1] ?? null;
+
+      const baseX = (anchorNode?.position?.x ?? 0) + 350;
+      const baseY = anchorNode?.position?.y ?? 200;
+
+      const newNodes: Node[] = steps.map((step, index) => ({
+        id: crypto.randomUUID(),
+        type: step.type,
+        position: { x: baseX + index * 350, y: baseY },
+        data: step.data,
+      }));
+
+      const newEdges: Edge[] = [];
+      if (anchorNode) {
+        newEdges.push({
+          id: `e-${anchorNode.id}-${newNodes[0].id}`,
+          source: anchorNode.id,
+          target: newNodes[0].id,
+          ...defaultEdgeOptions,
+        });
+      }
+      for (let i = 0; i < newNodes.length - 1; i++) {
+        newEdges.push({
+          id: `e-${newNodes[i].id}-${newNodes[i + 1].id}`,
+          source: newNodes[i].id,
+          target: newNodes[i + 1].id,
+          ...defaultEdgeOptions,
+        });
+      }
+
+      setNodes((nds) => [...nds, ...newNodes]);
+      setEdges((eds) => [...eds, ...newEdges]);
+      setSelectedNodeId(newNodes[newNodes.length - 1].id);
+    },
+    [nodes, selectedNodeId, setNodes, setEdges]
+  );
+
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
 
   return (
@@ -327,8 +377,11 @@ export function FlowCanvas({
       </ReactFlow>
 
       {/* Add node toolbar */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-background/95 backdrop-blur-sm border border-border rounded-xl px-3 py-2 shadow-lg">
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex flex-wrap items-center justify-center gap-2 bg-background/95 backdrop-blur-sm border border-border rounded-xl px-3 py-2 shadow-lg max-w-[95vw]">
         <span className="text-xs text-muted-foreground font-medium mr-1">Adicionar:</span>
+        <Button size="sm" onClick={() => setSequenceOpen(true)} className="gap-1.5 text-xs h-8">
+          <Layers size={12} /> Sequência
+        </Button>
         <Button variant="outline" size="sm" onClick={() => addNode("message")} className="gap-1.5 text-xs h-8">
           <MessageSquare size={12} /> Mensagem
         </Button>
@@ -368,6 +421,12 @@ export function FlowCanvas({
           variationEnabled={variationEnabled}
         />
       )}
+
+      <SequenceComposer
+        open={sequenceOpen}
+        onOpenChange={setSequenceOpen}
+        onGenerate={addSequence}
+      />
     </div>
   );
 }
