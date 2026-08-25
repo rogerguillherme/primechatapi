@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { matchesStep, aiMatchesStep, applyStepLabels } from "../_shared/flow-matching.ts";
 import { applyStageAutomations } from "../_shared/stage-automations.ts";
 
 const corsHeaders = {
@@ -115,6 +116,7 @@ async function resolveMatchedFlowStep(
   flowId: string,
   currentStepId: string | null,
   candidateTriggers: string[],
+  replyText?: string | null,
 ) {
   if (!currentStepId || candidateTriggers.length === 0) {
     return null;
@@ -157,8 +159,23 @@ async function resolveMatchedFlowStep(
     // but here we follow the parent_step_id chain.
   }
 
+  // 1) Casamento exato pelo payload/título do botão (comportamento histórico)
   const matched = branchSteps.find((step: any) => stepMatchesTriggers(step, candidateTriggers));
   if (matched) return matched;
+
+  // 2) Casamento configurado no passo: "exact" | "contains" (parecida) | "ai"
+  const modeMatched = branchSteps.find((step: any) => matchesStep(step, candidateTriggers));
+  if (modeMatched) return modeMatched;
+
+  // 3) Avaliação por IA para os ramos marcados como "ai"
+  const aiSteps = branchSteps.filter((step: any) => (step.match_mode || "exact") === "ai");
+  if (aiSteps.length > 0 && replyText && replyText.trim()) {
+    for (const step of aiSteps) {
+      const ok = await aiMatchesStep(step, replyText);
+      console.log("AI branch evaluation:", JSON.stringify({ stepId: step.id, match: ok }));
+      if (ok) return step;
+    }
+  }
 
   // Fallback: if we are at a condition step and it has exactly one child (that is NOT another condition),
   // treat it as the next step to execute if no specific trigger matches.
@@ -1149,6 +1166,7 @@ Deno.serve(async (req) => {
               exec.flow_id,
               currentStepId,
               candidateTriggers,
+              text,
             );
 
             // Fallback: old linear approach (condition node by trigger_value)
@@ -1160,7 +1178,7 @@ Deno.serve(async (req) => {
                 .eq("step_type", "condition");
 
               const conditionStep = (conditionSteps || []).find((s: any) =>
-                stepMatchesTriggers(s, candidateTriggers)
+                stepMatchesTriggers(s, candidateTriggers) || matchesStep(s, candidateTriggers)
               );
 
               if (conditionStep) {
@@ -1342,6 +1360,15 @@ async function processFlowStep(step: any, execution: any, lead: any, supabase: a
     || (typeof execution.metadata?.account_id === "string" && execution.metadata.account_id
         ? execution.metadata.account_id
         : null);
+
+  // Etiquetas configuradas neste passo do fluxo (rastreia por onde o lead passou)
+  await applyStepLabels(supabase, step, lead?.id);
+
+  // Passo dedicado apenas a etiquetar: aplica e segue imediatamente
+  if (step.step_type === "tag") {
+    await advanceExecution(execution, step, lead, supabase);
+    return;
+  }
 
   if (accountId && execution.metadata?.account_id !== accountId) {
     execution.metadata = { ...(execution.metadata || {}), account_id: accountId };
