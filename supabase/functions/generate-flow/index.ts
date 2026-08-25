@@ -23,14 +23,36 @@ type Attachment = {
 const AUDIO_EXTENSIONS: Record<string, string> = {
   "audio/mpeg": "mp3",
   "audio/mp3": "mp3",
+  "audio/mpga": "mp3",
   "audio/mp4": "m4a",
+  "audio/m4a": "m4a",
   "audio/x-m4a": "m4a",
   "audio/ogg": "ogg",
+  "audio/oga": "ogg",
   "audio/wav": "wav",
+  "audio/wave": "wav",
+  "audio/vnd.wave": "wav",
   "audio/x-wav": "wav",
   "audio/webm": "webm",
+  "video/webm": "webm",
   "audio/aac": "aac",
   "audio/flac": "flac",
+  "audio/x-flac": "flac",
+};
+
+const AUDIO_MIME_BY_EXTENSION: Record<string, string> = {
+  mp3: "audio/mpeg",
+  mpga: "audio/mpeg",
+  mpeg: "audio/mpeg",
+  m4a: "audio/mp4",
+  mp4: "audio/mp4",
+  ogg: "audio/ogg",
+  oga: "audio/ogg",
+  wav: "audio/wav",
+  wave: "audio/wav",
+  webm: "audio/webm",
+  aac: "audio/aac",
+  flac: "audio/flac",
 };
 
 const TRANSCRIPTION_URL = "https://ai.gateway.lovable.dev/v1/audio/transcriptions";
@@ -70,17 +92,70 @@ type TranscriptionResult =
   | { ok: true; text: string }
   | { ok: false; status: number; message: string };
 
+function getBaseMimeType(value?: string): string {
+  return (value || "").split(";")[0].trim().toLowerCase();
+}
+
+function getFileExtension(fileName: string): string {
+  const extension = fileName.split(".").pop()?.trim().toLowerCase() || "";
+  return extension === fileName.toLowerCase() ? "" : extension;
+}
+
+function resolveAudioFileType(
+  decodedMimeType: string,
+  declaredMimeType: string,
+  fileName: string,
+): { mimeType: string; extension: string } | null {
+  const fileExtension = getFileExtension(fileName);
+  const candidates = [
+    getBaseMimeType(decodedMimeType),
+    getBaseMimeType(declaredMimeType),
+    AUDIO_MIME_BY_EXTENSION[fileExtension] || "",
+  ];
+
+  for (const candidate of candidates) {
+    const extension = AUDIO_EXTENSIONS[candidate];
+    if (extension) return { mimeType: candidate, extension };
+  }
+
+  const extensionFromName = AUDIO_MIME_BY_EXTENSION[fileExtension] ? fileExtension : "";
+  if (extensionFromName) {
+    return { mimeType: AUDIO_MIME_BY_EXTENSION[extensionFromName], extension: extensionFromName };
+  }
+
+  return null;
+}
+
 function decodeAudioDataUrl(dataUrl: string): { bytes: Uint8Array; mimeType: string } | null {
-  const match = /^data:([^;,]+);base64,([A-Za-z0-9+/=\s]+)$/.exec(dataUrl);
+  const match = /^data:([^,]*),([\s\S]+)$/i.exec(dataUrl.trim());
   if (!match) return null;
+
+  const metadata = match[1];
+  if (!/(^|;)base64(;|$)/i.test(metadata)) return null;
 
   try {
     const binary = atob(match[2].replace(/\s/g, ""));
     const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-    return { bytes, mimeType: match[1].toLowerCase() };
+    return { bytes, mimeType: getBaseMimeType(metadata) };
   } catch {
     return null;
   }
+}
+
+async function readGatewayError(response: Response): Promise<string> {
+  const detail = (await response.text()).slice(0, 1000);
+  try {
+    const parsed = JSON.parse(detail) as Record<string, unknown>;
+    const error = parsed.error;
+    if (error && typeof error === "object" && "message" in error) {
+      const message = (error as { message?: unknown }).message;
+      if (typeof message === "string" && message.trim()) return message.trim();
+    }
+    if (typeof parsed.message === "string" && parsed.message.trim()) return parsed.message.trim();
+  } catch {
+    // A resposta de erro pode ser texto puro.
+  }
+  return detail || "O serviço de IA recusou a solicitação.";
 }
 
 /**
@@ -103,27 +178,27 @@ async function transcribeAudio(
       return { ok: false, status: 413, message: "O áudio excede o limite de 20MB." };
     }
 
-    const mimeType = decoded.mimeType.startsWith("audio/")
-      ? decoded.mimeType
-      : declaredMimeType.split(";")[0].toLowerCase();
-    const extension = AUDIO_EXTENSIONS[mimeType];
-    if (!extension) {
-      return { ok: false, status: 400, message: `Formato de áudio não suportado (${mimeType}).` };
+    const audioFileType = resolveAudioFileType(decoded.mimeType, declaredMimeType, fileName);
+    if (!audioFileType) {
+      const receivedType = getBaseMimeType(decoded.mimeType) || getBaseMimeType(declaredMimeType) || "desconhecido";
+      return { ok: false, status: 400, message: `Formato de áudio não suportado (${receivedType}).` };
     }
 
     const safeBaseName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/\.[^.]+$/, "") || "audio";
-    const audioFile = new File([decoded.bytes], `${safeBaseName}.${extension}`, { type: mimeType });
+    const audioFile = new File([decoded.bytes], `${safeBaseName}.${audioFileType.extension}`, {
+      type: audioFileType.mimeType,
+    });
     const formData = new FormData();
     formData.append("model", "openai/gpt-4o-mini-transcribe");
     formData.append("file", audioFile);
 
     const res = await fetch(TRANSCRIPTION_URL, {
       method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}` },
+      headers: { "Lovable-API-Key": apiKey },
       body: formData,
     });
     if (!res.ok) {
-      const detail = (await res.text()).slice(0, 500);
+      const detail = await readGatewayError(res);
       console.error("transcription failed:", res.status, detail);
       return {
         ok: false,
@@ -192,10 +267,11 @@ serve(async (req) => {
 
     for (const att of attachments) {
       const mime = att.mimeType || "application/octet-stream";
+      const baseMime = getBaseMimeType(mime);
       const kind = att.kind
-        || (mime === "application/pdf" ? "pdf"
-          : mime.startsWith("image/") ? "image"
-          : mime.startsWith("audio/") ? "audio" : "text");
+        || (baseMime === "application/pdf" ? "pdf"
+          : baseMime.startsWith("image/") ? "image"
+          : baseMime.startsWith("audio/") || AUDIO_MIME_BY_EXTENSION[getFileExtension(att.name || "")] ? "audio" : "text");
 
       if (kind === "text" && att.text) {
         content.push({
@@ -257,18 +333,21 @@ serve(async (req) => {
     });
 
     if (!response.ok) {
-      const detail = await response.text();
+      const detail = await readGatewayError(response);
       console.error("AI gateway error:", response.status, detail);
       if (response.status === 429) {
-        return json({ error: "Limite de requisições excedido. Tente novamente em alguns segundos." }, 429);
+        return json({ error: detail || "Limite de requisições excedido. Tente novamente em alguns segundos." }, 429);
       }
       if (response.status === 402) {
-        return json({ error: "Créditos de IA esgotados. Adicione créditos para continuar." }, 402);
+        return json({ error: detail || "Créditos de IA esgotados. Adicione créditos para continuar." }, 402);
+      }
+      if (response.status === 403) {
+        return json({ error: detail || "A IA está bloqueada para este workspace." }, 403);
       }
       if (response.status === 400) {
-        return json({ error: "O documento enviado não pôde ser lido pelo modelo. Tente outro formato (PDF, DOCX ou TXT)." }, 400);
+        return json({ error: detail || "O documento enviado não pôde ser lido pelo modelo. Tente outro formato (PDF, DOCX ou TXT)." }, 400);
       }
-      return json({ error: "Falha na IA ao processar o documento." }, 502);
+      return json({ error: detail || "Falha na IA ao processar o documento." }, 502);
     }
 
     const result = await response.json();
@@ -298,7 +377,7 @@ serve(async (req) => {
     }
 
     const normalized = steps
-      .filter((s): s is Record<string, any> => !!s && typeof s === "object")
+      .filter((s): s is Record<string, unknown> => !!s && typeof s === "object")
       .map((s) => ({
         type: typeof s.type === "string" ? s.type : "message",
         data: sanitizeDeep(s.data && typeof s.data === "object" ? s.data : {}) as Record<string, unknown>,
