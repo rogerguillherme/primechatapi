@@ -79,6 +79,8 @@ export default function Chat() {
   const [activeTab, setActiveTab] = useState<ChatTab>("aguardando_respostas");
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [filterAccountId, setFilterAccountId] = useState<string | null>(null);
+  const [contactOpen, setContactOpen] = useState(false);
+  const [contactTab, setContactTab] = useState<"info" | "edit">("info");
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const queryClient = useQueryClient();
