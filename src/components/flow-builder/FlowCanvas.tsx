@@ -62,8 +62,9 @@ const createDefaultNodeData = (type: InsertableStepType): Record<string, unknown
     return { custom_message: "", template_id: null, media_url: null, media_type: null };
   }
   if (type === "delay") {
-    return { delay_minutes: 60 };
+    return { delay_minutes: 1, delay_min_seconds: 0, delay_max_seconds: 0 };
   }
+
   if (type === "condition") {
     // match_mode: "exact" (igual), "contains" (parecida) ou "ai" (IA avalia a resposta)
     return { trigger_value: "", match_mode: "exact", ai_match_description: "" };

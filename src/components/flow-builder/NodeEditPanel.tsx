@@ -142,24 +142,42 @@ export function NodeEditPanel({ node, templates, onUpdate, onClose, variationEna
 
         {type === "delay" && (
           <div className="space-y-2">
-            <Label className="text-xs">Aguardar (minutos)</Label>
-            <Input
-              type="number"
-              min={1}
-              value={(data.delay_minutes as number) || 60}
-              onChange={(e) => onUpdate({ delay_minutes: parseInt(e.target.value) || 1 })}
-              className="h-8 text-sm"
-            />
-            {((data.delay_minutes as number) || 0) >= 60 && (
-              <p className="text-xs text-muted-foreground">
-                = {Math.floor(((data.delay_minutes as number) || 0) / 60)}h
-                {((data.delay_minutes as number) || 0) % 60 > 0
-                  ? ` ${((data.delay_minutes as number) || 0) % 60}min`
-                  : ""}
-              </p>
-            )}
+            <Label className="text-xs">Tempo de espera</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Input
+                  type="number"
+                  min={0}
+                  value={(data.delay_minutes as number) ?? 0}
+                  onChange={(e) =>
+                    onUpdate({ delay_minutes: Math.max(0, parseInt(e.target.value) || 0) })
+                  }
+                  className="h-8 text-sm"
+                />
+                <p className="text-[11px] text-muted-foreground">minutos</p>
+              </div>
+              <div className="space-y-1">
+                <Input
+                  type="number"
+                  min={0}
+                  max={59}
+                  value={(data.delay_min_seconds as number) ?? 0}
+                  onChange={(e) => {
+                    const secs = Math.min(59, Math.max(0, parseInt(e.target.value) || 0));
+                    onUpdate({ delay_min_seconds: secs, delay_max_seconds: secs });
+                  }}
+                  className="h-8 text-sm"
+                />
+                <p className="text-[11px] text-muted-foreground">segundos</p>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Total: {((data.delay_minutes as number) || 0)}min{" "}
+              {((data.delay_min_seconds as number) || 0)}s
+            </p>
           </div>
         )}
+
 
         {type === "condition" && (
           <div className="space-y-3">

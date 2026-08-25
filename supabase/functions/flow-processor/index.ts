@@ -7,6 +7,13 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+/** Espera total de um passo de delay: minutos + segundos (delay_min_seconds). */
+function stepDelayMs(step: any): number {
+  const minutes = Number(step?.delay_minutes) || 0;
+  const seconds = Number(step?.delay_min_seconds) || 0;
+  return (minutes * 60 + seconds) * 1000;
+}
+
 const READY_STATUSES = ["waiting_delay", "waiting_no_response"];
 const RETRY_DELAY_MS = 5000;
 // Janela para considerar um envio idêntico como duplicata. Ampliada para 6h
@@ -604,7 +611,7 @@ async function advanceToNextStep(
     await supabase.from("flow_executions").update({
       current_step_id: nextStep.id,
       status: "waiting_delay",
-      next_action_at: new Date(Date.now() + nextStep.delay_minutes * 60 * 1000).toISOString(),
+      next_action_at: new Date(Date.now() + stepDelayMs(nextStep)).toISOString(),
       updated_at: new Date().toISOString(),
     }).eq("id", exec.id);
   } else if (nextStep.step_type === "no_response") {

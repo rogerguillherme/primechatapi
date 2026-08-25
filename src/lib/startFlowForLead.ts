@@ -59,7 +59,7 @@ export async function startFlowForLead(params: {
   const baseMs = Date.now();
   const nextActionAt =
     firstStep.step_type === "delay"
-      ? new Date(baseMs + (firstStep.delay_minutes || 0) * 60 * 1000).toISOString()
+      ? new Date(baseMs + ((firstStep.delay_minutes || 0) * 60 + (firstStep.delay_min_seconds || 0)) * 1000).toISOString()
       : firstStep.step_type === "no_response"
         ? new Date(baseMs + (firstStep.timeout_minutes || 10) * 60 * 1000).toISOString()
         : new Date(baseMs).toISOString();

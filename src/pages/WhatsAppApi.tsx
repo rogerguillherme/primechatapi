@@ -838,7 +838,7 @@ function BroadcastTab() {
 
       const firstStepNextActionAt =
         firstStep.step_type === "delay"
-          ? new Date(scheduledBaseMs + (firstStep.delay_minutes || 0) * 60 * 1000).toISOString()
+          ? new Date(scheduledBaseMs + ((firstStep.delay_minutes || 0) * 60 + (firstStep.delay_min_seconds || 0)) * 1000).toISOString()
           : firstStep.step_type === "no_response"
             ? new Date(scheduledBaseMs + (firstStep.timeout_minutes || 10) * 60 * 1000).toISOString()
             : new Date(scheduledBaseMs).toISOString();
@@ -929,7 +929,7 @@ function BroadcastTab() {
 
       const firstStepNextActionAt =
         firstStep.step_type === "delay"
-          ? new Date(scheduledBaseMs + (firstStep.delay_minutes || 0) * 60 * 1000).toISOString()
+          ? new Date(scheduledBaseMs + ((firstStep.delay_minutes || 0) * 60 + (firstStep.delay_min_seconds || 0)) * 1000).toISOString()
           : firstStep.step_type === "no_response"
             ? new Date(scheduledBaseMs + (firstStep.timeout_minutes || 10) * 60 * 1000).toISOString()
             : new Date(scheduledBaseMs).toISOString();
