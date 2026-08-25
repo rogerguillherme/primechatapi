@@ -2510,7 +2510,10 @@ export default function WhatsAppApi() {
           <HomeViewSetting />
 
           {/* Distribuição inteligente de leads (conta específica) */}
-          <LeadDistributionSettings />
+
+          {/* Links de compartilhamento do número (frase, etiqueta e coluna) */}
+          <ShareLinksSettings />
+
 
 
 
