@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Send, FileText, Smile, Check, CheckCheck, Paperclip, AlertCircle, Bot } from "lucide-react";
+import { Send, FileText, Smile, Check, CheckCheck, Paperclip, AlertCircle, Bot, User, Columns3, Zap, Workflow } from "lucide-react";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,8 @@ import { useToast } from "@/hooks/use-toast";
 import { ChatMediaBubble } from "@/components/ChatMediaBubble";
 import { AudioRecorder } from "@/components/AudioRecorder";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
+import { ContactInfoSheet } from "@/components/chat/ContactInfoSheet";
+import { startFlowForLead } from "@/lib/startFlowForLead";
 
 interface LeadChatDrawerProps {
   lead: { id: string; name: string; phone: string } | null;
