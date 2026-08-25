@@ -471,7 +471,27 @@ function AiFlowChat({ onGenerate }: { onGenerate: (steps: any[]) => void }) {
       </div>
 
       {/* Input */}
-      <div className="p-2 border-t border-border">
+      <div className="p-2 border-t border-border space-y-2">
+        {attachments.length > 0 && (
+          <div className="space-y-1">
+            {attachments.map((att) => (
+              <div key={att.name} className="flex items-center gap-2 text-xs bg-muted rounded-md px-2 py-1">
+                <FileText size={12} className="text-primary shrink-0" />
+                <span className="truncate flex-1" title={att.name}>{att.name}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 shrink-0"
+                  aria-label={`Remover ${att.name}`}
+                  onClick={() => setAttachments((prev) => prev.filter((a) => a.name !== att.name))}
+                >
+                  <X size={11} />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -479,10 +499,28 @@ function AiFlowChat({ onGenerate }: { onGenerate: (steps: any[]) => void }) {
           }}
           className="flex gap-2"
         >
+          <label className="shrink-0">
+            <input
+              type="file"
+              multiple
+              accept={ACCEPT_ATTR}
+              className="sr-only"
+              onChange={(e) => {
+                handlePickFiles(e.target.files);
+                e.target.value = "";
+              }}
+            />
+            <span
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted cursor-pointer"
+              title="Anexar documento do roteiro"
+            >
+              {isReadingFile ? <Loader2 size={14} className="animate-spin" /> : <Paperclip size={14} />}
+            </span>
+          </label>
           <Textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            placeholder="Descreva seu fluxo..."
+            placeholder="Descreva ou anexe o roteiro..."
             className="text-xs min-h-[36px] max-h-[80px] resize-none"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -491,11 +529,17 @@ function AiFlowChat({ onGenerate }: { onGenerate: (steps: any[]) => void }) {
               }
             }}
           />
-          <Button type="submit" size="icon" className="h-9 w-9 shrink-0" disabled={isGenerating || !prompt.trim()}>
+          <Button
+            type="submit"
+            size="icon"
+            className="h-9 w-9 shrink-0"
+            disabled={isGenerating || isReadingFile || (!prompt.trim() && attachments.length === 0)}
+          >
             <Send size={14} />
           </Button>
         </form>
       </div>
+
     </div>
   );
 }
