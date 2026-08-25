@@ -1833,12 +1833,14 @@ export default function WhatsAppApi() {
   const handleCreateFlowFromWebhook = useCallback((triggerType: string) => {
     setFlowEditId(undefined);
     setFlowTriggerType(triggerType);
+    setFlowEditorOpen(true);
     setActiveMainTab("flows");
   }, []);
 
   const handleSelectFlowFromWebhook = useCallback((flowId: string, triggerType: string) => {
     setFlowTriggerType(undefined);
     setFlowEditId(flowId);
+    setFlowEditorOpen(true);
     setActiveMainTab("flows");
   }, []);
 
