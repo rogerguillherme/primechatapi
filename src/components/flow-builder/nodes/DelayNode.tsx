@@ -37,7 +37,7 @@ export function DelayNode({ id, data }: { id: string; data: DelayNodeData }) {
         </button>
       </div>
       <div className="p-3 flex items-center justify-center">
-        <span className="text-sm font-medium text-amber-600">{formatDelay(minutes)}</span>
+        <span className="text-sm font-medium text-amber-600">{formatDelay(minutes, seconds)}</span>
       </div>
       <Handle type="target" position={Position.Left} className="!w-3 !h-3 !bg-amber-500 !border-2 !border-background" />
       <Handle type="source" position={Position.Right} className="!w-3 !h-3 !bg-amber-500 !border-2 !border-background" />
