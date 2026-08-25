@@ -20,7 +20,7 @@ export async function startFlowForLead(params: {
   const { flowId, leadId, accountId = null, codigo = "" } = params;
 
   if (!flowId) throw new Error("Fluxo não informado");
-  if (!leadId) throw new Error("Lead не informado".replace("не", "não"));
+  if (!leadId) throw new Error("Lead não informado");
 
   const { data: rootSteps, error: rootStepError } = await supabase
     .from("flow_steps")
