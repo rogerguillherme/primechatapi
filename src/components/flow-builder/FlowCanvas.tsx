@@ -289,6 +289,53 @@ export function FlowCanvas({
     [edges, insertNodeOnEdge]
   );
 
+  /**
+   * Insere uma sequência inteira (formato "Data Crazy") como passos encadeados.
+   * A âncora é o nó selecionado; sem seleção, encadeia a partir do gatilho.
+   */
+  const addSequence = useCallback(
+    (steps: GeneratedSequenceStep[]) => {
+      if (!steps.length) return;
+
+      const anchorNode = selectedNodeId
+        ? nodes.find((n) => n.id === selectedNodeId) ?? null
+        : nodes.find((n) => n.id === "trigger") ?? nodes[nodes.length - 1] ?? null;
+
+      const baseX = (anchorNode?.position?.x ?? 0) + 350;
+      const baseY = anchorNode?.position?.y ?? 200;
+
+      const newNodes: Node[] = steps.map((step, index) => ({
+        id: crypto.randomUUID(),
+        type: step.type,
+        position: { x: baseX + index * 350, y: baseY },
+        data: step.data,
+      }));
+
+      const newEdges: Edge[] = [];
+      if (anchorNode) {
+        newEdges.push({
+          id: `e-${anchorNode.id}-${newNodes[0].id}`,
+          source: anchorNode.id,
+          target: newNodes[0].id,
+          ...defaultEdgeOptions,
+        });
+      }
+      for (let i = 0; i < newNodes.length - 1; i++) {
+        newEdges.push({
+          id: `e-${newNodes[i].id}-${newNodes[i + 1].id}`,
+          source: newNodes[i].id,
+          target: newNodes[i + 1].id,
+          ...defaultEdgeOptions,
+        });
+      }
+
+      setNodes((nds) => [...nds, ...newNodes]);
+      setEdges((eds) => [...eds, ...newEdges]);
+      setSelectedNodeId(newNodes[newNodes.length - 1].id);
+    },
+    [nodes, selectedNodeId, setNodes, setEdges]
+  );
+
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
 
   return (
