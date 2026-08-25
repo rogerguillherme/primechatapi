@@ -674,9 +674,27 @@ serve(async (req) => {
       return json({ error: "Envie uma descrição ou um documento." }, 400);
     }
 
-    const dataCrazySteps = await tryCompileDataCrazyAttachments(attachments);
-    if (dataCrazySteps) {
-      return json({ steps: dataCrazySteps });
+    const dataCrazyFlow = await tryCompileDataCrazyAttachments(attachments);
+    if (dataCrazyFlow) {
+      if (body?.persist === true) {
+        const targetUserId = typeof body?.target_user_id === "string" ? body.target_user_id : "";
+        if (!targetUserId) return json({ error: "Conta de destino não informada." }, 400);
+        const requestedName = typeof body?.flow_name === "string" && body.flow_name.trim()
+          ? body.flow_name.trim()
+          : dataCrazyFlow.name;
+        const flowKind = body?.flow_kind === "whatsapp" ? "whatsapp" : "api";
+        const flowId = await persistCompiledFlow({
+          req,
+          targetUserId,
+          flowName: requestedName,
+          flowDescription: dataCrazyFlow.description,
+          flowKind,
+          steps: dataCrazyFlow.steps,
+        });
+        return json({ steps: dataCrazyFlow.steps, flow_id: flowId, persisted: true });
+      }
+
+      return json({ steps: dataCrazyFlow.steps, name: dataCrazyFlow.name, description: dataCrazyFlow.description });
     }
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -812,6 +830,7 @@ serve(async (req) => {
 
     return json({ steps: normalized });
   } catch (error) {
+    if (error instanceof Response) return error;
     console.error("generate-flow error:", error);
     return json({ error: error instanceof Error ? error.message : "Erro inesperado." }, 500);
   }
