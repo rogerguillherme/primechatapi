@@ -376,8 +376,11 @@ export function FlowCanvas({
       </ReactFlow>
 
       {/* Add node toolbar */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-background/95 backdrop-blur-sm border border-border rounded-xl px-3 py-2 shadow-lg">
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex flex-wrap items-center justify-center gap-2 bg-background/95 backdrop-blur-sm border border-border rounded-xl px-3 py-2 shadow-lg max-w-[95vw]">
         <span className="text-xs text-muted-foreground font-medium mr-1">Adicionar:</span>
+        <Button size="sm" onClick={() => setSequenceOpen(true)} className="gap-1.5 text-xs h-8">
+          <Layers size={12} /> Sequência
+        </Button>
         <Button variant="outline" size="sm" onClick={() => addNode("message")} className="gap-1.5 text-xs h-8">
           <MessageSquare size={12} /> Mensagem
         </Button>
