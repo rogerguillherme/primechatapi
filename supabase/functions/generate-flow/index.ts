@@ -20,7 +20,7 @@ type Attachment = {
   kind?: "text" | "pdf" | "image" | "audio";
 };
 
-const AUDIO_FORMATS: Record<string, string> = {
+const AUDIO_EXTENSIONS: Record<string, string> = {
   "audio/mpeg": "mp3",
   "audio/mp3": "mp3",
   "audio/mp4": "m4a",
@@ -32,6 +32,9 @@ const AUDIO_FORMATS: Record<string, string> = {
   "audio/aac": "aac",
   "audio/flac": "flac",
 };
+
+const TRANSCRIPTION_URL = "https://ai.gateway.lovable.dev/v1/audio/transcriptions";
+const MAX_AUDIO_BYTES = 20 * 1024 * 1024;
 
 const SYSTEM_PROMPT = `Você é um compilador de roteiros para fluxos de automação de WhatsApp.
 
@@ -63,49 +66,80 @@ IDs de botão: strings hexadecimais curtas e únicas (ex.: "a1b2c3").`;
 
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
+type TranscriptionResult =
+  | { ok: true; text: string }
+  | { ok: false; status: number; message: string };
+
+function decodeAudioDataUrl(dataUrl: string): { bytes: Uint8Array; mimeType: string } | null {
+  const match = /^data:([^;,]+);base64,([A-Za-z0-9+/=\s]+)$/.exec(dataUrl);
+  if (!match) return null;
+
+  try {
+    const binary = atob(match[2].replace(/\s/g, ""));
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    return { bytes, mimeType: match[1].toLowerCase() };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Transcreve um áudio em uma chamada isolada.
  * Isolar a transcrição evita que o modelo misture bytes do áudio
  * (base64) no texto das mensagens do fluxo.
  */
 async function transcribeAudio(
-  base64: string,
-  format: string,
+  dataUrl: string,
+  fileName: string,
+  declaredMimeType: string,
   apiKey: string,
-): Promise<string> {
+): Promise<TranscriptionResult> {
   try {
-    const res = await fetch(GATEWAY_URL, {
+    const decoded = decodeAudioDataUrl(dataUrl);
+    if (!decoded || decoded.bytes.length === 0) {
+      return { ok: false, status: 400, message: "O arquivo de áudio está vazio ou corrompido." };
+    }
+    if (decoded.bytes.length > MAX_AUDIO_BYTES) {
+      return { ok: false, status: 413, message: "O áudio excede o limite de 20MB." };
+    }
+
+    const mimeType = decoded.mimeType.startsWith("audio/")
+      ? decoded.mimeType
+      : declaredMimeType.split(";")[0].toLowerCase();
+    const extension = AUDIO_EXTENSIONS[mimeType];
+    if (!extension) {
+      return { ok: false, status: 400, message: `Formato de áudio não suportado (${mimeType}).` };
+    }
+
+    const safeBaseName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/\.[^.]+$/, "") || "audio";
+    const audioFile = new File([decoded.bytes], `${safeBaseName}.${extension}`, { type: mimeType });
+    const formData = new FormData();
+    formData.append("model", "openai/gpt-4o-mini-transcribe");
+    formData.append("file", audioFile);
+
+    const res = await fetch(TRANSCRIPTION_URL, {
       method: "POST",
-      headers: { "Lovable-API-Key": apiKey, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        temperature: 0,
-        messages: [
-          {
-            role: "system",
-            content:
-              "Transcreva o áudio literalmente, em português, preservando a ordem e as pausas como quebras de linha. Responda somente com a transcrição, sem comentários.",
-          },
-          {
-            role: "user",
-            content: [
-              { type: "text", text: "Transcreva este áudio:" },
-              { type: "input_audio", input_audio: { data: base64, format } },
-            ],
-          },
-        ],
-      }),
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: formData,
     });
     if (!res.ok) {
-      console.error("transcription failed:", res.status, (await res.text()).slice(0, 300));
-      return "";
+      const detail = (await res.text()).slice(0, 500);
+      console.error("transcription failed:", res.status, detail);
+      return {
+        ok: false,
+        status: res.status,
+        message: detail || "O serviço de transcrição recusou o arquivo.",
+      };
     }
     const data = await res.json();
-    const text: string = data?.choices?.[0]?.message?.content ?? "";
-    return sanitizeText(text).trim();
+    const text = sanitizeText(typeof data?.text === "string" ? data.text : "").trim();
+    if (!text) {
+      return { ok: false, status: 422, message: "Nenhuma fala foi identificada no áudio." };
+    }
+    return { ok: true, text };
   } catch (err) {
     console.error("transcription error:", err);
-    return "";
+    return { ok: false, status: 502, message: "Falha ao conectar ao serviço de transcrição." };
   }
 }
 
@@ -184,19 +218,23 @@ serve(async (req) => {
         // Áudio é transcrito em uma chamada dedicada ANTES da compilação.
         // Enviar o áudio junto com a instrução de compilar fazia o modelo
         // devolver trechos binários/base64 ("códigos") dentro das mensagens.
-        const base64 = att.dataUrl.split(",")[1] ?? "";
-        if (!base64) continue;
-        const transcript = await transcribeAudio(
-          base64,
-          AUDIO_FORMATS[mime] || "mp3",
+        const transcription = await transcribeAudio(
+          att.dataUrl,
+          att.name || "audio",
+          mime,
           LOVABLE_API_KEY,
         );
-        if (!transcript) {
-          return json({ error: `Não foi possível transcrever o áudio "${att.name || "anexo"}". Tente enviar em MP3 ou cole o texto do roteiro.` }, 422);
+        if (!transcription.ok) {
+          const status = transcription.status === 429 || transcription.status === 402 || transcription.status === 403
+            ? transcription.status
+            : transcription.status >= 500 ? 502 : transcription.status;
+          return json({
+            error: `Não foi possível transcrever "${att.name || "anexo"}": ${transcription.message}`,
+          }, status);
         }
         content.push({
           type: "text",
-          text: `ROTEIRO — transcrição do áudio "${att.name || "anexo"}" (reproduza literalmente):\n<<<DOCUMENTO\n${transcript}\nDOCUMENTO>>>`,
+          text: `ROTEIRO — transcrição do áudio "${att.name || "anexo"}" (reproduza literalmente):\n<<<DOCUMENTO\n${transcription.text}\nDOCUMENTO>>>`,
         });
       }
     }
@@ -209,7 +247,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "google/gemini-3.7-flash",
         temperature: 0,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
