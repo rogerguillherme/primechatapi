@@ -54,6 +54,7 @@ Deno.serve(async (req) => {
         success: true,
         url: signed.signedUrl,
         media_type: mediaType,
+        file_name: file.name,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
