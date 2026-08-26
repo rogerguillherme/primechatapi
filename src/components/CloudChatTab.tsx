@@ -445,6 +445,71 @@ export function CloudChatTab() {
     },
   });
 
+  // Fluxos ativos, para a barra de seleção do cabeçalho
+  const { data: flows } = useQuery({
+    queryKey: ["chat-flows-active"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("flows")
+        .select("id, name")
+        .eq("active", true)
+        .order("name");
+      return data || [];
+    },
+    staleTime: 60_000,
+  });
+
+  // Execução em andamento do lead aberto — mostra qual fluxo está rodando e
+  // permite parar. Os status vivos são os mesmos que startFlowForLead cancela.
+  const { data: runningExecution } = useQuery({
+    queryKey: ["lead-flow-execution", selectedLeadId],
+    enabled: !!selectedLeadId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("flow_executions")
+        .select("id, flow_id, status")
+        .eq("lead_id", selectedLeadId)
+        .in("status", ["running", "waiting_delay", "waiting_reply", "waiting_no_response"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data;
+    },
+  });
+
+  const startFlow = useMutation({
+    mutationFn: async (flowId: string) => {
+      if (!selectedLead) throw new Error("Nenhuma conversa aberta");
+      await startFlowForLead({
+        flowId,
+        leadId: selectedLead.id,
+        accountId: selectedAccountId || defaultAccount?.id || null,
+      });
+    },
+    onSuccess: (_data, flowId) => {
+      const name = (flows || []).find((f: any) => f.id === flowId)?.name;
+      toast.success(name ? `Fluxo "${name}" iniciado` : "Fluxo iniciado");
+      queryClient.invalidateQueries({ queryKey: ["lead-flow-execution", selectedLeadId] });
+    },
+    onError: (e: Error) => toast.error(e.message || "Erro ao iniciar fluxo"),
+  });
+
+  const stopFlow = useMutation({
+    mutationFn: async () => {
+      if (!runningExecution?.id) return;
+      const { error } = await supabase
+        .from("flow_executions")
+        .update({ status: "cancelled" })
+        .eq("id", runningExecution.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Fluxo interrompido");
+      queryClient.invalidateQueries({ queryKey: ["lead-flow-execution", selectedLeadId] });
+    },
+    onError: (e: Error) => toast.error(e.message || "Erro ao interromper fluxo"),
+  });
+
   const matchedShortcuts = useMemo(() => {
     if (shortcutQuery === null) return [];
     const q = shortcutQuery.toLowerCase();
@@ -970,6 +1035,53 @@ export function CloudChatTab() {
               >
                 <Pencil size={18} />
               </button>
+
+              {/* Fluxo ativo na conversa */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    title={runningExecution ? "Fluxo em andamento nesta conversa" : "Iniciar um fluxo nesta conversa"}
+                    className={cn(
+                      "p-2 rounded-full hover:bg-accent transition-colors",
+                      runningExecution ? "text-primary" : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    <Workflow size={18} />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                    {runningExecution ? "Trocar fluxo da conversa" : "Iniciar fluxo nesta conversa"}
+                  </div>
+                  {(flows || []).length === 0 && (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                      Nenhum fluxo ativo. Crie um no Flow Builder e marque como ativo.
+                    </div>
+                  )}
+                  {(flows || []).map((flow: any) => (
+                    <DropdownMenuItem
+                      key={flow.id}
+                      onClick={() => startFlow.mutate(flow.id)}
+                      disabled={startFlow.isPending}
+                      className="gap-2"
+                    >
+                      <Workflow size={14} className="opacity-60 shrink-0" />
+                      <span className="flex-1 truncate">{flow.name}</span>
+                      {runningExecution?.flow_id === flow.id && <Check size={14} className="opacity-60" />}
+                    </DropdownMenuItem>
+                  ))}
+                  {runningExecution && (
+                    <DropdownMenuItem
+                      onClick={() => stopFlow.mutate()}
+                      disabled={stopFlow.isPending}
+                      className="gap-2 text-destructive"
+                    >
+                      <X size={14} className="shrink-0" />
+                      Parar fluxo em andamento
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               {/* Mover para outra etapa do Kanban */}
               <DropdownMenu>
