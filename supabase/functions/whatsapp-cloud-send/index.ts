@@ -808,11 +808,16 @@ Deno.serve(async (req) => {
         },
       };
     } else if (cta_url) {
+      const ctaBodyRaw = (message || "Acesse o link abaixo:").trim();
+      const ctaBodyText = ctaBodyRaw.length > 1024 ? ctaBodyRaw.substring(0, 1021) + "..." : ctaBodyRaw;
+      if (ctaBodyRaw.length > 1024) {
+        console.warn(`cta_url body truncated from ${ctaBodyRaw.length} to 1024 chars for ${cleanPhone}`);
+      }
       body = {
         messaging_product: "whatsapp", to: cleanPhone, type: "interactive",
         interactive: {
           type: "cta_url",
-          body: { text: message || "Acesse o link abaixo:" },
+          body: { text: ctaBodyText },
           action: { name: "cta_url", parameters: { display_text: (cta_url.display_text || "Acessar").substring(0, 20), url: cta_url.url } },
         },
       };
