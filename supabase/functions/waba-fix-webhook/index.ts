@@ -98,11 +98,18 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Se o override falhou por permissão mas a WABA já está inscrita no nosso
+    // app, os eventos chegam pelo callback do app — consideramos OK.
     const finalSubs = await graph(
       `https://graph.facebook.com/v21.0/${acc.business_account_id}/subscribed_apps?access_token=${
         acc.access_token || systemToken || appToken
       }`,
     );
+
+    const subscribedToOurApp = Array.isArray((finalSubs.body as any)?.data)
+      && (finalSubs.body as any).data.some((d: any) =>
+        !appId || String(d?.whatsapp_business_api_data?.id || "") === String(appId));
+    ok = ok || subscribedToOurApp;
 
     await admin
       .from("whatsapp_accounts")
@@ -110,7 +117,9 @@ Deno.serve(async (req) => {
         webhook_subscribed: ok,
         webhook_subscribed_at: ok ? new Date().toISOString() : null,
         webhook_last_check_at: new Date().toISOString(),
-        webhook_last_status: ok ? "success (override_callback_uri)" : "falha ao inscrever",
+        webhook_last_status: ok
+          ? (subscribedToOurApp ? "success (callback do app)" : "success (override_callback_uri)")
+          : "falha ao inscrever",
       })
       .eq("id", acc.id);
 
