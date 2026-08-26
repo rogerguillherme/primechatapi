@@ -89,9 +89,38 @@ async function subscribeWabaToApp(
   subText = await subRes.text();
   try { subData = JSON.parse(subText); } catch { subData = { raw: subText }; }
 
+  if (subRes.ok && !subData?.error) {
+    return { ok: true, subscribed: subData?.success ?? true, used_fields_param: false, details: subData };
+  }
+
+  // Tokens do Embedded Signup (escopo whatsapp_business_management, sem ser
+  // dono/dev do app) recebem "(#200) Permissions error" ao tentar gravar
+  // override_callback_uri. Nesse caso a WABA normalmente JÁ está inscrita no
+  // nosso app e os eventos chegam pelo callback configurado no nível do app —
+  // então confirmamos via GET antes de reportar falha.
+  const appId = Deno.env.get("META_APP_ID");
+  const checkRes = await fetch(subUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+  const checkText = await checkRes.text();
+  let checkData: any;
+  try { checkData = JSON.parse(checkText); } catch { checkData = { raw: checkText }; }
+
+  const alreadySubscribed = Array.isArray(checkData?.data)
+    && checkData.data.some((d: any) =>
+      !appId || String(d?.whatsapp_business_api_data?.id || "") === String(appId));
+
+  if (alreadySubscribed) {
+    return {
+      ok: true,
+      subscribed: true,
+      used_fields_param: false,
+      via_app_level_callback: true,
+      details: checkData,
+    };
+  }
+
   return {
-    ok: subRes.ok && !subData?.error,
-    subscribed: subData?.success ?? true,
+    ok: false,
+    subscribed: false,
     used_fields_param: false,
     error: subData?.error?.message || (!subRes.ok ? `HTTP ${subRes.status}` : undefined),
     details: subData,
