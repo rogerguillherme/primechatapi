@@ -37,7 +37,7 @@ import {
   KeyRound, ChevronDown, Webhook, LogOut, Plug, Tag, ChevronLeft, ChevronRight,
   Instagram, GitBranch, TrendingUp, Bot, Volume2, Sparkles, DollarSign,
   QrCode, RefreshCw, Loader2, Smartphone, Filter, Upload, UserMinus,
-  Home, KanbanSquare, Menu, X, Clock,
+  Home, KanbanSquare, Menu, X, Clock, Megaphone,
 } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
@@ -83,6 +83,7 @@ import { AiAssistantSettings } from "@/components/AiAssistantSettings";
 import { VoiceStudio } from "@/components/VoiceStudio";
 import { AiAgentConfig } from "@/components/AiAgentConfig";
 import { FinancialTab } from "@/components/FinancialTab";
+import { MetritoTab } from "@/components/MetritoTab";
 import { CloudChatTab } from "@/components/CloudChatTab";
 import { DashboardHome } from "@/pages/DashboardHome";
 import { HomeViewSetting } from "@/components/settings/HomeViewSetting";
@@ -2463,6 +2464,10 @@ export default function WhatsAppApi() {
               <DollarSign size={16} />
               {!navCollapsed && <span>Financeiro</span>}
             </TabsTrigger>
+            <TabsTrigger value="metrito" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+              <Megaphone size={16} />
+              {!navCollapsed && <span>Tráfego Pago</span>}
+            </TabsTrigger>
             {!navCollapsed && (
               <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 px-3 pt-3 pb-1 font-semibold">Sistema</p>
             )}
@@ -3075,6 +3080,11 @@ export default function WhatsAppApi() {
         {/* ── Financial Tab ── */}
         <TabsContent value="financial" className="space-y-4 p-4 sm:p-6 max-w-6xl overflow-y-auto flex-1 m-0">
           <FinancialTab />
+        </TabsContent>
+
+        {/* ── Metrito (tráfego pago) Tab ── */}
+        <TabsContent value="metrito" className="space-y-4 p-4 sm:p-6 max-w-6xl overflow-y-auto flex-1 m-0">
+          <MetritoTab />
         </TabsContent>
         </div>
       </Tabs>

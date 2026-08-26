@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { matchesStep, aiMatchesStep, applyStepLabels } from "../_shared/flow-matching.ts";
 import { applyStageAutomations } from "../_shared/stage-automations.ts";
+import { decodeWhatsAppText, sendMetritoEvent, runBestEffort } from "../_shared/metrito.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -769,6 +770,7 @@ Deno.serve(async (req) => {
       }
 
       let { data: lead } = await leadQuery.limit(1).maybeSingle();
+      const isNewLead = !lead;
 
       if (!lead) {
         const { data: newLead, error: createError } = await supabase
@@ -821,6 +823,41 @@ Deno.serve(async (req) => {
         status: "received",
         account_id: resolvedAccountId,
       });
+
+      // ── METRITO: ATRIBUIÇÃO DE ORIGEM + EVENTO DE LEAD ──
+      // Só na PRIMEIRA mensagem do lead: é a única que carrega o payload de
+      // rastreio do Metrito, e decodificar toda mensagem de conversa em
+      // andamento seria uma chamada por mensagem para um null garantido.
+      // Roda fora do caminho quente — nada aqui atrasa ou derruba o webhook.
+      if (isNewLead && lead) {
+        const metritoLeadId = lead.id;
+        const metritoLeadName = lead.name;
+        const metritoText = text || "";
+        runBestEffort(async () => {
+          const attribution = metritoText ? await decodeWhatsAppText(metritoText) : null;
+          if (attribution) {
+            // Lead recém-criado: metadata é '{}'. Relê antes de gravar para não
+            // sobrescrever o que outra automação tenha escrito no meio tempo.
+            const { data: fresh } = await supabase
+              .from("leads")
+              .select("metadata")
+              .eq("id", metritoLeadId)
+              .maybeSingle();
+            const merged = { ...((fresh?.metadata as Record<string, unknown>) || {}), metrito: attribution };
+            await supabase.from("leads").update({ metadata: merged }).eq("id", metritoLeadId);
+          }
+          await sendMetritoEvent({
+            name: "whatsapp_lead",
+            facebookName: "Lead",
+            facebookSourceKey: "business_messaging",
+            sourceKey: "whatsapp",
+            // Idempotência pelo id da mensagem: retry da Meta não duplica o lead.
+            idempotencyKey: "wa-lead-" + messageId,
+            lead: { phone: cleanPhone, name: metritoLeadName },
+            utm: attribution,
+          });
+        });
+      }
 
       // ── SHARE LINK ATTRIBUTION ──
       // Links de compartilhamento (wa.me com frase pré-preenchida) definem a

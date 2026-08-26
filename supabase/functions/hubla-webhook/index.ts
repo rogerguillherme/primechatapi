@@ -1,5 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkWebhookSecret } from "../_shared/webhook-secret.ts";
+import {
+  sendMetritoEvent,
+  sendMetritoTransaction,
+  runBestEffort,
+  type MetritoUtm,
+} from "../_shared/metrito.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -103,6 +109,66 @@ function extractPayload(payload: any) {
     externalOrderId, buyerName, buyerEmail, buyerPhone, buyerCpf,
     hublaId, hublaProductId, productName, amount, paymentMethod, status,
   };
+}
+
+// ── METRITO ──
+// Reporta a transação (todo status, inclusive reembolso/chargeback) e, quando
+// aprovada, o evento Purchase. Sempre fora do caminho quente: se o Metrito
+// estiver fora do ar o pedido continua gravado e os fluxos continuam rodando.
+function reportToMetrito(
+  supabase: any,
+  extracted: ReturnType<typeof extractPayload>,
+  leadId: string | null,
+) {
+  runBestEffort(async () => {
+    // UTMs vêm da atribuição gravada na primeira mensagem do lead (metadata.metrito).
+    let utm: MetritoUtm | null = null;
+    if (leadId) {
+      const { data: lead } = await supabase
+        .from("leads")
+        .select("metadata")
+        .eq("id", leadId)
+        .maybeSingle();
+      utm = (lead?.metadata?.metrito as MetritoUtm) || null;
+    }
+
+    await sendMetritoTransaction({
+      id: String(extracted.externalOrderId),
+      status: extracted.status,
+      amount: extracted.amount, // em reais; convertido para centavos inteiros
+      currency: "BRL",
+      customer: {
+        name: extracted.buyerName,
+        email: extracted.buyerEmail,
+        phone: extracted.buyerPhone,
+      },
+      products: extracted.hublaProductId || extracted.productName
+        ? [{ id: extracted.hublaProductId, name: extracted.productName || null }]
+        : undefined,
+      payment: extracted.paymentMethod ? { method: extracted.paymentMethod } : undefined,
+      utm,
+    });
+
+    if (extracted.status === "approved") {
+      await sendMetritoEvent({
+        name: "hubla_purchase",
+        facebookName: "Purchase",
+        // A compra nasce da conversa de WhatsApp, não de um checkout web.
+        facebookSourceKey: "business_messaging",
+        sourceKey: "whatsapp",
+        idempotencyKey: "hubla-purchase-" + extracted.externalOrderId,
+        value: extracted.amount,
+        currency: "BRL",
+        lead: {
+          email: extracted.buyerEmail,
+          phone: extracted.buyerPhone,
+          name: extracted.buyerName,
+          doc: extracted.buyerCpf,
+        },
+        utm,
+      });
+    }
+  });
 }
 
 async function resolveOrCreateLead(
@@ -236,6 +302,11 @@ Deno.serve(async (req) => {
           .from("orders")
           .update({ status, webhook_payload: payload })
           .eq("id", existingOrder.id);
+        // Reembolso e chargeback chegam como mudança de status de um pedido que
+        // já existe — sem isto eles nunca chegariam ao Metrito. Sem leadId: o
+        // Metrito casa pelo transaction.id, e os UTMs já foram enviados no
+        // evento original, então não vale uma query a mais aqui.
+        reportToMetrito(supabase, extracted, null);
       }
       await logWebhook(supabase, externalOrderId, status, 200, "Duplicate webhook ignored, status updated", payload);
       return new Response(
@@ -314,6 +385,8 @@ Deno.serve(async (req) => {
         await supabase.from("order_items").insert(orderItems);
       }
     }
+
+    reportToMetrito(supabase, extracted, leadId);
 
     // ── AUTO-TRACK: Register purchase campaign event ──
     if (status === "approved" && leadId) {
