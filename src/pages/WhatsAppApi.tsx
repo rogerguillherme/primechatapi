@@ -1844,23 +1844,33 @@ export default function WhatsAppApi() {
     setActiveMainTab("flows");
   }, []);
 
-  const [verifyToken, setVerifyToken] = useState("");
+  const [verifyToken, setVerifyToken] = useState("prime_chat_verify_2026");
   const [isSavingToken, setIsSavingToken] = useState(false);
 
-  // Load verify token from database
+  // O verify token pertence ao app Meta e é compartilhado entre as contas.
+  // Apenas administradores podem alterar a configuração global.
   useEffect(() => {
-    supabase.from("app_settings").select("value").eq("key", "whatsapp_verify_token").maybeSingle().then(({ data }) => {
-      if (data?.value) {
-        setVerifyToken(data.value);
-      } else {
-        // Generate default token if none exists
-        const generated = "meno_" + crypto.randomUUID().replace(/-/g, "").slice(0, 24);
-        setVerifyToken(generated);
-      }
-    });
-  }, []);
+    if (!isAdmin) return;
+
+    supabase
+      .from("app_settings")
+      .select("value")
+      .eq("key", "whatsapp_verify_token")
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (error) {
+          toast.error("Não foi possível carregar o token de verificação.");
+          return;
+        }
+        if (data?.value) setVerifyToken(data.value);
+      });
+  }, [isAdmin]);
 
   const handleSaveVerifyToken = async () => {
+    if (!isAdmin) {
+      toast.error("Somente o administrador pode alterar o token global.");
+      return;
+    }
     if (!verifyToken.trim()) {
       toast.error("Informe um token de verificação.");
       return;
@@ -2927,12 +2937,39 @@ export default function WhatsAppApi() {
                   <div className="space-y-2">
                     <Label htmlFor="verifyToken">Verify Token</Label>
                     <div className="flex gap-2">
-                      <Input id="verifyToken" placeholder="Defina um token de verificação" value={verifyToken} onChange={(e) => setVerifyToken(e.target.value)} />
-                      <Button onClick={handleSaveVerifyToken} disabled={isSavingToken} variant="default" size="sm" className="shrink-0">
-                        {isSavingToken ? "Salvando..." : <><CheckCircle2 size={16} /> Salvar</>}
-                      </Button>
+                      <Input
+                        id="verifyToken"
+                        placeholder="Defina um token de verificação"
+                        value={verifyToken}
+                        onChange={(e) => setVerifyToken(e.target.value)}
+                        readOnly={!isAdmin}
+                      />
+                      {isAdmin && (
+                        <Button onClick={handleSaveVerifyToken} disabled={isSavingToken} variant="default" size="sm" className="shrink-0">
+                          {isSavingToken ? "Salvando..." : <><CheckCircle2 size={16} /> Salvar</>}
+                        </Button>
+                      )}
+                      {!isAdmin && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="shrink-0"
+                          aria-label="Copiar verify token"
+                          onClick={() => {
+                            navigator.clipboard.writeText(verifyToken);
+                            toast.success("Verify token copiado!");
+                          }}
+                        >
+                          <Copy size={16} />
+                        </Button>
+                      )}
                     </div>
-                    <p className="text-xs text-muted-foreground">Use este valor no campo "Verify Token" ao configurar o webhook no Facebook.</p>
+                    <p className="text-xs text-muted-foreground">
+                      {isAdmin
+                        ? 'Use este valor no campo "Verify Token" ao configurar o webhook no Facebook.'
+                        : 'Este token é compartilhado pelo app Meta e gerenciado pelo administrador. Copie-o sem alterar.'}
+                    </p>
                   </div>
                   )}
                 </div>
