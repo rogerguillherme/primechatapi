@@ -83,6 +83,7 @@ export function CloudChatTab() {
   const [shortcutQuery, setShortcutQuery] = useState<string | null>(null);
   const [shortcutIndex, setShortcutIndex] = useState(0);
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const { accounts, defaultAccount } = useWhatsAppAccounts();
   const { templates } = useUserTemplates();
 
@@ -131,7 +132,8 @@ export function CloudChatTab() {
 
   // Fetch leads (already carries the denormalized last-message summary)
   const { data: leads } = useQuery({
-    queryKey: ["chat-leads"],
+    queryKey: ["chat-leads", "cloud", user?.id],
+    enabled: !!user,
     queryFn: async () => {
       const { data } = await (supabase as any)
         .from("leads")
@@ -382,7 +384,6 @@ export function CloudChatTab() {
   });
 
   // ── TRANSFERIR ATENDIMENTO ──
-  const { user } = useAuth();
   const { data: teamCtx } = useTeamContext();
   // A listagem de membros só existe para o dono da conta (RLS/edge function).
   const { data: teamMembers } = useTeamMembers(!!teamCtx?.isOwner);
