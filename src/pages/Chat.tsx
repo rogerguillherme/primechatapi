@@ -33,6 +33,7 @@ import { Trash2 } from "lucide-react";
 import { ContactInfoSheet } from "@/components/chat/ContactInfoSheet";
 import { startFlowForLead } from "@/lib/startFlowForLead";
 import { Zap, Workflow } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 type ChatTab = "novos_pedidos" | "aguardando_respostas" | "respondidas" | "reembolso";
 
@@ -90,12 +91,14 @@ export default function Chat() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAuth();
   const { accounts, defaultAccount } = useWhatsAppAccounts();
 
 
   // Fetch leads (already carries the denormalized last-message summary)
   const { data: leads, isLoading: leadsLoading, error: leadsError, refetch: refetchLeads } = useQuery({
-    queryKey: ["chat-leads"],
+    queryKey: ["chat-leads", "page", user?.id],
+    enabled: !!user,
     queryFn: async () => {
       const cols =
         "id, name, phone, email, photo_url, chat_status, updated_at, last_inbound_at, last_outbound_at, last_message_content, last_message_at, last_message_direction, last_message_status, last_message_account_id, account_ids";
