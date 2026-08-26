@@ -795,11 +795,16 @@ Deno.serve(async (req) => {
         body = { messaging_product: "whatsapp", to: cleanPhone, type: "document", document: { link: media_url, caption: message || undefined, filename: docFileName } };
       }
     } else if (interactive_buttons && Array.isArray(interactive_buttons) && interactive_buttons.length > 0) {
+      const btnBodyRaw = (message || "Escolha uma opção:").trim();
+      const btnBodyText = btnBodyRaw.length > 1024 ? btnBodyRaw.substring(0, 1021) + "..." : btnBodyRaw;
+      if (btnBodyRaw.length > 1024) {
+        console.warn(`interactive_buttons body truncated from ${btnBodyRaw.length} to 1024 chars for ${cleanPhone}`);
+      }
       body = {
         messaging_product: "whatsapp", to: cleanPhone, type: "interactive",
         interactive: {
           type: "button",
-          body: { text: message || "Escolha uma opção:" },
+          body: { text: btnBodyText },
           action: {
             buttons: interactive_buttons.slice(0, 3).map((btn: any, i: number) => ({
               type: "reply", reply: { id: btn.id || `btn_${i}`, title: (btn.title || `Opção ${i + 1}`).substring(0, 20) },
