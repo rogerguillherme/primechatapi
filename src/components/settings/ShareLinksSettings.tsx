@@ -63,15 +63,49 @@ function buildWaLink(phone: string, message: string): string {
 export function ShareLinksSettings() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const { accounts } = useWhatsAppAccounts();
+  const { accounts: ownAccounts } = useWhatsAppAccounts();
+  const { isAdmin } = useProfile();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ShareLink | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
 
-  const { data: links = [], isLoading } = useQuery<ShareLink[]>({
+  // Admin pode operar os links de um cliente. `null` = a própria conta.
+  const [targetUserId, setTargetUserId] = useState<string | null>(null);
+  const isRemote = !!targetUserId;
+
+  const callAdmin = async (payload: Record<string, unknown>) => {
+    const { data, error } = await supabase.functions.invoke("admin-share-links", {
+      body: { ...payload, user_id: targetUserId },
+    });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    return data;
+  };
+
+  const { data: clientUsers = [] } = useQuery({
+    queryKey: ["admin-share-link-users"],
+    enabled: !!isAdmin,
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("admin-share-links", {
+        body: { action: "users" },
+      });
+      if (error) throw error;
+      return (data?.users ?? []) as Array<{ id: string; email: string; accounts: number }>;
+    },
+  });
+
+  // Com um cliente selecionado tudo vem da edge function — o front não tem
+  // permissão para ler as contas dele direto, e nem deve ter.
+  const { data: remote } = useQuery({
+    queryKey: ["admin-share-links", targetUserId],
+    enabled: isRemote,
+    queryFn: () => callAdmin({ action: "list" }),
+  });
+
+  const { data: ownLinks = [], isLoading: ownLoading } = useQuery<ShareLink[]>({
     queryKey: ["share-links", user?.id],
-    enabled: !!user,
+    enabled: !!user && !isRemote,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("share_links")
@@ -83,9 +117,9 @@ export function ShareLinksSettings() {
     },
   });
 
-  const { data: labels = [] } = useQuery({
+  const { data: ownLabels = [] } = useQuery({
     queryKey: ["chat-labels", user?.id],
-    enabled: !!user,
+    enabled: !!user && !isRemote,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("chat_labels")
@@ -97,9 +131,9 @@ export function ShareLinksSettings() {
     },
   });
 
-  const { data: stages = [] } = useQuery({
+  const { data: ownStages = [] } = useQuery({
     queryKey: ["pipeline-stages-select", user?.id],
-    enabled: !!user,
+    enabled: !!user && !isRemote,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pipeline_stages")
@@ -111,8 +145,19 @@ export function ShareLinksSettings() {
     },
   });
 
-  const labelMap = useMemo(() => new Map(labels.map((l) => [l.id, l])), [labels]);
-  const stageMap = useMemo(() => new Map(stages.map((s) => [s.id, s])), [stages]);
+  const links: ShareLink[] = isRemote ? (remote?.links ?? []) : ownLinks;
+  const labels: any[] = isRemote ? (remote?.labels ?? []) : ownLabels;
+  const stages: any[] = isRemote ? (remote?.stages ?? []) : ownStages;
+  const accounts: any[] = isRemote ? (remote?.accounts ?? []) : ownAccounts;
+  const isLoading = isRemote ? !remote : ownLoading;
+
+  const refresh = () =>
+    queryClient.invalidateQueries({
+      queryKey: isRemote ? ["admin-share-links", targetUserId] : ["share-links", user?.id],
+    });
+
+  const labelMap = useMemo(() => new Map(labels.map((l: any) => [l.id, l])), [labels]);
+  const stageMap = useMemo(() => new Map(stages.map((s: any) => [s.id, s])), [stages]);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -122,7 +167,6 @@ export function ShareLinksSettings() {
       if (digits.length < 10) throw new Error("Informe o número com DDI e DDD (ex.: 5511999999999)");
 
       const payload = {
-        user_id: user!.id,
         name,
         account_id: form.accountId === NONE ? null : form.accountId,
         phone: digits,
@@ -132,17 +176,25 @@ export function ShareLinksSettings() {
         active: form.active,
       };
 
+      if (isRemote) {
+        await callAdmin({ action: "save", id: editing?.id ?? null, ...payload });
+        return;
+      }
+
       if (editing) {
-        const { error } = await supabase.from("share_links").update(payload).eq("id", editing.id);
+        const { error } = await supabase
+          .from("share_links")
+          .update({ ...payload, user_id: user!.id })
+          .eq("id", editing.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("share_links").insert(payload);
+        const { error } = await supabase.from("share_links").insert({ ...payload, user_id: user!.id });
         if (error) throw error;
       }
     },
     onSuccess: () => {
       toast.success(editing ? "Link atualizado" : "Link criado");
-      queryClient.invalidateQueries({ queryKey: ["share-links", user?.id] });
+      refresh();
       setDialogOpen(false);
       setEditing(null);
       setForm(EMPTY_FORM);
@@ -152,22 +204,43 @@ export function ShareLinksSettings() {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
+      if (isRemote) {
+        await callAdmin({ action: "delete", id });
+        return;
+      }
       const { error } = await supabase.from("share_links").delete().eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
       toast.success("Link removido");
-      queryClient.invalidateQueries({ queryKey: ["share-links", user?.id] });
+      refresh();
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const toggleActive = useMutation({
     mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
+      if (isRemote) {
+        // A function exige o payload completo; reaproveita o link já carregado.
+        const link = links.find((l) => l.id === id);
+        if (!link) throw new Error("Link não encontrado");
+        await callAdmin({
+          action: "save",
+          id,
+          name: link.name,
+          account_id: link.account_id,
+          phone: link.phone,
+          message: link.message,
+          label_id: link.label_id,
+          stage_id: link.stage_id,
+          active,
+        });
+        return;
+      }
       const { error } = await supabase.from("share_links").update({ active }).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["share-links", user?.id] }),
+    onSuccess: () => refresh(),
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -227,6 +300,38 @@ export function ShareLinksSettings() {
       </CardHeader>
 
       <CardContent className="space-y-3">
+        {isAdmin && clientUsers.length > 0 && (
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-lg border bg-muted/30 p-3">
+            <Label className="text-xs shrink-0">Gerenciar links de</Label>
+            <Select
+              value={targetUserId ?? "__self__"}
+              onValueChange={(v) => {
+                setTargetUserId(v === "__self__" ? null : v);
+                setDialogOpen(false);
+                setEditing(null);
+                setForm(EMPTY_FORM);
+              }}
+            >
+              <SelectTrigger className="h-8 text-xs sm:max-w-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__self__">Minha conta</SelectItem>
+                {clientUsers.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.email} ({c.accounts} {c.accounts === 1 ? "número" : "números"})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {isRemote && (
+              <p className="text-[11px] text-muted-foreground sm:ml-auto">
+                Editando como administrador. O link, a etiqueta e a coluna pertencem ao cliente.
+              </p>
+            )}
+          </div>
+        )}
+
         {isLoading ? (
           <div className="flex justify-center py-8">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
