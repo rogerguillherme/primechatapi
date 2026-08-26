@@ -90,11 +90,20 @@ Deno.serve(async (req) => {
 
       if (end < targets.length) {
         await sleep(rand(delay_min, delay_max) * 1000);
-        fetch(`${supabaseUrl}/functions/v1/live-cta-blast`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
-          body: JSON.stringify({ account_id, message, display_text, url, delay_min, delay_max, cursor: end }),
-        }).catch((e) => console.error("self-invoke falhou:", e));
+        // IMPORTANTE: precisa de await. Sem await o worker encerra junto com o
+        // waitUntil e a requisição do próximo chunk é cancelada (era por isso
+        // que o disparo parava sempre no primeiro lote de 30).
+        try {
+          const nextRes = await fetch(`${supabaseUrl}/functions/v1/live-cta-blast`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+            body: JSON.stringify({ account_id, message, display_text, url, delay_min, delay_max, cursor: end }),
+          });
+          console.log(`próximo chunk (cursor=${end}) status ${nextRes.status}`);
+          await nextRes.text().catch(() => "");
+        } catch (e: any) {
+          console.error("self-invoke falhou:", e?.message || e);
+        }
       } else {
         console.log("Disparo CTA concluído");
       }
