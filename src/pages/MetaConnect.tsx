@@ -174,6 +174,7 @@ export default function MetaConnect() {
         user_id: user.id,
         name: phone.verified_name || phone.display_phone_number || "WhatsApp",
         phone_number_id: phone.id,
+        display_phone_number: phone.display_phone_number || null,
         business_account_id: waba.id,
         access_token: activeConnection.meta_access_token,
         is_default: !existingAccounts || existingAccounts.length === 0,

@@ -171,6 +171,10 @@ export function ShareLinksSettings() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const selectedAccountHasNoPhone =
+    form.accountId !== NONE &&
+    !(accounts.find((a: any) => a.id === form.accountId) as any)?.display_phone_number;
+
   const openNew = () => {
     setEditing(null);
     const def = accounts.find((a: any) => a.is_default) ?? accounts[0];
@@ -340,7 +344,10 @@ export function ShareLinksSettings() {
                     <SelectItem value={NONE}>Número manual</SelectItem>
                     {accounts.map((a: any) => (
                       <SelectItem key={a.id} value={a.id}>
-                        {a.name} {a.display_phone_number ? `· ${a.display_phone_number}` : ""}
+                        {a.name}
+                        {a.display_phone_number
+                          ? ` · ${a.display_phone_number}`
+                          : " · número não sincronizado"}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -356,6 +363,12 @@ export function ShareLinksSettings() {
                 placeholder="5511999999999"
                 inputMode="numeric"
               />
+              {selectedAccountHasNoPhone && (
+                <p className="text-[11px] text-amber-600 dark:text-amber-500">
+                  Esta conta ainda não tem o número sincronizado com a Meta — digite-o aqui.
+                  Costuma acontecer quando o token da conta está vencido.
+                </p>
+              )}
             </div>
 
             <div className="space-y-1.5">
