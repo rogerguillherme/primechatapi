@@ -6,6 +6,7 @@
 // Body: { action: "query" | "projects" | "connections" | "fields", ... }
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { resolveMetritoCreds } from "../_shared/metrito.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,9 +51,14 @@ Deno.serve(async (req) => {
     }
     if (!userId) return json({ error: "Invalid auth" }, 401);
 
-    const apiKey = Deno.env.get("METRITO_API_KEY");
+    // Credencial da própria conta; cai no global se ela não cadastrou a dela.
+    // Usa service role só para ler metrito_settings — a RLS já isolaria por
+    // dono, mas aqui o owner é sempre o usuário autenticado acima.
+    const adminClient = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const creds = await resolveMetritoCreds(adminClient, userId);
+    const apiKey = creds.apiKey;
     if (!apiKey) {
-      // Feature inerte enquanto o secret não existe — não é erro de servidor.
+      // Feature inerte enquanto ninguém configurou — não é erro de servidor.
       return json({ error: "Metrito não configurado", configured: false }, 200);
     }
 
@@ -75,7 +81,7 @@ Deno.serve(async (req) => {
       url = BASE + "/v3/fields";
       init = { method: "GET", headers: metritoHeaders };
     } else if (action === "connections") {
-      const projectId = String(input?.project_id || Deno.env.get("METRITO_PROJECT_ID") || "");
+      const projectId = String(input?.project_id || creds.projectId || "");
       if (!projectId) return json({ error: "project_id obrigatório" }, 400);
       // Vai para o path da URL — só permite id opaco, sem barra/traversal.
       if (!/^[A-Za-z0-9_-]{1,64}$/.test(projectId)) {
@@ -84,9 +90,9 @@ Deno.serve(async (req) => {
       url = BASE + "/v3/projects/" + projectId + "/connections";
       init = { method: "GET", headers: metritoHeaders };
     } else if (action === "query") {
-      const projectId = input?.project_id || Deno.env.get("METRITO_PROJECT_ID");
+      const projectId = input?.project_id || creds.projectId;
       if (!projectId) {
-        return json({ error: "METRITO_PROJECT_ID não configurado", configured: false }, 200);
+        return json({ error: "Projeto do Metrito não configurado", configured: false }, 200);
       }
       const fields = Array.isArray(input?.fields) ? input.fields : [];
       if (fields.length === 0) return json({ error: "fields obrigatório" }, 400);

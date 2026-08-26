@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkWebhookSecret } from "../_shared/webhook-secret.ts";
 import {
+  resolveMetritoCreds,
   sendMetritoEvent,
   sendMetritoTransaction,
   runBestEffort,
@@ -121,16 +122,22 @@ function reportToMetrito(
   leadId: string | null,
 ) {
   runBestEffort(async () => {
-    // UTMs vêm da atribuição gravada na primeira mensagem do lead (metadata.metrito).
+    // UTMs vêm da atribuição gravada na primeira mensagem do lead
+    // (metadata.metrito). O user_id sai na mesma consulta e define de qual
+    // conta é a credencial do Metrito — pedido sem lead cai no global.
     let utm: MetritoUtm | null = null;
+    let ownerId: string | null = null;
     if (leadId) {
       const { data: lead } = await supabase
         .from("leads")
-        .select("metadata")
+        .select("metadata, user_id")
         .eq("id", leadId)
         .maybeSingle();
       utm = (lead?.metadata?.metrito as MetritoUtm) || null;
+      ownerId = lead?.user_id ?? null;
     }
+
+    const creds = await resolveMetritoCreds(supabase, ownerId);
 
     await sendMetritoTransaction({
       id: String(extracted.externalOrderId),
@@ -147,7 +154,7 @@ function reportToMetrito(
         : undefined,
       payment: extracted.paymentMethod ? { method: extracted.paymentMethod } : undefined,
       utm,
-    });
+    }, creds);
 
     if (extracted.status === "approved") {
       await sendMetritoEvent({
@@ -166,7 +173,7 @@ function reportToMetrito(
           doc: extracted.buyerCpf,
         },
         utm,
-      });
+      }, creds);
     }
   });
 }

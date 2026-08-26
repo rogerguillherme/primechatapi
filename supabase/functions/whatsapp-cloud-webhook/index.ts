@@ -1,7 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { matchesStep, aiMatchesStep, applyStepLabels } from "../_shared/flow-matching.ts";
 import { applyStageAutomations } from "../_shared/stage-automations.ts";
-import { decodeWhatsAppText, sendMetritoEvent, runBestEffort } from "../_shared/metrito.ts";
+import {
+  decodeWhatsAppText,
+  resolveMetritoCreds,
+  sendMetritoEvent,
+  runBestEffort,
+} from "../_shared/metrito.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -834,7 +839,10 @@ Deno.serve(async (req) => {
         const metritoLeadName = lead.name;
         const metritoText = text || "";
         runBestEffort(async () => {
-          const attribution = metritoText ? await decodeWhatsAppText(metritoText) : null;
+          // Credencial do dono da conta que recebeu a mensagem; cai no global
+          // se essa conta não cadastrou a dela.
+          const creds = await resolveMetritoCreds(supabase, resolvedUserId);
+          const attribution = metritoText ? await decodeWhatsAppText(metritoText, creds) : null;
           if (attribution) {
             // Lead recém-criado: metadata é '{}'. Relê antes de gravar para não
             // sobrescrever o que outra automação tenha escrito no meio tempo.
@@ -855,7 +863,7 @@ Deno.serve(async (req) => {
             idempotencyKey: "wa-lead-" + messageId,
             lead: { phone: cleanPhone, name: metritoLeadName },
             utm: attribution,
-          });
+          }, creds);
         });
       }
 

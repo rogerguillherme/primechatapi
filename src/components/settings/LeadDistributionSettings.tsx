@@ -14,9 +14,6 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Loader2, Shuffle, UserCheck, Users } from "lucide-react";
 
-/** Conta autorizada a usar a distribuição inteligente de leads. */
-export const LEAD_DISTRIBUTION_EMAIL = "estevaosz0602@gmail.com";
-
 export type DistributionTrigger = "first_inbound" | "any_unassigned" | "lead_created";
 
 const TRIGGERS: Array<{ value: DistributionTrigger; title: string; description: string }> = [
@@ -59,13 +56,11 @@ interface TargetRow {
 export function LeadDistributionSettings() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const allowed = user?.email?.toLowerCase() === LEAD_DISTRIBUTION_EMAIL;
-
-  const { data: members } = useTeamMembers(allowed);
+  const { data: members } = useTeamMembers(!!user);
 
   const { data: settings } = useQuery<SettingsRow | null>({
     queryKey: ["lead-distribution-settings", user?.id],
-    enabled: allowed && !!user,
+    enabled: !!user,
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("lead_distribution_settings")
@@ -79,7 +74,7 @@ export function LeadDistributionSettings() {
 
   const { data: targets } = useQuery<TargetRow[]>({
     queryKey: ["lead-distribution-targets", user?.id],
-    enabled: allowed && !!user,
+    enabled: !!user,
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("lead_distribution_targets")
@@ -156,8 +151,6 @@ export function LeadDistributionSettings() {
     },
     onError: (e: Error) => toast.error(e.message),
   });
-
-  if (!allowed) return null;
 
   const currentTrigger: DistributionTrigger = settings?.trigger_mode || "first_inbound";
 

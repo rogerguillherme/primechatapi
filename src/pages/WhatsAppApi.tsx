@@ -91,6 +91,7 @@ import { ShareLinksSettings } from "@/components/settings/ShareLinksSettings";
 import { StageAutomationsSettings } from "@/components/settings/StageAutomationsSettings";
 import { ChatLabelsSettings } from "@/components/settings/ChatLabelsSettings";
 import { ChatShortcutsSettings } from "@/components/settings/ChatShortcutsSettings";
+import { MetritoSettings } from "@/components/settings/MetritoSettings";
 
 import { TemplateStudio } from "@/components/templates/TemplateStudio";
 import { LeadsKanban } from "@/components/kanban/LeadsKanban";
@@ -2543,6 +2544,9 @@ export default function WhatsAppApi() {
 
           {/* Atalhos digitáveis do chat (/fluxo1, /oi ...) */}
           <ChatShortcutsSettings />
+
+          {/* Credenciais do Metrito desta conta (vazio = usa o padrão global) */}
+          <MetritoSettings />
 
 
 

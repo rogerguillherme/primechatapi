@@ -66,3 +66,30 @@ export function toCents(amount) {
   if (!Number.isFinite(n)) return 0;
   return Math.round(n * 100);
 }
+
+/**
+ * Decide entre a credencial cadastrada pela conta e a global.
+ *
+ * Tudo ou nada: se a conta cadastrou qualquer campo, os campos vazios DELA
+ * ficam nulos em vez de herdar o global. Herdar por campo misturaria a chave de
+ * uma conta com o projeto de outra, e o dado iria para o painel errado sem
+ * ninguém perceber.
+ */
+export function pickMetritoCreds(own, env) {
+  const clean = (v) => {
+    const s = typeof v === "string" ? v.trim() : "";
+    return s || null;
+  };
+  const mine = {
+    apiKey: clean(own?.apiKey),
+    genericKey: clean(own?.genericKey),
+    projectId: clean(own?.projectId),
+  };
+  const hasOwn = !!(mine.apiKey || mine.genericKey || mine.projectId);
+  if (hasOwn) return mine;
+  return {
+    apiKey: clean(env?.apiKey),
+    genericKey: clean(env?.genericKey),
+    projectId: clean(env?.projectId),
+  };
+}

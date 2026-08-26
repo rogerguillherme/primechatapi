@@ -5,13 +5,15 @@
 // processes thousands of messages a day; Metrito being slow or down must never
 // cost a message, a lead or an order.
 //
-// Secrets (set in Supabase, never in source):
-//   METRITO_API_KEY     — mtk_live_... (scopes tracking:write, data:read)
-//   METRITO_PROJECT_ID  — default project for /v3/query
-//   METRITO_GENERIC_KEY — ?k= key for the generic transaction webhook
-// A missing secret makes the matching feature inert (logs, returns null).
+// Credenciais: cada conta pode cadastrar as suas em `metrito_settings`. Quem
+// não cadastrou cai nos secrets globais:
+//   METRITO_API_KEY     — mtk_live_... (escopos tracking:write, data:read)
+//   METRITO_PROJECT_ID  — projeto padrão do /v3/query
+//   METRITO_GENERIC_KEY — chave ?k= do webhook genérico de transação
+// Sem credencial em nenhum dos dois níveis, a feature correspondente fica
+// inerte (loga e retorna null/false). Ver resolveMetritoCreds.
 
-import { mapHublaStatusToMetrito, toCents } from "./metrito-map.mjs";
+import { mapHublaStatusToMetrito, toCents, pickMetritoCreds } from "./metrito-map.mjs";
 
 export { mapHublaStatusToMetrito, toCents };
 
@@ -20,16 +22,53 @@ const BASE = "https://api.metrito.com";
 // up the isolate until it is recycled.
 const TIMEOUT_MS = 5000;
 
-export function metritoApiKey(): string | null {
-  return Deno.env.get("METRITO_API_KEY") || null;
+export interface MetritoCreds {
+  apiKey: string | null;
+  genericKey: string | null;
+  projectId: string | null;
 }
 
-export function metritoGenericKey(): string | null {
-  return Deno.env.get("METRITO_GENERIC_KEY") || null;
+/** Credenciais globais, vindas dos secrets. Fallback de quem não cadastrou. */
+export function envMetritoCreds(): MetritoCreds {
+  return {
+    apiKey: Deno.env.get("METRITO_API_KEY") || null,
+    genericKey: Deno.env.get("METRITO_GENERIC_KEY") || null,
+    projectId: Deno.env.get("METRITO_PROJECT_ID") || null,
+  };
 }
 
-export function metritoProjectId(): string | null {
-  return Deno.env.get("METRITO_PROJECT_ID") || null;
+/**
+ * Credenciais do dono `ownerId`, caindo nos secrets globais quando ele não
+ * cadastrou nenhuma.
+ *
+ * Tudo ou nada de propósito: se a conta tem cadastro próprio, os campos em
+ * branco dela ficam nulos em vez de herdar o global. Misturar a chave de um
+ * cliente com o project id de outro mandaria o dado dele para o painel errado
+ * — falha silenciosa e difícil de perceber.
+ */
+export async function resolveMetritoCreds(
+  supabase: any,
+  ownerId?: string | null,
+): Promise<MetritoCreds> {
+  const env = envMetritoCreds();
+  if (!ownerId) return env;
+  try {
+    const { data } = await supabase
+      .from("metrito_settings")
+      .select("api_key, generic_key, project_id")
+      .eq("owner_id", ownerId)
+      .maybeSingle();
+
+    // A regra de escolha vive em metrito-map.mjs para ser coberta pelo
+    // self-check em node — aqui só buscamos a linha.
+    return pickMetritoCreds(
+      { apiKey: data?.api_key, genericKey: data?.generic_key, projectId: data?.project_id },
+      env,
+    );
+  } catch (e) {
+    console.log("[metrito] creds lookup failed, using env: " + ((e as Error)?.message || e));
+    return env;
+  }
 }
 
 async function post(
@@ -67,8 +106,11 @@ export interface MetritoAttribution extends MetritoUtm {
  * Only worth calling on a lead's FIRST message — every other message costs a
  * round trip for a guaranteed null.
  */
-export async function decodeWhatsAppText(text: string): Promise<MetritoAttribution | null> {
-  const key = metritoApiKey();
+export async function decodeWhatsAppText(
+  text: string,
+  creds: MetritoCreds,
+): Promise<MetritoAttribution | null> {
+  const key = creds.apiKey;
   if (!key || !text) return null;
   try {
     const { ok, status, body } = await post(
@@ -119,10 +161,13 @@ export interface MetritoEventInput {
 }
 
 /** Fire-and-forget event to POST /v3/tracking/events. Never throws. */
-export async function sendMetritoEvent(input: MetritoEventInput): Promise<boolean> {
-  const key = metritoApiKey();
+export async function sendMetritoEvent(
+  input: MetritoEventInput,
+  creds: MetritoCreds,
+): Promise<boolean> {
+  const key = creds.apiKey;
   if (!key) {
-    console.log("[metrito] METRITO_API_KEY not set — event skipped");
+    console.log("[metrito] sem API key (conta nem global) — evento ignorado");
     return false;
   }
   try {
@@ -190,10 +235,13 @@ export interface MetritoTransactionInput {
  * Reports a transaction to POST /v2/tracking/generic?k=... .
  * Monetary values go out as INTEGER CENTS — see toCents / test_metrito.mjs.
  */
-export async function sendMetritoTransaction(input: MetritoTransactionInput): Promise<boolean> {
-  const k = metritoGenericKey();
+export async function sendMetritoTransaction(
+  input: MetritoTransactionInput,
+  creds: MetritoCreds,
+): Promise<boolean> {
+  const k = creds.genericKey;
   if (!k) {
-    console.log("[metrito] METRITO_GENERIC_KEY not set — transaction skipped");
+    console.log("[metrito] sem chave genérica (conta nem global) — transação ignorada");
     return false;
   }
   try {

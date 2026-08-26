@@ -1,7 +1,12 @@
 // Self-check for the Metrito money/status mapping.
 // Run: node supabase/functions/_shared/test_metrito.mjs
 import assert from "node:assert/strict";
-import { mapHublaStatusToMetrito, toCents, METRITO_STATUSES } from "./metrito-map.mjs";
+import {
+  mapHublaStatusToMetrito,
+  toCents,
+  pickMetritoCreds,
+  METRITO_STATUSES,
+} from "./metrito-map.mjs";
 
 // ── status mapping ──
 const cases = {
@@ -59,3 +64,37 @@ for (let c = 0; c < 2000; c++) {
 }
 
 console.log("metrito map: all assertions passed");
+
+// ── escolha de credencial: conta própria x global ──
+{
+  const env = { apiKey: "env-key", genericKey: "env-gen", projectId: "env-proj" };
+
+  // Sem cadastro próprio: cai inteiro no global.
+  assert.deepEqual(pickMetritoCreds(null, env), env, "sem linha -> global");
+  assert.deepEqual(
+    pickMetritoCreds({ apiKey: "", genericKey: "  ", projectId: null }, env),
+    env,
+    "linha em branco -> global",
+  );
+
+  // Com cadastro próprio: usa só o dela, sem herdar campo do global.
+  assert.deepEqual(
+    pickMetritoCreds({ apiKey: "own-key", genericKey: "", projectId: "" }, env),
+    { apiKey: "own-key", genericKey: null, projectId: null },
+    "cadastro parcial nao herda campo do global",
+  );
+  assert.deepEqual(
+    pickMetritoCreds({ apiKey: " own-key ", genericKey: "own-gen", projectId: "own-proj" }, env),
+    { apiKey: "own-key", genericKey: "own-gen", projectId: "own-proj" },
+    "cadastro completo, com trim",
+  );
+
+  // Global também ausente: tudo nulo, features ficam inertes.
+  assert.deepEqual(
+    pickMetritoCreds(null, {}),
+    { apiKey: null, genericKey: null, projectId: null },
+    "sem conta e sem global -> inerte",
+  );
+}
+
+console.log("metrito creds: all assertions passed");

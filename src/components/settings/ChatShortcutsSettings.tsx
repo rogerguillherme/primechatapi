@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Plus, Trash2, Zap } from "lucide-react";
+import { Loader2, Pencil, Plus, Trash2, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type ActionType = "message" | "flow";
@@ -50,6 +50,8 @@ export function ChatShortcutsSettings() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState(EMPTY_FORM);
   const [creating, setCreating] = useState(false);
+  // Mesmo painel serve para criar e editar; `editingId` diz qual dos dois.
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const { data: flows } = useQuery({
     queryKey: ["flows-shortcuts", user?.id],
@@ -79,7 +81,7 @@ export function ChatShortcutsSettings() {
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["chat-shortcuts", user?.id] });
 
-  const createMutation = useMutation({
+  const saveMutation = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error("Sessão expirada");
       const command = normalizeCommand(form.command);
@@ -91,15 +93,20 @@ export function ChatShortcutsSettings() {
         throw new Error("Escolha o fluxo que o atalho deve ativar");
       }
 
-      const { error } = await supabase.from("chat_shortcuts").insert({
-        user_id: user.id,
+      const payload = {
         command,
         description: form.description.trim() || null,
         action_type: form.action_type,
         message: form.action_type === "message" ? form.message.trim() : null,
         flow_id: form.action_type === "flow" ? form.flow_id : null,
-      });
+      };
+
+      const { error } = editingId
+        ? await supabase.from("chat_shortcuts").update(payload).eq("id", editingId)
+        : await supabase.from("chat_shortcuts").insert({ ...payload, user_id: user.id });
+
       if (error) {
+        // Índice único em (user_id, lower(command)).
         if (error.code === "23505" || error.message.includes("duplicate")) {
           throw new Error(`Já existe um atalho /${command}`);
         }
@@ -107,14 +114,33 @@ export function ChatShortcutsSettings() {
       }
     },
     onSuccess: () => {
-      toast({ title: "Atalho criado" });
+      toast({ title: editingId ? "Atalho atualizado" : "Atalho criado" });
       setForm(EMPTY_FORM);
       setCreating(false);
+      setEditingId(null);
       invalidate();
     },
     onError: (e: any) =>
-      toast({ title: "Erro ao criar atalho", description: e.message, variant: "destructive" }),
+      toast({ title: "Erro ao salvar atalho", description: e.message, variant: "destructive" }),
   });
+
+  const openEdit = (s: ChatShortcut) => {
+    setEditingId(s.id);
+    setForm({
+      command: s.command,
+      description: s.description ?? "",
+      action_type: s.action_type,
+      message: s.message ?? "",
+      flow_id: s.flow_id ?? "",
+    });
+    setCreating(true);
+  };
+
+  const closeForm = () => {
+    setCreating(false);
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+  };
 
   const toggleMutation = useMutation({
     mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
@@ -240,17 +266,14 @@ export function ChatShortcutsSettings() {
 
             <div className="flex gap-2">
               <Button
-                onClick={() => createMutation.mutate()}
-                disabled={createMutation.isPending}
+                onClick={() => saveMutation.mutate()}
+                disabled={saveMutation.isPending}
                 className="gap-1.5"
               >
-                {createMutation.isPending && <Loader2 size={15} className="animate-spin" />}
-                Salvar atalho
+                {saveMutation.isPending && <Loader2 size={15} className="animate-spin" />}
+                {editingId ? "Salvar alterações" : "Salvar atalho"}
               </Button>
-              <Button
-                variant="ghost"
-                onClick={() => { setCreating(false); setForm(EMPTY_FORM); }}
-              >
+              <Button variant="ghost" onClick={closeForm}>
                 Cancelar
               </Button>
             </div>
@@ -294,7 +317,17 @@ export function ChatShortcutsSettings() {
                 <Button
                   size="icon"
                   variant="ghost"
+                  onClick={() => openEdit(s)}
+                  title="Editar atalho"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <Pencil size={16} />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
                   onClick={() => deleteMutation.mutate(s.id)}
+                  title="Remover atalho"
                   className="text-muted-foreground hover:text-destructive"
                 >
                   <Trash2 size={16} />
