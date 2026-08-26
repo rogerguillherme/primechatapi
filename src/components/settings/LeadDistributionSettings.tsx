@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Loader2, Shuffle, Users } from "lucide-react";
+import { Loader2, Shuffle, UserCheck, Users } from "lucide-react";
 
 /** Conta autorizada a usar a distribuição inteligente de leads. */
 export const LEAD_DISTRIBUTION_EMAIL = "estevaosz0602@gmail.com";
@@ -44,6 +44,7 @@ interface SettingsRow {
   trigger_mode: DistributionTrigger;
   waiting_stage_id: string | null;
   in_service_stage_id: string | null;
+  sticky_agent: boolean;
 }
 
 interface TargetRow {
@@ -121,7 +122,7 @@ export function LeadDistributionSettings() {
   }, [targets]);
 
   const saveSettings = useMutation({
-    mutationFn: async (patch: Partial<Pick<SettingsRow, "enabled" | "trigger_mode">>) => {
+    mutationFn: async (patch: Partial<Pick<SettingsRow, "enabled" | "trigger_mode" | "sticky_agent">>) => {
       if (!user) throw new Error("Usuário não autenticado");
       const { error } = await (supabase as any)
         .from("lead_distribution_settings")
@@ -211,6 +212,25 @@ export function LeadDistributionSettings() {
               );
             })}
           </div>
+        </div>
+
+        <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-3">
+          <div className="space-y-1">
+            <Label htmlFor="dist-sticky" className="flex items-center gap-2">
+              <UserCheck size={14} /> Lead que volta fica com o mesmo vendedor
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Quando um lead perde o responsável e volta a mandar mensagem, ele é devolvido ao último
+              vendedor que o atendeu, em vez de entrar no rodízio. Se esse vendedor não estiver mais
+              ativo na lista abaixo, o rodízio normal assume. O retorno não conta no total de leads
+              recebidos — só leads novos pesam no percentual.
+            </p>
+          </div>
+          <Switch
+            id="dist-sticky"
+            checked={!!settings?.sticky_agent}
+            onCheckedChange={(v) => saveSettings.mutate({ sticky_agent: v })}
+          />
         </div>
 
         <div className="space-y-3">

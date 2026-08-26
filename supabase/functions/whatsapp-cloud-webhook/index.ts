@@ -881,13 +881,16 @@ Deno.serve(async (req) => {
 
           if (matched) {
             console.log(`[share-link] match ${matched.id} for lead ${lead.id}`);
-            if (matched.stage_id) {
-              await supabase.from("leads").update({ stage_id: matched.stage_id }).eq("id", lead.id);
-            }
+            // A etiqueta vem primeiro: se ela tiver coluna associada, o trigger
+            // trg_apply_label_stage move o lead. A coluna do próprio link é mais
+            // específica, então é aplicada depois e tem a palavra final.
             if (matched.label_id) {
               await supabase
                 .from("lead_labels")
                 .insert({ lead_id: lead.id, label_id: matched.label_id });
+            }
+            if (matched.stage_id) {
+              await supabase.from("leads").update({ stage_id: matched.stage_id }).eq("id", lead.id);
             }
             await supabase
               .from("share_links")

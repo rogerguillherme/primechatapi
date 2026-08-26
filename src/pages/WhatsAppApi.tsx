@@ -78,7 +78,6 @@ import { WebhookEndpoints } from "@/components/WebhookEndpoints";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 import { useUserTemplates } from "@/hooks/use-user-templates";
 import { AccountSelector } from "@/components/AccountSelector";
-import { ChatLabelsManager, useLabels, LeadLabelSelector } from "@/components/ChatLabelsManager";
 import { AiAssistantSettings } from "@/components/AiAssistantSettings";
 import { VoiceStudio } from "@/components/VoiceStudio";
 import { AiAgentConfig } from "@/components/AiAgentConfig";
@@ -90,6 +89,7 @@ import { HomeViewSetting } from "@/components/settings/HomeViewSetting";
 import { LeadDistributionSettings } from "@/components/settings/LeadDistributionSettings";
 import { ShareLinksSettings } from "@/components/settings/ShareLinksSettings";
 import { StageAutomationsSettings } from "@/components/settings/StageAutomationsSettings";
+import { ChatLabelsSettings } from "@/components/settings/ChatLabelsSettings";
 import { ChatShortcutsSettings } from "@/components/settings/ChatShortcutsSettings";
 
 import { TemplateStudio } from "@/components/templates/TemplateStudio";
@@ -2537,6 +2537,9 @@ export default function WhatsAppApi() {
 
           {/* Fluxos automáticos de mudança de coluna no Kanban */}
           <StageAutomationsSettings />
+
+          {/* Etiquetas do chat (nome, cor e coluna associada) */}
+          <ChatLabelsSettings />
 
           {/* Atalhos digitáveis do chat (/fluxo1, /oi ...) */}
           <ChatShortcutsSettings />

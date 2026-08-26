@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useToggleLeadLabel } from "@/hooks/use-chat-labels";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
@@ -186,29 +187,9 @@ export function ContactInfoSheet({ leadId, open, onOpenChange, defaultTab = "inf
     },
   });
 
-  const toggleLabel = useMutation({
-    mutationFn: async (labelId: string) => {
-      if (!leadId) throw new Error("Lead não selecionado");
-      const has = (leadLabelIds || []).includes(labelId);
-      if (has) {
-        const { error } = await supabase
-          .from("lead_labels")
-          .delete()
-          .eq("lead_id", leadId)
-          .eq("label_id", labelId);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("lead_labels").insert({ lead_id: leadId, label_id: labelId });
-        if (error) throw error;
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lead-labels-contact", leadId] });
-    },
-    onError: (err: any) => {
-      toast({ title: "Erro na etiqueta", description: err.message, variant: "destructive" });
-    },
-  });
+  // Toggle compartilhado com o chat: aplicar etiqueta com coluna associada
+  // move o lead de etapa (trigger no banco).
+  const toggleLabel = useToggleLeadLabel(leadId);
 
   const currentStage = useMemo(
     () => (stages || []).find((s) => s.id === (lead as any)?.stage_id),
@@ -319,7 +300,7 @@ export function ContactInfoSheet({ leadId, open, onOpenChange, defaultTab = "inf
                           return (
                             <button
                               key={l.id}
-                              onClick={() => toggleLabel.mutate(l.id)}
+                              onClick={() => toggleLabel.mutate({ labelId: l.id, applied: active })}
                               className={cn(
                                 "text-xs px-2.5 py-1 rounded-full border transition-colors",
                                 active

@@ -24,6 +24,7 @@ import { BulkBroadcastDialog } from "@/components/BulkBroadcastDialog";
 import { ContactInfoSheet } from "@/components/chat/ContactInfoSheet";
 import { startFlowForLead } from "@/lib/startFlowForLead";
 import { useTeamContext, useTeamMembers } from "@/hooks/use-team";
+import { useToggleLeadLabel } from "@/hooks/use-chat-labels";
 import { useAuth } from "@/contexts/AuthContext";
 
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
@@ -395,6 +396,12 @@ export function CloudChatTab() {
     },
     onError: (err: any) => toast.error(err.message || "Erro ao mover lead"),
   });
+
+  // ── ETIQUETAS ──
+  // O movimento de coluna quando a etiqueta tem stage_id é feito pelo trigger
+  // trg_apply_label_stage no banco — vale igual para o webhook.
+  const toggleLeadLabel = useToggleLeadLabel(selectedLeadId);
+  const leadLabelIds = (selectedLeadId && leadLabelsMap?.get(selectedLeadId)) || new Set<string>();
 
   // ── TRANSFERIR ATENDIMENTO ──
   const { data: teamCtx } = useTeamContext();
@@ -1107,6 +1114,63 @@ export function CloudChatTab() {
                       <span className="flex-1 truncate">{stage.name}</span>
                     </DropdownMenuItem>
                   ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Etiquetas do lead */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    title="Etiquetas desta conversa"
+                    className={cn(
+                      "p-2 rounded-full hover:bg-accent transition-colors",
+                      leadLabelIds.size > 0 ? "text-primary" : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    <Tag size={18} />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-60">
+                  <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Etiquetas</div>
+                  {labels.length === 0 && (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                      Nenhuma etiqueta criada. Crie em Configuração › Etiquetas do chat.
+                    </div>
+                  )}
+                  {labels.map((label: any) => {
+                    const applied = leadLabelIds.has(label.id);
+                    const stage = (pipelineStages || []).find((s: any) => s.id === label.stage_id);
+                    return (
+                      <DropdownMenuItem
+                        key={label.id}
+                        className="gap-2"
+                        disabled={toggleLeadLabel.isPending}
+                        onSelect={(e) => {
+                          e.preventDefault();
+                          toggleLeadLabel.mutate(
+                            { labelId: label.id, applied },
+                            {
+                              onSuccess: () =>
+                                toast.success(
+                                  applied
+                                    ? "Etiqueta removida"
+                                    : stage
+                                    ? `Etiqueta aplicada — lead movido para ${stage.name}`
+                                    : "Etiqueta aplicada",
+                                ),
+                            },
+                          );
+                        }}
+                      >
+                        <span
+                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: label.color || "hsl(var(--primary))" }}
+                        />
+                        <span className="flex-1 truncate">{label.name}</span>
+                        {applied && <Check size={14} className="opacity-60" />}
+                      </DropdownMenuItem>
+                    );
+                  })}
                 </DropdownMenuContent>
               </DropdownMenu>
 
