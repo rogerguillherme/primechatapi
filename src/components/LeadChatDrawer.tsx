@@ -14,7 +14,7 @@ import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { ChatMediaBubble } from "@/components/ChatMediaBubble";
-import { AudioRecorder } from "@/components/AudioRecorder";
+import { AudioRecorder, audioFileFromBlob } from "@/components/AudioRecorder";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 import { ContactInfoSheet } from "@/components/chat/ContactInfoSheet";
 import { startFlowForLead } from "@/lib/startFlowForLead";
@@ -305,8 +305,7 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
   }, [lead, sendMutation, toast]);
 
   const handleAudioRecorded = useCallback((blob: Blob) => {
-    const file = new File([blob], "audio.webm", { type: "audio/webm" });
-    uploadAndSendMedia(file);
+    uploadAndSendMedia(audioFileFromBlob(blob));
   }, [uploadAndSendMedia]);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {

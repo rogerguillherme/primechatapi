@@ -59,7 +59,9 @@ const WEBHOOK_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 function shouldRefreshWebhookSubscription(account: AccountCredentials): boolean {
   if (!account.businessAccountId || !account.accessToken) return false;
-  if (account.webhookSubscribed !== true) return true;
+  // A janela vale também quando a inscrição falhou. Sem isso, toda conta com
+  // webhook_subscribed = false paga 2-3 round-trips na Graph ANTES de cada
+  // envio — e nunca sai desse estado, porque a retentativa segue falhando.
   if (!account.webhookLastCheckAt) return true;
 
   const lastCheck = new Date(account.webhookLastCheckAt).getTime();

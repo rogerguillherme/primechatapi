@@ -2,6 +2,37 @@ import { useState, useRef, useCallback } from "react";
 import { Mic, Square, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// O WhatsApp Cloud API recusa audio/webm (erro 131053) — os únicos containers
+// aceitos são ogg/opus, mpeg, amr, mp4 e aac. Grava no primeiro que o navegador
+// suportar; webm fica só como último recurso, para não voltar a gravar mudo.
+const WHATSAPP_AUDIO_TYPES = [
+  "audio/ogg;codecs=opus",
+  "audio/mp4",
+  "audio/mpeg",
+  "audio/aac",
+];
+
+export function pickAudioMimeType(): string {
+  const supported = WHATSAPP_AUDIO_TYPES.find(
+    (t) => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(t),
+  );
+  return supported || "audio/webm;codecs=opus";
+}
+
+const EXT_BY_MIME: Record<string, string> = {
+  "audio/ogg": "ogg",
+  "audio/mp4": "m4a",
+  "audio/mpeg": "mp3",
+  "audio/aac": "aac",
+  "audio/webm": "webm",
+};
+
+/** Converte o blob gravado num File com extensão coerente com o container. */
+export function audioFileFromBlob(blob: Blob): File {
+  const base = (blob.type || "audio/webm").split(";")[0].trim();
+  return new File([blob], `audio.${EXT_BY_MIME[base] || "webm"}`, { type: base });
+}
+
 interface AudioRecorderProps {
   onRecorded: (blob: Blob) => void;
   disabled?: boolean;
@@ -17,7 +48,8 @@ export function AudioRecorder({ onRecorded, disabled }: AudioRecorderProps) {
   const startRecording = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm;codecs=opus" });
+      const mimeType = pickAudioMimeType();
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
 
@@ -26,7 +58,7 @@ export function AudioRecorder({ onRecorded, disabled }: AudioRecorderProps) {
       };
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+        const blob = new Blob(chunksRef.current, { type: mediaRecorder.mimeType || mimeType });
         onRecorded(blob);
         stream.getTracks().forEach((t) => t.stop());
       };

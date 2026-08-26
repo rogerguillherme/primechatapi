@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ChatMediaBubble } from "@/components/ChatMediaBubble";
-import { AudioRecorder } from "@/components/AudioRecorder";
+import { AudioRecorder, audioFileFromBlob } from "@/components/AudioRecorder";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -256,18 +256,31 @@ export function CloudChatTab() {
   const selectedLeadIdRef = useRef(selectedLeadId);
   selectedLeadIdRef.current = selectedLeadId;
 
-  // Realtime – global channel for sidebar (latest msgs / lead list)
+  // Realtime – global channel for sidebar (latest msgs / lead list).
+  // Cada evento aqui dispara um refetch de ATÉ 5000 leads. Em disparo, com
+  // milhares de eventos por hora, isso vira uma enxurrada de refetch que trava
+  // a aba. Coalescemos os eventos numa janela curta: a lista continua viva,
+  // mas atualiza no máximo uma vez a cada 3s. A conversa aberta não passa por
+  // aqui — ela tem canal próprio com merge otimista, e segue instantânea.
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRefresh = () => {
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = null;
+        queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
+      }, 3000);
+    };
+
     const channel = supabase
       .channel("cloud-chat-global-rt")
-      .on("postgres_changes", { event: "*", schema: "public", table: "chat_messages" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
-      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_messages" }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, scheduleRefresh)
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      if (timer) clearTimeout(timer);
+      supabase.removeChannel(channel);
+    };
   }, [queryClient]);
 
   // Realtime – dedicated channel per selected lead, with optimistic cache merge
@@ -513,7 +526,7 @@ export function CloudChatTab() {
   }, [selectedLead, sendMutation]);
 
   const handleAudioRecorded = useCallback((blob: Blob) => {
-    uploadAndSendMedia(new File([blob], "audio.webm", { type: "audio/webm" }));
+    uploadAndSendMedia(audioFileFromBlob(blob));
   }, [uploadAndSendMedia]);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
