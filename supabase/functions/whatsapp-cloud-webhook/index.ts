@@ -254,7 +254,12 @@ Deno.serve(async (req) => {
       console.error("Failed to read verify token from DB:", e);
     }
 
-    console.log("Webhook verify - mode:", mode, "received token:", JSON.stringify(token), "expected token:", JSON.stringify(VERIFY_TOKEN), "match:", token === VERIFY_TOKEN);
+    console.log("Webhook verification requested", {
+      mode,
+      hasReceivedToken: Boolean(token),
+      hasConfiguredToken: Boolean(VERIFY_TOKEN),
+      match: token?.trim() === VERIFY_TOKEN?.trim(),
+    });
 
     if (mode === "subscribe" && token && VERIFY_TOKEN && token.trim() === VERIFY_TOKEN.trim()) {
       console.log("Webhook verified successfully");

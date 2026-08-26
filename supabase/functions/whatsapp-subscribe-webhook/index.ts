@@ -141,8 +141,11 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !serviceRoleKey) {
+      throw new Error("Configuração interna do backend indisponível");
+    }
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
     const authHeader = req.headers.get("authorization") || "";
@@ -156,7 +159,14 @@ Deno.serve(async (req) => {
     }
 
     const { account_id } = await req.json().catch(() => ({}));
-    const verifyToken = Deno.env.get("WHATSAPP_VERIFY_TOKEN") || "prime_chat_verify_2026";
+    const { data: tokenSetting } = await adminClient
+      .from("app_settings")
+      .select("value")
+      .eq("key", "whatsapp_verify_token")
+      .maybeSingle();
+    const verifyToken = tokenSetting?.value?.trim()
+      || Deno.env.get("WHATSAPP_VERIFY_TOKEN")?.trim()
+      || "prime_chat_verify_2026";
     const appSubscription = await configureAppWebhookSubscription(supabaseUrl, verifyToken).catch((e: any) => ({
       ok: false,
       error: e?.message || String(e),

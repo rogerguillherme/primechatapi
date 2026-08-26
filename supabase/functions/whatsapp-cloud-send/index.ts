@@ -143,8 +143,20 @@ async function ensureWebhookSubscription(accessToken: string, businessAccountId?
   if (!businessAccountId || !accessToken) return { ok: false, skipped: true, error: "missing credentials" };
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const verifyToken = Deno.env.get("WHATSAPP_VERIFY_TOKEN") || "prime_chat_verify_2026";
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !serviceRoleKey) {
+      return { ok: false, skipped: true, error: "missing backend configuration" };
+    }
+    const settingsClient = createClient(supabaseUrl, serviceRoleKey);
+    const { data: tokenSetting } = await settingsClient
+      .from("app_settings")
+      .select("value")
+      .eq("key", "whatsapp_verify_token")
+      .maybeSingle();
+    const verifyToken = tokenSetting?.value?.trim()
+      || Deno.env.get("WHATSAPP_VERIFY_TOKEN")?.trim()
+      || "prime_chat_verify_2026";
     const metaAppId = Deno.env.get("META_APP_ID");
     const metaAppSecret = Deno.env.get("META_APP_SECRET");
 
