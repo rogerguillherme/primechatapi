@@ -46,25 +46,25 @@ Deno.serve(async (req) => {
     if (action === "users") {
       const { data: accounts, error } = await admin
         .from("whatsapp_accounts")
-        .select("user_id, name, display_phone_number");
+        .select("user_id");
       if (error) throw error;
 
-      const byUser = new Map<string, { accounts: number; sample: string }>();
+      const countByUser = new Map<string, number>();
       for (const a of accounts || []) {
-        const cur = byUser.get(a.user_id) || { accounts: 0, sample: a.name };
-        cur.accounts += 1;
-        byUser.set(a.user_id, cur);
+        countByUser.set(a.user_id, (countByUser.get(a.user_id) ?? 0) + 1);
       }
 
-      const { data: listed } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      // Se a listagem de usuários falhar, ainda devolvemos os ids — a tela
+      // fica feia, mas continua utilizável.
+      const { data: listed } = await admin.auth.admin
+        .listUsers({ page: 1, perPage: 1000 })
+        .catch(() => ({ data: null }) as any);
       const emailById = new Map((listed?.users || []).map((u: any) => [u.id, u.email]));
 
       return json({
-        users: [...byUser.entries()].map(([id, info]) => ({
-          id,
-          email: emailById.get(id) || id,
-          accounts: info.accounts,
-        })),
+        users: [...countByUser.entries()]
+          .map(([id, count]) => ({ id, email: emailById.get(id) || id, accounts: count }))
+          .sort((a, b) => String(a.email).localeCompare(String(b.email))),
       });
     }
 
