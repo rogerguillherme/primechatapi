@@ -53,6 +53,22 @@ Deno.serve(async (req) => {
       ? await graph(`https://graph.facebook.com/v21.0/${appId}/subscriptions?access_token=${appToken}`)
       : { status: 0, body: { error: "META_APP_ID/SECRET ausente" } };
 
+    // Diagnóstico: a qual app pertence o token da conta e qual é o nosso app?
+    const tokenDebug = appToken && acc.access_token
+      ? await graph(
+          `https://graph.facebook.com/v21.0/debug_token?input_token=${encodeURIComponent(acc.access_token)}&access_token=${appToken}`,
+        )
+      : { status: 0, body: null };
+    const tokenInfo = (tokenDebug.body as any)?.data
+      ? {
+          app_id: (tokenDebug.body as any).data.app_id,
+          application: (tokenDebug.body as any).data.application,
+          is_valid: (tokenDebug.body as any).data.is_valid,
+          expires_at: (tokenDebug.body as any).data.expires_at,
+          scopes: (tokenDebug.body as any).data.scopes,
+        }
+      : (tokenDebug.body as any)?.error || null;
+
     const attempts: Array<Record<string, unknown>> = [];
     let ok = false;
 
@@ -102,6 +118,8 @@ Deno.serve(async (req) => {
       ok,
       account: { id: acc.id, name: acc.name, waba_id: acc.business_account_id, phone_number_id: acc.phone_number_id },
       callback: CALLBACK,
+      our_app_id: appId,
+      account_token_info: tokenInfo,
       app_subscriptions: appSubs.body,
       attempts,
       subscribed_apps: finalSubs.body,
