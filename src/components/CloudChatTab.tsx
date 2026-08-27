@@ -140,7 +140,10 @@ export function CloudChatTab() {
     },
   });
 
-  // Fetch leads (already carries the denormalized last-message summary)
+  // Fetch leads (already carries the denormalized last-message summary).
+  // 5000 leads por refetch travava a aba: o payload chegava a alguns MB e todo
+  // evento de realtime refazia a conta. 800 cobre a caixa de entrada real
+  // (a busca por telefone/nome continua feita no servidor quando preciso).
   const { data: leads } = useQuery({
     queryKey: ["chat-leads", "cloud", user?.id],
     enabled: !!user,
@@ -151,12 +154,13 @@ export function CloudChatTab() {
           "id, name, phone, email, photo_url, chat_status, ai_enabled, assigned_to, updated_at, last_message_content, last_message_at, last_message_direction, last_message_status, last_message_account_id, account_ids"
         )
         .order("updated_at", { ascending: false, nullsFirst: false })
-        .limit(5000);
+        .limit(800);
       return (data || []) as any[];
     },
-    refetchInterval: 30000,
-    staleTime: 15000,
+    // O canal de realtime já invalida esta query; o polling só duplicava carga.
+    staleTime: 30_000,
   });
+
 
   const leadAccountMap = useMemo(() => {
     const map = new Map<string, Set<string>>();
