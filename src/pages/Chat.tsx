@@ -110,13 +110,13 @@ export default function Chat() {
           .from("leads")
           .select(cols)
           .order("last_message_at", { ascending: false, nullsFirst: false })
-          .limit(1000),
+          .limit(500),
         (supabase as any)
           .from("leads")
           .select(cols)
           .not("last_inbound_at", "is", null)
           .order("last_inbound_at", { ascending: false })
-          .limit(1000),
+          .limit(500),
       ]);
 
       if (recent.error) throw recent.error;
