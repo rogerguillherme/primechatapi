@@ -38,6 +38,7 @@ import {
   Instagram, GitBranch, TrendingUp, Bot, Volume2, Sparkles, DollarSign,
   QrCode, RefreshCw, Loader2, Smartphone, Filter, Upload, UserMinus,
   Home, KanbanSquare, Menu, X, Clock, Megaphone,
+  ShoppingBag, ShoppingCart, Boxes, CalendarClock, Undo2,
 } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
@@ -73,6 +74,14 @@ const BroadcastQueue = lazy(() => import("@/components/BroadcastQueue").then((m)
 const ContactImporter = lazy(() => import("@/components/ContactImporter").then((m) => ({ default: m.ContactImporter })));
 import { SendingMetrics } from "@/components/SendingMetrics";
 const CampaignAnalytics = lazy(() => import("@/components/CampaignAnalytics").then((m) => ({ default: m.CampaignAnalytics })));
+// Telas de venda que já existiam no projeto e nunca tiveram como ser abertas.
+// Entram como aba, não como rota: a navegação daqui é por abas.
+const OrdersPage = lazy(() => import("@/pages/Orders"));
+const AbandonedCarts = lazy(() => import("@/components/sales/AbandonedCarts").then((m) => ({ default: m.AbandonedCarts })));
+const RefundsPage = lazy(() => import("@/pages/Refunds"));
+const ProductsPage = lazy(() => import("@/pages/Products"));
+const ItemsPage = lazy(() => import("@/pages/Items"));
+const ExpirationsPage = lazy(() => import("@/pages/Expirations"));
 import { TemplateAccountBar } from "@/components/TemplateAccountBar";
 import { WebhookEndpoints } from "@/components/WebhookEndpoints";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
@@ -2464,6 +2473,30 @@ export default function WhatsAppApi() {
               {!navCollapsed && <span className="flex items-center gap-1.5">Vozes IA <span className="text-[9px] px-1 py-0.5 rounded bg-ai/20 text-ai font-bold">SCALE</span></span>}
             </TabsTrigger>
             {!navCollapsed && (
+              <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 px-3 pt-3 pb-1 font-semibold">Vendas</p>
+            )}
+            {navCollapsed && <div className="h-px bg-sidebar-border/40 mx-2 my-2" />}
+            <TabsTrigger value="orders" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+              <ShoppingBag size={16} />
+              {!navCollapsed && <span>Pedidos</span>}
+            </TabsTrigger>
+            <TabsTrigger value="abandoned" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+              <ShoppingCart size={16} />
+              {!navCollapsed && <span>Carrinho abandonado</span>}
+            </TabsTrigger>
+            <TabsTrigger value="products" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+              <Boxes size={16} />
+              {!navCollapsed && <span>Produtos</span>}
+            </TabsTrigger>
+            <TabsTrigger value="refunds" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+              <Undo2 size={16} />
+              {!navCollapsed && <span>Reembolsos</span>}
+            </TabsTrigger>
+            <TabsTrigger value="expirations" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+              <CalendarClock size={16} />
+              {!navCollapsed && <span>Vencimentos</span>}
+            </TabsTrigger>
+            {!navCollapsed && (
               <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 px-3 pt-3 pb-1 font-semibold">Análise</p>
             )}
             {navCollapsed && <div className="h-px bg-sidebar-border/40 mx-2 my-2" />}
@@ -3104,6 +3137,25 @@ export default function WhatsAppApi() {
         {/* ── Metrito (tráfego pago) Tab ── */}
         <TabsContent value="metrito" className="space-y-4 p-4 sm:p-6 max-w-6xl overflow-y-auto flex-1 m-0">
           <MetritoTab />
+        </TabsContent>
+
+        {/* ── Vendas ── telas que já existiam e estavam inacessíveis ── */}
+        <TabsContent value="orders" className="p-4 sm:p-6 overflow-y-auto flex-1 m-0">
+          <Suspense fallback={<TabFallback />}><OrdersPage /></Suspense>
+        </TabsContent>
+        <TabsContent value="abandoned" className="p-4 sm:p-6 overflow-y-auto flex-1 m-0">
+          <Suspense fallback={<TabFallback />}>
+            <AbandonedCarts onOpenChat={() => setActiveMainTab("chat")} />
+          </Suspense>
+        </TabsContent>
+        <TabsContent value="products" className="p-4 sm:p-6 overflow-y-auto flex-1 m-0">
+          <Suspense fallback={<TabFallback />}><ProductsPage /></Suspense>
+        </TabsContent>
+        <TabsContent value="refunds" className="p-4 sm:p-6 overflow-y-auto flex-1 m-0">
+          <Suspense fallback={<TabFallback />}><RefundsPage /></Suspense>
+        </TabsContent>
+        <TabsContent value="expirations" className="p-4 sm:p-6 overflow-y-auto flex-1 m-0">
+          <Suspense fallback={<TabFallback />}><ExpirationsPage /></Suspense>
         </TabsContent>
         </div>
       </Tabs>

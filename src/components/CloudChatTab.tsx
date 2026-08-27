@@ -24,6 +24,7 @@ import {
 import { BulkBroadcastDialog } from "@/components/BulkBroadcastDialog";
 import { ContactInfoSheet } from "@/components/chat/ContactInfoSheet";
 import { startFlowForLead } from "@/lib/startFlowForLead";
+import { takePendingLead } from "@/lib/openLeadInChat";
 import { interpolateForLead } from "@/lib/interpolate";
 import { useTeamContext, useTeamMembers } from "@/hooks/use-team";
 import { useToggleLeadLabel } from "@/hooks/use-chat-labels";
@@ -93,6 +94,12 @@ export function CloudChatTab() {
   useEffect(() => {
     if (!selectedAccountId && defaultAccount) setSelectedAccountId(defaultAccount.id);
   }, [defaultAccount, selectedAccountId]);
+
+  // Veio de uma tela de vendas ("abrir conversa"): abre o lead pedido.
+  useEffect(() => {
+    const pending = takePendingLead();
+    if (pending) setSelectedLeadId(pending);
+  }, []);
 
   // Auto backfill profile photos for leads (once per account per session)
   useEffect(() => {
