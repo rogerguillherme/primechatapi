@@ -550,6 +550,12 @@ async function advanceToNextStep(
 ) {
   let nextStep: any = null;
 
+  // `send_attempts` conta tentativas de UM passo. Sem zerar ao avançar, o
+  // contador acumulava ao longo do fluxo e a execução era marcada como
+  // `failed` no 5º passo processado (normalmente no meio dos áudios), mesmo
+  // com todos os envios bem-sucedidos. Zeramos a cada avanço.
+  const clearedMetadata = { ...(exec.metadata || {}), send_attempts: 0 };
+
   const { data: childSteps } = await supabase
     .from("flow_steps")
     .select("*")
@@ -576,6 +582,7 @@ async function advanceToNextStep(
       } else {
         await supabase.from("flow_executions").update({
           status: "completed",
+      metadata: clearedMetadata,
           updated_at: new Date().toISOString(),
         }).eq("id", exec.id);
         return;
@@ -590,6 +597,8 @@ async function advanceToNextStep(
         await supabase.from("flow_executions").update({
           current_step_id: currentStep.id,
           status: "waiting_reply",
+      metadata: clearedMetadata,
+          metadata: clearedMetadata,
           updated_at: new Date().toISOString(),
         }).eq("id", exec.id);
         return;
@@ -616,6 +625,7 @@ async function advanceToNextStep(
   if (!nextStep) {
     await supabase.from("flow_executions").update({
       status: "completed",
+      metadata: clearedMetadata,
       updated_at: new Date().toISOString(),
     }).eq("id", exec.id);
     return;
@@ -625,6 +635,7 @@ async function advanceToNextStep(
     await supabase.from("flow_executions").update({
       current_step_id: nextStep.id,
       status: "waiting_delay",
+      metadata: clearedMetadata,
       next_action_at: new Date(Date.now() + stepDelayMs(nextStep)).toISOString(),
       updated_at: new Date().toISOString(),
     }).eq("id", exec.id);
@@ -633,6 +644,7 @@ async function advanceToNextStep(
     await supabase.from("flow_executions").update({
       current_step_id: nextStep.id,
       status: "waiting_no_response",
+      metadata: clearedMetadata,
       next_action_at: new Date(Date.now() + timeoutMin * 60 * 1000).toISOString(),
       updated_at: new Date().toISOString(),
     }).eq("id", exec.id);
@@ -640,6 +652,7 @@ async function advanceToNextStep(
     await supabase.from("flow_executions").update({
       current_step_id: nextStep.id,
       status: "waiting_reply",
+      metadata: clearedMetadata,
       updated_at: new Date().toISOString(),
     }).eq("id", exec.id);
   } else if (
@@ -652,6 +665,7 @@ async function advanceToNextStep(
     await supabase.from("flow_executions").update({
       current_step_id: nextStep.id,
       status: "waiting_delay",
+      metadata: clearedMetadata,
       next_action_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).eq("id", exec.id);
