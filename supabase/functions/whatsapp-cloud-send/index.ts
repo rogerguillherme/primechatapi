@@ -780,10 +780,9 @@ Deno.serve(async (req) => {
       } else if (media_type === "video") {
         body = { messaging_product: "whatsapp", to: cleanPhone, type: "video", video: { link: media_url, caption: message || undefined } };
       } else if (media_type === "audio") {
-        // Para o WhatsApp exibir como ÁUDIO GRAVADO (voice note) e não como
-        // "encaminhado", a mídia precisa: (1) ser enviada por `id` — nunca por
-        // `link`, que reaproveita o handle e marca como encaminhada; e (2) ser
-        // um OGG/Opus, único container que o WhatsApp trata como PTT.
+        // Para o WhatsApp exibir como ÁUDIO GRAVADO (voice note), a mídia precisa
+        // ser OGG/Opus e o payload precisa declarar explicitamente `voice: true`.
+        // O upload por `id` evita depender de um download posterior da URL.
         let audioPayload: Record<string, string> | null = null;
 
         if (isD360) {
@@ -831,7 +830,12 @@ Deno.serve(async (req) => {
           }
         }
 
-        body = { messaging_product: "whatsapp", to: cleanPhone, type: "audio", audio: audioPayload };
+        body = {
+          messaging_product: "whatsapp",
+          to: cleanPhone,
+          type: "audio",
+          audio: { ...audioPayload, voice: true },
+        };
 
 
       } else {
