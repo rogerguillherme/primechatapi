@@ -105,7 +105,11 @@ export function AudioRecorder({ onRecorded, disabled }: AudioRecorderProps) {
       });
 
       rec.ondataavailable = (data: Uint8Array) => {
-        onRecorded(new Blob([data], { type: OGG_MIME }));
+        // Copiamos para um ArrayBuffer próprio: o tipo do encoder pode apontar
+        // para SharedArrayBuffer, que o construtor de Blob não aceita.
+        const bytes = new Uint8Array(data.byteLength);
+        bytes.set(data);
+        onRecorded(new Blob([bytes.buffer], { type: OGG_MIME }));
       };
 
       await rec.start();
