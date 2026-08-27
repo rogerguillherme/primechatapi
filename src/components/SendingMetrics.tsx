@@ -7,16 +7,22 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
-  Send, CheckCheck, Eye, Inbox, RefreshCw, ChevronDown, ChevronRight, MessageCircle,
-  Loader2, Zap, Download,
+  Send, RefreshCw, ChevronDown, ChevronRight, MessageCircle,
+  Loader2, Zap, Download, AlertTriangle,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 import { CampaignListMetrics, useCampaignListMetrics } from "@/components/dashboard/CampaignListMetrics";
-
+import { SendingProgressBar } from "@/components/dashboard/SendingProgressBar";
+import {
+  useBroadcastProgress,
+  useFlowProgress,
+  useSendingMetricsBySource,
+} from "@/hooks/use-sending-metrics";
+import { SOURCE_HINT, SOURCE_LABEL, counterDrift, type OriginTotals } from "@/lib/sendingMetrics";
 
 function getAvatarColor(name: string) {
   const colors = ["bg-emerald-600", "bg-violet-600", "bg-amber-600", "bg-rose-600", "bg-cyan-600", "bg-indigo-600"];
@@ -28,62 +34,30 @@ function getInitials(name: string) {
   return name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 }
 
-interface BroadcastGroup {
+const IN_PROGRESS_STATUSES = new Set(["processing", "queued", "running", "pending", "scheduled", "paused"]);
+
+/** Um disparo na lista: campanha de lista ou lote de fluxo. */
+interface DispatchGroup {
   key: string;
   label: string;
-  total: number;
+  type: "broadcast" | "flow";
+  date: string;
+  status?: string | null;
+  inProgress: boolean;
+  audience: number;
   sent: number;
   delivered: number;
   read: number;
   failed: number;
-  cancelled?: number;
-  leadIds: string[];
-  type?: "broadcast" | "flow";
+  skipped: number;
+  pending: number;
+  tracksDelivery: boolean;
+  /** divergência entre o contador do broadcast_jobs e a contagem real */
+  drift: number | null;
+  jobId?: string;
   flowId?: string;
-  date?: string;
-  status?: string;
-  inProgress?: boolean;
-}
-
-interface AccountStats {
-  id: string;
-  name: string;
-  total: number;
-  sent: number;
-  delivered: number;
-  read: number;
-  failed: number;
-}
-
-interface CampaignEventRow {
-  campaign_id: string;
-  event_type: string;
-}
-
-function buildCampaignEventCountMap(events: CampaignEventRow[] | null | undefined) {
-  const map = new Map<string, { delivered: number; read: number }>();
-
-  for (const event of events || []) {
-    if (event.event_type !== "delivered" && event.event_type !== "read") continue;
-    const current = map.get(event.campaign_id) || { delivered: 0, read: 0 };
-    if (event.event_type === "delivered") current.delivered += 1;
-    if (event.event_type === "read") current.read += 1;
-    map.set(event.campaign_id, current);
-  }
-
-  return map;
-}
-
-function getEffectiveJobCounts(
-  job: { id: string; delivered_count: number | null; read_count: number | null },
-  eventMap: Map<string, { delivered: number; read: number }>
-) {
-  const eventCounts = eventMap.get(job.id);
-
-  return {
-    delivered: Math.max(job.delivered_count || 0, eventCounts?.delivered || 0),
-    read: Math.max(job.read_count || 0, eventCounts?.read || 0),
-  };
+  batchStart?: string;
+  batchEnd?: string;
 }
 
 export function SendingMetrics() {
@@ -93,327 +67,129 @@ export function SendingMetrics() {
   const { accounts } = useWhatsAppAccounts();
   const { data: listData, isLoading: listLoading } = useCampaignListMetrics();
 
+  const { data: metrics, isLoading } = useSendingMetricsBySource();
+  const { data: broadcasts, isLoading: loadingBroadcasts } = useBroadcastProgress();
+  const { data: flowBatches, isLoading: loadingFlows } = useFlowProgress();
 
   const handleRefresh = () => {
     setRefreshing(true);
-    queryClient.invalidateQueries({ queryKey: ["sending-metrics-summary"] });
-    queryClient.invalidateQueries({ queryKey: ["sending-metrics-dispatches"] });
-    queryClient.invalidateQueries({ queryKey: ["sending-metrics-by-account"] });
+    for (const key of ["sending-metrics-by-source", "broadcast-progress", "flow-progress", "campaign-list-metrics"]) {
+      queryClient.invalidateQueries({ queryKey: [key] });
+    }
     setTimeout(() => setRefreshing(false), 800);
   };
 
-  const { data: stats, isLoading } = useQuery({
-    queryKey: ["sending-metrics-summary"],
-    queryFn: async () => {
-      // Combine broadcast_jobs + outbound chat_messages
-      const { data: jobs } = await supabase
-        .from("broadcast_jobs")
-        .select("id, total_leads, sent_count, delivered_count, read_count, error_count");
+  const accountName = useMemo(
+    () => new Map(accounts.map((a) => [a.id, a.name] as const)),
+    [accounts]
+  );
 
-      let bjTotal = 0, bjSent = 0, bjDelivered = 0, bjRead = 0;
-      if (jobs && jobs.length > 0) {
-        const { data: events } = await supabase
-          .from("campaign_events")
-          .select("campaign_id, event_type")
-          .in("campaign_id", jobs.map((job) => job.id));
+  const dispatches = useMemo<DispatchGroup[]>(() => {
+    const groups: DispatchGroup[] = [];
 
-        const eventMap = buildCampaignEventCountMap(events as CampaignEventRow[] | null | undefined);
+    for (const job of broadcasts || []) {
+      const dateStr = format(new Date(job.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR });
+      groups.push({
+        key: `job:${job.job_id}`,
+        label:
+          job.campaign_name ||
+          (job.template_name ? `Disparo ${dateStr} — ${job.template_name}` : `Disparo ${dateStr}`),
+        type: "broadcast",
+        date: job.created_at,
+        status: job.status,
+        inProgress: IN_PROGRESS_STATUSES.has((job.status || "").toLowerCase()),
+        audience: job.audience,
+        sent: job.sent,
+        delivered: job.delivered,
+        read: job.read,
+        failed: job.failed,
+        skipped: job.skipped,
+        pending: job.pending,
+        tracksDelivery: true,
+        drift: counterDrift(job.job_delivered, job.delivered),
+        jobId: job.job_id,
+      });
+    }
 
-        bjTotal = jobs.reduce((sum, j) => sum + (j.total_leads || 0), 0);
-        bjSent = jobs.reduce((sum, j) => sum + (j.sent_count || 0), 0);
-        bjDelivered = jobs.reduce((sum, j) => sum + getEffectiveJobCounts(j, eventMap).delivered, 0);
-        bjRead = jobs.reduce((sum, j) => sum + getEffectiveJobCounts(j, eventMap).read, 0);
-      }
+    for (const batch of flowBatches || []) {
+      const dateStr = format(new Date(batch.batch_started_at), "dd/MM/yyyy HH:mm", { locale: ptBR });
+      groups.push({
+        key: `flow:${batch.flow_id}:${batch.batch_started_at}`,
+        label: `⚡ ${batch.flow_name} — ${dateStr}`,
+        type: "flow",
+        date: batch.batch_started_at,
+        status: batch.pending > 0 ? "processing" : "completed",
+        inProgress: batch.pending > 0,
+        audience: batch.total,
+        sent: batch.sent,
+        delivered: 0,
+        read: 0,
+        failed: batch.failed,
+        skipped: batch.skipped,
+        pending: batch.pending,
+        tracksDelivery: false,
+        drift: null,
+        flowId: batch.flow_id,
+        batchStart: batch.batch_started_at,
+        batchEnd: batch.last_activity || batch.batch_started_at,
+      });
+    }
 
-      // Count outbound messages (covers flow sends, manual sends, etc.)
-      const { count: outboundCount } = await supabase
-        .from("chat_messages")
-        .select("id", { count: "exact", head: true })
-        .eq("direction", "outbound");
+    return groups.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [broadcasts, flowBatches]);
 
-      const { count: deliveredCount } = await supabase
-        .from("chat_messages")
-        .select("id", { count: "exact", head: true })
-        .eq("direction", "outbound")
-        .in("status", ["delivered", "read"]);
-
-      const { count: readCount } = await supabase
-        .from("chat_messages")
-        .select("id", { count: "exact", head: true })
-        .eq("direction", "outbound")
-        .eq("status", "read");
-
-      const msgTotal = outboundCount || 0;
-      const msgDelivered = deliveredCount || 0;
-      const msgRead = readCount || 0;
-
-      return {
-        total: Math.max(bjTotal, msgTotal),
-        sent: Math.max(bjSent, msgTotal),
-        delivered: Math.max(bjDelivered, msgDelivered),
-        read: Math.max(bjRead, msgRead),
-      };
-    },
-    refetchInterval: 30000,
-  });
-
-  const { data: accountStats } = useQuery({
-    queryKey: ["sending-metrics-by-account"],
-    queryFn: async () => {
-      const accountMap = new Map<string, { total: number; sent: number; delivered: number; read: number; failed: number }>();
-
-      // Broadcast jobs (if any)
-      const { data: jobs } = await supabase
-        .from("broadcast_jobs")
-        .select("id, account_id, total_leads, sent_count, delivered_count, read_count, error_count");
-
-      const { data: events } = jobs && jobs.length > 0
-        ? await supabase
-            .from("campaign_events")
-            .select("campaign_id, event_type")
-            .in("campaign_id", jobs.map((job) => job.id))
-        : { data: [] };
-
-      const eventMap = buildCampaignEventCountMap(events as CampaignEventRow[] | null | undefined);
-
-      if (jobs) {
-        for (const job of jobs) {
-          const effective = getEffectiveJobCounts(job, eventMap);
-          const accId = job.account_id || "unknown";
-          const cur = accountMap.get(accId) || { total: 0, sent: 0, delivered: 0, read: 0, failed: 0 };
-          cur.total += job.total_leads || 0;
-          cur.sent += job.sent_count || 0;
-          cur.delivered += effective.delivered;
-          cur.read += effective.read;
-          cur.failed += job.error_count || 0;
-          accountMap.set(accId, cur);
-        }
-      }
-
-      // Count outbound chat_messages per account and status.
-      // Iterates known accounts + "sem conta" (null account_id).
-      const targets: (string | null)[] = [...accounts.map((a) => a.id), null];
-      for (const target of targets) {
-        const base = () => {
-          let q = supabase
-            .from("chat_messages")
-            .select("id", { count: "exact", head: true })
-            .eq("direction", "outbound");
-          q = target === null ? q.is("account_id", null) : q.eq("account_id", target);
-          return q;
-        };
-        const [{ count: total }, { count: delivered }, { count: read }, { count: failed }] = await Promise.all([
-          base(),
-          base().in("status", ["delivered", "read"]),
-          base().eq("status", "read"),
-          base().eq("status", "failed"),
-        ]);
-
-        const key = target ?? "unknown";
-        const existing = accountMap.get(key) || { total: 0, sent: 0, delivered: 0, read: 0, failed: 0 };
-        const msgTotal = total || 0;
-        if (msgTotal > existing.total) {
-          existing.total = msgTotal;
-          existing.sent = msgTotal;
-        }
-        existing.delivered = Math.max(existing.delivered, delivered || 0);
-        existing.read = Math.max(existing.read, read || 0);
-        existing.failed = Math.max(existing.failed, failed || 0);
-        if (existing.total > 0) accountMap.set(key, existing);
-      }
-
-      const result: AccountStats[] = [];
-      for (const acc of accounts) {
-        const s = accountMap.get(acc.id);
-        if (!s || s.total === 0) continue;
-        result.push({ id: acc.id, name: acc.name, ...s });
-      }
-
-      const unknown = accountMap.get("unknown");
-      if (unknown && unknown.total > 0) {
-        result.push({ id: "unknown", name: "Sem conta vinculada", ...unknown });
-      }
-
-      return result;
-    },
-    enabled: accounts.length > 0,
-    refetchInterval: 30000,
-  });
-
-  const { data: dispatches, isLoading: loadingDispatches } = useQuery({
-    queryKey: ["sending-metrics-dispatches"],
-    queryFn: async () => {
-      const groups: BroadcastGroup[] = [];
-
-      // 1. Broadcast jobs
-      const { data: jobs } = await supabase
-        .from("broadcast_jobs")
-        .select("id, created_at, total_leads, sent_count, delivered_count, read_count, error_count, lead_ids, template_name, campaign_name, status")
-        .order("created_at", { ascending: false });
-
-      const { data: events } = jobs && jobs.length > 0
-        ? await supabase
-            .from("campaign_events")
-            .select("campaign_id, event_type")
-            .in("campaign_id", jobs.map((job) => job.id))
-        : { data: [] };
-
-      const eventMap = buildCampaignEventCountMap(events as CampaignEventRow[] | null | undefined);
-
-      if (jobs) {
-        for (const job of jobs) {
-          const effective = getEffectiveJobCounts(job, eventMap);
-          const dateStr = format(new Date(job.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR });
-          const status = (job as any).status as string | undefined;
-          const inProgress = status === "processing" || status === "queued" || status === "running" || status === "paused";
-          groups.push({
-            key: job.id,
-            label: `${(job as any).campaign_name || (job.template_name ? `Disparo ${dateStr} — ${job.template_name}` : `Disparo ${dateStr}`)}`,
-            total: job.total_leads || job.lead_ids?.length || 0,
-            sent: job.sent_count || 0,
-            delivered: effective.delivered,
-            read: effective.read,
-            failed: job.error_count || 0,
-            leadIds: job.lead_ids || [],
-            type: "broadcast",
-            status,
-            inProgress,
-          });
-        }
-      }
-
-      // 2. Flow executions grouped by flow + date
-      const { data: flowExecs } = await supabase
-        .from("flow_executions")
-        .select("id, flow_id, lead_id, status, started_at")
-        .order("started_at", { ascending: false })
-        .limit(1000);
-
-      if (flowExecs && flowExecs.length > 0) {
-        const flowIds = [...new Set(flowExecs.map(fe => fe.flow_id))];
-        const { data: flows } = await supabase
-          .from("flows")
-          .select("id, name")
-          .in("id", flowIds);
-        const flowNameMap = new Map((flows || []).map(f => [f.id, f.name]));
-
-        // Group by flow_id + date
-        const flowGroups = new Map<string, { flowId: string; date: string; leadIds: string[]; completed: number; failed: number; cancelled: number; startedAt: string }>();
-        for (const fe of flowExecs) {
-          // Use local-date key so the calendar date matches the user's timezone
-          const localDate = new Date(fe.started_at);
-          const dateKey = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, "0")}-${String(localDate.getDate()).padStart(2, "0")}`;
-          const groupKey = `flow-${fe.flow_id}-${dateKey}`;
-          const existing = flowGroups.get(groupKey) || { flowId: fe.flow_id, date: dateKey, leadIds: [], completed: 0, failed: 0, cancelled: 0, startedAt: fe.started_at };
-          existing.leadIds.push(fe.lead_id);
-          if (fe.status === "failed") existing.failed++;
-          else if (fe.status === "cancelled") existing.cancelled++;
-          else existing.completed++; // completed / waiting_* / running = message sent
-          flowGroups.set(groupKey, existing);
-        }
-
-        for (const [key, group] of flowGroups) {
-          const flowName = flowNameMap.get(group.flowId) || "Fluxo";
-          // Parse as local date to avoid UTC shift (e.g. "2026-05-24" → 23/05 in BRT)
-          const [y, m, d] = group.date.split("-").map(Number);
-          const dateStr = format(new Date(y, m - 1, d), "dd/MM/yyyy", { locale: ptBR });
-          groups.push({
-            key,
-            label: `⚡ ${flowName} — ${dateStr}`,
-            total: group.leadIds.length,
-            sent: group.completed,
-            delivered: group.completed,
-            read: 0,
-            failed: group.failed,
-            cancelled: group.cancelled,
-            leadIds: group.leadIds,
-            type: "flow",
-            flowId: group.flowId,
-            date: group.date,
-          });
-        }
-      }
-
-      // Sort: most recent first
-      return groups;
-    },
-    refetchInterval: (query) => {
-      const data = query.state.data as BroadcastGroup[] | undefined;
-      return data?.some((g) => g.inProgress) ? 5000 : 30000;
-    },
-  });
-
-  const pct = (n: number, t: number) => t > 0 ? `${Math.round((n / t) * 100)}%` : "—";
-
-  const metrics = [
-    { label: "Total", value: stats?.total || 0, icon: <Send size={18} />, colorClass: "text-primary" },
-    { label: "Enviado", value: stats?.sent || 0, icon: <CheckCheck size={18} />, colorClass: "text-amber-500", percent: pct(stats?.sent || 0, stats?.total || 0) },
-    { label: "Recebido", value: stats?.delivered || 0, icon: <Inbox size={18} />, colorClass: "text-emerald-500", percent: pct(stats?.delivered || 0, stats?.total || 0) },
-    { label: "Lido", value: stats?.read || 0, icon: <Eye size={18} />, colorClass: "text-blue-500", percent: pct(stats?.read || 0, stats?.total || 0) },
-  ];
+  const loadingDispatches = loadingBroadcasts || loadingFlows;
 
   return (
     <div className="space-y-4">
       <WhatsAppLimits />
 
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-muted-foreground">Métricas gerais</h3>
+        <h3 className="text-sm font-medium text-muted-foreground">Métricas por origem</h3>
         <Button variant="outline" size="sm" onClick={handleRefresh} className="gap-1.5">
           <RefreshCw size={14} className={cn(refreshing && "animate-spin")} />
           Atualizar
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {metrics.map((m) => (
-          <Card key={m.label}>
-            <CardContent className="pt-4 pb-3 px-4">
-              <div className="flex items-center justify-between mb-1">
-                <span className={m.colorClass}>{m.icon}</span>
-                {m.percent && (
-                  <Badge variant="secondary" className="text-[10px] font-mono">{m.percent}</Badge>
-                )}
-              </div>
-              <p className="text-2xl font-bold">{isLoading ? "—" : m.value}</p>
-              <p className="text-xs text-muted-foreground">{m.label}</p>
-            </CardContent>
-          </Card>
+      <div className="grid gap-3 lg:grid-cols-3">
+        {(metrics?.bySource || []).map((t) => (
+          <OriginCard key={t.source} totals={t} isLoading={isLoading} />
         ))}
       </div>
 
-      {accountStats && accountStats.length > 0 && (
+      {metrics && metrics.byAccount.size > 0 && (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
-              <MessageCircle size={16} /> Disparos por conta
+              <MessageCircle size={16} /> Por conta do WhatsApp
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y divide-border">
-              {accountStats.map((acc) => (
-                <div key={acc.id} className="px-4 py-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium">{acc.name}</span>
-                    <Badge variant="outline" className="text-[10px] font-mono">{acc.total} total</Badge>
-                  </div>
-                  <div className="grid grid-cols-4 gap-2">
-                    <div className="text-center py-1.5 rounded-md bg-muted/50">
-                      <p className="text-sm font-bold text-amber-500">{acc.sent}</p>
-                      <p className="text-[10px] text-muted-foreground">Enviado</p>
-                    </div>
-                    <div className="text-center py-1.5 rounded-md bg-muted/50">
-                      <p className="text-sm font-bold text-emerald-500">{acc.delivered}</p>
-                      <p className="text-[10px] text-muted-foreground">Recebido</p>
-                    </div>
-                    <div className="text-center py-1.5 rounded-md bg-muted/50">
-                      <p className="text-sm font-bold text-blue-500">{acc.read}</p>
-                      <p className="text-[10px] text-muted-foreground">Lido</p>
-                    </div>
-                    <div className="text-center py-1.5 rounded-md bg-muted/50">
-                      <p className="text-sm font-bold text-destructive">{acc.failed}</p>
-                      <p className="text-[10px] text-muted-foreground">Falhou</p>
-                    </div>
-                  </div>
+              {[...metrics.byAccount].map(([accountId, totalsList]) => (
+                <div key={accountId} className="px-4 py-3 space-y-3">
+                  <p className="text-sm font-medium">
+                    {accountName.get(accountId) || "Sem conta vinculada"}
+                  </p>
+                  {totalsList
+                    .filter((t) => t.total > 0)
+                    .map((t) => (
+                      <div key={t.source} className="space-y-1.5">
+                        <p className="text-[11px] text-muted-foreground">{SOURCE_LABEL[t.source]}</p>
+                        <SendingProgressBar
+                          audience={t.total}
+                          sent={t.sent}
+                          delivered={t.delivered ?? 0}
+                          read={t.read ?? 0}
+                          failed={t.failed}
+                          skipped={t.skipped}
+                          pending={t.pending}
+                          tracksDelivery={t.tracksDelivery}
+                          compact
+                        />
+                      </div>
+                    ))}
                 </div>
               ))}
             </div>
@@ -439,7 +215,6 @@ export function SendingMetrics() {
         </CardContent>
       </Card>
 
-
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
@@ -449,22 +224,19 @@ export function SendingMetrics() {
         <CardContent className="p-0">
           {loadingDispatches ? (
             <p className="text-sm text-muted-foreground text-center py-8">Carregando...</p>
-          ) : !dispatches?.length ? (
+          ) : !dispatches.length ? (
             <p className="text-sm text-muted-foreground text-center py-8">Nenhum disparo registrado.</p>
           ) : (
             <ScrollArea className="max-h-[500px]">
               <div className="divide-y divide-border">
-                {dispatches.map((d) => {
-                  const isExpanded = expandedKey === d.key;
-                  return (
-                    <DispatchItem
-                      key={d.key}
-                      group={d}
-                      isExpanded={isExpanded}
-                      onToggle={() => setExpandedKey(isExpanded ? null : d.key)}
-                    />
-                  );
-                })}
+                {dispatches.map((d) => (
+                  <DispatchItem
+                    key={d.key}
+                    group={d}
+                    isExpanded={expandedKey === d.key}
+                    onToggle={() => setExpandedKey(expandedKey === d.key ? null : d.key)}
+                  />
+                ))}
               </div>
             </ScrollArea>
           )}
@@ -474,28 +246,77 @@ export function SendingMetrics() {
   );
 }
 
-/* ── Dispatch Item with lead list ── */
+/* ── Card de uma origem ── */
+function OriginCard({ totals, isLoading }: { totals: OriginTotals; isLoading: boolean }) {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm">{SOURCE_LABEL[totals.source]}</CardTitle>
+        <p className="text-[10px] text-muted-foreground leading-snug">{SOURCE_HINT[totals.source]}</p>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-2xl font-bold tabular-nums">
+          {isLoading ? "—" : totals.total.toLocaleString("pt-BR")}
+          <span className="text-xs font-normal text-muted-foreground"> mensagens</span>
+        </p>
+        <SendingProgressBar
+          audience={totals.total}
+          sent={totals.sent}
+          delivered={totals.delivered ?? 0}
+          read={totals.read ?? 0}
+          failed={totals.failed}
+          skipped={totals.skipped}
+          pending={totals.pending}
+          tracksDelivery={totals.tracksDelivery}
+        />
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ── Um disparo, com barra de progresso e lista de leads ── */
 function DispatchItem({ group, isExpanded, onToggle }: {
-  group: BroadcastGroup;
+  group: DispatchGroup;
   isExpanded: boolean;
   onToggle: () => void;
 }) {
   const { data: leads, isLoading } = useQuery({
     queryKey: ["dispatch-leads", group.key],
-    enabled: isExpanded && (group.leadIds?.length ?? 0) > 0,
+    enabled: isExpanded,
+    staleTime: 60_000,
     queryFn: async () => {
-      const allLeads: any[] = [];
-      for (let i = 0; i < group.leadIds.length; i += 100) {
-        const batch = group.leadIds.slice(i, i + 100);
+      let leadIds: string[] = [];
+
+      if (group.type === "broadcast" && group.jobId) {
+        const { data } = await supabase
+          .from("broadcast_jobs")
+          .select("lead_ids")
+          .eq("id", group.jobId)
+          .maybeSingle();
+        leadIds = data?.lead_ids || [];
+      } else if (group.flowId && group.batchStart) {
+        // Só a lista visual do painel — 500 é teto de exibição, não de contagem
+        // (as contagens vêm agregadas do banco).
+        const { data } = await supabase
+          .from("flow_executions")
+          .select("lead_id")
+          .eq("flow_id", group.flowId)
+          .gte("started_at", group.batchStart)
+          .lte("started_at", group.batchEnd || group.batchStart)
+          .limit(500);
+        leadIds = [...new Set((data || []).map((e) => e.lead_id).filter(Boolean))];
+      }
+
+      const all: { id: string; name: string; phone: string }[] = [];
+      for (let i = 0; i < leadIds.length; i += 100) {
         const { data } = await supabase
           .from("leads")
-          .select("id, name, phone, photo_url")
-          .in("id", batch);
-        if (data) allLeads.push(...data);
+          .select("id, name, phone")
+          .in("id", leadIds.slice(i, i + 100));
+        if (data) all.push(...data);
       }
-      return allLeads;
+      return all;
     },
-    staleTime: 60000,
   });
 
   return (
@@ -507,7 +328,7 @@ function DispatchItem({ group, isExpanded, onToggle }: {
         <span className="text-muted-foreground shrink-0">
           {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </span>
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 space-y-1.5">
           <div className="flex items-center gap-2">
             {group.type === "flow" && <Zap size={12} className="text-amber-500 shrink-0" />}
             <p className="text-sm font-medium truncate">{group.label}</p>
@@ -521,95 +342,88 @@ function DispatchItem({ group, isExpanded, onToggle }: {
               <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-500/40">Pausado</Badge>
             )}
           </div>
-          <p className="text-xs text-muted-foreground">
-            {group.total} lead{group.total !== 1 ? "s" : ""} · {group.sent}/{group.total} enviado{group.sent !== 1 ? "s" : ""}
-          </p>
-        </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <Badge variant="outline" className="text-[10px]">{group.sent} env</Badge>
-          {group.failed > 0 && <Badge variant="destructive" className="text-[10px]">{group.failed} err</Badge>}
-          {(group.cancelled ?? 0) > 0 && (
-            <Badge variant="outline" className="text-[10px] text-muted-foreground border-border">{group.cancelled} cancelado{group.cancelled !== 1 ? "s" : ""}</Badge>
-          )}
+          <SendingProgressBar
+            audience={group.audience}
+            sent={group.sent}
+            delivered={group.delivered}
+            read={group.read}
+            failed={group.failed}
+            skipped={group.skipped}
+            pending={group.pending}
+            tracksDelivery={group.tracksDelivery}
+            compact
+          />
         </div>
       </button>
 
-
       {isExpanded && (
-        <div className="px-4 pb-3 pl-11 bg-muted/20 space-y-3">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="text-center py-2 rounded-md bg-background border border-border">
-              <p className="text-lg font-bold">{group.total}</p>
-              <p className="text-[10px] text-muted-foreground">Total</p>
-            </div>
-            <div className="text-center py-2 rounded-md bg-background border border-border">
-              <p className="text-lg font-bold text-amber-500">{group.sent}</p>
-              <p className="text-[10px] text-muted-foreground">Enviado</p>
-            </div>
-            <div className="text-center py-2 rounded-md bg-background border border-border">
-              <p className="text-lg font-bold text-emerald-500">{group.delivered}</p>
-              <p className="text-[10px] text-muted-foreground">Recebido</p>
-            </div>
-            <div className="text-center py-2 rounded-md bg-background border border-border">
-              <p className="text-lg font-bold text-blue-500">{group.read}</p>
-              <p className="text-[10px] text-muted-foreground">Lido</p>
-            </div>
-          </div>
+        <div className="px-4 pb-3 pl-11 bg-muted/20 space-y-3 pt-1">
+          <SendingProgressBar
+            audience={group.audience}
+            sent={group.sent}
+            delivered={group.delivered}
+            read={group.read}
+            failed={group.failed}
+            skipped={group.skipped}
+            pending={group.pending}
+            tracksDelivery={group.tracksDelivery}
+          />
 
-          {(group.failed > 0 || (group.cancelled ?? 0) > 0) && (
-            <div className="grid grid-cols-2 gap-3">
-              <div className="text-center py-2 rounded-md bg-background border border-destructive/30">
-                <p className="text-lg font-bold text-destructive">{group.failed}</p>
-                <p className="text-[10px] text-muted-foreground">Erro real</p>
-              </div>
-              <div className="text-center py-2 rounded-md bg-background border border-border">
-                <p className="text-lg font-bold text-muted-foreground">{group.cancelled ?? 0}</p>
-                <p className="text-[10px] text-muted-foreground">Cancelado (não enviado)</p>
-              </div>
-            </div>
+          {group.drift !== null && (
+            <p className="flex items-start gap-1.5 text-[10px] text-amber-600">
+              <AlertTriangle size={12} className="shrink-0 mt-px" />
+              O contador salvo no disparo marca {group.drift > 0 ? "+" : ""}
+              {group.drift.toLocaleString("pt-BR")} entregues em relação à contagem por mensagem
+              mostrada acima. A tela usa a contagem por mensagem (message_logs).
+            </p>
           )}
 
-          {(group.failed > 0 || (group.cancelled ?? 0) > 0) && (
-            <ExportErrorsButton group={group} />
+          {group.type === "flow" && (
+            <p className="text-[10px] text-muted-foreground">
+              Fluxos não registram o id da mensagem enviada, então entrega e leitura não podem ser
+              atribuídas ao lote — aparecem em branco de propósito.
+            </p>
           )}
 
-          {(group.leadIds?.length ?? 0) > 0 && (
-            <div className="space-y-1">
-              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Leads enviados</p>
-              {isLoading ? (
-                <div className="flex items-center gap-2 py-3 justify-center text-muted-foreground">
-                  <Loader2 size={14} className="animate-spin" />
-                  <span className="text-xs">Carregando leads...</span>
-                </div>
-              ) : (
-                <ScrollArea className="max-h-[200px]">
-                  <div className="space-y-0.5">
-                    {leads?.map((lead) => (
-                      <div key={lead.id} className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-accent/30">
-                        <Avatar className="w-6 h-6">
-                          <AvatarFallback className={cn(getAvatarColor(lead.name), "text-[10px] text-white")}>
-                            {getInitials(lead.name)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-medium truncate">{lead.name}</p>
-                        </div>
-                        <span className="text-[10px] text-muted-foreground font-mono">{lead.phone}</span>
+          {(group.failed > 0 || group.skipped > 0) && <ExportErrorsButton group={group} />}
+
+          <div className="space-y-1">
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Leads do disparo</p>
+            {isLoading ? (
+              <div className="flex items-center gap-2 py-3 justify-center text-muted-foreground">
+                <Loader2 size={14} className="animate-spin" />
+                <span className="text-xs">Carregando leads...</span>
+              </div>
+            ) : !leads?.length ? (
+              <p className="text-xs text-muted-foreground py-2">Nenhum lead encontrado.</p>
+            ) : (
+              <ScrollArea className="max-h-[200px]">
+                <div className="space-y-0.5">
+                  {leads.map((lead) => (
+                    <div key={lead.id} className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-accent/30">
+                      <Avatar className="w-6 h-6">
+                        <AvatarFallback className={cn(getAvatarColor(lead.name), "text-[10px] text-white")}>
+                          {getInitials(lead.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium truncate">{lead.name}</p>
                       </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              )}
-            </div>
-          )}
+                      <span className="text-[10px] text-muted-foreground font-mono">{lead.phone}</span>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            )}
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-/* ── Export error leads as CSV ── */
-function ExportErrorsButton({ group }: { group: BroadcastGroup }) {
+/* ── Exporta os leads com erro em CSV ── */
+function ExportErrorsButton({ group }: { group: DispatchGroup }) {
   const [loading, setLoading] = useState(false);
 
   const handleExport = async () => {
@@ -617,53 +431,53 @@ function ExportErrorsButton({ group }: { group: BroadcastGroup }) {
     try {
       let rows: { name: string; phone: string; error: string }[] = [];
 
-      if (group.type === "flow" && group.flowId && group.date) {
-        const [y, m, d] = group.date.split("-").map(Number);
-        const start = new Date(y, m - 1, d, 0, 0, 0).toISOString();
-        const end = new Date(y, m - 1, d, 23, 59, 59, 999).toISOString();
+      if (group.type === "flow" && group.flowId && group.batchStart) {
         const { data: execs } = await supabase
           .from("flow_executions")
           .select("lead_id, status, metadata")
           .eq("flow_id", group.flowId)
-          .gte("started_at", start)
-          .lte("started_at", end)
-          .in("status", ["failed", "cancelled"]);
+          .gte("started_at", group.batchStart)
+          .lte("started_at", group.batchEnd || group.batchStart)
+          .in("status", ["failed", "error", "cancelled", "canceled", "skipped", "stopped"]);
 
-        const leadIds = [...new Set((execs || []).map((e) => e.lead_id))];
+        const leadIds = [...new Set((execs || []).map((e) => e.lead_id).filter(Boolean))];
         const leadMap = new Map<string, { name: string; phone: string }>();
         for (let i = 0; i < leadIds.length; i += 100) {
-          const batch = leadIds.slice(i, i + 100);
-          const { data } = await supabase.from("leads").select("id, name, phone").in("id", batch);
+          const { data } = await supabase.from("leads").select("id, name, phone").in("id", leadIds.slice(i, i + 100));
           (data || []).forEach((l) => leadMap.set(l.id, { name: l.name, phone: l.phone }));
         }
         rows = (execs || []).map((e) => {
           const lead = leadMap.get(e.lead_id);
-          const meta = (e.metadata || {}) as any;
+          const meta = (e.metadata || {}) as Record<string, string>;
+          const cancelled = ["cancelled", "canceled", "skipped", "stopped"].includes(e.status);
           return {
             name: lead?.name || "",
             phone: lead?.phone || "",
-            error: e.status === "cancelled" ? (meta.cancel_reason || "Cancelado") : (meta.last_error || meta.error || "Falhou"),
+            error: cancelled
+              ? meta.cancel_reason || "Cancelado"
+              : meta.last_error || meta.error || "Falhou",
           };
         });
-      } else {
-        // broadcast
+      } else if (group.jobId) {
         const { data: logs } = await supabase
           .from("message_logs")
-          .select("phone, lead_id, error_message, error_code")
-          .eq("job_id", group.key)
-          .eq("status", "failed");
+          .select("phone, lead_id, error_message, error_code, status")
+          .eq("job_id", group.jobId)
+          .in("status", [
+            "failed", "error", "blocked_by_meta", "payment_issue",
+            "rate_limited", "invalid_number", "skipped",
+          ]);
 
         const leadIds = [...new Set((logs || []).map((l) => l.lead_id).filter(Boolean) as string[])];
         const leadMap = new Map<string, string>();
         for (let i = 0; i < leadIds.length; i += 100) {
-          const batch = leadIds.slice(i, i + 100);
-          const { data } = await supabase.from("leads").select("id, name").in("id", batch);
+          const { data } = await supabase.from("leads").select("id, name").in("id", leadIds.slice(i, i + 100));
           (data || []).forEach((l) => leadMap.set(l.id, l.name));
         }
         rows = (logs || []).map((l) => ({
           name: (l.lead_id && leadMap.get(l.lead_id)) || "",
           phone: l.phone || "",
-          error: [l.error_code, l.error_message].filter(Boolean).join(" — ") || "Falhou",
+          error: [l.status, l.error_code, l.error_message].filter(Boolean).join(" — ") || "Falhou",
         }));
       }
 
@@ -682,7 +496,7 @@ function ExportErrorsButton({ group }: { group: BroadcastGroup }) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `erros-${group.key}.csv`;
+      a.download = `erros-${group.key.replace(/[^a-zA-Z0-9-]/g, "_")}.csv`;
       a.click();
       URL.revokeObjectURL(url);
     } finally {
@@ -693,7 +507,7 @@ function ExportErrorsButton({ group }: { group: BroadcastGroup }) {
   return (
     <Button variant="outline" size="sm" className="gap-1.5" onClick={handleExport} disabled={loading}>
       {loading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-      Exportar erros ({group.failed})
+      Exportar erros ({(group.failed + group.skipped).toLocaleString("pt-BR")})
     </Button>
   );
 }

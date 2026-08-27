@@ -7,6 +7,10 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import type { BroadcastProgressRow } from "@/hooks/use-sending-metrics";
+
+/** As RPCs novas ainda não estão nos tipos gerados pelo Lovable. */
+type RpcFn = (fn: string, args?: Record<string, unknown>) => Promise<{ data: unknown }>;
 
 // WhatsApp Cloud API pricing (USD) — Brazil
 export const PRICING = {
@@ -114,19 +118,33 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
         )
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
+        // Teto de EXIBIÇÃO: 500 campanhas na tabela por lista. As contagens de
+        // mensagem não dependem disso (vêm agregadas do banco), mas o custo
+        // total do rodapé só soma as campanhas listadas.
         .limit(500);
       if (startDate) jobsQuery = jobsQuery.gte("created_at", startDate.toISOString());
       if (endDate) jobsQuery = jobsQuery.lte("created_at", endDate.toISOString());
 
-      const [jobsRes, tplRes] = await Promise.all([
+      const [jobsRes, tplRes, progressRes] = await Promise.all([
         jobsQuery,
         supabase
           .from("chat_templates")
           .select("id, category, name, template_name")
           .eq("user_id", user.id),
+        // Contagem por mensagem (message_logs), agregada no banco. Os contadores
+        // gravados em broadcast_jobs derivam quando um callback da Meta se perde;
+        // usar a mesma fonte dos outros painéis evita a tela mostrar dois números
+        // diferentes para a mesma campanha.
+        (supabase.rpc as unknown as RpcFn)("get_broadcast_progress", {
+          p_since: startDate ? startDate.toISOString() : null,
+          p_limit: 500,
+        }),
       ]);
 
       const jobs = jobsRes.data || [];
+      const progressByJob = new Map<string, BroadcastProgressRow>(
+        ((progressRes.data as BroadcastProgressRow[]) || []).map((p) => [p.job_id, p])
+      );
       const templates = tplRes.data || [];
       const tplCat = new Map(templates.map((t) => [t.id, inferCategory(t.category)]));
       // Alguns jobs guardam apenas o nome do template (sem template_id):
@@ -227,10 +245,11 @@ export function useCampaignListMetrics(startDate?: Date, endDate?: Date) {
 
 
       const rows: CampaignListRow[] = jobs.map((j) => {
-        const sent = j.sent_count || 0;
-        const delivered = j.delivered_count || 0;
-        const read = j.read_count || 0;
-        const errors = j.error_count || 0;
+        const prog = progressByJob.get(j.id);
+        const sent = prog ? prog.sent : j.sent_count || 0;
+        const delivered = prog ? Math.min(prog.delivered, sent) : j.delivered_count || 0;
+        const read = prog ? Math.min(prog.read, delivered) : j.read_count || 0;
+        const errors = prog ? prog.failed : j.error_count || 0;
         const cat = resolveCategory(j.template_id, j.template_name);
         const rate = PRICING[cat];
         const agg = perJob.get(j.id);
