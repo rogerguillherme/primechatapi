@@ -282,6 +282,12 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
   const selectedLeadIdRef = useRef(selectedLeadId);
   selectedLeadIdRef.current = selectedLeadId;
 
+  useEffect(() => {
+    onConversationChange?.(!!selectedLeadId);
+    return () => onConversationChange?.(false);
+  }, [selectedLeadId, onConversationChange]);
+
+
   // Realtime – global channel for sidebar (latest msgs / lead list).
   // Cada evento aqui dispara um refetch de ATÉ 5000 leads. Em disparo, com
   // milhares de eventos por hora, isso vira uma enxurrada de refetch que trava
