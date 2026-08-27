@@ -161,38 +161,38 @@ describe("parseRow", () => {
     );
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.order.externalOrderId).toBe("INV-1");
-    expect(r.order.phone).toBe("5511999998888");
-    expect(r.order.amount).toBe(1234.56);
-    expect(r.order.status).toBe("approved");
+    expect(r.order!.externalOrderId).toBe("INV-1");
+    expect(r.order!.phone).toBe("5511999998888");
+    expect(r.order!.amount).toBe(1234.56);
+    expect(r.order!.status).toBe("approved");
   });
 
   it("rejeita linha sem ID e linha sem telefone, com motivo", () => {
     const semId = parseRow({ Pedido: "", Telefone: "11999998888" }, MAPPING, 3);
     expect(semId.ok).toBe(false);
-    if (!semId.ok) expect(semId.error.reason).toMatch(/ID/);
+    if (!semId.ok) expect(semId.error!.reason).toMatch(/ID/);
 
     const semTel = parseRow({ Pedido: "INV-2", Telefone: "" }, MAPPING, 4);
     expect(semTel.ok).toBe(false);
-    if (!semTel.ok) expect(semTel.error.hint).toBe("INV-2");
+    if (!semTel.ok) expect(semTel.error!.hint).toBe("INV-2");
   });
 
   it("rejeita valor ilegível em vez de gravar zero", () => {
     const r = parseRow({ Pedido: "INV-3", Telefone: "11999998888", Valor: "combinado" }, MAPPING, 5);
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error.reason).toMatch(/valor/);
+    if (!r.ok) expect(r.error!.reason).toMatch(/valor/);
   });
 
   it("coluna de valor não mapeada grava zero sem virar erro", () => {
     const r = parseRow({ Pedido: "INV-4", Telefone: "11999998888" }, { external_order_id: "Pedido", phone: "Telefone" }, 6);
     expect(r.ok).toBe(true);
-    if (r.ok) expect(r.order.amount).toBe(0);
+    if (r.ok) expect(r.order!.amount).toBe(0);
   });
 
   it("telefone curto demais não passa", () => {
     const r = parseRow({ Pedido: "INV-5", Telefone: "1234" }, MAPPING, 7);
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error.reason).toMatch(/inválido/);
+    if (!r.ok) expect(r.error!.reason).toMatch(/inválido/);
   });
 });
 

@@ -140,7 +140,10 @@ export function CloudChatTab() {
     },
   });
 
-  // Fetch leads (already carries the denormalized last-message summary)
+  // Fetch leads (already carries the denormalized last-message summary).
+  // 5000 leads por refetch travava a aba: o payload chegava a alguns MB e todo
+  // evento de realtime refazia a conta. 800 cobre a caixa de entrada real
+  // (a busca por telefone/nome continua feita no servidor quando preciso).
   const { data: leads } = useQuery({
     queryKey: ["chat-leads", "cloud", user?.id],
     enabled: !!user,
@@ -151,12 +154,13 @@ export function CloudChatTab() {
           "id, name, phone, email, photo_url, chat_status, ai_enabled, assigned_to, updated_at, last_message_content, last_message_at, last_message_direction, last_message_status, last_message_account_id, account_ids"
         )
         .order("updated_at", { ascending: false, nullsFirst: false })
-        .limit(5000);
+        .limit(800);
       return (data || []) as any[];
     },
-    refetchInterval: 30000,
-    staleTime: 15000,
+    // O canal de realtime já invalida esta query; o polling só duplicava carga.
+    staleTime: 30_000,
   });
+
 
   const leadAccountMap = useMemo(() => {
     const map = new Map<string, Set<string>>();
@@ -245,7 +249,9 @@ export function CloudChatTab() {
     onError: () => toast.error("Erro ao atualizar agente IA"),
   });
 
-  // Messages for selected lead
+  // Messages for selected lead — apenas as 300 mais recentes.
+  // Conversas antigas chegavam a milhares de mensagens: o React renderizava
+  // tudo de uma vez e a aba congelava ao abrir o contato.
   const { data: messages } = useQuery({
     queryKey: ["chat-messages", selectedLeadId],
     queryFn: async () => {
@@ -254,13 +260,15 @@ export function CloudChatTab() {
         .from("chat_messages")
         .select("*")
         .eq("lead_id", selectedLeadId)
-        .order("created_at", { ascending: true });
-      return data || [];
+        .order("created_at", { ascending: false })
+        .limit(300);
+      return (data || []).slice().reverse();
     },
     enabled: !!selectedLeadId,
     refetchOnWindowFocus: true,
     refetchOnMount: "always",
   });
+
 
   // Keep a ref so the realtime callback always sees the latest selectedLeadId
   const selectedLeadIdRef = useRef(selectedLeadId);
@@ -807,6 +815,16 @@ export function CloudChatTab() {
     });
   }, [filteredLeads, latestMessages]);
 
+  // Renderizar centenas de linhas de uma vez era o maior custo de layout da
+  // aba. Mostramos um bloco por vez e crescemos sob demanda.
+  const PAGE = 60;
+  const [visibleCount, setVisibleCount] = useState(PAGE);
+  useEffect(() => {
+    setVisibleCount(PAGE);
+  }, [search, activeTab, filterAccountId, filterLabelIds]);
+  const visibleLeads = useMemo(() => sortedLeads.slice(0, visibleCount), [sortedLeads, visibleCount]);
+
+
   const groupedMessages = useMemo(() => {
     if (!messages) return [];
     const groups: { date: Date; messages: typeof messages }[] = [];
@@ -1011,7 +1029,7 @@ export function CloudChatTab() {
           {sortedLeads.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-8">Nenhum contato encontrado.</p>
           )}
-          {sortedLeads.map((lead) => {
+          {visibleLeads.map((lead) => {
             const latest = latestMessages?.get(lead.id);
             const isSelected = lead.id === selectedLeadId;
             const leadTags = getLeadLabels(lead.id);
@@ -1065,6 +1083,14 @@ export function CloudChatTab() {
               </button>
             );
           })}
+          {visibleLeads.length < sortedLeads.length && (
+            <button
+              onClick={() => setVisibleCount((c) => c + 60)}
+              className="w-full py-3 text-xs text-muted-foreground hover:bg-accent/40 transition-colors"
+            >
+              Carregar mais ({sortedLeads.length - visibleLeads.length} restantes)
+            </button>
+          )}
         </ScrollArea>
       </div>
 

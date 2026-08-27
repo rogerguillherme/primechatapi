@@ -226,9 +226,14 @@ export interface RowError {
   hint?: string;
 }
 
-export type ParseResult =
-  | { ok: true; order: ParsedOrder }
-  | { ok: false; error: RowError };
+export interface ParseResult {
+  ok: boolean;
+  /** presente quando ok === true */
+  order?: ParsedOrder;
+  /** presente quando ok === false */
+  error?: RowError;
+}
+
 
 const text = (row: Record<string, unknown>, col?: string): string =>
   col ? String(row[col] ?? "").trim() : "";
@@ -321,8 +326,8 @@ export function planImport(
   let duplicatesInFile = 0;
 
   for (const r of results) {
-    if (!r.ok) {
-      errors.push(r.error);
+    if (!r.ok || !r.order) {
+      if (r.error) errors.push(r.error);
       continue;
     }
     if (byId.has(r.order.externalOrderId)) duplicatesInFile++;
@@ -330,6 +335,7 @@ export function planImport(
     // status muda, e a linha de baixo é a mais recente.
     byId.set(r.order.externalOrderId, r.order);
   }
+
 
   const create: ParsedOrder[] = [];
   const update: ParsedOrder[] = [];
