@@ -68,7 +68,15 @@ function StatusIcon({ status }: { status: string }) {
   return <Check size={14} className="opacity-60" />;
 }
 
-export function CloudChatTab() {
+export interface CloudChatTabProps {
+  /**
+   * Avisa o shell quando uma conversa é aberta/fechada. No celular a barra
+   * inferior desaparece com a conversa aberta, como no WhatsApp.
+   */
+  onConversationChange?: (open: boolean) => void;
+}
+
+export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [message, setMessage] = useState("");
@@ -273,6 +281,12 @@ export function CloudChatTab() {
   // Keep a ref so the realtime callback always sees the latest selectedLeadId
   const selectedLeadIdRef = useRef(selectedLeadId);
   selectedLeadIdRef.current = selectedLeadId;
+
+  useEffect(() => {
+    onConversationChange?.(!!selectedLeadId);
+    return () => onConversationChange?.(false);
+  }, [selectedLeadId, onConversationChange]);
+
 
   // Realtime – global channel for sidebar (latest msgs / lead list).
   // Cada evento aqui dispara um refetch de ATÉ 5000 leads. Em disparo, com
@@ -861,7 +875,7 @@ export function CloudChatTab() {
   };
 
   return (
-    <div className="flex h-full border border-border rounded-lg overflow-hidden bg-background">
+    <div className="flex h-full overflow-hidden bg-background lg:rounded-lg lg:border lg:border-border">
       {/* LEFT PANEL - Contact list */}
       <div className={cn(
         "w-[340px] flex flex-col border-r border-border",

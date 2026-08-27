@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } fro
 import { useNavigate } from "react-router-dom";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { SmokeBackground } from "@/components/SmokeBackground";
+import { MobileBottomNav } from "@/components/MobileBottomNav";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -1844,6 +1845,8 @@ export default function WhatsAppApi() {
   const [isSaving, setIsSaving] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // Conversa aberta no chat → a barra inferior sai de cena no celular.
+  const [chatConversationOpen, setChatConversationOpen] = useState(false);
   const isMobile = useIsMobile();
   // Em telas pequenas o menu nunca fica no modo "colapsado" (ícones): ele vira gaveta.
   const navCollapsed = sidebarCollapsed && !isMobile;
@@ -3075,7 +3078,7 @@ export default function WhatsAppApi() {
         {/* ── Webhook Tab (Event Webhooks) ── */}
         {/* ── Chat Tab ── */}
         <TabsContent value="chat" className="flex-1 overflow-hidden m-0 p-0">
-          <CloudChatTab />
+          <CloudChatTab onConversationChange={setChatConversationOpen} />
         </TabsContent>
 
         <TabsContent value="webhook" className="space-y-4 p-4 sm:p-6 max-w-6xl overflow-y-auto flex-1 m-0">
@@ -3166,6 +3169,14 @@ export default function WhatsAppApi() {
           <Suspense fallback={<TabFallback />}><ExpirationsPage /></Suspense>
         </TabsContent>
         </div>
+
+        {/* Navegação inferior estilo app — só no celular. */}
+        <MobileBottomNav
+          active={activeMainTab}
+          onNavigate={(t) => { setActiveMainTab(t); setMobileNavOpen(false); }}
+          onOpenMenu={() => setMobileNavOpen(true)}
+          hidden={activeMainTab === "chat" && chatConversationOpen}
+        />
       </Tabs>
 
       {/* ── QR Code Dialog (Evolution) ── */}

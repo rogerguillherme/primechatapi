@@ -1,31 +1,38 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- TODO: Set the document title to the name of your application -->
-    <title>Prime Chat</title>
-    <meta name="description" content="Prime Chat - Plataforma de Comunicação">
-    <meta name="author" content="Lovable" />
+    <!-- viewport-fit=cover + interactive-widget: teclado do celular não empurra o layout do chat. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <title>Prime Chat — Atendimento e disparos no WhatsApp</title>
+    <meta name="description" content="Atenda conversas, dispare campanhas e automatize fluxos de WhatsApp em um único painel." />
+    <meta name="author" content="Prime Chat" />
 
-    <!-- TODO: Update og:title to match your application name -->
-    
-    
+    <link rel="icon" href="/favicon.png" type="image/png" />
+
+    <!-- PWA: instalável na tela inicial do celular -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#0b1620" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Prime Chat" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/8b464d20-8264-43df-8f0d-a585b8d28e68/id-preview-512d7d2e--ba4042fd-1110-48c1-84a1-0c913679aeb5.lovable.app-1771427154027.png">
+    <meta property="og:title" content="Prime Chat — Atendimento e disparos no WhatsApp" />
+    <meta property="og:description" content="Atenda conversas, dispare campanhas e automatize fluxos de WhatsApp em um único painel." />
+    <meta property="og:image" content="https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/8b464d20-8264-43df-8f0d-a585b8d28e68/id-preview-512d7d2e--ba4042fd-1110-48c1-84a1-0c913679aeb5.lovable.app-1771427154027.png" />
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@Lovable" />
-    <meta name="twitter:image" content="https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/8b464d20-8264-43df-8f0d-a585b8d28e68/id-preview-512d7d2e--ba4042fd-1110-48c1-84a1-0c913679aeb5.lovable.app-1771427154027.png">
-    
-  
-  
-  
-  <meta property="og:title" content="Prime Chat">
-  <meta name="twitter:title" content="Prime Chat">
-  <meta property="og:description" content="Prime Chat - Plataforma de Comunicação">
-  <meta name="twitter:description" content="Prime Chat - Plataforma de Comunicação">
-</head>
+    <meta name="twitter:title" content="Prime Chat — Atendimento e disparos no WhatsApp" />
+    <meta name="twitter:description" content="Atenda conversas, dispare campanhas e automatize fluxos de WhatsApp em um único painel." />
+    <meta name="twitter:image" content="https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/8b464d20-8264-43df-8f0d-a585b8d28e68/id-preview-512d7d2e--ba4042fd-1110-48c1-84a1-0c913679aeb5.lovable.app-1771427154027.png" />
+  </head>
 
   <body>
     <div id="root"></div>
