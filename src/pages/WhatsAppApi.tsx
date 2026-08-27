@@ -3175,6 +3175,7 @@ export default function WhatsAppApi() {
           active={activeMainTab}
           onNavigate={(t) => { setActiveMainTab(t); setMobileNavOpen(false); }}
           onOpenMenu={() => setMobileNavOpen(true)}
+          hidden={activeMainTab === "chat" && chatConversationOpen}
         />
       </Tabs>
 
