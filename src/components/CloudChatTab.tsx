@@ -1083,6 +1083,14 @@ export function CloudChatTab() {
               </button>
             );
           })}
+          {visibleLeads.length < sortedLeads.length && (
+            <button
+              onClick={() => setVisibleCount((c) => c + 60)}
+              className="w-full py-3 text-xs text-muted-foreground hover:bg-accent/40 transition-colors"
+            >
+              Carregar mais ({sortedLeads.length - visibleLeads.length} restantes)
+            </button>
+          )}
         </ScrollArea>
       </div>
 
