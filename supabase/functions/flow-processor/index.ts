@@ -477,14 +477,24 @@ async function sendStepMessage(
 
   if (expectedLogContent) {
     const windowStart = new Date(Date.now() - DUPLICATE_SEND_WINDOW_MS).toISOString();
-    const { data: recentDuplicate, error: duplicateError } = await supabase
+    let duplicateQuery = supabase
       .from("chat_messages")
       .select("id, created_at, status")
       .eq("lead_id", lead.id)
       .eq("direction", "outbound")
       .eq("content", expectedLogContent)
       .in("status", SUCCESS_STATUSES)
-      .gte("created_at", windowStart)
+      .gte("created_at", windowStart);
+
+    // Mídia sem legenda é registrada com um texto fixo por tipo ("🎤 Áudio",
+    // "📷 Imagem"...). Comparando só o conteúdo, o segundo áudio do fluxo
+    // parecia repetição do primeiro e era descartado em silêncio — o fluxo
+    // avançava como se tivesse enviado. A URL distingue um passo do outro.
+    if (body.media_url) {
+      duplicateQuery = duplicateQuery.eq("media_url", body.media_url);
+    }
+
+    const { data: recentDuplicate, error: duplicateError } = await duplicateQuery
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -494,7 +504,16 @@ async function sendStepMessage(
     }
 
     if (recentDuplicate) {
-      console.log("Skipping duplicate flow send:", step.id, lead.id, recentDuplicate.id);
+      console.log(
+        "Envio ignorado por duplicidade:",
+        JSON.stringify({
+          step: step.id,
+          lead: lead.id,
+          original: recentDuplicate.id,
+          content: expectedLogContent,
+          media_url: body.media_url || null,
+        }),
+      );
       return true;
     }
   }
