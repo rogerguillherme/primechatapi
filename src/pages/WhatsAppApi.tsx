@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { SmokeBackground } from "@/components/SmokeBackground";
@@ -44,7 +44,7 @@ import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { FlowBuilder } from "@/components/FlowBuilder";
+const FlowBuilder = lazy(() => import("@/components/FlowBuilder").then((m) => ({ default: m.FlowBuilder })));
 import { TemplateManager } from "@/components/TemplateManager";
 import { EvolutionBroadcastTab } from "@/components/EvolutionBroadcastTab";
 import QRCodeLib from "qrcode";
@@ -69,10 +69,10 @@ function normalizePairingCode(value: unknown): string | null {
   if (!code || code.length > 32 || code.includes("@") || code.includes(",")) return null;
   return code;
 }
-import { BroadcastQueue } from "@/components/BroadcastQueue";
-import { ContactImporter } from "@/components/ContactImporter";
+const BroadcastQueue = lazy(() => import("@/components/BroadcastQueue").then((m) => ({ default: m.BroadcastQueue })));
+const ContactImporter = lazy(() => import("@/components/ContactImporter").then((m) => ({ default: m.ContactImporter })));
 import { SendingMetrics } from "@/components/SendingMetrics";
-import { CampaignAnalytics } from "@/components/CampaignAnalytics";
+const CampaignAnalytics = lazy(() => import("@/components/CampaignAnalytics").then((m) => ({ default: m.CampaignAnalytics })));
 import { TemplateAccountBar } from "@/components/TemplateAccountBar";
 import { WebhookEndpoints } from "@/components/WebhookEndpoints";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
@@ -1296,11 +1296,11 @@ function BroadcastTab() {
 
 
         <TabsContent value="queue" className="mt-4">
-          <BroadcastQueue />
+          <Suspense fallback={<TabFallback />}><BroadcastQueue /></Suspense>
         </TabsContent>
 
         <TabsContent value="import" className="mt-4">
-          <ContactImporter />
+          <Suspense fallback={<TabFallback />}><ContactImporter /></Suspense>
         </TabsContent>
 
         <TabsContent value="whatsapp" className="mt-4">
@@ -1793,6 +1793,16 @@ function BroadcastTab() {
 /* ══════════════════════════════════════════════════
    MAIN PAGE
    ══════════════════════════════════════════════════ */
+
+/** Espera curta enquanto o pedaço da aba é baixado sob demanda. */
+function TabFallback() {
+  return (
+    <div className="flex items-center justify-center py-16">
+      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+    </div>
+  );
+}
+
 export default function WhatsAppApi() {
   const { user, session, signOut } = useAuth();
   const queryClient = useQueryClient();
@@ -3051,6 +3061,7 @@ export default function WhatsAppApi() {
               : "space-y-4 p-4 sm:p-6 max-w-6xl overflow-y-auto"
           )}
         >
+          <Suspense fallback={<TabFallback />}>
           <FlowBuilder
             key={flowTriggerType || flowEditId || "default"}
             initialTriggerType={flowTriggerType}
@@ -3058,11 +3069,12 @@ export default function WhatsAppApi() {
             onEditorOpen={() => setFlowEditorOpen(true)}
             onEditorClose={() => { setFlowEditorOpen(false); setFlowEditId(undefined); setFlowTriggerType(undefined); }}
           />
+          </Suspense>
         </TabsContent>
 
         {/* ── Analytics Tab ── */}
         <TabsContent value="analytics" className="space-y-4 p-4 sm:p-6 max-w-6xl overflow-y-auto flex-1 m-0">
-          <CampaignAnalytics />
+          <Suspense fallback={<TabFallback />}><CampaignAnalytics /></Suspense>
         </TabsContent>
 
         {/* ── History Tab ── */}

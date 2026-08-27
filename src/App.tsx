@@ -7,17 +7,21 @@ import { AppHeader } from "@/components/AppHeader";
 import { AiAssistantChat } from "@/components/AiAssistantChat";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { PlatformProvider } from "@/contexts/PlatformContext";
-import WhatsAppApi from "./pages/WhatsAppApi";
-import MetaConnect from "./pages/MetaConnect";
-import InstagramDashboard from "./pages/InstagramDashboard";
-import InstagramCallbackPage from "./pages/InstagramCallback";
-import NotFound from "./pages/NotFound";
-import Auth from "./pages/Auth";
-import TrialSignup from "./pages/TrialSignup";
-import TrialExpired from "./pages/TrialExpired";
-import LandingPage from "./pages/LandingPage";
-import AdminUsers from "./pages/AdminUsers";
-import WabaHealth from "./pages/WabaHealth";
+// Cada tela vira um arquivo separado, baixado só quando alguém entra nela.
+// Antes o build era um único JS de 2,6 MB: quem abria o login esperava o
+// construtor de fluxos, os gráficos e o leitor de planilha carregarem junto.
+import { lazy, Suspense } from "react";
+const WhatsAppApi = lazy(() => import("./pages/WhatsAppApi"));
+const MetaConnect = lazy(() => import("./pages/MetaConnect"));
+const InstagramDashboard = lazy(() => import("./pages/InstagramDashboard"));
+const InstagramCallbackPage = lazy(() => import("./pages/InstagramCallback"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const Auth = lazy(() => import("./pages/Auth"));
+const TrialSignup = lazy(() => import("./pages/TrialSignup"));
+const TrialExpired = lazy(() => import("./pages/TrialExpired"));
+const LandingPage = lazy(() => import("./pages/LandingPage"));
+const AdminUsers = lazy(() => import("./pages/AdminUsers"));
+const WabaHealth = lazy(() => import("./pages/WabaHealth"));
 import { Loader2 } from "lucide-react";
 import { BroadcastProgressFloat } from "@/components/BroadcastProgressFloat";
 import { useTrialStatus } from "@/hooks/use-trial-status";
@@ -83,8 +87,18 @@ function AdminOnlyRoute({ children }: { children: React.ReactNode }) {
 }
 
 
+/** Mesma marca d'água do ProtectedRoute, para a troca de tela não piscar. */
+function RouteFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    </div>
+  );
+}
+
 function AppRoutes() {
   return (
+    <Suspense fallback={<RouteFallback />}>
     <Routes>
       <Route path="/auth" element={<Auth />} />
       <Route path="/teste-gratis" element={<TrialSignup />} />
@@ -157,6 +171,7 @@ function AppRoutes() {
       <Route path="/site" element={<LandingPage />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
+    </Suspense>
   );
 }
 
