@@ -3166,6 +3166,13 @@ export default function WhatsAppApi() {
           <Suspense fallback={<TabFallback />}><ExpirationsPage /></Suspense>
         </TabsContent>
         </div>
+
+        {/* Navegação inferior estilo app — só no celular. */}
+        <MobileBottomNav
+          active={activeMainTab}
+          onNavigate={(t) => { setActiveMainTab(t); setMobileNavOpen(false); }}
+          onOpenMenu={() => setMobileNavOpen(true)}
+        />
       </Tabs>
 
       {/* ── QR Code Dialog (Evolution) ── */}
