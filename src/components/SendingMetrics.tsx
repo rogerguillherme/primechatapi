@@ -1,28 +1,24 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { WhatsAppLimits } from "./WhatsAppLimits";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
-  Send, RefreshCw, ChevronDown, ChevronRight, MessageCircle,
+  Send, RefreshCw, ChevronDown, ChevronRight,
   Loader2, Zap, Download, AlertTriangle,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
-import { CampaignListMetrics, useCampaignListMetrics } from "@/components/dashboard/CampaignListMetrics";
 import { SendingProgressBar } from "@/components/dashboard/SendingProgressBar";
 import {
   useBroadcastProgress,
   useFlowProgress,
-  useSendingMetricsBySource,
 } from "@/hooks/use-sending-metrics";
-import { SOURCE_HINT, SOURCE_LABEL, counterDrift, type OriginTotals } from "@/lib/sendingMetrics";
+import { counterDrift } from "@/lib/sendingMetrics";
 
 function getAvatarColor(name: string) {
   const colors = ["bg-emerald-600", "bg-violet-600", "bg-amber-600", "bg-rose-600", "bg-cyan-600", "bg-indigo-600"];
@@ -64,25 +60,17 @@ export function SendingMetrics() {
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
-  const { accounts } = useWhatsAppAccounts();
-  const { data: listData, isLoading: listLoading } = useCampaignListMetrics();
 
-  const { data: metrics, isLoading } = useSendingMetricsBySource();
   const { data: broadcasts, isLoading: loadingBroadcasts } = useBroadcastProgress();
   const { data: flowBatches, isLoading: loadingFlows } = useFlowProgress();
 
   const handleRefresh = () => {
     setRefreshing(true);
-    for (const key of ["sending-metrics-by-source", "broadcast-progress", "flow-progress", "campaign-list-metrics"]) {
+    for (const key of ["broadcast-progress", "flow-progress"]) {
       queryClient.invalidateQueries({ queryKey: [key] });
     }
     setTimeout(() => setRefreshing(false), 800);
   };
-
-  const accountName = useMemo(
-    () => new Map(accounts.map((a) => [a.id, a.name] as const)),
-    [accounts]
-  );
 
   const dispatches = useMemo<DispatchGroup[]>(() => {
     const groups: DispatchGroup[] = [];
@@ -140,96 +128,84 @@ export function SendingMetrics() {
 
   const loadingDispatches = loadingBroadcasts || loadingFlows;
 
+  // Só dois grupos: o que saiu para uma lista e o que saiu sozinho.
+  // Fluxo disparado por webhook e envio automático são a mesma coisa para
+  // quem olha o histórico — nenhum dos dois foi você quem mandou na mão.
+  const byKind = useMemo(() => {
+    const listas = dispatches.filter((d) => d.type === "broadcast");
+    const automacao = dispatches.filter((d) => d.type !== "broadcast");
+    return { listas, automacao };
+  }, [dispatches]);
+
+  const [kind, setKind] = useState<"listas" | "automacao">("listas");
+  const current = kind === "listas" ? byKind.listas : byKind.automacao;
+  const totals = useMemo(() => sumDispatches(current), [current]);
+
   return (
     <div className="space-y-4">
-      <WhatsAppLimits />
-
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-muted-foreground">Métricas por origem</h3>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="inline-flex rounded-lg border border-border p-0.5 bg-muted/40">
+          {([
+            ["listas", "Listas", byKind.listas.length],
+            ["automacao", "Automação", byKind.automacao.length],
+          ] as const).map(([value, label, count]) => (
+            <button
+              key={value}
+              onClick={() => { setKind(value); setExpandedKey(null); }}
+              className={cn(
+                "px-3 py-1.5 text-sm rounded-md transition-colors flex items-center gap-1.5",
+                kind === value
+                  ? "bg-background shadow-sm font-medium"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {label}
+              <span className="text-[11px] tabular-nums opacity-60">{count}</span>
+            </button>
+          ))}
+        </div>
         <Button variant="outline" size="sm" onClick={handleRefresh} className="gap-1.5">
           <RefreshCw size={14} className={cn(refreshing && "animate-spin")} />
           Atualizar
         </Button>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-3">
-        {(metrics?.bySource || []).map((t) => (
-          <OriginCard key={t.source} totals={t} isLoading={isLoading} />
-        ))}
-      </div>
-
-      {metrics && metrics.byAccount.size > 0 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <MessageCircle size={16} /> Por conta do WhatsApp
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="divide-y divide-border">
-              {[...metrics.byAccount].map(([accountId, totalsList]) => (
-                <div key={accountId} className="px-4 py-3 space-y-3">
-                  <p className="text-sm font-medium">
-                    {accountName.get(accountId) || "Sem conta vinculada"}
-                  </p>
-                  {totalsList
-                    .filter((t) => t.total > 0)
-                    .map((t) => (
-                      <div key={t.source} className="space-y-1.5">
-                        <p className="text-[11px] text-muted-foreground">{SOURCE_LABEL[t.source]}</p>
-                        <SendingProgressBar
-                          audience={t.total}
-                          sent={t.sent}
-                          delivered={t.delivered ?? 0}
-                          read={t.read ?? 0}
-                          failed={t.failed}
-                          skipped={t.skipped}
-                          pending={t.pending}
-                          tracksDelivery={t.tracksDelivery}
-                          compact
-                        />
-                      </div>
-                    ))}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <Zap size={16} /> Métricas individuais por lista
+            <Send size={16} />
+            {kind === "listas" ? "Disparos para listas" : "Envios automáticos"}
           </CardTitle>
+          <p className="text-[11px] text-muted-foreground leading-snug">
+            {kind === "listas"
+              ? "Envios em massa que você disparou para uma lista de contatos."
+              : "Fluxos e gatilhos de webhook — o que o sistema enviou sozinho."}
+          </p>
         </CardHeader>
-        <CardContent>
-          <CampaignListMetrics rows={listData?.rows || []} isLoading={listLoading} title="" />
-          {listData && (
-            <p className="text-[11px] text-muted-foreground mt-3">
-              Custo total do período: <span className="font-semibold text-revenue">R$ {listData.totals.costBrl.toFixed(2)}</span>{" "}
-              · {listData.totals.billable.toLocaleString("pt-BR")} cobradas ·{" "}
-              {listData.totals.freeInWindow.toLocaleString("pt-BR")} grátis (janela 24h)
-            </p>
-          )}
-        </CardContent>
-      </Card>
+        <CardContent className="space-y-4">
+          <SendingProgressBar
+            audience={totals.audience}
+            sent={totals.sent}
+            delivered={totals.delivered}
+            read={totals.read}
+            failed={totals.failed}
+            skipped={totals.skipped}
+            pending={totals.pending}
+            tracksDelivery={kind === "listas"}
+          />
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm flex items-center gap-2">
-            <Send size={16} /> Disparos realizados
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
           {loadingDispatches ? (
             <p className="text-sm text-muted-foreground text-center py-8">Carregando...</p>
-          ) : !dispatches.length ? (
-            <p className="text-sm text-muted-foreground text-center py-8">Nenhum disparo registrado.</p>
+          ) : !current.length ? (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              {kind === "listas"
+                ? "Nenhum disparo para lista registrado."
+                : "Nenhum envio automático registrado."}
+            </p>
           ) : (
-            <ScrollArea className="max-h-[500px]">
+            <ScrollArea className="max-h-[560px] -mx-6">
               <div className="divide-y divide-border">
-                {dispatches.map((d) => (
+                {current.map((d) => (
                   <DispatchItem
                     key={d.key}
                     group={d}
@@ -246,31 +222,19 @@ export function SendingMetrics() {
   );
 }
 
-/* ── Card de uma origem ── */
-function OriginCard({ totals, isLoading }: { totals: OriginTotals; isLoading: boolean }) {
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm">{SOURCE_LABEL[totals.source]}</CardTitle>
-        <p className="text-[10px] text-muted-foreground leading-snug">{SOURCE_HINT[totals.source]}</p>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <p className="text-2xl font-bold tabular-nums">
-          {isLoading ? "—" : totals.total.toLocaleString("pt-BR")}
-          <span className="text-xs font-normal text-muted-foreground"> mensagens</span>
-        </p>
-        <SendingProgressBar
-          audience={totals.total}
-          sent={totals.sent}
-          delivered={totals.delivered ?? 0}
-          read={totals.read ?? 0}
-          failed={totals.failed}
-          skipped={totals.skipped}
-          pending={totals.pending}
-          tracksDelivery={totals.tracksDelivery}
-        />
-      </CardContent>
-    </Card>
+/** Soma um conjunto de disparos para a barra do topo. */
+function sumDispatches(list: DispatchGroup[]) {
+  return list.reduce(
+    (acc, d) => ({
+      audience: acc.audience + (d.audience || 0),
+      sent: acc.sent + (d.sent || 0),
+      delivered: acc.delivered + (d.delivered || 0),
+      read: acc.read + (d.read || 0),
+      failed: acc.failed + (d.failed || 0),
+      skipped: acc.skipped + (d.skipped || 0),
+      pending: acc.pending + (d.pending || 0),
+    }),
+    { audience: 0, sent: 0, delivered: 0, read: 0, failed: 0, skipped: 0, pending: 0 },
   );
 }
 
