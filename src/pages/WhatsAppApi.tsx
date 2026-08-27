@@ -1845,6 +1845,8 @@ export default function WhatsAppApi() {
   const [isSaving, setIsSaving] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // Conversa aberta no chat → a barra inferior sai de cena no celular.
+  const [chatConversationOpen, setChatConversationOpen] = useState(false);
   const isMobile = useIsMobile();
   // Em telas pequenas o menu nunca fica no modo "colapsado" (ícones): ele vira gaveta.
   const navCollapsed = sidebarCollapsed && !isMobile;
