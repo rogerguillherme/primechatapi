@@ -162,7 +162,8 @@ export default function Chat() {
 
 
 
-  // Fetch messages for selected lead
+  // Fetch messages for selected lead — só as 300 mais recentes, senão
+  // conversas longas travam a renderização.
   const { data: messages } = useQuery({
     queryKey: ["chat-messages", selectedLeadId],
     queryFn: async () => {
@@ -171,11 +172,13 @@ export default function Chat() {
         .from("chat_messages")
         .select("*")
         .eq("lead_id", selectedLeadId)
-        .order("created_at", { ascending: true });
-      return data || [];
+        .order("created_at", { ascending: false })
+        .limit(300);
+      return (data || []).slice().reverse();
     },
     enabled: !!selectedLeadId,
   });
+
 
   // AI: per-lead toggle
   const { data: leadAiEnabled } = useQuery({
