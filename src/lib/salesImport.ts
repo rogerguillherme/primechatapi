@@ -326,8 +326,8 @@ export function planImport(
   let duplicatesInFile = 0;
 
   for (const r of results) {
-    if (!r.ok) {
-      errors.push(r.error);
+    if (!r.ok || !r.order) {
+      if (r.error) errors.push(r.error);
       continue;
     }
     if (byId.has(r.order.externalOrderId)) duplicatesInFile++;
@@ -335,6 +335,7 @@ export function planImport(
     // status muda, e a linha de baixo é a mais recente.
     byId.set(r.order.externalOrderId, r.order);
   }
+
 
   const create: ParsedOrder[] = [];
   const update: ParsedOrder[] = [];
