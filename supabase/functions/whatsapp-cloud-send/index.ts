@@ -780,44 +780,59 @@ Deno.serve(async (req) => {
       } else if (media_type === "video") {
         body = { messaging_product: "whatsapp", to: cleanPhone, type: "video", video: { link: media_url, caption: message || undefined } };
       } else if (media_type === "audio") {
-        // Enviar por `link` faz a Meta reutilizar o handle do arquivo e o WhatsApp
-        // marca a mensagem como "encaminhada". Fazendo upload a cada envio,
-        // geramos um media id novo e a mensagem chega como enviada normalmente.
-        let audioPayload: Record<string, string> = { link: media_url };
-        if (!isD360) {
-          try {
-            const fileRes = await fetch(media_url);
-            if (!fileRes.ok) throw new Error(`download ${fileRes.status}`);
-            const rawType = (fileRes.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
-            const ext = (media_url.split("?")[0].split(".").pop() || "").toLowerCase();
-            const { mime, fileExt } = resolveAudioMime(rawType, ext);
-            const blob = new Blob([await fileRes.arrayBuffer()], { type: mime });
-            const form = new FormData();
-            form.append("messaging_product", "whatsapp");
-            form.append("type", mime);
-            form.append("file", blob, `audio.${fileExt}`);
-            const upRes = await fetch(
-              `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/media`,
-              { method: "POST", headers: { Authorization: `Bearer ${ACCESS_TOKEN}` }, body: form },
-            );
-            const upJson = await upRes.json().catch(() => null);
-            if (upRes.ok && upJson?.id) {
-              audioPayload = { id: upJson.id };
-            } else {
-              // Cair no `link` faz o WhatsApp exibir a mensagem como encaminhada.
-              // Logamos o motivo real da Meta para não virar mistério.
-              console.error(
-                "Falha no upload de áudio — cai no link e chega como ENCAMINHADA. " +
-                  "status=" + upRes.status +
-                  " mime=" + mime +
-                  " meta=" + JSON.stringify(upJson?.error || upJson),
+        // Para o WhatsApp exibir como ÁUDIO GRAVADO (voice note) e não como
+        // "encaminhado", a mídia precisa: (1) ser enviada por `id` — nunca por
+        // `link`, que reaproveita o handle e marca como encaminhada; e (2) ser
+        // um OGG/Opus, único container que o WhatsApp trata como PTT.
+        let audioPayload: Record<string, string> | null = null;
+
+        if (isD360) {
+          audioPayload = { link: media_url };
+        } else {
+          let lastErr = "";
+          for (let attempt = 1; attempt <= 3 && !audioPayload; attempt++) {
+            try {
+              const fileRes = await fetch(media_url);
+              if (!fileRes.ok) throw new Error(`download ${fileRes.status}`);
+              const rawType = (fileRes.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+              const ext = (media_url.split("?")[0].split(".").pop() || "").toLowerCase();
+              const { mime, fileExt } = resolveAudioMime(rawType, ext);
+              // Opus só é reconhecido como voice note quando o codec é declarado.
+              const uploadMime = mime === "audio/ogg" ? "audio/ogg; codecs=opus" : mime;
+              const blob = new Blob([await fileRes.arrayBuffer()], { type: uploadMime });
+              const form = new FormData();
+              form.append("messaging_product", "whatsapp");
+              form.append("type", uploadMime);
+              form.append("file", blob, `audio.${fileExt}`);
+              const upRes = await fetch(
+                `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/media`,
+                { method: "POST", headers: { Authorization: `Bearer ${ACCESS_TOKEN}` }, body: form },
               );
+              const upJson = await upRes.json().catch(() => null);
+              if (upRes.ok && upJson?.id) {
+                audioPayload = { id: upJson.id };
+              } else {
+                lastErr = `status=${upRes.status} mime=${uploadMime} meta=${JSON.stringify(upJson?.error || upJson)}`;
+                console.error(`Upload de áudio falhou (tentativa ${attempt}/3): ${lastErr}`);
+              }
+            } catch (e) {
+              lastErr = String(e);
+              console.error(`Erro ao subir áudio (tentativa ${attempt}/3):`, e);
             }
-          } catch (e) {
-            console.error("Erro ao subir áudio para a Meta, usando link:", e);
+          }
+
+          if (!audioPayload) {
+            // Não caímos mais no `link`: chegaria como "encaminhada".
+            // Falhamos para o chamador (fluxo) poder reenviar.
+            return new Response(
+              JSON.stringify({ error: `Falha ao subir áudio para a Meta: ${lastErr}` }),
+              { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+            );
           }
         }
+
         body = { messaging_product: "whatsapp", to: cleanPhone, type: "audio", audio: audioPayload };
+
 
       } else {
         // Preserva o nome/extensão original do arquivo (qualquer tipo, não só PDF).
