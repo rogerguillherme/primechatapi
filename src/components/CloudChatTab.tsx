@@ -875,7 +875,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
   };
 
   return (
-    <div className="flex h-full border border-border rounded-lg overflow-hidden bg-background">
+    <div className="flex h-full overflow-hidden bg-background lg:rounded-lg lg:border lg:border-border">
       {/* LEFT PANEL - Contact list */}
       <div className={cn(
         "w-[340px] flex flex-col border-r border-border",
