@@ -548,6 +548,9 @@ function AiFlowChat({ onGenerate }: { onGenerate: (steps: any[]) => void }) {
 /* ── Flow Editor View (Visual Canvas) ── */
 function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flow: Flow | null; onBack: () => void; initialTriggerType?: string; initialKind?: FlowKind }) {
   const queryClient = useQueryClient();
+  // Fluxo pertence à CONTA (dono), não a quem clicou: um gerente criando um
+  // fluxo precisa que o resto da equipe consiga vê-lo e executá-lo.
+  const { data: team } = useTeamContext();
   const draftKey = useMemo(() => `${FLOW_DRAFT_STORAGE_PREFIX}${flow?.id ?? "new"}`, [flow?.id]);
   const initialDraft = useMemo(() => readFlowDraft(draftKey), [draftKey]);
 

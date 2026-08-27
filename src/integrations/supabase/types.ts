@@ -2833,6 +2833,16 @@ export type Database = {
           total_products: number
         }[]
       }
+      get_sales_summary: {
+        Args: { p_from?: string; p_to?: string }
+        Returns: {
+          approved_revenue: number
+          by_product: Json
+          returning_buyers: number
+          total_buyers: number
+          total_orders: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -2840,7 +2850,60 @@ export type Database = {
         }
         Returns: boolean
       }
+      list_buyers: {
+        Args: {
+          p_from?: string
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_to?: string
+        }
+        Returns: {
+          created_at: string
+          email: string
+          hubla_id: string
+          id: string
+          name: string
+          phone: string
+          purchase_count: number
+          top_products: string[]
+          total_count: number
+        }[]
+      }
+      order_net_amount: {
+        Args: { p_amount: number; p_payload: Json }
+        Returns: number
+      }
       recover_stuck_flow_executions: { Args: never; Returns: number }
+      search_orders: {
+        Args: {
+          p_from?: string
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_statuses?: string[]
+          p_to?: string
+        }
+        Returns: {
+          amount: number
+          created_at: string
+          external_order_id: string
+          id: string
+          lead_email: string
+          lead_id: string
+          lead_name: string
+          lead_phone: string
+          net_amount: number
+          payment_method: string
+          product_id: string
+          product_name: string
+          status: string
+          total_count: number
+          updated_at: string
+        }[]
+      }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       team_access_level: { Args: { _owner: string }; Returns: string }
       team_lead_scope: { Args: { _owner: string }; Returns: string }
     }
