@@ -48,6 +48,9 @@ function groupOrders(orders: any[]): OrderGroup[] {
   return groups;
 }
 
+/** Teto de exibição. O total real vem do banco e aparece ao lado da busca. */
+const PAGE_SIZE = 200;
+
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
@@ -67,20 +70,51 @@ export default function Orders() {
     return () => { supabase.removeChannel(channel); };
   }, [queryClient]);
 
-  const { data: orders, isLoading } = useQuery({
-    queryKey: ["orders", search, dateRange.from?.toISOString(), dateRange.to?.toISOString()],
+  // Espera a digitação parar: sem isso é uma consulta por tecla.
+  const [debounced, setDebounced] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(search.trim()), 350);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const { data: result, isLoading } = useQuery({
+    queryKey: ["orders", debounced, dateRange.from?.toISOString(), dateRange.to?.toISOString()],
     queryFn: async () => {
-      let query = supabase
-        .from("orders")
-        .select("id, lead_id, product_id, external_order_id, amount, status, payment_method, created_at, updated_at, leads(name, phone), products(checkout_name)")
-        .order("created_at", { ascending: false });
-      if (search) query = query.or(`external_order_id.ilike.%${search}%`);
-      if (dateRange.from) query = query.gte("created_at", dateRange.from.toISOString());
-      if (dateRange.to) query = query.lte("created_at", dateRange.to.toISOString());
-      const { data } = await query;
-      return data || [];
+      // A busca roda no banco (nome, telefone, e-mail, produto e número do
+      // pedido). Filtrar no navegador só enxergaria as primeiras 1.000 linhas
+      // que o Supabase devolve, e esconderia o resto sem avisar.
+      const { data, error } = await (supabase as any).rpc("search_orders", {
+        p_search: debounced || null,
+        p_statuses: null,
+        p_from: dateRange.from ? dateRange.from.toISOString() : null,
+        p_to: dateRange.to ? dateRange.to.toISOString() : null,
+        p_limit: PAGE_SIZE,
+        p_offset: 0,
+      });
+      if (error) throw error;
+
+      const rows = (data || []) as any[];
+      return {
+        total: rows.length ? Number(rows[0].total_count) : 0,
+        // Reaproveita o formato aninhado que o resto da tela já espera.
+        orders: rows.map((r) => ({
+          id: r.id,
+          lead_id: r.lead_id,
+          product_id: r.product_id,
+          external_order_id: r.external_order_id,
+          amount: r.amount,
+          status: r.status,
+          payment_method: r.payment_method,
+          created_at: r.created_at,
+          updated_at: r.updated_at,
+          leads: { name: r.lead_name, phone: r.lead_phone, email: r.lead_email },
+          products: { checkout_name: r.product_name },
+        })),
+      };
     },
   });
+
+  const orders = result?.orders;
 
   const groups = useMemo(() => groupOrders(orders || []), [orders]);
 
@@ -99,9 +133,16 @@ export default function Orders() {
       <div className="flex items-center gap-4 mb-4 flex-wrap">
         <div className="max-w-sm relative flex-shrink-0">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="Buscar por ID externo..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+          <Input placeholder="Nome, telefone, e-mail, produto ou pedido" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
         <DateRangeFilter value={dateRange} onChange={setDateRange} />
+        {result && (
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {result.total > PAGE_SIZE
+              ? `mostrando ${result.orders.length} de ${result.total.toLocaleString("pt-BR")}`
+              : `${result.total.toLocaleString("pt-BR")} pedidos`}
+          </span>
+        )}
       </div>
       <div className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
         <Table>

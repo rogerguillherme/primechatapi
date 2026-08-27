@@ -78,6 +78,7 @@ const CampaignAnalytics = lazy(() => import("@/components/CampaignAnalytics").th
 // Entram como aba, não como rota: a navegação daqui é por abas.
 const OrdersPage = lazy(() => import("@/pages/Orders"));
 const AbandonedCarts = lazy(() => import("@/components/sales/AbandonedCarts").then((m) => ({ default: m.AbandonedCarts })));
+const SalesImporter = lazy(() => import("@/components/sales/SalesImporter").then((m) => ({ default: m.SalesImporter })));
 const RefundsPage = lazy(() => import("@/pages/Refunds"));
 const ProductsPage = lazy(() => import("@/pages/Products"));
 const ItemsPage = lazy(() => import("@/pages/Items"));
@@ -2484,6 +2485,10 @@ export default function WhatsAppApi() {
               <ShoppingCart size={16} />
               {!navCollapsed && <span>Carrinho abandonado</span>}
             </TabsTrigger>
+            <TabsTrigger value="sales-import" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+              <Upload size={16} />
+              {!navCollapsed && <span>Importar vendas</span>}
+            </TabsTrigger>
             <TabsTrigger value="products" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
               <Boxes size={16} />
               {!navCollapsed && <span>Produtos</span>}
@@ -3147,6 +3152,9 @@ export default function WhatsAppApi() {
           <Suspense fallback={<TabFallback />}>
             <AbandonedCarts onOpenChat={() => setActiveMainTab("chat")} />
           </Suspense>
+        </TabsContent>
+        <TabsContent value="sales-import" className="p-4 sm:p-6 max-w-4xl overflow-y-auto flex-1 m-0">
+          <Suspense fallback={<TabFallback />}><SalesImporter /></Suspense>
         </TabsContent>
         <TabsContent value="products" className="p-4 sm:p-6 overflow-y-auto flex-1 m-0">
           <Suspense fallback={<TabFallback />}><ProductsPage /></Suspense>
