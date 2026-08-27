@@ -597,7 +597,6 @@ async function advanceToNextStep(
         await supabase.from("flow_executions").update({
           current_step_id: currentStep.id,
           status: "waiting_reply",
-      metadata: clearedMetadata,
           metadata: clearedMetadata,
           updated_at: new Date().toISOString(),
         }).eq("id", exec.id);
