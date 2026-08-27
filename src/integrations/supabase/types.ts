@@ -1377,6 +1377,7 @@ export type Database = {
           id: string
           in_service_stage_id: string | null
           owner_id: string
+          sticky_agent: boolean
           trigger_mode: string
           updated_at: string
           waiting_stage_id: string | null
@@ -1387,6 +1388,7 @@ export type Database = {
           id?: string
           in_service_stage_id?: string | null
           owner_id: string
+          sticky_agent?: boolean
           trigger_mode?: string
           updated_at?: string
           waiting_stage_id?: string | null
@@ -1397,6 +1399,7 @@ export type Database = {
           id?: string
           in_service_stage_id?: string | null
           owner_id?: string
+          sticky_agent?: boolean
           trigger_mode?: string
           updated_at?: string
           waiting_stage_id?: string | null
@@ -1538,6 +1541,7 @@ export type Database = {
           email: string | null
           hubla_id: string | null
           id: string
+          last_assigned_to: string | null
           last_inbound_at: string | null
           last_message_account_id: string | null
           last_message_at: string | null
@@ -1568,6 +1572,7 @@ export type Database = {
           email?: string | null
           hubla_id?: string | null
           id?: string
+          last_assigned_to?: string | null
           last_inbound_at?: string | null
           last_message_account_id?: string | null
           last_message_at?: string | null
@@ -1598,6 +1603,7 @@ export type Database = {
           email?: string | null
           hubla_id?: string | null
           id?: string
+          last_assigned_to?: string | null
           last_inbound_at?: string | null
           last_message_account_id?: string | null
           last_message_at?: string | null
