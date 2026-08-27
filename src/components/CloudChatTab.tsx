@@ -12,13 +12,14 @@ import { AudioRecorder, audioFileFromBlob } from "@/components/AudioRecorder";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import {
   Search, Send, MessageSquare, FileText, Check, CheckCheck,
   MoreVertical, ArrowLeft, Paperclip, Clock, MessageCircleReply,
   ShoppingBag, RotateCcw, Tag, X, AlertCircle, Bot, Users, PowerOff, Megaphone,
-  Info, Pencil, Columns3, Zap, Workflow, UserPlus,
+  Info, Pencil, Columns3, Zap, Workflow, UserPlus, Pause, Play,
 } from "lucide-react";
 import { BulkBroadcastDialog } from "@/components/BulkBroadcastDialog";
 import { ContactInfoSheet } from "@/components/chat/ContactInfoSheet";
@@ -468,22 +469,25 @@ export function CloudChatTab() {
   });
 
   // Execução em andamento do lead aberto — mostra qual fluxo está rodando e
-  // permite parar. Os status vivos são os mesmos que startFlowForLead cancela.
+  // permite pausar, retomar ou parar. Os status vivos são os mesmos que
+  // startFlowForLead cancela, mais `paused`.
   const { data: runningExecution } = useQuery({
     queryKey: ["lead-flow-execution", selectedLeadId],
     enabled: !!selectedLeadId,
     queryFn: async () => {
       const { data } = await supabase
         .from("flow_executions")
-        .select("id, flow_id, status")
+        .select("id, flow_id, status, next_action_at, metadata")
         .eq("lead_id", selectedLeadId)
-        .in("status", ["running", "waiting_delay", "waiting_reply", "waiting_no_response"])
+        .in("status", ["running", "waiting_delay", "waiting_reply", "waiting_no_response", "paused"])
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
       return data;
     },
   });
+
+  const isPaused = runningExecution?.status === "paused";
 
   const startFlow = useMutation({
     mutationFn: async (flowId: string) => {
@@ -500,6 +504,61 @@ export function CloudChatTab() {
       queryClient.invalidateQueries({ queryKey: ["lead-flow-execution", selectedLeadId] });
     },
     onError: (e: Error) => toast.error(e.message || "Erro ao iniciar fluxo"),
+  });
+
+  // Pausar não precisa de coluna nem migration: o processador só acorda
+  // execução em `waiting_delay`/`waiting_no_response`, e a rotina que
+  // desentrava execução travada só mexe em `running`. Um status `paused` fica
+  // parado sozinho. Guardamos quanto faltava do delay para a retomada não
+  // disparar tudo de uma vez.
+  const pauseFlow = useMutation({
+    mutationFn: async () => {
+      if (!runningExecution?.id) return;
+      const remainingMs = runningExecution.next_action_at
+        ? Math.max(0, new Date(runningExecution.next_action_at).getTime() - Date.now())
+        : null;
+      const { error } = await supabase
+        .from("flow_executions")
+        .update({
+          status: "paused",
+          metadata: {
+            ...((runningExecution.metadata as Record<string, unknown>) || {}),
+            paused_from: runningExecution.status,
+            paused_remaining_ms: remainingMs,
+            paused_at: new Date().toISOString(),
+          },
+        })
+        .eq("id", runningExecution.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Fluxo pausado — retome quando quiser");
+      queryClient.invalidateQueries({ queryKey: ["lead-flow-execution", selectedLeadId] });
+    },
+    onError: (e: Error) => toast.error(e.message || "Erro ao pausar fluxo"),
+  });
+
+  const resumeFlow = useMutation({
+    mutationFn: async () => {
+      if (!runningExecution?.id) return;
+      const md = (runningExecution.metadata as Record<string, any>) || {};
+      const remainingMs = typeof md.paused_remaining_ms === "number" ? md.paused_remaining_ms : 0;
+      const { error } = await supabase
+        .from("flow_executions")
+        .update({
+          status: md.paused_from || "waiting_delay",
+          next_action_at: new Date(Date.now() + remainingMs).toISOString(),
+        })
+        .eq("id", runningExecution.id);
+      if (error) throw error;
+      // Acorda o processador; o cron também passa por aqui periodicamente.
+      supabase.functions.invoke("flow-processor", { body: { auto: true } }).catch(() => {});
+    },
+    onSuccess: () => {
+      toast.success("Fluxo retomado");
+      queryClient.invalidateQueries({ queryKey: ["lead-flow-execution", selectedLeadId] });
+    },
+    onError: (e: Error) => toast.error(e.message || "Erro ao retomar fluxo"),
   });
 
   const stopFlow = useMutation({
@@ -1046,10 +1105,20 @@ export function CloudChatTab() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
-                    title={runningExecution ? "Fluxo em andamento nesta conversa" : "Iniciar um fluxo nesta conversa"}
+                    title={
+                      isPaused
+                        ? "Fluxo pausado nesta conversa"
+                        : runningExecution
+                          ? "Fluxo em andamento nesta conversa"
+                          : "Iniciar um fluxo nesta conversa"
+                    }
                     className={cn(
                       "p-2 rounded-full hover:bg-accent transition-colors",
-                      runningExecution ? "text-primary" : "text-muted-foreground hover:text-foreground",
+                      isPaused
+                        ? "text-amber-500"
+                        : runningExecution
+                          ? "text-primary"
+                          : "text-muted-foreground hover:text-foreground",
                     )}
                   >
                     <Workflow size={18} />
@@ -1057,7 +1126,11 @@ export function CloudChatTab() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-64">
                   <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-                    {runningExecution ? "Trocar fluxo da conversa" : "Iniciar fluxo nesta conversa"}
+                    {isPaused
+                      ? "Fluxo pausado"
+                      : runningExecution
+                        ? "Trocar fluxo da conversa"
+                        : "Iniciar fluxo nesta conversa"}
                   </div>
                   {(flows || []).length === 0 && (
                     <div className="px-2 py-1.5 text-xs text-muted-foreground">
@@ -1077,14 +1150,36 @@ export function CloudChatTab() {
                     </DropdownMenuItem>
                   ))}
                   {runningExecution && (
-                    <DropdownMenuItem
-                      onClick={() => stopFlow.mutate()}
-                      disabled={stopFlow.isPending}
-                      className="gap-2 text-destructive"
-                    >
-                      <X size={14} className="shrink-0" />
-                      Parar fluxo em andamento
-                    </DropdownMenuItem>
+                    <>
+                      <DropdownMenuSeparator />
+                      {isPaused ? (
+                        <DropdownMenuItem
+                          onClick={() => resumeFlow.mutate()}
+                          disabled={resumeFlow.isPending}
+                          className="gap-2"
+                        >
+                          <Play size={14} className="shrink-0" />
+                          Retomar fluxo
+                        </DropdownMenuItem>
+                      ) : (
+                        <DropdownMenuItem
+                          onClick={() => pauseFlow.mutate()}
+                          disabled={pauseFlow.isPending}
+                          className="gap-2"
+                        >
+                          <Pause size={14} className="shrink-0" />
+                          Pausar fluxo
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem
+                        onClick={() => stopFlow.mutate()}
+                        disabled={stopFlow.isPending}
+                        className="gap-2 text-destructive"
+                      >
+                        <X size={14} className="shrink-0" />
+                        Parar fluxo em andamento
+                      </DropdownMenuItem>
+                    </>
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>

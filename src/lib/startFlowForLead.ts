@@ -68,7 +68,9 @@ export async function startFlowForLead(params: {
     .from("flow_executions")
     .update({ status: "cancelled" })
     .eq("lead_id", leadId)
-    .in("status", ["running", "waiting_delay", "waiting_reply", "waiting_no_response"]);
+    // `paused` entra aqui: senão iniciar outro fluxo deixaria o pausado vivo,
+    // e ele voltaria a disparar no meio do novo quando alguém retomasse.
+    .in("status", ["running", "waiting_delay", "waiting_reply", "waiting_no_response", "paused"]);
 
   const { error: insertError } = await supabase.from("flow_executions").insert({
     flow_id: flowId,
