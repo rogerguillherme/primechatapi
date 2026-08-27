@@ -1029,7 +1029,7 @@ export function CloudChatTab() {
           {sortedLeads.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-8">Nenhum contato encontrado.</p>
           )}
-          {sortedLeads.map((lead) => {
+          {visibleLeads.map((lead) => {
             const latest = latestMessages?.get(lead.id);
             const isSelected = lead.id === selectedLeadId;
             const leadTags = getLeadLabels(lead.id);
