@@ -454,15 +454,21 @@ export function CloudChatTab() {
     },
   });
 
-  // Fluxos ativos, para a barra de seleção do cabeçalho
+  // Fluxos para o seletor do cabeçalho.
+  //
+  // Lista TODOS, não só os ativos. `active` governa o disparo automático por
+  // gatilho; iniciar um fluxo aqui é decisão explícita do atendente, numa
+  // conversa específica. Filtrar por ativo fazia a lista vir vazia e o botão
+  // parecer quebrado para quem tinha fluxo montado mas não publicado.
   const { data: flows } = useQuery({
-    queryKey: ["chat-flows-active"],
+    queryKey: ["chat-flows-all"],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("flows")
-        .select("id, name")
-        .eq("active", true)
+        .select("id, name, active")
+        .order("active", { ascending: false })
         .order("name");
+      if (error) throw error;
       return data || [];
     },
     staleTime: 60_000,
@@ -503,7 +509,10 @@ export function CloudChatTab() {
       toast.success(name ? `Fluxo "${name}" iniciado` : "Fluxo iniciado");
       queryClient.invalidateQueries({ queryKey: ["lead-flow-execution", selectedLeadId] });
     },
-    onError: (e: Error) => toast.error(e.message || "Erro ao iniciar fluxo"),
+    onError: (e: Error) => {
+      console.error("[fluxo] falha ao iniciar:", e);
+      toast.error(e.message || "Erro ao iniciar fluxo");
+    },
   });
 
   // Pausar não precisa de coluna nem migration: o processador só acorda
@@ -1134,18 +1143,20 @@ export function CloudChatTab() {
                   </div>
                   {(flows || []).length === 0 && (
                     <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                      Nenhum fluxo ativo. Crie um no Flow Builder e marque como ativo.
+                      Nenhum fluxo criado ainda. Monte um no Flow Builder.
                     </div>
                   )}
                   {(flows || []).map((flow: any) => (
                     <DropdownMenuItem
                       key={flow.id}
                       onClick={() => startFlow.mutate(flow.id)}
-                      disabled={startFlow.isPending}
                       className="gap-2"
                     >
                       <Workflow size={14} className="opacity-60 shrink-0" />
                       <span className="flex-1 truncate">{flow.name}</span>
+                      {!flow.active && (
+                        <span className="text-[10px] text-muted-foreground shrink-0">inativo</span>
+                      )}
                       {runningExecution?.flow_id === flow.id && <Check size={14} className="opacity-60" />}
                     </DropdownMenuItem>
                   ))}
