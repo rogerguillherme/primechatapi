@@ -249,7 +249,9 @@ export function CloudChatTab() {
     onError: () => toast.error("Erro ao atualizar agente IA"),
   });
 
-  // Messages for selected lead
+  // Messages for selected lead — apenas as 300 mais recentes.
+  // Conversas antigas chegavam a milhares de mensagens: o React renderizava
+  // tudo de uma vez e a aba congelava ao abrir o contato.
   const { data: messages } = useQuery({
     queryKey: ["chat-messages", selectedLeadId],
     queryFn: async () => {
@@ -258,13 +260,15 @@ export function CloudChatTab() {
         .from("chat_messages")
         .select("*")
         .eq("lead_id", selectedLeadId)
-        .order("created_at", { ascending: true });
-      return data || [];
+        .order("created_at", { ascending: false })
+        .limit(300);
+      return (data || []).slice().reverse();
     },
     enabled: !!selectedLeadId,
     refetchOnWindowFocus: true,
     refetchOnMount: "always",
   });
+
 
   // Keep a ref so the realtime callback always sees the latest selectedLeadId
   const selectedLeadIdRef = useRef(selectedLeadId);
