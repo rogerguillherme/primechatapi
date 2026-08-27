@@ -1764,6 +1764,36 @@ export type Database = {
         }
         Relationships: []
       }
+      metrito_settings: {
+        Row: {
+          api_key: string | null
+          created_at: string
+          generic_key: string | null
+          id: string
+          owner_id: string
+          project_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          api_key?: string | null
+          created_at?: string
+          generic_key?: string | null
+          id?: string
+          owner_id: string
+          project_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          api_key?: string | null
+          created_at?: string
+          generic_key?: string | null
+          id?: string
+          owner_id?: string
+          project_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           created_at: string
