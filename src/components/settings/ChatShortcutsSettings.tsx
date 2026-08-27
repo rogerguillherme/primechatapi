@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTeamContext } from "@/hooks/use-team";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,6 +47,7 @@ function normalizeCommand(raw: string): string {
 
 export function ChatShortcutsSettings() {
   const { user } = useAuth();
+  const { data: team } = useTeamContext();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [form, setForm] = useState(EMPTY_FORM);
@@ -101,9 +103,13 @@ export function ChatShortcutsSettings() {
         flow_id: form.action_type === "flow" ? form.flow_id : null,
       };
 
+      // O atalho pertence à CONTA, não a quem clicou: um gerente criando em
+      // nome do dono precisa que a equipe inteira enxergue o comando.
+      const ownerId = team?.ownerId ?? user.id;
+
       const { error } = editingId
         ? await supabase.from("chat_shortcuts").update(payload).eq("id", editingId)
-        : await supabase.from("chat_shortcuts").insert({ ...payload, user_id: user.id });
+        : await supabase.from("chat_shortcuts").insert({ ...payload, user_id: ownerId });
 
       if (error) {
         // Índice único em (user_id, lower(command)).

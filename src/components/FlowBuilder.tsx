@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNodesState, useEdgesState, type Node, type Edge, MarkerType } from "@xyflow/react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTeamContext } from "@/hooks/use-team";
 import { useUserTemplates } from "@/hooks/use-user-templates";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -970,7 +971,7 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
       } else {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error("Usuário não autenticado");
-        const { data, error } = await supabase.from("flows").insert({ name, description: description || null, user_id: user.id, trigger_type: triggerType, flow_kind: (initialKind || "api"), ...flowSettingsPayload } as any).select("id").single();
+        const { data, error } = await supabase.from("flows").insert({ name, description: description || null, user_id: team?.ownerId ?? user.id, trigger_type: triggerType, flow_kind: (initialKind || "api"), ...flowSettingsPayload } as any).select("id").single();
         if (error) throw error;
         flowId = data.id;
       }
@@ -1116,6 +1117,7 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
 /* ── Main FlowBuilder Component ── */
 export function FlowBuilder({ initialTriggerType, initialFlowId, onEditorClose, onEditorOpen }: { initialTriggerType?: string; initialFlowId?: string; onEditorClose?: () => void; onEditorOpen?: () => void }) {
   const { user } = useAuth();
+  const { data: team } = useTeamContext();
   const [editingFlow, setEditingFlow] = useState<Flow | null | undefined>(
     initialTriggerType ? null : undefined
   );
