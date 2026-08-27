@@ -226,9 +226,14 @@ export interface RowError {
   hint?: string;
 }
 
-export type ParseResult =
-  | { ok: true; order: ParsedOrder }
-  | { ok: false; error: RowError };
+export interface ParseResult {
+  ok: boolean;
+  /** presente quando ok === true */
+  order?: ParsedOrder;
+  /** presente quando ok === false */
+  error?: RowError;
+}
+
 
 const text = (row: Record<string, unknown>, col?: string): string =>
   col ? String(row[col] ?? "").trim() : "";
