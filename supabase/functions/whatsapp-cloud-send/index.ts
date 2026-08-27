@@ -280,6 +280,40 @@ async function getTemplateRecord(supabase: any, templateName: string, accountId?
   return { template: globalTemplate || templates[0], hasExplicitLinks: templateLinks.length > 0 };
 }
 
+
+// O WhatsApp Cloud API aceita só estes containers de áudio. Rotular errado faz
+// o upload falhar com 131053, e aí o envio cai no `link` — que é justamente o
+// que faz a mensagem chegar como "encaminhada".
+const AUDIO_MIME_BY_EXT: Record<string, string> = {
+  mp3: "audio/mpeg",
+  m4a: "audio/mp4",
+  mp4: "audio/mp4",
+  aac: "audio/aac",
+  amr: "audio/amr",
+  ogg: "audio/ogg",
+  oga: "audio/ogg",
+  opus: "audio/ogg",
+};
+const AUDIO_EXT_BY_MIME: Record<string, string> = {
+  "audio/mpeg": "mp3",
+  "audio/mp4": "m4a",
+  "audio/aac": "aac",
+  "audio/amr": "amr",
+  "audio/ogg": "ogg",
+};
+
+/**
+ * Decide o mime a declarar no upload. Confia no content-type só quando ele é
+ * um dos aceitos — `audio/webm` e `application/octet-stream` chegam bastante e
+ * antes viravam "audio/ogg" no chute, o que a Meta rejeita.
+ */
+function resolveAudioMime(rawType: string, ext: string): { mime: string; fileExt: string } {
+  const mime = AUDIO_EXT_BY_MIME[rawType]
+    ? rawType
+    : AUDIO_MIME_BY_EXT[ext] || "audio/ogg";
+  return { mime, fileExt: AUDIO_EXT_BY_MIME[mime] || "ogg" };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -754,20 +788,14 @@ Deno.serve(async (req) => {
           try {
             const fileRes = await fetch(media_url);
             if (!fileRes.ok) throw new Error(`download ${fileRes.status}`);
-            const rawType = (fileRes.headers.get("content-type") || "").split(";")[0].trim();
+            const rawType = (fileRes.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
             const ext = (media_url.split("?")[0].split(".").pop() || "").toLowerCase();
-            const mime = rawType && rawType.startsWith("audio/")
-              ? rawType
-              : ext === "mp3"
-                ? "audio/mpeg"
-                : ext === "m4a"
-                  ? "audio/mp4"
-                  : "audio/ogg";
+            const { mime, fileExt } = resolveAudioMime(rawType, ext);
             const blob = new Blob([await fileRes.arrayBuffer()], { type: mime });
             const form = new FormData();
             form.append("messaging_product", "whatsapp");
             form.append("type", mime);
-            form.append("file", blob, `audio.${mime === "audio/mpeg" ? "mp3" : mime === "audio/mp4" ? "m4a" : "ogg"}`);
+            form.append("file", blob, `audio.${fileExt}`);
             const upRes = await fetch(
               `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/media`,
               { method: "POST", headers: { Authorization: `Bearer ${ACCESS_TOKEN}` }, body: form },
@@ -776,7 +804,14 @@ Deno.serve(async (req) => {
             if (upRes.ok && upJson?.id) {
               audioPayload = { id: upJson.id };
             } else {
-              console.error("Falha no upload de áudio, usando link:", upRes.status, JSON.stringify(upJson));
+              // Cair no `link` faz o WhatsApp exibir a mensagem como encaminhada.
+              // Logamos o motivo real da Meta para não virar mistério.
+              console.error(
+                "Falha no upload de áudio — cai no link e chega como ENCAMINHADA. " +
+                  "status=" + upRes.status +
+                  " mime=" + mime +
+                  " meta=" + JSON.stringify(upJson?.error || upJson),
+              );
             }
           } catch (e) {
             console.error("Erro ao subir áudio para a Meta, usando link:", e);
