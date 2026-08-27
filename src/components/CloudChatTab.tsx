@@ -23,6 +23,7 @@ import {
 import { BulkBroadcastDialog } from "@/components/BulkBroadcastDialog";
 import { ContactInfoSheet } from "@/components/chat/ContactInfoSheet";
 import { startFlowForLead } from "@/lib/startFlowForLead";
+import { interpolateForLead } from "@/lib/interpolate";
 import { useTeamContext, useTeamMembers } from "@/hooks/use-team";
 import { useToggleLeadLabel } from "@/hooks/use-chat-labels";
 import { useAuth } from "@/contexts/AuthContext";
@@ -633,9 +634,7 @@ export function CloudChatTab() {
       return;
     }
 
-    const text = (shortcut.message || "")
-      .replace(/\{nome\}/gi, selectedLead.name || "")
-      .replace(/\{telefone\}/gi, selectedLead.phone || "");
+    const text = interpolateForLead(shortcut.message || "", selectedLead);
     setMessage(text);
     textareaRef.current?.focus();
   }, [selectedLead, selectedAccountId, defaultAccount]);

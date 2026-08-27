@@ -18,6 +18,7 @@ import { AudioRecorder, audioFileFromBlob } from "@/components/AudioRecorder";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 import { ContactInfoSheet } from "@/components/chat/ContactInfoSheet";
 import { startFlowForLead } from "@/lib/startFlowForLead";
+import { interpolateForLead } from "@/lib/interpolate";
 
 interface LeadChatDrawerProps {
   lead: { id: string; name: string; phone: string } | null;
@@ -184,9 +185,7 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
       }
       return;
     }
-    const text = (shortcut.message || "")
-      .replace(/\{nome\}/gi, lead.name || "")
-      .replace(/\{telefone\}/gi, lead.phone || "");
+    const text = interpolateForLead(shortcut.message || "", lead);
     setMessage(text);
     textareaRef.current?.focus();
   }, [lead, selectedAccountId, defaultAccount, toast]);
