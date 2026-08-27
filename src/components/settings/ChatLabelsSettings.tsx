@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTeamContext } from "@/hooks/use-team";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +42,7 @@ const EMPTY_FORM: FormState = { name: "", color: LABEL_COLORS[0], stageId: NONE 
 /** Etiquetas do chat: criar, renomear, trocar cor, ligar a uma coluna do Kanban. */
 export function ChatLabelsSettings() {
   const { user } = useAuth();
+  const { data: team } = useTeamContext();
   const queryClient = useQueryClient();
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -97,7 +99,9 @@ export function ChatLabelsSettings() {
       } else {
         const { error } = await supabase
           .from("chat_labels")
-          .insert({ ...payload, user_id: user.id });
+          // Etiqueta pertence à CONTA, não a quem clicou: um gerente criando
+          // uma etiqueta em nome do dono precisa que o resto da equipe a veja.
+          .insert({ ...payload, user_id: team?.ownerId ?? user.id });
         if (error) throw error;
       }
     },
