@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { matchesStep, aiMatchesStep, applyStepLabels } from "../_shared/flow-matching.ts";
 import { applyStageAutomations } from "../_shared/stage-automations.ts";
+import { interpolate } from "../_shared/interpolate.mjs";
 import {
   decodeWhatsAppText,
   resolveMetritoCreds,
@@ -68,12 +69,6 @@ function buildVars(lead: any, metadata: any): Record<string, string> {
   return vars;
 }
 
-function interpolate(text: string, vars: Record<string, string>): string {
-  if (!text) return text;
-  return text
-    .replace(/\{(\w+)\}/g, (_m, k) => (vars[k] !== undefined ? vars[k] : `{${k}}`))
-    .replace(/\{\{(\d+)\}\}/g, () => vars.nome || "");
-}
 
 function normalizePhone(phone: string): string {
   const digits = phone.replace(/\D/g, "");
