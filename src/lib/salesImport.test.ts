@@ -161,7 +161,7 @@ describe("parseRow", () => {
     );
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.order.externalOrderId).toBe("INV-1");
+    expect(r.order!.externalOrderId).toBe("INV-1");
     expect(r.order!.phone).toBe("5511999998888");
     expect(r.order!.amount).toBe(1234.56);
     expect(r.order!.status).toBe("approved");
