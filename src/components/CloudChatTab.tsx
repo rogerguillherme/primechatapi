@@ -815,6 +815,16 @@ export function CloudChatTab() {
     });
   }, [filteredLeads, latestMessages]);
 
+  // Renderizar centenas de linhas de uma vez era o maior custo de layout da
+  // aba. Mostramos um bloco por vez e crescemos sob demanda.
+  const PAGE = 60;
+  const [visibleCount, setVisibleCount] = useState(PAGE);
+  useEffect(() => {
+    setVisibleCount(PAGE);
+  }, [search, activeTab, filterAccountId, filterLabelIds]);
+  const visibleLeads = useMemo(() => sortedLeads.slice(0, visibleCount), [sortedLeads, visibleCount]);
+
+
   const groupedMessages = useMemo(() => {
     if (!messages) return [];
     const groups: { date: Date; messages: typeof messages }[] = [];
