@@ -68,7 +68,15 @@ function StatusIcon({ status }: { status: string }) {
   return <Check size={14} className="opacity-60" />;
 }
 
-export function CloudChatTab() {
+export interface CloudChatTabProps {
+  /**
+   * Avisa o shell quando uma conversa é aberta/fechada. No celular a barra
+   * inferior desaparece com a conversa aberta, como no WhatsApp.
+   */
+  onConversationChange?: (open: boolean) => void;
+}
+
+export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [message, setMessage] = useState("");
