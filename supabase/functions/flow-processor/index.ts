@@ -17,9 +17,11 @@ function stepDelayMs(step: any): number {
 
 const READY_STATUSES = ["waiting_delay", "waiting_no_response"];
 const RETRY_DELAY_MS = 5000;
-// Janela para considerar um envio idêntico como duplicata. Ampliada para 6h
-// para impedir que um reprocessamento reenvie mensagens que já foram aceitas.
-const DUPLICATE_SEND_WINDOW_MS = 6 * 60 * 60 * 1000;
+// Quantos passos já enviados guardamos por execução. É a proteção contra
+// reenvio quando um passo é reprocessado — fluxo longo não precisa da lista
+// inteira, só do passado recente.
+const SENT_STEPS_MEMORY = 50;
+
 // Somente envios que DERAM CERTO bloqueiam um novo envio; falhas (ex.: #131047)
 // devem poder ser reenviadas pelo número correto.
 const SUCCESS_STATUSES = ["sent", "delivered", "read", "pending"];
@@ -90,7 +92,7 @@ Deno.serve(async (req) => {
     // Agora um punhado corre em paralelo. O limite é baixo de propósito: o
     // gargalo real não é este processo, é a API da Meta e o limite de envio do
     // número. Paralelismo alto aqui só troca "fila lenta" por "429 da Meta".
-    const CONCURRENCY = Math.max(1, Number(Deno.env.get("FLOW_CONCURRENCY") || 5));
+    const CONCURRENCY = Math.max(1, Number(Deno.env.get("FLOW_CONCURRENCY") || 3));
     const BATCH_LIMIT = 100;
     const POOL_LIMIT = 400;
     // Para de reivindicar trabalho novo antes do teto da edge function, para
@@ -312,11 +314,41 @@ Deno.serve(async (req) => {
           currentStep.step_type === "interactive_buttons" ||
           currentStep.step_type === "cta_url"
         ) {
-          const sent = await sendStepMessage(currentStep, lead, supabase, supabaseUrl, supabaseKey, exec.metadata, executionAccountId);
-          if (!sent) {
-            console.error("Failed to send message for execution:", exec.id);
-            await requeueExecution(exec, supabase);
-            return;
+          // Proteção contra reenvio: a identidade é ESTA etapa DESTA execução.
+          //
+          // Antes comparávamos o texto da mensagem numa janela de horas, então
+          // dois fluxos diferentes com a mesma abertura colidiam e o segundo
+          // não era enviado. Agora só bloqueia o que realmente é repetição: um
+          // passo reprocessado depois de já ter saído.
+          const jaEnviados: string[] = Array.isArray(exec.metadata?.sent_steps)
+            ? exec.metadata.sent_steps
+            : [];
+
+          if (jaEnviados.includes(currentStep.id)) {
+            console.log(
+              "[fluxo] etapa ja enviada nesta execucao, seguindo adiante:",
+              JSON.stringify({ execucao: exec.id, etapa: currentStep.id }),
+            );
+          } else {
+            const sent = await sendStepMessage(currentStep, lead, supabase, supabaseUrl, supabaseKey, exec.metadata, executionAccountId);
+            if (!sent) {
+              console.error("Failed to send message for execution:", exec.id);
+              await requeueExecution(exec, supabase);
+              return;
+            }
+
+            // Marca DEPOIS do envio: falha tem que poder ser retentada.
+            const memoria = [...jaEnviados, currentStep.id].slice(-SENT_STEPS_MEMORY);
+            exec.metadata = { ...(exec.metadata || {}), sent_steps: memoria };
+            const { error: marcaErr } = await supabase
+              .from("flow_executions")
+              .update({ metadata: exec.metadata })
+              .eq("id", exec.id);
+            if (marcaErr) {
+              // Não interrompe: a mensagem já foi. No pior caso um
+              // reprocessamento reenvia uma vez.
+              console.error("[fluxo] falha ao marcar etapa como enviada:", marcaErr);
+            }
           }
         }
 
@@ -537,49 +569,6 @@ async function sendStepMessage(
     return false;
   }
 
-  if (expectedLogContent) {
-    const windowStart = new Date(Date.now() - DUPLICATE_SEND_WINDOW_MS).toISOString();
-    let duplicateQuery = supabase
-      .from("chat_messages")
-      .select("id, created_at, status")
-      .eq("lead_id", lead.id)
-      .eq("direction", "outbound")
-      .eq("content", expectedLogContent)
-      .in("status", SUCCESS_STATUSES)
-      .gte("created_at", windowStart);
-
-    // Mídia sem legenda é registrada com um texto fixo por tipo ("🎤 Áudio",
-    // "📷 Imagem"...). Comparando só o conteúdo, o segundo áudio do fluxo
-    // parecia repetição do primeiro e era descartado em silêncio — o fluxo
-    // avançava como se tivesse enviado. A URL distingue um passo do outro.
-    if (body.media_url) {
-      duplicateQuery = duplicateQuery.eq("media_url", body.media_url);
-    }
-
-    const { data: recentDuplicate, error: duplicateError } = await duplicateQuery
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (duplicateError) {
-      console.error("Duplicate check failed:", duplicateError);
-    }
-
-    if (recentDuplicate) {
-      console.log(
-        "Envio ignorado por duplicidade:",
-        JSON.stringify({
-          step: step.id,
-          lead: lead.id,
-          original: recentDuplicate.id,
-          content: expectedLogContent,
-          media_url: body.media_url || null,
-        }),
-      );
-      return true;
-    }
-  }
-
   console.log("Sending message for step:", step.id, JSON.stringify(body));
 
   const sendRes = await fetch(`${supabaseUrl}/functions/v1/whatsapp-cloud-send`, {
@@ -646,8 +635,9 @@ async function evaluateNoResponseConditions(
       .from("lead_labels")
       .select("label_id")
       .eq("lead_id", lead?.id);
-    leadLabelIds = (data || []).map((r: any) => r.label_id);
-    return leadLabelIds;
+    const ids = (data || []).map((r: any) => r.label_id as string);
+    leadLabelIds = ids;
+    return ids;
   };
 
   for (const cond of conditions) {
