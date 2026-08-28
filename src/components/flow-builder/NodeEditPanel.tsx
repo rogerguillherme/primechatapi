@@ -10,6 +10,8 @@ import { AudioRecorder } from "@/components/AudioRecorder";
 import { useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useTeamContext } from "@/hooks/use-team";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface NodeEditPanelProps {
   node: Node;
@@ -411,9 +413,47 @@ function StepLabelsField({
   onChange: (ids: string[]) => void;
 }) {
   const { labels, isLoading } = useChatLabels();
+  const { data: team } = useTeamContext();
+  const queryClient = useQueryClient();
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newColor, setNewColor] = useState("#6366f1");
+  const [saving, setSaving] = useState(false);
 
   const toggle = (id: string) => {
     onChange(selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id]);
+  };
+
+  /** Cria a etiqueta na conta (dono) e já a marca neste passo do fluxo. */
+  const createLabel = async () => {
+    const name = newName.trim();
+    if (!name) {
+      toast.error("Informe o nome da etiqueta");
+      return;
+    }
+    setSaving(true);
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const userId = auth?.user?.id;
+      if (!userId) throw new Error("Sessão expirada");
+
+      const { data, error } = await supabase
+        .from("chat_labels")
+        .insert({ name, color: newColor, user_id: team?.ownerId ?? userId })
+        .select("id")
+        .single();
+      if (error) throw error;
+
+      await queryClient.invalidateQueries({ queryKey: ["chat-labels"] });
+      if (data?.id) onChange([...selected, data.id]);
+      toast.success("Etiqueta criada");
+      setNewName("");
+      setCreating(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao criar etiqueta");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -423,7 +463,7 @@ function StepLabelsField({
         <p className="text-[11px] text-muted-foreground">Carregando etiquetas...</p>
       ) : labels.length === 0 ? (
         <p className="text-[11px] text-muted-foreground">
-          Nenhuma etiqueta criada ainda. Crie etiquetas nas configurações do chat.
+          Nenhuma etiqueta criada ainda. Crie a primeira abaixo.
         </p>
       ) : (
         <div className="flex flex-wrap gap-1.5">
@@ -449,12 +489,66 @@ function StepLabelsField({
           })}
         </div>
       )}
+
+      {creating ? (
+        <div className="space-y-2 rounded-md border border-border p-2">
+          <Input
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="Nome da etiqueta"
+            className="h-8 text-sm"
+            maxLength={40}
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void createLabel();
+              }
+            }}
+          />
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              value={newColor}
+              onChange={(e) => setNewColor(e.target.value)}
+              className="h-8 w-10 rounded border border-input bg-background p-0.5"
+              aria-label="Cor da etiqueta"
+            />
+            <Button size="sm" className="h-8 text-xs" disabled={saving} onClick={() => void createLabel()}>
+              {saving ? <Loader2 size={12} className="animate-spin" /> : "Criar"}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 text-xs"
+              disabled={saving}
+              onClick={() => {
+                setCreating(false);
+                setNewName("");
+              }}
+            >
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-8 gap-1.5 text-xs"
+          onClick={() => setCreating(true)}
+        >
+          <Plus size={12} /> Nova etiqueta
+        </Button>
+      )}
+
       <p className="text-[11px] text-muted-foreground">
         Útil para acompanhar por quais etapas do fluxo cada lead passou.
       </p>
     </div>
   );
 }
+
 
 function AiAgentFields({ data, onUpdate }: { data: Record<string, unknown>; onUpdate: (d: Record<string, unknown>) => void }) {
   const { agents, isLoading } = useAiAgents();
