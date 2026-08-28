@@ -691,19 +691,31 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
   const sendMutation = useMutation({
     mutationFn: async ({ text, mediaUrl, mediaType }: { text?: string; mediaUrl?: string; mediaType?: string }) => {
       if (!selectedLead) throw new Error("No lead selected");
+      // `zapi_message_id` guarda o ID da mensagem na Meta — necessário para citar (context).
+      const replyToId: string | null = replyTo?.zapi_message_id || null;
       const { data, error } = await supabase.functions.invoke("whatsapp-cloud-send", {
-        body: { phone: selectedLead.phone, message: text || "", lead_id: selectedLead.id, media_url: mediaUrl, media_type: mediaType, account_id: selectedAccountId },
+        body: {
+          phone: selectedLead.phone,
+          message: text || "",
+          lead_id: selectedLead.id,
+          media_url: mediaUrl,
+          media_type: mediaType,
+          account_id: selectedAccountId,
+          reply_to_message_id: replyToId,
+        },
       });
       if (error) throw error;
       return data;
     },
     onSuccess: () => {
       setMessage("");
+      setReplyTo(null);
       queryClient.invalidateQueries({ queryKey: ["chat-messages", selectedLeadId] });
       queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
     },
     onError: (err: any) => toast.error(err.message),
   });
+
 
   const uploadAndSendMedia = useCallback(async (file: File) => {
     if (!selectedLead) return;
