@@ -37,6 +37,9 @@ interface KanbanLead {
   last_message_at: string | null;
 }
 
+/** Valor sentinela do filtro: leads sem responsável. */
+const UNASSIGNED = "__sem_dono__";
+
 const STAGE_COLORS = ["#6366f1", "#0ea5e9", "#22c55e", "#f59e0b", "#ef4444", "#a855f7", "#14b8a6"];
 
 // Colunas iniciais espelham as etapas do chat, para que os dois módulos falem
@@ -68,6 +71,9 @@ export function LeadsKanban() {
   const [stageDialogOpen, setStageDialogOpen] = useState(false);
   const [editingStage, setEditingStage] = useState<Stage | null>(null);
   const [stageForm, setStageForm] = useState({ name: "", color: STAGE_COLORS[0] });
+  // Filtro por vendedor. "" = todos; SEM_DONO = leads sem responsável, que é
+  // o recorte que mais interessa a quem administra.
+  const [filterAgentId, setFilterAgentId] = useState<string>("");
   const [draggingLeadId, setDraggingLeadId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
 
@@ -88,7 +94,7 @@ export function LeadsKanban() {
   const stageKey = stages.map((s) => s.id).join(",");
 
   const { data: columnData, isLoading: leadsLoading } = useQuery<Record<string, ColumnData>>({
-    queryKey: ["kanban-columns", ownerId, stageKey],
+    queryKey: ["kanban-columns", ownerId, stageKey, filterAgentId],
     enabled: !!ownerId && !stagesLoading,
     staleTime: 30_000,
     queryFn: async () => {
@@ -107,6 +113,10 @@ export function LeadsKanban() {
               })
               .eq("user_id", ownerId!);
             q = stageId ? q.eq("stage_id", stageId) : q.is("stage_id", null);
+            // Filtra no banco, não na tela: o contador de cada coluna e o
+            // recorte de cartões vêm da própria consulta.
+            if (filterAgentId === UNASSIGNED) q = q.is("assigned_to", null);
+            else if (filterAgentId) q = q.eq("assigned_to", filterAgentId);
             return q;
           };
 
@@ -262,6 +272,23 @@ export function LeadsKanban() {
 
           </div>
         </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {members.length > 0 && (
+            <select
+              value={filterAgentId}
+              onChange={(e) => setFilterAgentId(e.target.value)}
+              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+              aria-label="Filtrar por vendedor"
+            >
+              <option value="">Todos os vendedores</option>
+              <option value={UNASSIGNED}>Sem responsável</option>
+              {members.map((m) => (
+                <option key={m.member_user_id} value={m.member_user_id}>
+                  {m.display_name || m.email}
+                </option>
+              ))}
+            </select>
+          )}
         {canManageStages && (
           <div className="flex gap-2">
             {stages.length === 0 && (
@@ -286,6 +313,7 @@ export function LeadsKanban() {
             </Button>
           </div>
         )}
+        </div>
       </div>
 
       {stages.length === 0 ? (

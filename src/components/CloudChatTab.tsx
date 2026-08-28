@@ -34,6 +34,9 @@ import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 
+/** Valor sentinela do filtro por vendedor: conversas sem responsável. */
+const UNASSIGNED_AGENT = "__sem_dono__";
+
 type ChatTab = "aguardando_respostas" | "respondidas" | "erro";
 type AiMode = "off" | "all" | "selected";
 
@@ -84,6 +87,8 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [filterAccountId, setFilterAccountId] = useState<string | null>(null);
   const [filterLabelIds, setFilterLabelIds] = useState<Set<string>>(new Set());
+  // "" = todos os vendedores; UNASSIGNED_AGENT = conversas sem responsável.
+  const [filterAgentId, setFilterAgentId] = useState<string>("");
   const [showLabelFilter, setShowLabelFilter] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -787,6 +792,11 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
       }
       if (s && !l.name.toLowerCase().includes(s) && !l.phone.includes(s) && !l.email?.toLowerCase().includes(s)) return false;
       if (filterAccountId && !leadAccountMap?.get(filterAccountId)?.has(l.id)) return false;
+      if (filterAgentId === UNASSIGNED_AGENT) {
+        if (l.assigned_to) return false;
+      } else if (filterAgentId && l.assigned_to !== filterAgentId) {
+        return false;
+      }
       if (filterLabelIds.size > 0) {
         const leadLbls = leadLabelsMap?.get(l.id);
         if (!leadLbls) return false;
@@ -800,7 +810,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
       seen.add(key);
       return true;
     });
-  }, [leads, search, activeTab, filterAccountId, leadAccountMap, filterLabelIds, leadLabelsMap, failedLeadIds]);
+  }, [leads, search, activeTab, filterAccountId, filterAgentId, leadAccountMap, filterLabelIds, leadLabelsMap, failedLeadIds]);
 
   const tabCounts = useMemo(() => {
     if (!leads) return {} as Record<string, number>;
@@ -835,7 +845,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
   const [visibleCount, setVisibleCount] = useState(PAGE);
   useEffect(() => {
     setVisibleCount(PAGE);
-  }, [search, activeTab, filterAccountId, filterLabelIds]);
+  }, [search, activeTab, filterAccountId, filterAgentId, filterLabelIds]);
   const visibleLeads = useMemo(() => sortedLeads.slice(0, visibleCount), [sortedLeads, visibleCount]);
 
 
@@ -902,6 +912,20 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                 <option value="">Todos os números</option>
                 {accounts.map((a) => (
                   <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+            )}
+            {agents.length > 1 && (
+              <select
+                value={filterAgentId}
+                onChange={(e) => setFilterAgentId(e.target.value)}
+                className="flex-1 rounded-md border border-input bg-background px-2 py-1 text-xs"
+                aria-label="Filtrar por vendedor"
+              >
+                <option value="">Todos os vendedores</option>
+                <option value={UNASSIGNED_AGENT}>Sem responsável</option>
+                {agents.map((a) => (
+                  <option key={a.id} value={a.id}>{a.label}</option>
                 ))}
               </select>
             )}
