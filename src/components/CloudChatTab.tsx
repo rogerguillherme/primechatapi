@@ -904,6 +904,80 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
     return format(d, "dd/MM/yy");
   };
 
+  /** Horário completo da última mensagem enviada (outbound) para o lead. */
+  const formatLastOutbound = (dateStr: string) => {
+    const d = new Date(dateStr);
+    if (isToday(d)) return `Enviado hoje ${format(d, "HH:mm")}`;
+    if (isYesterday(d)) return `Enviado ontem ${format(d, "HH:mm")}`;
+    return `Enviado ${format(d, "dd/MM/yy HH:mm")}`;
+  };
+
+  // ---- Marcação local de "não lido" -------------------------------------
+  const [unreadIds, setUnreadIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      const raw = localStorage.getItem(UNREAD_KEY(user.id));
+      setUnreadIds(new Set(raw ? (JSON.parse(raw) as string[]) : []));
+    } catch {
+      setUnreadIds(new Set());
+    }
+  }, [user?.id]);
+
+  const persistUnread = useCallback(
+    (next: Set<string>) => {
+      setUnreadIds(next);
+      if (!user?.id) return;
+      try {
+        localStorage.setItem(UNREAD_KEY(user.id), JSON.stringify([...next]));
+      } catch {
+        /* storage cheio/indisponível — marcação segue apenas em memória */
+      }
+    },
+    [user?.id]
+  );
+
+  const toggleUnread = useCallback(
+    (leadId: string) => {
+      const next = new Set(unreadIds);
+      if (next.has(leadId)) {
+        next.delete(leadId);
+      } else {
+        next.add(leadId);
+        if (selectedLeadId === leadId) setSelectedLeadId(null);
+      }
+      persistUnread(next);
+    },
+    [unreadIds, persistUnread, selectedLeadId]
+  );
+
+  // Abrir a conversa limpa a marcação manual de não lido.
+  useEffect(() => {
+    if (!selectedLeadId || !unreadIds.has(selectedLeadId)) return;
+    const next = new Set(unreadIds);
+    next.delete(selectedLeadId);
+    persistUnread(next);
+  }, [selectedLeadId, unreadIds, persistUnread]);
+
+  // ---- Finalizar conversa ----------------------------------------------
+  const finalizeLead = useMutation({
+    mutationFn: async ({ leadId, done }: { leadId: string; done: boolean }) => {
+      const { error } = await supabase
+        .from("leads")
+        .update({ chat_status: done ? "finalizado" : "respondidas" })
+        .eq("id", leadId);
+      if (error) throw error;
+      return done;
+    },
+    onSuccess: (done, { leadId }) => {
+      if (done && selectedLeadId === leadId) setSelectedLeadId(null);
+      queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
+      toast.success(done ? "Conversa finalizada" : "Conversa reaberta");
+    },
+    onError: (e: any) => toast.error(e?.message || "Não foi possível atualizar a conversa"),
+  });
+
   const toggleLabelFilter = (labelId: string) => {
     setFilterLabelIds((prev) => {
       const next = new Set(prev);
