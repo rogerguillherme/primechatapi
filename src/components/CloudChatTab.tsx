@@ -1410,8 +1410,8 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                     <Workflow size={18} />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-64 max-h-[70vh] overflow-hidden p-0">
-                  <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                <DropdownMenuContent align="end" className="w-80 max-h-[80vh] overflow-hidden p-0">
+                  <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
                     {isPaused
                       ? "Fluxo pausado"
                       : runningExecution
@@ -1419,21 +1419,24 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                         : "Iniciar fluxo nesta conversa"}
                   </div>
                   {(flows || []).length === 0 && (
-                    <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                    <div className="px-3 py-3 text-sm text-muted-foreground">
                       Nenhum fluxo criado ainda. Monte um no Flow Builder.
                     </div>
                   )}
                   {/* Lista rolável: com muitos fluxos o menu não estoura a tela
                       e as ações (pausar/parar) continuam sempre visíveis. */}
-                  <div className="max-h-64 overflow-y-auto overscroll-contain px-1">
+                  <div className="max-h-[26rem] overflow-y-auto overscroll-contain px-1 py-1">
                     {(flows || []).map((flow: any) => (
                       <DropdownMenuItem
                         key={flow.id}
                         onClick={() => startFlow.mutate(flow.id)}
-                        className="gap-2"
+                        className="gap-2.5 py-2.5 text-sm"
                       >
-                        <Workflow size={14} className="opacity-60 shrink-0" />
-                        <span className="flex-1 truncate">{flow.name}</span>
+                        <Workflow size={15} className="opacity-60 shrink-0" />
+                        {/* Nome inteiro em até duas linhas: fluxo costuma ter
+                            nome descritivo, e cortar no meio esconde
+                            justamente o que diferencia um do outro. */}
+                        <span className="flex-1 leading-snug line-clamp-2">{flow.name}</span>
                         {!flow.active && (
                           <span className="text-[10px] text-muted-foreground shrink-0">inativo</span>
                         )}
