@@ -48,7 +48,6 @@ import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 const FlowBuilder = lazy(() => import("@/components/FlowBuilder").then((m) => ({ default: m.FlowBuilder })));
 import { TemplateManager } from "@/components/TemplateManager";
-import { EvolutionBroadcastTab } from "@/components/EvolutionBroadcastTab";
 import QRCodeLib from "qrcode";
 
 // Converte o retorno do Evolution em um data-url renderizável.
@@ -80,21 +79,26 @@ const CampaignAnalytics = lazy(() => import("@/components/CampaignAnalytics").th
 const OrdersPage = lazy(() => import("@/pages/Orders"));
 const AbandonedCarts = lazy(() => import("@/components/sales/AbandonedCarts").then((m) => ({ default: m.AbandonedCarts })));
 const SalesImporter = lazy(() => import("@/components/sales/SalesImporter").then((m) => ({ default: m.SalesImporter })));
+
+// Abas pesadas fora do primeiro carregamento: a tela abre em "home", e
+// trazer chat, kanban, agente e financeiro junto custava ~930 KB a todo mundo.
+const EvolutionBroadcastTab = lazy(() => import("@/components/EvolutionBroadcastTab").then((m) => ({ default: m.EvolutionBroadcastTab })));
+const WebhookEndpoints = lazy(() => import("@/components/WebhookEndpoints").then((m) => ({ default: m.WebhookEndpoints })));
+const AiAssistantSettings = lazy(() => import("@/components/AiAssistantSettings").then((m) => ({ default: m.AiAssistantSettings })));
+const VoiceStudio = lazy(() => import("@/components/VoiceStudio").then((m) => ({ default: m.VoiceStudio })));
+const AiAgentConfig = lazy(() => import("@/components/AiAgentConfig").then((m) => ({ default: m.AiAgentConfig })));
+const FinancialTab = lazy(() => import("@/components/FinancialTab").then((m) => ({ default: m.FinancialTab })));
+const MetritoTab = lazy(() => import("@/components/MetritoTab").then((m) => ({ default: m.MetritoTab })));
+const CloudChatTab = lazy(() => import("@/components/CloudChatTab").then((m) => ({ default: m.CloudChatTab })));
+const LeadsKanban = lazy(() => import("@/components/kanban/LeadsKanban").then((m) => ({ default: m.LeadsKanban })));
 const RefundsPage = lazy(() => import("@/pages/Refunds"));
 const ProductsPage = lazy(() => import("@/pages/Products"));
 const ItemsPage = lazy(() => import("@/pages/Items"));
 const ExpirationsPage = lazy(() => import("@/pages/Expirations"));
 import { TemplateAccountBar } from "@/components/TemplateAccountBar";
-import { WebhookEndpoints } from "@/components/WebhookEndpoints";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 import { useUserTemplates } from "@/hooks/use-user-templates";
 import { AccountSelector } from "@/components/AccountSelector";
-import { AiAssistantSettings } from "@/components/AiAssistantSettings";
-import { VoiceStudio } from "@/components/VoiceStudio";
-import { AiAgentConfig } from "@/components/AiAgentConfig";
-import { FinancialTab } from "@/components/FinancialTab";
-import { MetritoTab } from "@/components/MetritoTab";
-import { CloudChatTab } from "@/components/CloudChatTab";
 import { DashboardHome } from "@/pages/DashboardHome";
 import { HomeViewSetting } from "@/components/settings/HomeViewSetting";
 import { LeadDistributionSettings } from "@/components/settings/LeadDistributionSettings";
@@ -105,7 +109,6 @@ import { ChatShortcutsSettings } from "@/components/settings/ChatShortcutsSettin
 import { MetritoSettings } from "@/components/settings/MetritoSettings";
 
 import { TemplateStudio } from "@/components/templates/TemplateStudio";
-import { LeadsKanban } from "@/components/kanban/LeadsKanban";
 import { TeamManagement } from "@/components/team/TeamManagement";
 
 const isUnauthorizedFunctionError = (error: unknown) =>
@@ -1315,7 +1318,7 @@ function BroadcastTab() {
         </TabsContent>
 
         <TabsContent value="whatsapp" className="mt-4">
-          <EvolutionBroadcastTab />
+          <Suspense fallback={<TabFallback />}><EvolutionBroadcastTab /></Suspense>
         </TabsContent>
 
 
@@ -3065,7 +3068,7 @@ export default function WhatsAppApi() {
         </TabsContent>
 
         <TabsContent value="kanban" className="flex-1 overflow-hidden m-0 p-6">
-          <LeadsKanban />
+          <Suspense fallback={<TabFallback />}><LeadsKanban /></Suspense>
         </TabsContent>
 
         {/* ── Team Tab ── */}
@@ -3078,11 +3081,11 @@ export default function WhatsAppApi() {
         {/* ── Webhook Tab (Event Webhooks) ── */}
         {/* ── Chat Tab ── */}
         <TabsContent value="chat" className="flex-1 overflow-hidden m-0 p-0">
-          <CloudChatTab onConversationChange={setChatConversationOpen} />
+          <Suspense fallback={<TabFallback />}><CloudChatTab onConversationChange={setChatConversationOpen} /></Suspense>
         </TabsContent>
 
         <TabsContent value="webhook" className="space-y-4 p-4 sm:p-6 max-w-6xl overflow-y-auto flex-1 m-0">
-          <WebhookEndpoints onCreateFlow={handleCreateFlowFromWebhook} onSelectFlow={handleSelectFlowFromWebhook} />
+          <Suspense fallback={<TabFallback />}><WebhookEndpoints onCreateFlow={handleCreateFlowFromWebhook} onSelectFlow={handleSelectFlowFromWebhook} /></Suspense>
         </TabsContent>
 
 
@@ -3125,26 +3128,26 @@ export default function WhatsAppApi() {
 
         {/* ── AI Assistant Tab ── */}
         <TabsContent value="ai-assistant" className="space-y-4 p-4 sm:p-6 max-w-6xl overflow-y-auto flex-1 m-0">
-          <AiAssistantSettings />
+          <Suspense fallback={<TabFallback />}><AiAssistantSettings /></Suspense>
         </TabsContent>
         {/* ── Voice Studio Tab ── */}
         <TabsContent value="voice-studio" className="space-y-4 p-4 sm:p-6 max-w-6xl overflow-y-auto flex-1 m-0">
-          <VoiceStudio />
+          <Suspense fallback={<TabFallback />}><VoiceStudio /></Suspense>
         </TabsContent>
 
         {/* ── AI Agent Tab ── */}
         <TabsContent value="ai-agent" className="space-y-4 p-4 sm:p-6 max-w-6xl overflow-y-auto flex-1 m-0">
-          <AiAgentConfig />
+          <Suspense fallback={<TabFallback />}><AiAgentConfig /></Suspense>
         </TabsContent>
 
         {/* ── Financial Tab ── */}
         <TabsContent value="financial" className="space-y-4 p-4 sm:p-6 max-w-6xl overflow-y-auto flex-1 m-0">
-          <FinancialTab />
+          <Suspense fallback={<TabFallback />}><FinancialTab /></Suspense>
         </TabsContent>
 
         {/* ── Metrito (tráfego pago) Tab ── */}
         <TabsContent value="metrito" className="space-y-4 p-4 sm:p-6 max-w-6xl overflow-y-auto flex-1 m-0">
-          <MetritoTab />
+          <Suspense fallback={<TabFallback />}><MetritoTab /></Suspense>
         </TabsContent>
 
         {/* ── Vendas ── telas que já existiam e estavam inacessíveis ── */}
