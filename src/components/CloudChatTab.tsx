@@ -1452,7 +1452,17 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                       const prevMsg = mi > 0 ? group.messages[mi - 1] : null;
                       const showTail = !prevMsg || prevMsg.direction !== msg.direction;
                       return (
-                        <div key={msg.id} className={cn("flex mb-[2px]", isOutbound ? "justify-end" : "justify-start", showTail && "mt-2")}>
+                        <div key={msg.id} className={cn("group flex mb-[2px] items-center gap-1", isOutbound ? "justify-end" : "justify-start", showTail && "mt-2")}>
+                          {isOutbound && (
+                            <button
+                              type="button"
+                              title="Responder"
+                              onClick={() => { setReplyTo(msg); textareaRef.current?.focus(); }}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-accent text-muted-foreground"
+                            >
+                              <Reply size={15} />
+                            </button>
+                          )}
                           <div className={cn(
                             "relative max-w-[65%] px-[9px] pt-[6px] pb-2 text-sm leading-[19px] shadow-sm rounded-lg",
                             isOutbound ? "bg-primary/10 text-foreground" : "bg-card text-foreground",
@@ -1475,8 +1485,19 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                               {isOutbound && <StatusIcon status={msg.status} />}
                             </span>
                           </div>
+                          {!isOutbound && (
+                            <button
+                              type="button"
+                              title="Responder"
+                              onClick={() => { setReplyTo(msg); textareaRef.current?.focus(); }}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-accent text-muted-foreground"
+                            >
+                              <Reply size={15} />
+                            </button>
+                          )}
                         </div>
                       );
+
                     })}
                   </div>
                 ))}
