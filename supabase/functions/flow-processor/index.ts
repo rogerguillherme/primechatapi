@@ -826,11 +826,22 @@ async function advanceToNextStep(
       updated_at: new Date().toISOString(),
     }).eq("id", exec.id);
   } else if (nextStep.step_type === "no_response") {
-    const timeoutMin = nextStep.timeout_minutes || 10;
+    // Com várias condições, a primeira checagem acontece no menor tempo
+    // configurado; as demais são reagendadas conforme forem vencendo.
+    const conds = Array.isArray(nextStep.no_response_conditions)
+      ? nextStep.no_response_conditions.filter((c: any) => c && c.key)
+      : [];
+    const condTimeouts = conds
+      .map((c: any) => Math.max(0, Number(c.timeout_minutes) || 0))
+      .sort((a: number, b: number) => a - b);
+    const timeoutMin = condTimeouts.length > 0
+      ? (condTimeouts[0] || 1)
+      : (nextStep.timeout_minutes || 10);
+    const startedAt = new Date().toISOString();
     await supabase.from("flow_executions").update({
       current_step_id: nextStep.id,
       status: "waiting_no_response",
-      metadata: clearedMetadata,
+      metadata: { ...clearedMetadata, no_response_started_at: startedAt },
       next_action_at: new Date(Date.now() + timeoutMin * 60 * 1000).toISOString(),
       updated_at: new Date().toISOString(),
     }).eq("id", exec.id);
