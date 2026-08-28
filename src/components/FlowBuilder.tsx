@@ -13,9 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
-  Plus, Trash2, GitBranch, ChevronRight, Play, Pause, ArrowLeft, Save,
-  Sparkles, Send, Loader2, Bot, X, MessageCircle, Code2, Settings2, Copy,
-  Paperclip, FileText,
+  Plus, Trash2, GitBranch, ChevronRight, Play, Pause, ArrowLeft, Save, Sparkles, Send, Loader2, Bot, X, MessageCircle, Code2, Settings2, Copy, Paperclip, FileText, ChevronUp, ChevronDown,
 } from "lucide-react";
 import {
   extractFlowDocument, ACCEPT_ATTR, type ExtractedAttachment,
@@ -118,7 +116,9 @@ function FlowListView({ onEdit }: { onEdit: (flow: Flow | null, kind?: FlowKind)
       const { data } = await supabase
         .from("flows")
         .select("*")
-        .order("created_at", { ascending: false });
+        // Ordem escolhida pelo usuário; nome só desempata.
+        .order("position", { ascending: true })
+        .order("name", { ascending: true });
       return (data || []) as Flow[];
     },
   });
@@ -133,6 +133,35 @@ function FlowListView({ onEdit }: { onEdit: (flow: Flow | null, kind?: FlowKind)
       }
       return counts;
     },
+  });
+
+  /** Troca de lugar com o vizinho. Grava as duas posições de uma vez para a
+   *  lista não piscar num estado intermediário. */
+  const moveFlow = useMutation({
+    mutationFn: async ({ flow, direcao }: { flow: Flow; direcao: -1 | 1 }) => {
+      const lista = filteredFlows;
+      const i = lista.findIndex((f) => f.id === flow.id);
+      const vizinho = lista[i + direcao];
+      if (!vizinho) return;
+
+      const posAtual = (flow as any).position ?? i + 1;
+      const posVizinho = (vizinho as any).position ?? i + 1 + direcao;
+
+      // `as any`: os tipos do Supabase são gerados a partir do banco e só
+      // conhecerão `position` depois que a migration for aplicada.
+      const [r1, r2] = await Promise.all([
+        (supabase as any).from("flows").update({ position: posVizinho }).eq("id", flow.id),
+        (supabase as any).from("flows").update({ position: posAtual }).eq("id", vizinho.id),
+      ]);
+      if (r1.error) throw r1.error;
+      if (r2.error) throw r2.error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["flows"] });
+      // A lista suspensa do chat lê a mesma ordem.
+      queryClient.invalidateQueries({ queryKey: ["chat-flows-all"] });
+    },
+    onError: (e: any) => toast.error(e?.message || "Não foi possível reordenar"),
   });
 
   const toggleActive = useMutation({
@@ -250,6 +279,28 @@ function FlowListView({ onEdit }: { onEdit: (flow: Flow | null, kind?: FlowKind)
               </p>
             </div>
             <div className="flex items-center gap-1">
+              <div className="flex flex-col">
+                <button
+                  type="button"
+                  title="Subir na lista"
+                  aria-label={`Subir ${flow.name}`}
+                  disabled={moveFlow.isPending || filteredFlows[0]?.id === flow.id}
+                  onClick={() => moveFlow.mutate({ flow, direcao: -1 })}
+                  className="p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-25"
+                >
+                  <ChevronUp size={14} />
+                </button>
+                <button
+                  type="button"
+                  title="Descer na lista"
+                  aria-label={`Descer ${flow.name}`}
+                  disabled={moveFlow.isPending || filteredFlows[filteredFlows.length - 1]?.id === flow.id}
+                  onClick={() => moveFlow.mutate({ flow, direcao: 1 })}
+                  className="p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-25"
+                >
+                  <ChevronDown size={14} />
+                </button>
+              </div>
               <Button
                 variant="ghost" size="icon" className="h-8 w-8"
                 onClick={() => toggleActive.mutate({ id: flow.id, active: !flow.active })}

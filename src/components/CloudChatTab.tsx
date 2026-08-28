@@ -541,11 +541,14 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
   const { data: flows } = useQuery({
     queryKey: ["chat-flows-all"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // `as any` até os tipos serem regerados com a coluna `position`.
+      const { data, error } = await (supabase as any)
         .from("flows")
-        .select("id, name, active")
-        .order("active", { ascending: false })
-        .order("name");
+        .select("id, name, active, position")
+        // Mesma ordem escolhida no construtor: quem monta define o que vem
+        // primeiro aqui.
+        .order("position", { ascending: true })
+        .order("name", { ascending: true });
       if (error) throw error;
       return data || [];
     },
