@@ -83,8 +83,19 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const BATCH_LIMIT = 40;
+    // Antes: 40 execuções processadas UMA POR VEZ. Um passo com áudio (upload
+    // + envio) segurava toda a fila atrás dele, e a invocação estourava o
+    // tempo antes de esvaziar o lote.
+    //
+    // Agora um punhado corre em paralelo. O limite é baixo de propósito: o
+    // gargalo real não é este processo, é a API da Meta e o limite de envio do
+    // número. Paralelismo alto aqui só troca "fila lenta" por "429 da Meta".
+    const CONCURRENCY = Math.max(1, Number(Deno.env.get("FLOW_CONCURRENCY") || 5));
+    const BATCH_LIMIT = 100;
     const POOL_LIMIT = 400;
+    // Para de reivindicar trabalho novo antes do teto da edge function, para
+    // não ser morto no meio de um envio já reivindicado.
+    const DEADLINE = Date.now() + 100_000;
     const now = new Date().toISOString();
 
     // Busca um pool maior e embaralha antes de processar. Isso reduz a
@@ -103,7 +114,17 @@ Deno.serve(async (req) => {
       const j = Math.floor(Math.random() * (i + 1));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
-    const readyExecutions = shuffled.slice(0, BATCH_LIMIT);
+    // Uma execução por lead nesta rodada. Duas correndo em paralelo para o
+    // mesmo contato entregariam as mensagens fora de ordem; a que sobrar é
+    // pega na próxima rodada, que vem logo em seguida.
+    const vistos = new Set<string>();
+    const readyExecutions: any[] = [];
+    for (const e of shuffled) {
+      if (vistos.has(e.lead_id)) continue;
+      vistos.add(e.lead_id);
+      readyExecutions.push(e);
+      if (readyExecutions.length >= BATCH_LIMIT) break;
+    }
 
 
     if (!readyExecutions || readyExecutions.length === 0) {
@@ -115,13 +136,13 @@ Deno.serve(async (req) => {
 
     let processed = 0;
  
-    for (const exec of readyExecutions) {
+    const processOne = async (exec: any) => {
       let claimed = false;
 
       try {
         claimed = await claimExecution(exec, supabase);
         if (!claimed) {
-          continue;
+          return;
         }
 
         const { data: lead } = await supabase
@@ -135,7 +156,7 @@ Deno.serve(async (req) => {
             status: "cancelled",
             updated_at: new Date().toISOString(),
           }).eq("id", exec.id);
-          continue;
+          return;
         }
 
         // Skip & cancel if lead opted out
@@ -145,7 +166,7 @@ Deno.serve(async (req) => {
             updated_at: new Date().toISOString(),
             metadata: { ...(exec.metadata || {}), cancel_reason: "lead_unsubscribed" },
           }).eq("id", exec.id);
-          continue;
+          return;
         }
 
 
@@ -155,7 +176,7 @@ Deno.serve(async (req) => {
             status: "completed",
             updated_at: new Date().toISOString(),
           }).eq("id", exec.id);
-          continue;
+          return;
         }
 
         let executionAccountId = typeof exec.metadata?.account_id === "string" && exec.metadata.account_id
@@ -229,13 +250,13 @@ Deno.serve(async (req) => {
         if (currentStep.step_type === "tag") {
           await advanceToNextStep(exec, currentStep, lead, supabase, supabaseUrl, supabaseKey, executionAccountId);
           processed++;
-          continue;
+          return;
         }
 
         if (currentStep.step_type === "no_response" || exec.status === "waiting_no_response") {
           await advanceToNextStep(exec, currentStep, lead, supabase, supabaseUrl, supabaseKey, executionAccountId);
           processed++;
-          continue;
+          return;
         }
 
         // BLACKLIST: add lead to blacklist and continue
@@ -262,7 +283,7 @@ Deno.serve(async (req) => {
 
           await advanceToNextStep(exec, currentStep, lead, supabase, supabaseUrl, supabaseKey, executionAccountId);
           processed++;
-          continue;
+          return;
         }
 
         if (
@@ -274,7 +295,7 @@ Deno.serve(async (req) => {
           if (!sent) {
             console.error("Failed to send message for execution:", exec.id);
             await requeueExecution(exec, supabase);
-            continue;
+            return;
           }
         }
 
@@ -290,7 +311,27 @@ Deno.serve(async (req) => {
           }
         }
       }
-    }
+    };
+
+    // Pool de trabalhadores: cada um puxa a próxima execução da lista até
+    // acabar ou o tempo apertar. A reivindicação já é atômica (update
+    // condicional em status + current_step_id), então rodar em paralelo não
+    // duplica envio — só deixa de esperar um lead para começar o próximo.
+    let cursor = 0;
+    const workers = Array.from(
+      { length: Math.min(CONCURRENCY, readyExecutions.length) },
+      async () => {
+        while (cursor < readyExecutions.length) {
+          if (Date.now() > DEADLINE) {
+            console.warn("[fluxo] tempo esgotado; o restante fica para a proxima rodada");
+            return;
+          }
+          const exec = readyExecutions[cursor++];
+          await processOne(exec);
+        }
+      },
+    );
+    await Promise.all(workers);
 
     const { data: moreReady } = await supabase
       .from("flow_executions")
