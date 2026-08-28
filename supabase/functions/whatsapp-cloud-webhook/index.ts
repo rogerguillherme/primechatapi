@@ -930,11 +930,21 @@ Deno.serve(async (req) => {
             .normalize("NFD")
             .replace(/[\u0300-\u036f]/g, "")
             .trim();
-          // Whole-word / phrase match. \b not reliable across accents, so use lookarounds.
-          const UNSUB_REGEX = /(^|[^a-z0-9])(sair|parar|pare|stop|unsubscribe|cancelar|cancela|remover|remove|descadastrar|descadastra|nao quero mais|nao quero|cancelar inscricao|sair da lista|remover da lista)([^a-z0-9]|$)/i;
-          const match = normalized.match(UNSUB_REGEX);
-          if (match) {
-            const keyword = match[2];
+          // IMPORTANT: only treat as opt-out when the WHOLE message is an opt-out
+          // command (e.g. "sair", "parar", "nao quero mais"). Substring matching
+          // caused false positives like "Estou doido pra sair de lá kkk".
+          const cleaned = normalized.replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+          const OPT_OUT_COMMANDS = [
+            "sair", "parar", "pare", "stop", "unsubscribe", "cancelar", "cancela",
+            "remover", "remove", "descadastrar", "descadastra", "nao quero mais",
+            "nao quero", "nao quero receber", "nao quero receber mais",
+            "cancelar inscricao", "sair da lista", "remover da lista",
+            "para de mandar", "pare de mandar", "me remove", "me remover",
+            "me tira da lista", "nao me mande mais mensagens",
+          ];
+          const keyword = OPT_OUT_COMMANDS.includes(cleaned) ? cleaned : null;
+          if (keyword) {
+
             console.log(`[unsubscribe] keyword "${keyword}" matched for lead ${lead.id}`);
 
             // 1. Mark lead as unsubscribed (idempotent)
