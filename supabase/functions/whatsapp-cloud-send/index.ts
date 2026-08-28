@@ -326,7 +326,7 @@ Deno.serve(async (req) => {
 
     const body_payload = await req.json();
     console.log("whatsapp-cloud-send received request:", JSON.stringify(body_payload));
-    const { phone, message, lead_id, media_url, media_type, template_name, template_language, template_params, interactive_buttons, cta_url, account_id, file_name } = body_payload;
+    const { phone, message, lead_id, media_url, media_type, template_name, template_language, template_params, interactive_buttons, cta_url, account_id, file_name, reply_to_message_id } = body_payload;
 
     if (!phone || (!message && !media_url && !template_name && !interactive_buttons && !cta_url)) {
       return new Response(
