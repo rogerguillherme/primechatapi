@@ -49,7 +49,7 @@ const CHAT_TABS: { value: ChatTab; label: string; icon: React.ReactNode }[] = [
 ];
 
 /** Marcações locais de "não lido" (por usuário, neste navegador). */
-const UNREAD_KEY = (userId: string) => `chat-unread-${userId}`;
+
 
 function getAvatarColor(name: string) {
   const colors = ["bg-emerald-600", "bg-violet-600", "bg-amber-600", "bg-rose-600", "bg-cyan-600", "bg-indigo-600"];
