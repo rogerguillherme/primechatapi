@@ -600,6 +600,106 @@ async function sendStepMessage(
   return true;
 }
 
+type NoResponseCondition = {
+  key?: string;
+  type?: string;
+  timeout_minutes?: number;
+  label_id?: string | null;
+};
+
+type NoResponseOutcome =
+  | { kind: "advance"; branchKey: string | null }
+  | { kind: "requeue"; nextActionAt: string };
+
+/**
+ * Avalia as condições configuradas em um passo "Sem Resposta".
+ *
+ * Cada condição descreve um cenário e aponta para um ramo do fluxo (o ramo é
+ * o passo filho cujo `trigger_value` é igual à chave da condição). As condições
+ * são avaliadas na ordem em que o usuário as montou: a primeira que bater vence.
+ * Sem condições configuradas o comportamento antigo é mantido (segue em frente).
+ */
+async function evaluateNoResponseConditions(
+  exec: any,
+  step: any,
+  lead: any,
+  supabase: any,
+): Promise<NoResponseOutcome> {
+  const raw = Array.isArray(step?.no_response_conditions) ? step.no_response_conditions : [];
+  const conditions = raw.filter((c: NoResponseCondition) => c && c.key) as NoResponseCondition[];
+  if (conditions.length === 0) return { kind: "advance", branchKey: null };
+
+  const startedAtIso: string =
+    exec?.metadata?.no_response_started_at || exec?.updated_at || new Date().toISOString();
+  const startedAt = new Date(startedAtIso).getTime();
+  const elapsedMin = Math.max(0, (Date.now() - startedAt) / 60000);
+
+  const repliedAfterStart =
+    !!lead?.last_inbound_at && new Date(lead.last_inbound_at).getTime() > startedAt;
+
+  // Etiquetas do lead só são buscadas quando alguma condição realmente precisa.
+  let leadLabelIds: string[] | null = null;
+  const loadLeadLabels = async (): Promise<string[]> => {
+    if (leadLabelIds) return leadLabelIds;
+    const { data } = await supabase
+      .from("lead_labels")
+      .select("label_id")
+      .eq("lead_id", lead?.id);
+    leadLabelIds = (data || []).map((r: any) => r.label_id);
+    return leadLabelIds;
+  };
+
+  for (const cond of conditions) {
+    const waitMin = Math.max(0, Number(cond.timeout_minutes) || 0);
+    const waited = elapsedMin >= waitMin;
+
+    switch (cond.type) {
+      case "replied_late":
+        if (waited && repliedAfterStart) return { kind: "advance", branchKey: cond.key! };
+        break;
+      case "has_label": {
+        if (!waited) break;
+        const labels = await loadLeadLabels();
+        if (cond.label_id && labels.includes(cond.label_id)) {
+          return { kind: "advance", branchKey: cond.key! };
+        }
+        break;
+      }
+      case "no_label": {
+        if (!waited) break;
+        const labels = await loadLeadLabels();
+        if (cond.label_id && !labels.includes(cond.label_id)) {
+          return { kind: "advance", branchKey: cond.key! };
+        }
+        break;
+      }
+      case "else":
+        if (waited) return { kind: "advance", branchKey: cond.key! };
+        break;
+      case "timeout":
+      default:
+        // Não respondeu nada dentro do tempo configurado.
+        if (waited && !repliedAfterStart) return { kind: "advance", branchKey: cond.key! };
+        break;
+    }
+  }
+
+  // Nada bateu: se ainda existe condição com tempo de espera maior, aguarda.
+  const pending = conditions
+    .map((c) => Math.max(0, Number(c.timeout_minutes) || 0))
+    .filter((min) => min > elapsedMin)
+    .sort((a, b) => a - b)[0];
+
+  if (pending !== undefined) {
+    return {
+      kind: "requeue",
+      nextActionAt: new Date(startedAt + pending * 60 * 1000).toISOString(),
+    };
+  }
+
+  return { kind: "advance", branchKey: null };
+}
+
 async function advanceToNextStep(
   exec: any,
   currentStep: any,
@@ -608,6 +708,7 @@ async function advanceToNextStep(
   supabaseUrl: string,
   supabaseKey: string,
   accountId?: string | null,
+  branchKey?: string | null,
 ) {
   let nextStep: any = null;
 
@@ -616,6 +717,7 @@ async function advanceToNextStep(
   // `failed` no 5º passo processado (normalmente no meio dos áudios), mesmo
   // com todos os envios bem-sucedidos. Zeramos a cada avanço.
   const clearedMetadata = { ...(exec.metadata || {}), send_attempts: 0 };
+  delete (clearedMetadata as any).no_response_started_at;
 
   const { data: childSteps } = await supabase
     .from("flow_steps")
@@ -623,6 +725,18 @@ async function advanceToNextStep(
     .eq("flow_id", exec.flow_id)
     .eq("parent_step_id", currentStep.id)
     .order("step_order");
+
+  // Ramo escolhido por uma condição de "sem resposta": o filho é identificado
+  // pela chave da condição gravada em `trigger_value`.
+  if (branchKey && childSteps && childSteps.length > 0) {
+    const branchChild =
+      childSteps.find((c: any) => c.trigger_value === branchKey) ||
+      childSteps.find((c: any) => !c.trigger_value);
+    if (branchChild) {
+      nextStep = branchChild;
+      childSteps.length = 0;
+    }
+  }
 
   if (childSteps && childSteps.length > 0) {
     if (
