@@ -20,6 +20,7 @@ import {
   MoreVertical, ArrowLeft, Paperclip, Clock, MessageCircleReply,
   ShoppingBag, RotateCcw, Tag, X, AlertCircle, Bot, Users, PowerOff, Megaphone,
   Info, Pencil, Columns3, Zap, Workflow, UserPlus, Pause, Play, Reply,
+  CheckCircle2, Mail,
 } from "lucide-react";
 import { BulkBroadcastDialog } from "@/components/BulkBroadcastDialog";
 import { ContactInfoSheet } from "@/components/chat/ContactInfoSheet";
