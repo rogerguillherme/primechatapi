@@ -25,6 +25,7 @@ import {
 import { BulkBroadcastDialog } from "@/components/BulkBroadcastDialog";
 import { ContactInfoSheet } from "@/components/chat/ContactInfoSheet";
 import { startFlowForLead } from "@/lib/startFlowForLead";
+import { functionErrorMessage } from "@/lib/functionError";
 import { takePendingLead } from "@/lib/openLeadInChat";
 import { interpolateForLead } from "@/lib/interpolate";
 import { useTeamContext, useTeamMembers } from "@/hooks/use-team";
@@ -743,7 +744,8 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
       queryClient.invalidateQueries({ queryKey: ["chat-messages", selectedLeadId] });
       queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: async (err: any) =>
+      toast.error(await functionErrorMessage(err, "Não foi possível enviar a mensagem")),
   });
 
 
@@ -757,7 +759,8 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
       if (error) throw error;
       sendMutation.mutate({ mediaUrl: data.url, mediaType: data.media_type });
     } catch (err: any) {
-      toast.error(err.message);
+      // O motivo vem no corpo da resposta; sem isto vira "non-2xx status code".
+      toast.error(await functionErrorMessage(err, "Não foi possível enviar o arquivo"));
     }
   }, [selectedLead, sendMutation]);
 
