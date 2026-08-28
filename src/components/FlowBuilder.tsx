@@ -669,6 +669,17 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
             }
             edgeLabel = step.trigger_value;
           }
+          // Ramos de um passo "Sem Resposta": a chave da condição fica em trigger_value.
+          if (parentStep?.step_type === "no_response" && step.trigger_value) {
+            const conds = Array.isArray(parentStep.no_response_conditions)
+              ? parentStep.no_response_conditions
+              : [];
+            const condIdx = conds.findIndex((c: any) => c?.key === step.trigger_value);
+            if (condIdx >= 0) {
+              sourceHandle = `cond-${step.trigger_value}`;
+              edgeLabel = `Condição ${condIdx + 1}`;
+            }
+          }
           allEdges.push({
             id: `e-${step.parent_step_id}-${step.id}`,
             source: step.parent_step_id,
