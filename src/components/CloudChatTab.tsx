@@ -19,7 +19,7 @@ import {
   Search, Send, MessageSquare, FileText, Check, CheckCheck,
   MoreVertical, ArrowLeft, Paperclip, Clock, MessageCircleReply,
   ShoppingBag, RotateCcw, Tag, X, AlertCircle, Bot, Users, PowerOff, Megaphone,
-  Info, Pencil, Columns3, Zap, Workflow, UserPlus, Pause, Play,
+  Info, Pencil, Columns3, Zap, Workflow, UserPlus, Pause, Play, Reply,
 } from "lucide-react";
 import { BulkBroadcastDialog } from "@/components/BulkBroadcastDialog";
 import { ContactInfoSheet } from "@/components/chat/ContactInfoSheet";
@@ -99,6 +99,9 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
   const [contactTab, setContactTab] = useState<"info" | "edit">("info");
   const [shortcutQuery, setShortcutQuery] = useState<string | null>(null);
   const [shortcutIndex, setShortcutIndex] = useState(0);
+  /** Mensagem selecionada para responder (citação WhatsApp). */
+  const [replyTo, setReplyTo] = useState<any | null>(null);
+
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { accounts, defaultAccount } = useWhatsAppAccounts();
@@ -688,19 +691,31 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
   const sendMutation = useMutation({
     mutationFn: async ({ text, mediaUrl, mediaType }: { text?: string; mediaUrl?: string; mediaType?: string }) => {
       if (!selectedLead) throw new Error("No lead selected");
+      // `zapi_message_id` guarda o ID da mensagem na Meta — necessário para citar (context).
+      const replyToId: string | null = replyTo?.zapi_message_id || null;
       const { data, error } = await supabase.functions.invoke("whatsapp-cloud-send", {
-        body: { phone: selectedLead.phone, message: text || "", lead_id: selectedLead.id, media_url: mediaUrl, media_type: mediaType, account_id: selectedAccountId },
+        body: {
+          phone: selectedLead.phone,
+          message: text || "",
+          lead_id: selectedLead.id,
+          media_url: mediaUrl,
+          media_type: mediaType,
+          account_id: selectedAccountId,
+          reply_to_message_id: replyToId,
+        },
       });
       if (error) throw error;
       return data;
     },
     onSuccess: () => {
       setMessage("");
+      setReplyTo(null);
       queryClient.invalidateQueries({ queryKey: ["chat-messages", selectedLeadId] });
       queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
     },
     onError: (err: any) => toast.error(err.message),
   });
+
 
   const uploadAndSendMedia = useCallback(async (file: File) => {
     if (!selectedLead) return;
@@ -1452,7 +1467,17 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                       const prevMsg = mi > 0 ? group.messages[mi - 1] : null;
                       const showTail = !prevMsg || prevMsg.direction !== msg.direction;
                       return (
-                        <div key={msg.id} className={cn("flex mb-[2px]", isOutbound ? "justify-end" : "justify-start", showTail && "mt-2")}>
+                        <div key={msg.id} className={cn("group flex mb-[2px] items-center gap-1", isOutbound ? "justify-end" : "justify-start", showTail && "mt-2")}>
+                          {isOutbound && (
+                            <button
+                              type="button"
+                              title="Responder"
+                              onClick={() => { setReplyTo(msg); textareaRef.current?.focus(); }}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-accent text-muted-foreground"
+                            >
+                              <Reply size={15} />
+                            </button>
+                          )}
                           <div className={cn(
                             "relative max-w-[65%] px-[9px] pt-[6px] pb-2 text-sm leading-[19px] shadow-sm rounded-lg",
                             isOutbound ? "bg-primary/10 text-foreground" : "bg-card text-foreground",
@@ -1475,8 +1500,19 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                               {isOutbound && <StatusIcon status={msg.status} />}
                             </span>
                           </div>
+                          {!isOutbound && (
+                            <button
+                              type="button"
+                              title="Responder"
+                              onClick={() => { setReplyTo(msg); textareaRef.current?.focus(); }}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-accent text-muted-foreground"
+                            >
+                              <Reply size={15} />
+                            </button>
+                          )}
                         </div>
                       );
+
                     })}
                   </div>
                 ))}
@@ -1487,6 +1523,32 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
             {/* Input */}
             <div className="px-4 py-2 bg-card border-t border-border">
               <input ref={fileInputRef} type="file" accept="image/*,video/*,audio/*,.pdf,.doc,.docx" className="hidden" onChange={handleFileSelect} />
+              {replyTo && (
+                <div className="max-w-3xl mx-auto mb-2 flex items-start gap-2 rounded-lg border-l-4 border-primary bg-accent/50 px-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium text-primary">
+                      {replyTo.direction === "outbound" ? "Você" : (selectedLead?.name || "Lead")}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {replyTo.content || (replyTo.media_type ? `[${replyTo.media_type}]` : "Mensagem")}
+                    </p>
+                    {!replyTo.zapi_message_id && (
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        Esta mensagem não tem ID da Meta — será enviada sem citação.
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReplyTo(null)}
+                    className="p-1 rounded-full hover:bg-accent text-muted-foreground"
+                    title="Cancelar resposta"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+              )}
+
               <div className="flex items-end gap-2 max-w-3xl mx-auto">
                 <div className="flex items-center gap-0.5 shrink-0 mb-[5px]">
                   {templates && templates.length > 0 && (
