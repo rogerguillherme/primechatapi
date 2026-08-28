@@ -37,14 +37,18 @@ import { cn } from "@/lib/utils";
 /** Valor sentinela do filtro por vendedor: conversas sem responsável. */
 const UNASSIGNED_AGENT = "__sem_dono__";
 
-type ChatTab = "aguardando_respostas" | "respondidas" | "erro";
+type ChatTab = "aguardando_respostas" | "respondidas" | "erro" | "finalizado";
 type AiMode = "off" | "all" | "selected";
 
 const CHAT_TABS: { value: ChatTab; label: string; icon: React.ReactNode }[] = [
   { value: "respondidas", label: "Respondidas", icon: <MessageCircleReply size={14} /> },
   { value: "aguardando_respostas", label: "Aguardando", icon: <Clock size={14} /> },
+  { value: "finalizado", label: "Finalizados", icon: <CheckCircle2 size={14} /> },
   { value: "erro", label: "Erro", icon: <AlertCircle size={14} /> },
 ];
+
+/** Marcações locais de "não lido" (por usuário, neste navegador). */
+const UNREAD_KEY = (userId: string) => `chat-unread-${userId}`;
 
 function getAvatarColor(name: string) {
   const colors = ["bg-emerald-600", "bg-violet-600", "bg-amber-600", "bg-rose-600", "bg-cyan-600", "bg-indigo-600"];
