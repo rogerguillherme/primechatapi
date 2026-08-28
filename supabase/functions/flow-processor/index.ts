@@ -254,10 +254,30 @@ Deno.serve(async (req) => {
         }
 
         if (currentStep.step_type === "no_response" || exec.status === "waiting_no_response") {
-          await advanceToNextStep(exec, currentStep, lead, supabase, supabaseUrl, supabaseKey, executionAccountId);
+          // Um passo "Sem Resposta" pode ter várias condições configuradas
+          // (tempo de espera, resposta atrasada, etiqueta do lead, padrão).
+          // Cada condição aponta para um ramo diferente do fluxo.
+          const outcome = await evaluateNoResponseConditions(exec, currentStep, lead, supabase);
+
+          if (outcome.kind === "requeue") {
+            // Nenhuma condição bateu ainda, mas há condições com tempo maior:
+            // reagenda para o próximo limite em vez de abandonar o passo.
+            await supabase.from("flow_executions").update({
+              next_action_at: outcome.nextActionAt,
+              updated_at: new Date().toISOString(),
+            }).eq("id", exec.id);
+            processed++;
+            return;
+          }
+
+          await advanceToNextStep(
+            exec, currentStep, lead, supabase, supabaseUrl, supabaseKey, executionAccountId,
+            outcome.branchKey,
+          );
           processed++;
           return;
         }
+
 
         // BLACKLIST: add lead to blacklist and continue
         if (currentStep.step_type === "blacklist") {
