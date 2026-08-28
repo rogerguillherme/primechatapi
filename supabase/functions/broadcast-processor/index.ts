@@ -617,7 +617,7 @@ Deno.serve(async (req) => {
         .from("broadcast_jobs")
         .update({ last_cursor: newCursor, status: isComplete ? "completed" : "processing", updated_at: new Date().toISOString() })
         .eq("id", jobId);
-      if (!isComplete) await chainNextBatch(supabaseUrl, jobId);
+      if (!isComplete) await chainNextBatch(supabaseUrl, jobId, supabase);
       return new Response(JSON.stringify({ message: "Batch skipped", blacklistedSkipped, dedupSkipped }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -996,7 +996,7 @@ Deno.serve(async (req) => {
 
     // Chain next batch if not complete
     if (!isComplete) {
-      await chainNextBatch(supabaseUrl, jobId);
+      await chainNextBatch(supabaseUrl, jobId, supabase);
     }
 
     return new Response(
@@ -1019,14 +1019,25 @@ Deno.serve(async (req) => {
   }
 });
 
-async function chainNextBatch(supabaseUrl: string, jobId: string) {
+/**
+ * Chama o próximo lote do disparo.
+ *
+ * Se esta chamada falha, o disparo PARA no meio — e antes disso só virava um
+ * console.error, que ninguém lê. Uma campanha de milhares de contatos podia
+ * entregar metade e ficar assim, sem nada na tela indicando.
+ *
+ * Agora a falha é registrada no próprio job, no estado que a interface já sabe
+ * exibir. O `last_cursor` fica intacto, então retomar continua de onde parou
+ * em vez de reenviar para quem já recebeu.
+ */
+async function chainNextBatch(supabaseUrl: string, jobId: string, supabase: any) {
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const internalSecret = Deno.env.get("BROADCAST_INTERNAL_SECRET") || "";
   try {
     // 1 second delay between batches
     await new Promise((r) => setTimeout(r, 1000));
 
-    await fetch(`${supabaseUrl}/functions/v1/broadcast-processor`, {
+    const res = await fetch(`${supabaseUrl}/functions/v1/broadcast-processor`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1035,7 +1046,27 @@ async function chainNextBatch(supabaseUrl: string, jobId: string) {
       },
       body: JSON.stringify({ job_id: jobId }),
     });
+
+    // Resposta de erro também interrompe a corrente: sem isso um 500 do
+    // próximo lote passaria como sucesso aqui.
+    if (!res.ok) {
+      throw new Error(`próximo lote respondeu ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    }
   } catch (e) {
-    console.error("Failed to chain next batch:", e);
+    const motivo = e instanceof Error ? e.message : String(e);
+    console.error("Failed to chain next batch:", motivo);
+    try {
+      await supabase
+        .from("broadcast_jobs")
+        .update({
+          status: "paused_by_system",
+          pause_reason: "A corrente de lotes foi interrompida",
+          last_error: `Falha ao encadear o próximo lote: ${motivo}`.slice(0, 500),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", jobId);
+    } catch (marcaErr) {
+      console.error("Também falhou ao registrar a interrupção no job:", marcaErr);
+    }
   }
 }
