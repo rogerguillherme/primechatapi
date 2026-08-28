@@ -1263,7 +1263,8 @@ export default function Chat() {
                     <Send size={20} />
                   </button>
                 ) : (
-                  <AudioRecorder onRecorded={handleAudioRecorded} disabled={sendMutation.isPending} />
+                  <AudioRecorder onRecorded={handleAudioRecorded}
+                    onError={(m) => toast({ title: "Áudio", description: m, variant: "destructive" })} disabled={sendMutation.isPending} />
                 )}
               </div>
             </div>

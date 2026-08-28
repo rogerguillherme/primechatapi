@@ -15,15 +15,22 @@ const AUDIO_EXT_BY_MIME = {
 };
 
 function resolveAudioMime(rawType, ext) {
-  const mime = AUDIO_EXT_BY_MIME[rawType] ? rawType : AUDIO_MIME_BY_EXT[ext] || "audio/ogg";
-  return { mime, fileExt: AUDIO_EXT_BY_MIME[mime] || "ogg" };
+  const mime = AUDIO_EXT_BY_MIME[rawType] ? rawType : AUDIO_MIME_BY_EXT[ext];
+  if (!mime) return null;
+  return { mime, fileExt: AUDIO_EXT_BY_MIME[mime] };
 }
 
 // content-type confiável passa direto
 assert.deepEqual(resolveAudioMime("audio/mpeg", "mp3"), { mime: "audio/mpeg", fileExt: "mp3" });
 assert.deepEqual(resolveAudioMime("audio/mp4", "m4a"), { mime: "audio/mp4", fileExt: "m4a" });
 
-// o bug: content-type inútil ou não aceito caía em "audio/ogg" no chute
+// o bug que gerou o 131053: formato desconhecido era declarado como ogg, e a
+// Meta recusava porque os bytes não eram ogg. Agora recusa antes de mentir.
+assert.equal(resolveAudioMime("audio/webm", "webm"), null, "webm nao e aceito");
+assert.equal(resolveAudioMime("application/octet-stream", "bin"), null, "extensao desconhecida");
+assert.equal(resolveAudioMime("", ""), null, "sem tipo nem extensao");
+
+// content-type inútil mas extensão conhecida: usa a extensão
 assert.deepEqual(resolveAudioMime("application/octet-stream", "mp4"), { mime: "audio/mp4", fileExt: "m4a" });
 assert.deepEqual(resolveAudioMime("", "m4a"), { mime: "audio/mp4", fileExt: "m4a" });
 assert.deepEqual(resolveAudioMime("audio/webm", "m4a"), { mime: "audio/mp4", fileExt: "m4a" });

@@ -641,7 +641,8 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
                 <Send size={18} />
               </button>
             ) : (
-              <AudioRecorder onRecorded={handleAudioRecorded} disabled={sendMutation.isPending} />
+              <AudioRecorder onRecorded={handleAudioRecorded}
+                    onError={(m) => toast({ title: "Áudio", description: m, variant: "destructive" })} disabled={sendMutation.isPending} />
             )}
           </div>
         </div>

@@ -39,6 +39,8 @@ export function audioFileFromBlob(blob: Blob): File {
 
 interface AudioRecorderProps {
   onRecorded: (blob: Blob) => void;
+  /** Avisa o operador quando não dá para gravar num formato aceito. */
+  onError?: (mensagem: string) => void;
   disabled?: boolean;
 }
 
@@ -47,7 +49,7 @@ interface Stoppable {
   stop: () => void;
 }
 
-export function AudioRecorder({ onRecorded, disabled }: AudioRecorderProps) {
+export function AudioRecorder({ onRecorded, onError, disabled }: AudioRecorderProps) {
   const [recording, setRecording] = useState(false);
   const [duration, setDuration] = useState(0);
   const recorderRef = useRef<Stoppable | null>(null);
@@ -116,16 +118,27 @@ export function AudioRecorder({ onRecorded, disabled }: AudioRecorderProps) {
       recorderRef.current = rec;
       beginTimer();
     } catch (err) {
-      // Encoder indisponível (navegador antigo, worker bloqueado): grava do
-      // jeito antigo em vez de deixar o operador sem áudio nenhum.
-      console.warn("Encoder Opus indisponível, gravando pelo MediaRecorder:", err);
+      // Encoder indisponível (navegador antigo, worker bloqueado). O caminho
+      // antigo só ajuda se o navegador gravar num container que o WhatsApp
+      // aceita — em Chrome ele produz webm, que a Meta recusa. Antes isso
+      // seguia calado até o envio falhar com uma mensagem confusa.
+      console.warn("Encoder Opus indisponível, tentando o MediaRecorder:", err);
+      const alternativo = pickFallbackMimeType();
+      if (alternativo.startsWith("audio/webm")) {
+        onError?.(
+          "Não consegui preparar o áudio neste navegador — o WhatsApp não aceita o " +
+            "formato que ele grava. Tente pelo Chrome atualizado ou envie o áudio como arquivo.",
+        );
+        return;
+      }
       try {
         await startWithMediaRecorder();
       } catch (fallbackErr) {
         console.error("Não foi possível acessar o microfone:", fallbackErr);
+        onError?.("Não foi possível acessar o microfone.");
       }
     }
-  }, [onRecorded, startWithMediaRecorder]);
+  }, [onRecorded, onError, startWithMediaRecorder]);
 
   const stopRecording = useCallback(() => {
     recorderRef.current?.stop();

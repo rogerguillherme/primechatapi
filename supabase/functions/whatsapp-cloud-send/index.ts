@@ -303,15 +303,23 @@ const AUDIO_EXT_BY_MIME: Record<string, string> = {
 };
 
 /**
- * Decide o mime a declarar no upload. Confia no content-type só quando ele é
- * um dos aceitos — `audio/webm` e `application/octet-stream` chegam bastante e
- * antes viravam "audio/ogg" no chute, o que a Meta rejeita.
+ * Decide o mime a declarar no upload, ou `null` quando o arquivo não é de um
+ * formato que o WhatsApp aceita.
+ *
+ * O `null` importa: antes, formato desconhecido virava "audio/ogg" no chute.
+ * Um arquivo webm — que é o que o navegador grava quando o codificador Opus
+ * não carrega — era declarado como Ogg, e a Meta respondia exatamente
+ * "uploaded with mimetype as audio/ogg, however on processing it is of type
+ * application/octet-stream" (131053). Declarar um formato que o arquivo não
+ * tem troca um erro claro por um confuso.
  */
-function resolveAudioMime(rawType: string, ext: string): { mime: string; fileExt: string } {
-  const mime = AUDIO_EXT_BY_MIME[rawType]
-    ? rawType
-    : AUDIO_MIME_BY_EXT[ext] || "audio/ogg";
-  return { mime, fileExt: AUDIO_EXT_BY_MIME[mime] || "ogg" };
+function resolveAudioMime(
+  rawType: string,
+  ext: string,
+): { mime: string; fileExt: string } | null {
+  const mime = AUDIO_EXT_BY_MIME[rawType] ? rawType : AUDIO_MIME_BY_EXT[ext];
+  if (!mime) return null;
+  return { mime, fileExt: AUDIO_EXT_BY_MIME[mime] };
 }
 
 Deno.serve(async (req) => {
@@ -795,7 +803,19 @@ Deno.serve(async (req) => {
               if (!fileRes.ok) throw new Error(`download ${fileRes.status}`);
               const rawType = (fileRes.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
               const ext = (media_url.split("?")[0].split(".").pop() || "").toLowerCase();
-              const { mime, fileExt } = resolveAudioMime(rawType, ext);
+              const formato = resolveAudioMime(rawType, ext);
+              if (!formato) {
+                // Não adianta tentar de novo: o arquivo é que não serve.
+                return new Response(
+                  JSON.stringify({
+                    error:
+                      `Este áudio está em um formato que o WhatsApp não aceita ` +
+                      `(${rawType || ext || "desconhecido"}). Aceitos: ogg/opus, mp3, m4a, aac e amr.`,
+                  }),
+                  { status: 415, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+                );
+              }
+              const { mime, fileExt } = formato;
               // O CAMPO `type` leva o codec: é assim que a Meta reconhece o
               // arquivo como mensagem de voz.
               //

@@ -1943,7 +1943,8 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                     <Send size={18} />
                   </button>
                 ) : (
-                  <AudioRecorder onRecorded={handleAudioRecorded} disabled={sendMutation.isPending} />
+                  <AudioRecorder onRecorded={handleAudioRecorded}
+                    onError={(m) => toast.error(m)} disabled={sendMutation.isPending} />
                 )}
               </div>
             </div>
