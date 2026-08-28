@@ -159,7 +159,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
       const { data } = await (supabase as any)
         .from("leads")
         .select(
-          "id, name, phone, email, photo_url, chat_status, ai_enabled, assigned_to, updated_at, last_outbound_at, last_message_content, last_message_at, last_message_direction, last_message_status, last_message_account_id, account_ids"
+          "id, name, phone, email, photo_url, chat_status, ai_enabled, assigned_to, updated_at, last_outbound_at, last_message_content, last_message_at, last_message_direction, last_message_status, last_message_account_id, account_ids, manually_unread"
         )
         .order("updated_at", { ascending: false, nullsFirst: false })
         .limit(800);
