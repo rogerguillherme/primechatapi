@@ -393,25 +393,50 @@ Deno.serve(async (req) => {
       .order("next_action_at")
       .limit(1);
 
-    if (moreReady && moreReady.length > 0) {
-      const nextAt = new Date(moreReady[0].next_action_at).getTime();
-      const nowMs = Date.now();
-      const delayMs = nextAt <= nowMs ? 1000 : Math.min(nextAt - nowMs, 55000);
+    // Reagendamento imediato: serve só para esvaziar uma fila que já está
+    // pronta agora, sem esperar o próximo minuto do cron.
+    //
+    // Precisa de EdgeRuntime.waitUntil: a Supabase encerra o isolate assim que
+    // a resposta é devolvida, e um setTimeout solto morre junto — era por isso
+    // que a cadeia se perdia e o envio atrasava.
+    //
+    // Espera longa NÃO é reagendada aqui: manter o isolate vivo por um minuto
+    // à toa custa caro e falha em silêncio se ele for reciclado. Quem cobre
+    // isso é o cron `flow-processor-heartbeat`, que roda a cada minuto.
+    const proximo = moreReady && moreReady.length > 0
+      ? new Date(moreReady[0].next_action_at).getTime()
+      : null;
 
-      setTimeout(async () => {
-        try {
-          await fetch(`${supabaseUrl}/functions/v1/flow-processor`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${supabaseKey}`,
-            },
-            body: JSON.stringify({ auto: true }),
-          });
-        } catch (e) {
-          console.error("Self-invocation failed:", e);
+    if (proximo !== null && proximo - Date.now() <= 15_000) {
+      const delayMs = Math.max(1000, proximo - Date.now());
+      const encadeia = new Promise<void>((resolve) => {
+        setTimeout(async () => {
+          try {
+            await fetch(`${supabaseUrl}/functions/v1/flow-processor`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${supabaseKey}`,
+              },
+              body: JSON.stringify({ auto: true }),
+            });
+          } catch (e) {
+            console.error("Self-invocation failed:", e);
+          } finally {
+            resolve();
+          }
+        }, delayMs);
+      });
+
+      try {
+        // @ts-ignore EdgeRuntime é fornecido pela Supabase
+        if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+          // @ts-ignore
+          EdgeRuntime.waitUntil(encadeia);
         }
-      }, delayMs);
+      } catch {
+        /* sem waitUntil, o cron cobre em no máximo um minuto */
+      }
     }
 
     return new Response(
