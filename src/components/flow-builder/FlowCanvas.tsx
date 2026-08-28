@@ -126,6 +126,14 @@ export function FlowCanvas({
           }
         }
       }
+      // Saída de uma condição do passo "Sem Resposta": rotula com a condição.
+      if (params.sourceHandle?.startsWith("cond-")) {
+        const sourceNode = nodes.find((n) => n.id === params.source);
+        const conds = (sourceNode?.data?.no_response_conditions as any[]) || [];
+        const key = params.sourceHandle.replace("cond-", "");
+        const idx = conds.findIndex((c: any) => c?.key === key);
+        if (idx >= 0) label = `Condição ${idx + 1}`;
+      }
       setEdges((eds) => addEdge({ ...params, ...defaultEdgeOptions, ...(label ? { label } : {}) }, eds));
     },
     [setEdges, nodes]
