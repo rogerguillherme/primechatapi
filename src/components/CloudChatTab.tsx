@@ -1851,6 +1851,14 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                     <Paperclip size={20} />
                   </button>
 
+                  {/* Emojis e figurinhas */}
+                  <EmojiPicker
+                    disabled={sendMutation.isPending}
+                    onSelect={(e) => handleMessageChange(message + e)}
+                    onSendSticker={(e) => sendMutation.mutate({ text: e })}
+                  />
+
+
                   {/* Atalhos: mensagens rápidas e fluxos */}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
