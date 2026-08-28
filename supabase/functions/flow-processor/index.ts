@@ -602,6 +602,18 @@ async function advanceToNextStep(
         }).eq("id", exec.id);
         return;
       }
+      // O construtor deixa ligar um passo a vários, mas o motor segue um
+      // caminho só. Os demais ramos são abandonados aqui — sem este aviso,
+      // some sem rastro e o fluxo termina como se tivesse enviado tudo.
+      console.warn(
+        "[fluxo] passo com varios ramos: seguindo apenas o primeiro",
+        JSON.stringify({
+          flow: exec.flow_id,
+          passo: currentStep.id,
+          seguindo: childSteps[0].id,
+          ignorados: childSteps.slice(1).map((c: any) => c.id),
+        }),
+      );
       nextStep = childSteps[0];
     }
   }
