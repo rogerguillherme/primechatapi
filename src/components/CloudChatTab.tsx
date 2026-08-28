@@ -1670,7 +1670,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                               type="button"
                               title="Responder"
                               onClick={() => { setReplyTo(msg); textareaRef.current?.focus(); }}
-                              className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-accent text-muted-foreground"
+                              className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-accent text-muted-foreground"
                             >
                               <Reply size={15} />
                             </button>
@@ -1719,7 +1719,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                               type="button"
                               title="Responder"
                               onClick={() => { setReplyTo(msg); textareaRef.current?.focus(); }}
-                              className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-accent text-muted-foreground"
+                              className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-accent text-muted-foreground"
                             >
                               <Reply size={15} />
                             </button>

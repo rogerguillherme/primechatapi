@@ -694,7 +694,7 @@ function SimulationPanel({ agentId, agentName }: { agentId: string; agentName: s
                       {m.role === "assistant" && (
                         <button
                           onClick={() => openFeedback(i)}
-                          className="self-start flex items-center gap-1 text-[10px] text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity px-1"
+                          className="self-start flex items-center gap-1 text-[10px] text-muted-foreground hover:text-destructive opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity px-1"
                           title="Corrigir esta resposta"
                         >
                           <ThumbsDown size={11} /> Corrigir resposta
