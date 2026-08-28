@@ -1444,7 +1444,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                   )}
                   {/* Lista rolável: com muitos fluxos o menu não estoura a tela
                       e as ações (pausar/parar) continuam sempre visíveis. */}
-                  <div className="max-h-[26rem] overflow-y-auto overscroll-contain px-1 py-1">
+                  <div className="max-h-[34rem] overflow-y-auto overscroll-contain px-1 py-1">
                     {(flows || []).map((flow: any) => (
                       <DropdownMenuItem
                         key={flow.id}
