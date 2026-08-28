@@ -1543,7 +1543,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                 </div>
                 <div className="relative flex-1">
                   {shortcutQuery !== null && matchedShortcuts.length > 0 && (
-                    <div className="absolute bottom-full mb-2 left-0 right-0 z-30 rounded-lg border border-border bg-popover shadow-lg overflow-hidden">
+                    <div className="absolute bottom-full mb-2 left-0 right-0 z-30 rounded-lg border border-border bg-popover shadow-lg overflow-y-auto max-h-64">
                       {matchedShortcuts.map((s: any, i: number) => (
                         <button
                           key={s.id}
