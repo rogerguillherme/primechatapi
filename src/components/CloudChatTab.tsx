@@ -912,53 +912,59 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
     return `Enviado ${format(d, "dd/MM/yy HH:mm")}`;
   };
 
-  // ---- Marcação local de "não lido" -------------------------------------
-  const [unreadIds, setUnreadIds] = useState<Set<string>>(new Set());
+  // ---- Marcação de "não lido" (persistida no banco) ---------------------
+  // Antes ficava em localStorage e cada dispositivo tinha sua própria lista.
+  // Agora a fonte da verdade é `leads.manually_unread`, então a marcação
+  // aparece igual em celular e desktop.
+  const unreadIds = useMemo(
+    () =>
+      new Set<string>(
+        (leads || [])
+          .filter((l: any) => l.manually_unread)
+          .map((l: any) => l.id as string)
+      ),
+    [leads]
+  );
 
-  useEffect(() => {
-    if (!user?.id) return;
-    try {
-      const raw = localStorage.getItem(UNREAD_KEY(user.id));
-      setUnreadIds(new Set(raw ? (JSON.parse(raw) as string[]) : []));
-    } catch {
-      setUnreadIds(new Set());
-    }
-  }, [user?.id]);
-
-  const persistUnread = useCallback(
-    (next: Set<string>) => {
-      setUnreadIds(next);
-      if (!user?.id) return;
-      try {
-        localStorage.setItem(UNREAD_KEY(user.id), JSON.stringify([...next]));
-      } catch {
-        /* storage cheio/indisponível — marcação segue apenas em memória */
+  const setUnreadFlag = useCallback(
+    async (leadId: string, value: boolean) => {
+      // Atualização otimista: a lista responde na hora, o realtime confirma.
+      queryClient.setQueryData(
+        ["chat-leads", "cloud", user?.id],
+        (prev: any) =>
+          Array.isArray(prev)
+            ? prev.map((l: any) =>
+                l.id === leadId ? { ...l, manually_unread: value } : l
+              )
+            : prev
+      );
+      const { error } = await (supabase as any)
+        .from("leads")
+        .update({ manually_unread: value })
+        .eq("id", leadId);
+      if (error) {
+        // Falhou: recarrega para não deixar estado divergente em tela.
+        queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
+        toast.error("Não foi possível salvar a marcação de não lido");
       }
     },
-    [user?.id]
+    [queryClient, user?.id]
   );
 
   const toggleUnread = useCallback(
     (leadId: string) => {
-      const next = new Set(unreadIds);
-      if (next.has(leadId)) {
-        next.delete(leadId);
-      } else {
-        next.add(leadId);
-        if (selectedLeadId === leadId) setSelectedLeadId(null);
-      }
-      persistUnread(next);
+      const next = !unreadIds.has(leadId);
+      if (next && selectedLeadId === leadId) setSelectedLeadId(null);
+      void setUnreadFlag(leadId, next);
     },
-    [unreadIds, persistUnread, selectedLeadId]
+    [unreadIds, setUnreadFlag, selectedLeadId]
   );
 
   // Abrir a conversa limpa a marcação manual de não lido.
   useEffect(() => {
     if (!selectedLeadId || !unreadIds.has(selectedLeadId)) return;
-    const next = new Set(unreadIds);
-    next.delete(selectedLeadId);
-    persistUnread(next);
-  }, [selectedLeadId, unreadIds, persistUnread]);
+    void setUnreadFlag(selectedLeadId, false);
+  }, [selectedLeadId, unreadIds, setUnreadFlag]);
 
   // ---- Finalizar conversa ----------------------------------------------
   const finalizeLead = useMutation({
