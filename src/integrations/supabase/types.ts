@@ -942,6 +942,7 @@ export type Database = {
           flow_kind: string
           id: string
           name: string
+          position: number
           sending_window_enabled: boolean
           sending_window_end: string
           sending_window_start: string
@@ -961,6 +962,7 @@ export type Database = {
           flow_kind?: string
           id?: string
           name: string
+          position?: number
           sending_window_enabled?: boolean
           sending_window_end?: string
           sending_window_start?: string
@@ -980,6 +982,7 @@ export type Database = {
           flow_kind?: string
           id?: string
           name?: string
+          position?: number
           sending_window_enabled?: boolean
           sending_window_end?: string
           sending_window_start?: string
