@@ -20,6 +20,7 @@ import {
   MoreVertical, ArrowLeft, Paperclip, Clock, MessageCircleReply,
   ShoppingBag, RotateCcw, Tag, X, AlertCircle, Bot, Users, PowerOff, Megaphone,
   Info, Pencil, Columns3, Zap, Workflow, UserPlus, Pause, Play, Reply,
+  CheckCircle2, Mail,
 } from "lucide-react";
 import { BulkBroadcastDialog } from "@/components/BulkBroadcastDialog";
 import { ContactInfoSheet } from "@/components/chat/ContactInfoSheet";
@@ -37,14 +38,18 @@ import { cn } from "@/lib/utils";
 /** Valor sentinela do filtro por vendedor: conversas sem responsável. */
 const UNASSIGNED_AGENT = "__sem_dono__";
 
-type ChatTab = "aguardando_respostas" | "respondidas" | "erro";
+type ChatTab = "aguardando_respostas" | "respondidas" | "erro" | "finalizado";
 type AiMode = "off" | "all" | "selected";
 
 const CHAT_TABS: { value: ChatTab; label: string; icon: React.ReactNode }[] = [
   { value: "respondidas", label: "Respondidas", icon: <MessageCircleReply size={14} /> },
   { value: "aguardando_respostas", label: "Aguardando", icon: <Clock size={14} /> },
+  { value: "finalizado", label: "Finalizados", icon: <CheckCircle2 size={14} /> },
   { value: "erro", label: "Erro", icon: <AlertCircle size={14} /> },
 ];
+
+/** Marcações locais de "não lido" (por usuário, neste navegador). */
+const UNREAD_KEY = (userId: string) => `chat-unread-${userId}`;
 
 function getAvatarColor(name: string) {
   const colors = ["bg-emerald-600", "bg-violet-600", "bg-amber-600", "bg-rose-600", "bg-cyan-600", "bg-indigo-600"];
@@ -154,7 +159,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
       const { data } = await (supabase as any)
         .from("leads")
         .select(
-          "id, name, phone, email, photo_url, chat_status, ai_enabled, assigned_to, updated_at, last_message_content, last_message_at, last_message_direction, last_message_status, last_message_account_id, account_ids"
+          "id, name, phone, email, photo_url, chat_status, ai_enabled, assigned_to, updated_at, last_outbound_at, last_message_content, last_message_at, last_message_direction, last_message_status, last_message_account_id, account_ids"
         )
         .order("updated_at", { ascending: false, nullsFirst: false })
         .limit(800);
@@ -899,6 +904,80 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
     return format(d, "dd/MM/yy");
   };
 
+  /** Horário completo da última mensagem enviada (outbound) para o lead. */
+  const formatLastOutbound = (dateStr: string) => {
+    const d = new Date(dateStr);
+    if (isToday(d)) return `Enviado hoje ${format(d, "HH:mm")}`;
+    if (isYesterday(d)) return `Enviado ontem ${format(d, "HH:mm")}`;
+    return `Enviado ${format(d, "dd/MM/yy HH:mm")}`;
+  };
+
+  // ---- Marcação local de "não lido" -------------------------------------
+  const [unreadIds, setUnreadIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      const raw = localStorage.getItem(UNREAD_KEY(user.id));
+      setUnreadIds(new Set(raw ? (JSON.parse(raw) as string[]) : []));
+    } catch {
+      setUnreadIds(new Set());
+    }
+  }, [user?.id]);
+
+  const persistUnread = useCallback(
+    (next: Set<string>) => {
+      setUnreadIds(next);
+      if (!user?.id) return;
+      try {
+        localStorage.setItem(UNREAD_KEY(user.id), JSON.stringify([...next]));
+      } catch {
+        /* storage cheio/indisponível — marcação segue apenas em memória */
+      }
+    },
+    [user?.id]
+  );
+
+  const toggleUnread = useCallback(
+    (leadId: string) => {
+      const next = new Set(unreadIds);
+      if (next.has(leadId)) {
+        next.delete(leadId);
+      } else {
+        next.add(leadId);
+        if (selectedLeadId === leadId) setSelectedLeadId(null);
+      }
+      persistUnread(next);
+    },
+    [unreadIds, persistUnread, selectedLeadId]
+  );
+
+  // Abrir a conversa limpa a marcação manual de não lido.
+  useEffect(() => {
+    if (!selectedLeadId || !unreadIds.has(selectedLeadId)) return;
+    const next = new Set(unreadIds);
+    next.delete(selectedLeadId);
+    persistUnread(next);
+  }, [selectedLeadId, unreadIds, persistUnread]);
+
+  // ---- Finalizar conversa ----------------------------------------------
+  const finalizeLead = useMutation({
+    mutationFn: async ({ leadId, done }: { leadId: string; done: boolean }) => {
+      const { error } = await supabase
+        .from("leads")
+        .update({ chat_status: done ? "finalizado" : "respondidas" })
+        .eq("id", leadId);
+      if (error) throw error;
+      return done;
+    },
+    onSuccess: (done, { leadId }) => {
+      if (done && selectedLeadId === leadId) setSelectedLeadId(null);
+      queryClient.invalidateQueries({ queryKey: ["chat-leads"] });
+      toast.success(done ? "Conversa finalizada" : "Conversa reaberta");
+    },
+    onError: (e: any) => toast.error(e?.message || "Não foi possível atualizar a conversa"),
+  });
+
   const toggleLabelFilter = (labelId: string) => {
     setFilterLabelIds((prev) => {
       const next = new Set(prev);
@@ -1102,13 +1181,24 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
             const latest = latestMessages?.get(lead.id);
             const isSelected = lead.id === selectedLeadId;
             const leadTags = getLeadLabels(lead.id);
+            const isUnread = unreadIds.has(lead.id);
+            const isDone = lead.chat_status === "finalizado";
             return (
-              <button
+              <div
                 key={lead.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => setSelectedLeadId(lead.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setSelectedLeadId(lead.id);
+                  }
+                }}
                 className={cn(
-                  "w-full text-left flex items-center gap-3 px-3 py-3 transition-colors border-b border-border/30",
-                  isSelected ? "bg-accent" : "hover:bg-accent/40"
+                  "group w-full text-left flex items-center gap-3 px-3 py-3 transition-colors border-b border-border/30 cursor-pointer",
+                  isSelected ? "bg-accent" : "hover:bg-accent/40",
+                  isUnread && "bg-primary/5"
                 )}
               >
                 <Avatar className="w-10 h-10 flex-shrink-0">
@@ -1119,12 +1209,15 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <p className="font-medium text-sm truncate">{lead.name}</p>
-                    {latest && (
-                      <span className="text-[11px] text-muted-foreground ml-2 shrink-0">
-                        {formatSidebarTime(latest.created_at)}
-                      </span>
-                    )}
+                    <p className={cn("text-sm truncate", isUnread ? "font-bold" : "font-medium")}>{lead.name}</p>
+                    <div className="flex items-center gap-1 ml-2 shrink-0">
+                      {isUnread && <span className="w-2 h-2 rounded-full bg-primary" />}
+                      {latest && (
+                        <span className="text-[11px] text-muted-foreground">
+                          {formatSidebarTime(latest.created_at)}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-1 mt-0.5">
                     {latest?.direction === "outbound" && <CheckCheck size={12} className="text-sky-400 shrink-0" />}
@@ -1132,6 +1225,11 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                       {latest ? latest.content : "Iniciar conversa"}
                     </p>
                   </div>
+                  {lead.last_outbound_at && (
+                    <p className="text-[10px] text-muted-foreground/80 mt-0.5 truncate">
+                      {formatLastOutbound(lead.last_outbound_at)}
+                    </p>
+                  )}
                   {leadTags.length > 0 && (
                     <div className="flex gap-1 mt-1 flex-wrap">
                       {leadTags.slice(0, 3).map((tag) => (
@@ -1149,7 +1247,31 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                     </div>
                   )}
                 </div>
-              </button>
+                <div className="flex flex-col gap-1 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                  <button
+                    type="button"
+                    title={isUnread ? "Marcar como lido" : "Marcar como não lido"}
+                    onClick={(e) => { e.stopPropagation(); toggleUnread(lead.id); }}
+                    className={cn(
+                      "p-1 rounded-md hover:bg-accent",
+                      isUnread ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <Mail size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    title={isDone ? "Reabrir conversa" : "Finalizar conversa"}
+                    onClick={(e) => { e.stopPropagation(); finalizeLead.mutate({ leadId: lead.id, done: !isDone }); }}
+                    className={cn(
+                      "p-1 rounded-md hover:bg-accent",
+                      isDone ? "text-emerald-500" : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {isDone ? <RotateCcw size={14} /> : <CheckCircle2 size={14} />}
+                  </button>
+                </div>
+              </div>
             );
           })}
           {visibleLeads.length < sortedLeads.length && (
