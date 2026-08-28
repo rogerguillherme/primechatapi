@@ -1292,7 +1292,10 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                     </div>
                   )}
                 </div>
-                <div className="flex flex-col gap-1 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                {/* Em toque não existe hover: escondidos por opacidade, esses botões
+                    eram inalcançáveis em tablet. Visíveis por padrão; o
+                    comportamento de aparecer no hover fica só no desktop. */}
+                <div className="flex flex-col gap-1 shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                   <button
                     type="button"
                     title={isUnread ? "Marcar como lido" : "Marcar como não lido"}
@@ -1553,6 +1556,33 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                   })}
                 </DropdownMenuContent>
               </DropdownMenu>
+
+              {/* Finalizar / reabrir o atendimento.
+                  Existia só no cartão da lista, escondido atrás de hover — em
+                  tablet nunca aparecia, e é aqui, com a conversa aberta, que a
+                  pessoa termina o atendimento. */}
+              {(() => {
+                const conversaFinalizada = selectedLead.chat_status === "finalizado";
+                return (
+                  <button
+                    type="button"
+                    title={conversaFinalizada ? "Reabrir atendimento" : "Finalizar atendimento"}
+                    aria-label={conversaFinalizada ? "Reabrir atendimento" : "Finalizar atendimento"}
+                    onClick={() =>
+                      finalizeLead.mutate({ leadId: selectedLead.id, done: !conversaFinalizada })
+                    }
+                    disabled={finalizeLead.isPending}
+                    className={cn(
+                      "p-2 rounded-full hover:bg-accent transition-colors",
+                      conversaFinalizada
+                        ? "text-emerald-500"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {conversaFinalizada ? <RotateCcw size={18} /> : <CheckCircle2 size={18} />}
+                  </button>
+                );
+              })()}
 
               {/* Transferir atendimento para outro atendente */}
               <DropdownMenu>
