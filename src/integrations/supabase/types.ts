@@ -1803,10 +1803,41 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_prefs: {
+        Row: {
+          assigned_to_me: boolean
+          created_at: string
+          new_lead: boolean
+          new_message: boolean
+          sound: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          assigned_to_me?: boolean
+          created_at?: string
+          new_lead?: boolean
+          new_message?: boolean
+          sound?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          assigned_to_me?: boolean
+          created_at?: string
+          new_lead?: boolean
+          new_message?: boolean
+          sound?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           created_at: string
           id: string
+          lead_id: string | null
           link: string | null
           message: string | null
           read: boolean
@@ -1817,6 +1848,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          lead_id?: string | null
           link?: string | null
           message?: string | null
           read?: boolean
@@ -1827,6 +1859,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          lead_id?: string | null
           link?: string | null
           message?: string | null
           read?: boolean
@@ -2878,6 +2911,16 @@ export type Database = {
           top_products: string[]
           total_count: number
         }[]
+      }
+      notify_lead_event: {
+        Args: {
+          p_lead_id: string
+          p_message: string
+          p_title: string
+          p_type: string
+          p_user_id: string
+        }
+        Returns: undefined
       }
       order_net_amount: {
         Args: { p_amount: number; p_payload: Json }
