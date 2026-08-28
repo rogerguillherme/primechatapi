@@ -24,6 +24,8 @@ import {
 } from "lucide-react";
 import { BulkBroadcastDialog } from "@/components/BulkBroadcastDialog";
 import { ContactInfoSheet } from "@/components/chat/ContactInfoSheet";
+import { EmojiPicker } from "@/components/chat/EmojiPicker";
+
 import { startFlowForLead } from "@/lib/startFlowForLead";
 import { functionErrorMessage } from "@/lib/functionError";
 import { takePendingLead } from "@/lib/openLeadInChat";
