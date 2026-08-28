@@ -142,6 +142,18 @@ export function ChatMediaBubble({ mediaType, mediaUrl, caption, isOutbound }: Ch
     return <AudioPlayer src={mediaUrl} isOutbound={isOutbound} />;
   }
 
+  // Figurinha (.webp): sem moldura nem legenda — o WhatsApp também a mostra solta.
+  if (mediaType === "sticker") {
+    return (
+      <img
+        src={mediaUrl}
+        alt={caption || "Figurinha"}
+        className="w-[140px] h-[140px] object-contain"
+        loading="lazy"
+      />
+    );
+  }
+
   if (mediaType === "image") {
     return (
       <div className="space-y-1">
