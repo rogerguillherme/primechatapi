@@ -1014,6 +1014,9 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
         is_entry: entryNodeIds.has(String(e.node.id)),
         buttons: (e.node.type === "interactive_buttons" || e.node.type === "cta_url") ? (e.node.data.buttons as any) || [] : [],
         timeout_minutes: (e.node.data.timeout_minutes as number) || null,
+        no_response_conditions: e.node.type === "no_response"
+          ? ((e.node.data.no_response_conditions as any[]) || []).filter((c) => c && c.key)
+          : [],
         ai_agent_id: e.node.type === "ai_agent" ? (e.node.data.agent_id as string) || null : null,
         ai_prompt: e.node.type === "ai_agent" ? (e.node.data.ai_prompt as string) || null : null,
         max_interactions: e.node.type === "ai_agent" ? (e.node.data.max_interactions as number) || 5 : null,
