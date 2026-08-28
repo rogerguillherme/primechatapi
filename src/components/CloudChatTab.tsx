@@ -301,6 +301,8 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
     queryKey: ["chat-messages", selectedLeadId],
     queryFn: async () => {
       if (!selectedLeadId) return [];
+      // `*` já inclui error_code/error_title/error_details — são eles que
+      // explicam a falha na bolha.
       const { data } = await supabase
         .from("chat_messages")
         .select("*")
@@ -1734,6 +1736,17 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                               {isOutbound && <StatusIcon status={msg.status} />}
                             </span>
                           </div>
+                          {/* O motivo da falha vinha da Meta e ficava só no
+                              banco: a tela mostrava um ícone vermelho e nada
+                              mais. Sem isto, "não está funcionando" é tudo o
+                              que o operador consegue relatar. */}
+                          {isOutbound && msg.status === "failed" && (
+                            <p className="mt-1 text-[11px] leading-snug text-destructive break-words">
+                              {msg.error_title || "Falha no envio"}
+                              {msg.error_details ? `: ${msg.error_details}` : ""}
+                              {msg.error_code ? ` (${msg.error_code})` : ""}
+                            </p>
+                          )}
                           {!isOutbound && (
                             <button
                               type="button"
