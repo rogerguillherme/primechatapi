@@ -88,6 +88,10 @@ const createDefaultNodeData = (type: InsertableStepType): Record<string, unknown
     return { reason: "opt-out via fluxo" };
   }
 
+  if (type === "no_response") {
+    return { timeout_minutes: 10, no_response_conditions: [] };
+  }
+
   return { timeout_minutes: 10 };
 };
 
@@ -121,6 +125,14 @@ export function FlowCanvas({
             label = buttons[btnIdx].title || `Botão ${btnIdx + 1}`;
           }
         }
+      }
+      // Saída de uma condição do passo "Sem Resposta": rotula com a condição.
+      if (params.sourceHandle?.startsWith("cond-")) {
+        const sourceNode = nodes.find((n) => n.id === params.source);
+        const conds = (sourceNode?.data?.no_response_conditions as any[]) || [];
+        const key = params.sourceHandle.replace("cond-", "");
+        const idx = conds.findIndex((c: any) => c?.key === key);
+        if (idx >= 0) label = `Condição ${idx + 1}`;
       }
       setEdges((eds) => addEdge({ ...params, ...defaultEdgeOptions, ...(label ? { label } : {}) }, eds));
     },

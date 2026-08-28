@@ -604,6 +604,9 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
             trigger_value: s.trigger_value,
             buttons: Array.isArray(s.buttons) ? s.buttons : [],
             timeout_minutes: s.timeout_minutes || null,
+            no_response_conditions: Array.isArray(s.no_response_conditions)
+              ? s.no_response_conditions
+              : [],
             agent_id: s.ai_agent_id || null,
             ai_prompt: s.ai_prompt || "",
             max_interactions: s.max_interactions || 5,
@@ -665,6 +668,17 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
               sourceHandle = `btn-${btnIdx}`;
             }
             edgeLabel = step.trigger_value;
+          }
+          // Ramos de um passo "Sem Resposta": a chave da condição fica em trigger_value.
+          if (parentStep?.step_type === "no_response" && step.trigger_value) {
+            const conds = Array.isArray(parentStep.no_response_conditions)
+              ? parentStep.no_response_conditions
+              : [];
+            const condIdx = conds.findIndex((c: any) => c?.key === step.trigger_value);
+            if (condIdx >= 0) {
+              sourceHandle = `cond-${step.trigger_value}`;
+              edgeLabel = `Condição ${condIdx + 1}`;
+            }
           }
           allEdges.push({
             id: `e-${step.parent_step_id}-${step.id}`,
@@ -916,6 +930,11 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
             const buttons = (parentNode.data.buttons as any[]) || [];
             if (buttons[btnIdx]) triggerValue = buttons[btnIdx].title || null;
           }
+          // Cada saída do passo "Sem Resposta" grava a chave da condição,
+          // que é como o motor escolhe o ramo em tempo de execução.
+          if (parentNode?.type === "no_response" && sourceHandle.startsWith("cond-")) {
+            triggerValue = sourceHandle.replace("cond-", "") || null;
+          }
         }
 
         entries.push({ node, parentNodeId, triggerValue, order: order++ });
@@ -995,6 +1014,9 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
         is_entry: entryNodeIds.has(String(e.node.id)),
         buttons: (e.node.type === "interactive_buttons" || e.node.type === "cta_url") ? (e.node.data.buttons as any) || [] : [],
         timeout_minutes: (e.node.data.timeout_minutes as number) || null,
+        no_response_conditions: e.node.type === "no_response"
+          ? ((e.node.data.no_response_conditions as any[]) || []).filter((c) => c && c.key)
+          : [],
         ai_agent_id: e.node.type === "ai_agent" ? (e.node.data.agent_id as string) || null : null,
         ai_prompt: e.node.type === "ai_agent" ? (e.node.data.ai_prompt as string) || null : null,
         max_interactions: e.node.type === "ai_agent" ? (e.node.data.max_interactions as number) || 5 : null,

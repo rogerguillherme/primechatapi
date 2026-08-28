@@ -341,27 +341,7 @@ export function NodeEditPanel({ node, templates, onUpdate, onClose, variationEna
         )}
 
         {type === "no_response" && (
-          <div className="space-y-2">
-            <Label className="text-xs">Timeout (minutos)</Label>
-            <Input
-              type="number"
-              min={1}
-              value={(data.timeout_minutes as number) || 10}
-              onChange={(e) => onUpdate({ timeout_minutes: parseInt(e.target.value) || 10 })}
-              className="h-8 text-sm"
-            />
-            {((data.timeout_minutes as number) || 0) >= 60 && (
-              <p className="text-xs text-muted-foreground">
-                = {Math.floor(((data.timeout_minutes as number) || 0) / 60)}h
-                {((data.timeout_minutes as number) || 0) % 60 > 0
-                  ? ` ${((data.timeout_minutes as number) || 0) % 60}min`
-                  : ""}
-              </p>
-            )}
-            <p className="text-[11px] text-muted-foreground">
-              Se o lead não clicar no botão/link anterior dentro deste tempo, o fluxo avança para o próximo passo.
-            </p>
-          </div>
+          <NoResponseFields data={data} onUpdate={onUpdate} />
         )}
 
         {type === "ai_agent" && (
@@ -1187,6 +1167,197 @@ function AudioUploadField({
           MP3/OGG (opus) até 16MB, ou grave pelo microfone. Áudio é enviado sem legenda pelo WhatsApp.
         </p>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Passo "Sem Resposta": várias condições, cada uma com seu próprio ramo
+// ---------------------------------------------------------------------------
+
+/** Condição avaliada quando o lead não responde ao passo anterior. */
+export interface NoResponseCondition {
+  key: string;
+  type: "timeout" | "replied_late" | "has_label" | "no_label" | "else";
+  timeout_minutes: number;
+  label_id?: string | null;
+}
+
+const NO_RESPONSE_TYPE_LABELS: Record<NoResponseCondition["type"], string> = {
+  timeout: "Não respondeu nada",
+  replied_late: "Respondeu depois do tempo",
+  has_label: "Lead tem a etiqueta",
+  no_label: "Lead não tem a etiqueta",
+  else: "Qualquer outro caso (padrão)",
+};
+
+/** Rótulo curto usado nas saídas do nó no canvas. */
+export function noResponseConditionLabel(
+  cond: NoResponseCondition,
+  labelName?: string
+): string {
+  const time = `${cond.timeout_minutes || 0}min`;
+  switch (cond.type) {
+    case "replied_late":
+      return `Respondeu após ${time}`;
+    case "has_label":
+      return `Com etiqueta ${labelName || "?"}`;
+    case "no_label":
+      return `Sem etiqueta ${labelName || "?"}`;
+    case "else":
+      return `Padrão após ${time}`;
+    default:
+      return `Sem resposta em ${time}`;
+  }
+}
+
+function NoResponseFields({
+  data,
+  onUpdate,
+}: {
+  data: Record<string, unknown>;
+  onUpdate: (data: Record<string, unknown>) => void;
+}) {
+  const { labels } = useChatLabels();
+  const conditions = (Array.isArray(data.no_response_conditions)
+    ? (data.no_response_conditions as NoResponseCondition[])
+    : []
+  ).filter((c) => c && c.key);
+
+  const commit = (next: NoResponseCondition[]) => {
+    // O menor tempo continua sendo gravado em `timeout_minutes` para manter
+    // compatibilidade com fluxos antigos e com a exibição no canvas.
+    const smallest = next.length
+      ? Math.min(...next.map((c) => Math.max(1, Number(c.timeout_minutes) || 1)))
+      : ((data.timeout_minutes as number) || 10);
+    onUpdate({ no_response_conditions: next, timeout_minutes: smallest });
+  };
+
+  const addCondition = () => {
+    commit([
+      ...conditions,
+      {
+        key: crypto.randomUUID().slice(0, 8),
+        type: "timeout",
+        timeout_minutes: (data.timeout_minutes as number) || 10,
+        label_id: null,
+      },
+    ]);
+  };
+
+  const updateCondition = (key: string, patch: Partial<NoResponseCondition>) => {
+    commit(conditions.map((c) => (c.key === key ? { ...c, ...patch } : c)));
+  };
+
+  const removeCondition = (key: string) => {
+    commit(conditions.filter((c) => c.key !== key));
+  };
+
+  return (
+    <div className="space-y-3">
+      {conditions.length === 0 && (
+        <div className="space-y-2">
+          <Label className="text-xs">Tempo de espera (minutos)</Label>
+          <Input
+            type="number"
+            min={1}
+            value={(data.timeout_minutes as number) || 10}
+            onChange={(e) => onUpdate({ timeout_minutes: parseInt(e.target.value) || 10 })}
+            className="h-8 text-sm"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Se o lead não responder/clicar dentro deste tempo, o fluxo avança para o próximo
+            passo. Adicione condições abaixo para criar caminhos diferentes.
+          </p>
+        </div>
+      )}
+
+      {conditions.length > 0 && (
+        <div className="space-y-2">
+          <Label className="text-xs">Condições (avaliadas de cima para baixo)</Label>
+          {conditions.map((cond, idx) => (
+            <div key={cond.key} className="rounded-md border border-border p-2 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-medium text-muted-foreground">
+                  Saída {idx + 1}
+                </span>
+                <div className="flex-1" />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6"
+                  onClick={() => removeCondition(cond.key)}
+                  aria-label="Remover condição"
+                >
+                  <Trash2 size={12} />
+                </Button>
+              </div>
+
+              <Select
+                value={cond.type}
+                onValueChange={(v) =>
+                  updateCondition(cond.key, { type: v as NoResponseCondition["type"] })
+                }
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(NO_RESPONSE_TYPE_LABELS).map(([value, text]) => (
+                    <SelectItem key={value} value={value} className="text-xs">
+                      {text}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <div className="space-y-1">
+                <Label className="text-[11px]">Depois de (minutos)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={cond.timeout_minutes || 10}
+                  onChange={(e) =>
+                    updateCondition(cond.key, {
+                      timeout_minutes: Math.max(1, parseInt(e.target.value) || 1),
+                    })
+                  }
+                  className="h-8 text-sm"
+                />
+              </div>
+
+              {(cond.type === "has_label" || cond.type === "no_label") && (
+                <div className="space-y-1">
+                  <Label className="text-[11px]">Etiqueta</Label>
+                  <Select
+                    value={cond.label_id || ""}
+                    onValueChange={(v) => updateCondition(cond.key, { label_id: v })}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Selecione a etiqueta" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {labels.map((l) => (
+                        <SelectItem key={l.id} value={l.id} className="text-xs">
+                          {l.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+          ))}
+          <p className="text-[11px] text-muted-foreground">
+            Ligue cada saída do nó no canvas ao passo que deve ser executado quando aquela
+            condição acontecer.
+          </p>
+        </div>
+      )}
+
+      <Button variant="outline" size="sm" className="h-8 text-xs w-full" onClick={addCondition}>
+        <Plus size={12} className="mr-1" /> Adicionar condição
+      </Button>
     </div>
   );
 }

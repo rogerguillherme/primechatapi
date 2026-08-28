@@ -1,8 +1,15 @@
 import { Handle, Position } from "@xyflow/react";
 import { TimerOff, Trash2 } from "lucide-react";
+import { useChatLabels } from "@/hooks/use-chat-labels";
+import {
+  noResponseConditionLabel,
+  type NoResponseCondition,
+} from "@/components/flow-builder/NodeEditPanel";
 
 interface NoResponseNodeData {
   timeout_minutes?: number;
+  /** Condições configuradas — cada uma vira uma saída própria do nó. */
+  no_response_conditions?: NoResponseCondition[];
   onDelete?: (id: string) => void;
   [key: string]: unknown;
 }
@@ -16,6 +23,12 @@ function formatTimeout(minutes: number) {
 
 export function NoResponseNode({ id, data }: { id: string; data: NoResponseNodeData }) {
   const minutes = data.timeout_minutes || 10;
+  const { labels } = useChatLabels();
+  const conditions = (Array.isArray(data.no_response_conditions)
+    ? data.no_response_conditions
+    : []
+  ).filter((c) => c && c.key);
+
   return (
     <div className="bg-background border border-border rounded-xl shadow-md min-w-[220px] overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2 bg-rose-500/10 border-b border-border">
@@ -30,13 +43,50 @@ export function NoResponseNode({ id, data }: { id: string; data: NoResponseNodeD
           <Trash2 size={12} />
         </button>
       </div>
-      <div className="p-3 text-center">
-        <p className="text-xs text-muted-foreground">Se não clicar em:</p>
-        <p className="text-sm font-medium text-rose-600 mt-0.5">{formatTimeout(minutes)}</p>
-        <p className="text-[10px] text-muted-foreground mt-1">→ envia próxima mensagem</p>
-      </div>
-      <Handle type="target" position={Position.Left} className="!w-3 !h-3 !bg-rose-500 !border-2 !border-background" />
-      <Handle type="source" position={Position.Right} className="!w-3 !h-3 !bg-rose-500 !border-2 !border-background" />
+
+      {conditions.length === 0 ? (
+        <div className="p-3 text-center">
+          <p className="text-xs text-muted-foreground">Se não responder em:</p>
+          <p className="text-sm font-medium text-rose-600 mt-0.5">{formatTimeout(minutes)}</p>
+          <p className="text-[10px] text-muted-foreground mt-1">→ envia próxima mensagem</p>
+        </div>
+      ) : (
+        <div className="py-2">
+          {conditions.map((cond, idx) => {
+            const labelName = labels.find((l) => l.id === cond.label_id)?.name;
+            return (
+              <div key={cond.key} className="relative px-3 py-1.5">
+                <p className="text-[11px] text-foreground pr-2">
+                  {noResponseConditionLabel(cond, labelName)}
+                </p>
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id={`cond-${cond.key}`}
+                  style={{ top: "50%" }}
+                  className="!w-3 !h-3 !bg-rose-500 !border-2 !border-background"
+                />
+                {idx < conditions.length - 1 && (
+                  <div className="absolute left-3 right-3 bottom-0 h-px bg-border" />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="!w-3 !h-3 !bg-rose-500 !border-2 !border-background"
+      />
+      {conditions.length === 0 && (
+        <Handle
+          type="source"
+          position={Position.Right}
+          className="!w-3 !h-3 !bg-rose-500 !border-2 !border-background"
+        />
+      )}
     </div>
   );
 }
