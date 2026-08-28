@@ -833,6 +833,7 @@ export type Database = {
           media_type: string | null
           media_url: string | null
           message_variations: Json
+          no_response_conditions: Json
           parent_step_id: string | null
           step_order: number
           step_type: string
@@ -861,6 +862,7 @@ export type Database = {
           media_type?: string | null
           media_url?: string | null
           message_variations?: Json
+          no_response_conditions?: Json
           parent_step_id?: string | null
           step_order?: number
           step_type?: string
@@ -889,6 +891,7 @@ export type Database = {
           media_type?: string | null
           media_url?: string | null
           message_variations?: Json
+          no_response_conditions?: Json
           parent_step_id?: string | null
           step_order?: number
           step_type?: string
