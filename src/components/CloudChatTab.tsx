@@ -774,6 +774,22 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
     if (e.target) e.target.value = "";
   }, [uploadAndSendMedia]);
 
+  /**
+   * Janela de 24h da Meta: fora dela só template aprovado é aceito, e qualquer
+   * outro envio volta com o erro 131047. Calculado a partir das mensagens já
+   * carregadas — não custa consulta nova.
+   *
+   * Sem nenhuma mensagem recebida na conversa, a janela está fechada: ela só
+   * abre quando o contato escreve.
+   */
+  const janela24h = useMemo(() => {
+    const ultimaEntrada = (messages || []).find((m: any) => m.direction === "inbound");
+    if (!ultimaEntrada) return { aberta: false, restamHoras: 0 };
+    const passouMs = Date.now() - new Date(ultimaEntrada.created_at).getTime();
+    const restamMs = 24 * 60 * 60 * 1000 - passouMs;
+    return { aberta: restamMs > 0, restamHoras: Math.max(0, Math.floor(restamMs / 3600000)) };
+  }, [messages]);
+
   const handleSend = () => {
     const text = message.trim();
     if (!text) return;
@@ -1799,6 +1815,17 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                   >
                     <X size={15} />
                   </button>
+                </div>
+              )}
+
+              {selectedLead && !janela24h.aberta && (
+                <div className="max-w-3xl mx-auto mb-2 flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2">
+                  <AlertCircle size={15} className="text-amber-600 dark:text-amber-500 mt-0.5 shrink-0" />
+                  <p className="text-xs leading-snug text-amber-700 dark:text-amber-400">
+                    <b>Fora da janela de 24 horas.</b> O contato não escreve há mais de um dia,
+                    então a Meta recusa mensagem livre — texto, áudio ou arquivo. Só um
+                    <b> template aprovado</b> reabre a conversa.
+                  </p>
                 </div>
               )}
 
