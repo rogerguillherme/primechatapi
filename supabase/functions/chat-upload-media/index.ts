@@ -19,6 +19,8 @@ Deno.serve(async (req) => {
     const formData = await req.formData();
     const file = formData.get("file") as File;
     const leadId = formData.get("lead_id") as string;
+    // Figurinha: o cliente marca explicitamente para não cair como imagem comum.
+    const asSticker = String(formData.get("as_sticker") || "") === "1";
 
     if (!file || !leadId) {
       return new Response(
@@ -29,12 +31,31 @@ Deno.serve(async (req) => {
 
     // Determine media type
     let mediaType = "document";
-    if (file.type.startsWith("image/")) mediaType = "image";
+    if (asSticker) {
+      // A Meta só aceita figurinha em WebP; estático até 100KB.
+      const isWebp = file.type === "image/webp" || file.name.toLowerCase().endsWith(".webp");
+      if (!isWebp) {
+        return new Response(
+          JSON.stringify({ error: "Figurinha precisa ser um arquivo .webp" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (file.size > 500 * 1024) {
+        return new Response(
+          JSON.stringify({ error: "Figurinha muito grande (máx. 500KB; estáticas até 100KB)" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      mediaType = "sticker";
+    }
+    else if (file.type.startsWith("image/")) mediaType = "image";
     else if (file.type.startsWith("audio/")) mediaType = "audio";
     else if (file.type.startsWith("video/")) mediaType = "video";
 
     const ext = file.name.split(".").pop() || "bin";
-    const path = `outgoing/${leadId}/${crypto.randomUUID()}.${ext}`;
+    const path = asSticker
+      ? `stickers/${leadId}/${crypto.randomUUID()}.webp`
+      : `outgoing/${leadId}/${crypto.randomUUID()}.${ext}`;
 
     const arrayBuffer = await file.arrayBuffer();
     const { error: uploadError } = await supabase.storage
