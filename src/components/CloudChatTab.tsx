@@ -24,6 +24,8 @@ import {
 } from "lucide-react";
 import { BulkBroadcastDialog } from "@/components/BulkBroadcastDialog";
 import { ContactInfoSheet } from "@/components/chat/ContactInfoSheet";
+import { EmojiPicker } from "@/components/chat/EmojiPicker";
+
 import { startFlowForLead } from "@/lib/startFlowForLead";
 import { functionErrorMessage } from "@/lib/functionError";
 import { takePendingLead } from "@/lib/openLeadInChat";
@@ -1429,7 +1431,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                     <Workflow size={18} />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-80 max-h-[80vh] overflow-hidden p-0">
+                <DropdownMenuContent align="end" className="w-[30rem] max-h-[85vh] overflow-hidden p-0">
                   <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
                     {isPaused
                       ? "Fluxo pausado"
@@ -1444,7 +1446,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                   )}
                   {/* Lista rolável: com muitos fluxos o menu não estoura a tela
                       e as ações (pausar/parar) continuam sempre visíveis. */}
-                  <div className="max-h-[26rem] overflow-y-auto overscroll-contain px-1 py-1">
+                  <div className="max-h-[34rem] overflow-y-auto overscroll-contain px-1 py-1">
                     {(flows || []).map((flow: any) => (
                       <DropdownMenuItem
                         key={flow.id}
@@ -1850,6 +1852,14 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                   <button onClick={() => fileInputRef.current?.click()} className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground">
                     <Paperclip size={20} />
                   </button>
+
+                  {/* Emojis e figurinhas */}
+                  <EmojiPicker
+                    disabled={sendMutation.isPending}
+                    onSelect={(e) => handleMessageChange(message + e)}
+                    onSendSticker={(e) => sendMutation.mutate({ text: e })}
+                  />
+
 
                   {/* Atalhos: mensagens rápidas e fluxos */}
                   <DropdownMenu>
