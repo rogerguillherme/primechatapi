@@ -1220,7 +1220,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                     <Workflow size={18} />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuContent align="end" className="w-64 max-h-[70vh] overflow-hidden p-0">
                   <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
                     {isPaused
                       ? "Fluxo pausado"
@@ -1233,20 +1233,25 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                       Nenhum fluxo criado ainda. Monte um no Flow Builder.
                     </div>
                   )}
-                  {(flows || []).map((flow: any) => (
-                    <DropdownMenuItem
-                      key={flow.id}
-                      onClick={() => startFlow.mutate(flow.id)}
-                      className="gap-2"
-                    >
-                      <Workflow size={14} className="opacity-60 shrink-0" />
-                      <span className="flex-1 truncate">{flow.name}</span>
-                      {!flow.active && (
-                        <span className="text-[10px] text-muted-foreground shrink-0">inativo</span>
-                      )}
-                      {runningExecution?.flow_id === flow.id && <Check size={14} className="opacity-60" />}
-                    </DropdownMenuItem>
-                  ))}
+                  {/* Lista rolável: com muitos fluxos o menu não estoura a tela
+                      e as ações (pausar/parar) continuam sempre visíveis. */}
+                  <div className="max-h-64 overflow-y-auto overscroll-contain px-1">
+                    {(flows || []).map((flow: any) => (
+                      <DropdownMenuItem
+                        key={flow.id}
+                        onClick={() => startFlow.mutate(flow.id)}
+                        className="gap-2"
+                      >
+                        <Workflow size={14} className="opacity-60 shrink-0" />
+                        <span className="flex-1 truncate">{flow.name}</span>
+                        {!flow.active && (
+                          <span className="text-[10px] text-muted-foreground shrink-0">inativo</span>
+                        )}
+                        {runningExecution?.flow_id === flow.id && <Check size={14} className="opacity-60" />}
+                      </DropdownMenuItem>
+                    ))}
+                  </div>
+
                   {runningExecution && (
                     <>
                       <DropdownMenuSeparator />
