@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { applyStepLabels } from "../_shared/flow-matching.ts";
 import { interpolate } from "../_shared/interpolate.mjs";
+import { decideNoResponse } from "../_shared/no-response.mjs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -269,6 +270,22 @@ Deno.serve(async (req) => {
               next_action_at: outcome.nextActionAt,
               updated_at: new Date().toISOString(),
             }).eq("id", exec.id);
+            processed++;
+            return;
+          }
+
+          if (outcome.kind === "stop") {
+            // O lead fez o que a regra pedia para interromper. Encerrar é o
+            // comportamento correto: seguir seria ignorar a condição.
+            await supabase.from("flow_executions").update({
+              status: "completed",
+              metadata: { ...(exec.metadata || {}), stop_reason: outcome.reason },
+              updated_at: new Date().toISOString(),
+            }).eq("id", exec.id);
+            console.log(
+              "[fluxo] parado pela condicao do passo Sem Resposta:",
+              JSON.stringify({ execucao: exec.id, etapa: currentStep.id, motivo: outcome.reason }),
+            );
             processed++;
             return;
           }
@@ -624,7 +641,9 @@ type NoResponseCondition = {
 
 type NoResponseOutcome =
   | { kind: "advance"; branchKey: string | null }
-  | { kind: "requeue"; nextActionAt: string };
+  | { kind: "requeue"; nextActionAt: string }
+  // O lead fez o que a regra pedia para interromper: encerra em vez de seguir.
+  | { kind: "stop"; reason: string };
 
 /**
  * Avalia as condições configuradas em um passo "Sem Resposta".
@@ -640,80 +659,35 @@ async function evaluateNoResponseConditions(
   lead: any,
   supabase: any,
 ): Promise<NoResponseOutcome> {
-  const raw = Array.isArray(step?.no_response_conditions) ? step.no_response_conditions : [];
-  const conditions = raw.filter((c: NoResponseCondition) => c && c.key) as NoResponseCondition[];
-  if (conditions.length === 0) return { kind: "advance", branchKey: null };
+  const conditions = Array.isArray(step?.no_response_conditions) ? step.no_response_conditions : [];
 
   const startedAtIso: string =
     exec?.metadata?.no_response_started_at || exec?.updated_at || new Date().toISOString();
   const startedAt = new Date(startedAtIso).getTime();
-  const elapsedMin = Math.max(0, (Date.now() - startedAt) / 60000);
 
-  const repliedAfterStart =
-    !!lead?.last_inbound_at && new Date(lead.last_inbound_at).getTime() > startedAt;
+  const resultado = await decideNoResponse(conditions, {
+    elapsedMin: Math.max(0, (Date.now() - startedAt) / 60000),
+    repliedAfterStart:
+      !!lead?.last_inbound_at && new Date(lead.last_inbound_at).getTime() > startedAt,
+    // Só é chamado se alguma condição de etiqueta existir.
+    loadLabels: async () => {
+      const { data } = await supabase
+        .from("lead_labels")
+        .select("label_id")
+        .eq("lead_id", lead?.id);
+      return (data || []).map((r: any) => r.label_id as string);
+    },
+  });
 
-  // Etiquetas do lead só são buscadas quando alguma condição realmente precisa.
-  let leadLabelIds: string[] | null = null;
-  const loadLeadLabels = async (): Promise<string[]> => {
-    if (leadLabelIds) return leadLabelIds;
-    const { data } = await supabase
-      .from("lead_labels")
-      .select("label_id")
-      .eq("lead_id", lead?.id);
-    const ids = (data || []).map((r: any) => r.label_id as string);
-    leadLabelIds = ids;
-    return ids;
-  };
-
-  for (const cond of conditions) {
-    const waitMin = Math.max(0, Number(cond.timeout_minutes) || 0);
-    const waited = elapsedMin >= waitMin;
-
-    switch (cond.type) {
-      case "replied_late":
-        if (waited && repliedAfterStart) return { kind: "advance", branchKey: cond.key! };
-        break;
-      case "has_label": {
-        if (!waited) break;
-        const labels = await loadLeadLabels();
-        if (cond.label_id && labels.includes(cond.label_id)) {
-          return { kind: "advance", branchKey: cond.key! };
-        }
-        break;
-      }
-      case "no_label": {
-        if (!waited) break;
-        const labels = await loadLeadLabels();
-        if (cond.label_id && !labels.includes(cond.label_id)) {
-          return { kind: "advance", branchKey: cond.key! };
-        }
-        break;
-      }
-      case "else":
-        if (waited) return { kind: "advance", branchKey: cond.key! };
-        break;
-      case "timeout":
-      default:
-        // Não respondeu nada dentro do tempo configurado.
-        if (waited && !repliedAfterStart) return { kind: "advance", branchKey: cond.key! };
-        break;
-    }
-  }
-
-  // Nada bateu: se ainda existe condição com tempo de espera maior, aguarda.
-  const pending = conditions
-    .map((c) => Math.max(0, Number(c.timeout_minutes) || 0))
-    .filter((min) => min > elapsedMin)
-    .sort((a, b) => a - b)[0];
-
-  if (pending !== undefined) {
+  if (resultado.kind === "requeue") {
+    // O módulo é .mjs, então o tipo do retorno chega solto aqui.
+    const espera = Number((resultado as { waitMin?: number }).waitMin) || 0;
     return {
       kind: "requeue",
-      nextActionAt: new Date(startedAt + pending * 60 * 1000).toISOString(),
+      nextActionAt: new Date(startedAt + espera * 60 * 1000).toISOString(),
     };
   }
-
-  return { kind: "advance", branchKey: null };
+  return resultado as NoResponseOutcome;
 }
 
 async function advanceToNextStep(
