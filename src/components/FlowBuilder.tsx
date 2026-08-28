@@ -930,6 +930,11 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
             const buttons = (parentNode.data.buttons as any[]) || [];
             if (buttons[btnIdx]) triggerValue = buttons[btnIdx].title || null;
           }
+          // Cada saída do passo "Sem Resposta" grava a chave da condição,
+          // que é como o motor escolhe o ramo em tempo de execução.
+          if (parentNode?.type === "no_response" && sourceHandle.startsWith("cond-")) {
+            triggerValue = sourceHandle.replace("cond-", "") || null;
+          }
         }
 
         entries.push({ node, parentNodeId, triggerValue, order: order++ });
