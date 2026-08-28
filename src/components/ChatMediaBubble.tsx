@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Play, Pause, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -9,11 +9,42 @@ interface ChatMediaBubbleProps {
   isOutbound: boolean;
 }
 
+/** Velocidades de reprodução, na ordem em que o botão alterna. */
+const SPEEDS = [1, 1.5, 2, 3] as const;
+const SPEED_KEY = "prime-chat:audio-speed";
+
+/** Lê a velocidade escolhida antes. Voltar para 1x a cada áudio irrita. */
+function storedSpeed(): number {
+  try {
+    const v = Number(localStorage.getItem(SPEED_KEY));
+    return SPEEDS.includes(v as any) ? v : 1;
+  } catch {
+    return 1;
+  }
+}
+
 function AudioPlayer({ src, isOutbound }: { src: string; isOutbound: boolean }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [speed, setSpeed] = useState(storedSpeed);
+
+  // O elemento é recriado a cada render de mídia nova; reaplica a velocidade.
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.playbackRate = speed;
+  }, [speed, src]);
+
+  const cycleSpeed = () => {
+    const proxima = SPEEDS[(SPEEDS.indexOf(speed as any) + 1) % SPEEDS.length];
+    setSpeed(proxima);
+    if (audioRef.current) audioRef.current.playbackRate = proxima;
+    try {
+      localStorage.setItem(SPEED_KEY, String(proxima));
+    } catch {
+      /* navegador sem armazenamento: vale só para esta sessão */
+    }
+  };
 
   const togglePlay = () => {
     if (!audioRef.current) return;
@@ -32,7 +63,10 @@ function AudioPlayer({ src, isOutbound }: { src: string; isOutbound: boolean }) 
 
   const handleLoadedMetadata = () => {
     if (!audioRef.current) return;
-    setDuration(audioRef.current.duration);
+    // Áudio em stream (ou ogg sem cabeçalho de duração) reporta Infinity/NaN.
+    // Sem esta guarda, o formatador imprimia "Infinity:NaN" na bolha.
+    const d = audioRef.current.duration;
+    setDuration(Number.isFinite(d) && d > 0 ? d : 0);
   };
 
   const handleEnded = () => setPlaying(false);
@@ -45,6 +79,7 @@ function AudioPlayer({ src, isOutbound }: { src: string; isOutbound: boolean }) 
   };
 
   const formatTime = (t: number) => {
+    if (!Number.isFinite(t) || t < 0) return "--:--";
     const m = Math.floor(t / 60);
     const s = Math.floor(t % 60);
     return `${m}:${s.toString().padStart(2, "0")}`;
@@ -79,9 +114,24 @@ function AudioPlayer({ src, isOutbound }: { src: string; isOutbound: boolean }) 
             style={{ width: duration ? `${(progress / duration) * 100}%` : "0%" }}
           />
         </div>
-        <span className="text-[10px] opacity-60">
-          {formatTime(playing ? progress : duration || 0)}
-        </span>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] opacity-60">
+            {formatTime(playing ? progress : duration || 0)}
+          </span>
+          <button
+            type="button"
+            onClick={cycleSpeed}
+            title="Velocidade de reprodução"
+            aria-label={`Velocidade ${speed}x — clique para mudar`}
+            className={cn(
+              "text-[10px] font-semibold px-1.5 py-0.5 rounded transition-colors tabular-nums",
+              speed === 1 ? "opacity-60 hover:opacity-100" : "opacity-100",
+              isOutbound ? "bg-[#4fc3f7]/20 text-[#0d7377]" : "bg-primary/10 text-primary",
+            )}
+          >
+            {speed}×
+          </button>
+        </div>
       </div>
     </div>
   );
