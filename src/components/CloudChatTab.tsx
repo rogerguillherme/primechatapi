@@ -1181,13 +1181,24 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
             const latest = latestMessages?.get(lead.id);
             const isSelected = lead.id === selectedLeadId;
             const leadTags = getLeadLabels(lead.id);
+            const isUnread = unreadIds.has(lead.id);
+            const isDone = lead.chat_status === "finalizado";
             return (
-              <button
+              <div
                 key={lead.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => setSelectedLeadId(lead.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setSelectedLeadId(lead.id);
+                  }
+                }}
                 className={cn(
-                  "w-full text-left flex items-center gap-3 px-3 py-3 transition-colors border-b border-border/30",
-                  isSelected ? "bg-accent" : "hover:bg-accent/40"
+                  "group w-full text-left flex items-center gap-3 px-3 py-3 transition-colors border-b border-border/30 cursor-pointer",
+                  isSelected ? "bg-accent" : "hover:bg-accent/40",
+                  isUnread && "bg-primary/5"
                 )}
               >
                 <Avatar className="w-10 h-10 flex-shrink-0">
@@ -1198,12 +1209,15 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <p className="font-medium text-sm truncate">{lead.name}</p>
-                    {latest && (
-                      <span className="text-[11px] text-muted-foreground ml-2 shrink-0">
-                        {formatSidebarTime(latest.created_at)}
-                      </span>
-                    )}
+                    <p className={cn("text-sm truncate", isUnread ? "font-bold" : "font-medium")}>{lead.name}</p>
+                    <div className="flex items-center gap-1 ml-2 shrink-0">
+                      {isUnread && <span className="w-2 h-2 rounded-full bg-primary" />}
+                      {latest && (
+                        <span className="text-[11px] text-muted-foreground">
+                          {formatSidebarTime(latest.created_at)}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-1 mt-0.5">
                     {latest?.direction === "outbound" && <CheckCheck size={12} className="text-sky-400 shrink-0" />}
@@ -1211,6 +1225,11 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                       {latest ? latest.content : "Iniciar conversa"}
                     </p>
                   </div>
+                  {lead.last_outbound_at && (
+                    <p className="text-[10px] text-muted-foreground/80 mt-0.5 truncate">
+                      {formatLastOutbound(lead.last_outbound_at)}
+                    </p>
+                  )}
                   {leadTags.length > 0 && (
                     <div className="flex gap-1 mt-1 flex-wrap">
                       {leadTags.slice(0, 3).map((tag) => (
@@ -1228,7 +1247,31 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                     </div>
                   )}
                 </div>
-              </button>
+                <div className="flex flex-col gap-1 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                  <button
+                    type="button"
+                    title={isUnread ? "Marcar como lido" : "Marcar como não lido"}
+                    onClick={(e) => { e.stopPropagation(); toggleUnread(lead.id); }}
+                    className={cn(
+                      "p-1 rounded-md hover:bg-accent",
+                      isUnread ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <Mail size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    title={isDone ? "Reabrir conversa" : "Finalizar conversa"}
+                    onClick={(e) => { e.stopPropagation(); finalizeLead.mutate({ leadId: lead.id, done: !isDone }); }}
+                    className={cn(
+                      "p-1 rounded-md hover:bg-accent",
+                      isDone ? "text-emerald-500" : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {isDone ? <RotateCcw size={14} /> : <CheckCircle2 size={14} />}
+                  </button>
+                </div>
+              </div>
             );
           })}
           {visibleLeads.length < sortedLeads.length && (
