@@ -604,6 +604,9 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
             trigger_value: s.trigger_value,
             buttons: Array.isArray(s.buttons) ? s.buttons : [],
             timeout_minutes: s.timeout_minutes || null,
+            no_response_conditions: Array.isArray(s.no_response_conditions)
+              ? s.no_response_conditions
+              : [],
             agent_id: s.ai_agent_id || null,
             ai_prompt: s.ai_prompt || "",
             max_interactions: s.max_interactions || 5,
