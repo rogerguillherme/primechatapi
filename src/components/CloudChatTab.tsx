@@ -99,6 +99,9 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
   const [contactTab, setContactTab] = useState<"info" | "edit">("info");
   const [shortcutQuery, setShortcutQuery] = useState<string | null>(null);
   const [shortcutIndex, setShortcutIndex] = useState(0);
+  /** Mensagem selecionada para responder (citação WhatsApp). */
+  const [replyTo, setReplyTo] = useState<any | null>(null);
+
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { accounts, defaultAccount } = useWhatsAppAccounts();
