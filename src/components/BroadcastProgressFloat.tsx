@@ -62,7 +62,14 @@ export function BroadcastProgressFloat() {
         .limit(5);
       return (data || []) as BroadcastJob[];
     },
-    refetchInterval: 3000,
+    // 3s só enquanto existe disparo andando. Este componente fica montado no
+    // app inteiro: no ritmo fixo eram 1.200 requisições por hora, por aba,
+    // mesmo sem nada acontecendo — e a barra só aparece quando há job ativo.
+    refetchInterval: (query) => {
+      const jobs = (query.state.data || []) as BroadcastJob[];
+      const rodando = jobs.some((j) => j.status === "pending" || j.status === "processing");
+      return rodando ? 3000 : 60_000;
+    },
     enabled: !!session?.user.id,
   });
 

@@ -139,19 +139,6 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
     },
   });
 
-  // Fetch lead-label mapping
-  const { data: leadLabelsMap } = useQuery({
-    queryKey: ["lead-labels-map"],
-    queryFn: async () => {
-      const { data } = await supabase.from("lead_labels").select("lead_id, label_id");
-      const map = new Map<string, Set<string>>();
-      for (const ll of data || []) {
-        if (!map.has(ll.lead_id)) map.set(ll.lead_id, new Set());
-        map.get(ll.lead_id)!.add(ll.label_id);
-      }
-      return map;
-    },
-  });
 
   // Fetch leads (already carries the denormalized last-message summary).
   // 5000 leads por refetch travava a aba: o payload chegava a alguns MB e todo
@@ -174,6 +161,34 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
     staleTime: 30_000,
   });
 
+
+  // Etiquetas das conversas carregadas.
+  //
+  // Antes buscava `lead_labels` inteira e o Supabase cortava em 1.000 linhas
+  // sem avisar: em conta grande, etiqueta de conversa antiga simplesmente não
+  // aparecia. Agora pede só as dos leads em tela, em lotes — a URL não aguenta
+  // 800 ids de uma vez.
+  const loadedLeadIds = useMemo(() => (leads || []).map((l: any) => l.id), [leads]);
+
+  const { data: leadLabelsMap } = useQuery({
+    queryKey: ["lead-labels-map", loadedLeadIds.length],
+    enabled: loadedLeadIds.length > 0,
+    queryFn: async () => {
+      const map = new Map<string, Set<string>>();
+      for (let i = 0; i < loadedLeadIds.length; i += 200) {
+        const { data, error } = await supabase
+          .from("lead_labels")
+          .select("lead_id, label_id")
+          .in("lead_id", loadedLeadIds.slice(i, i + 200));
+        if (error) throw error;
+        for (const ll of data || []) {
+          if (!map.has(ll.lead_id)) map.set(ll.lead_id, new Set());
+          map.get(ll.lead_id)!.add(ll.label_id);
+        }
+      }
+      return map;
+    },
+  });
 
   const leadAccountMap = useMemo(() => {
     const map = new Map<string, Set<string>>();
