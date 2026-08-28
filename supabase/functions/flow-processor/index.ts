@@ -147,7 +147,8 @@ Deno.serve(async (req) => {
 
         const { data: lead } = await supabase
           .from("leads")
-          .select("id, name, phone, unsubscribed")
+          // last_inbound_at alimenta as condições de "sem resposta".
+          .select("id, name, phone, unsubscribed, last_inbound_at, metadata")
           .eq("id", exec.lead_id)
           .single();
 
