@@ -1253,7 +1253,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                   </div>
 
                   {runningExecution && (
-                    <>
+                    <div className="px-1 pb-1">
                       <DropdownMenuSeparator />
                       {isPaused ? (
                         <DropdownMenuItem
@@ -1282,8 +1282,9 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                         <X size={14} className="shrink-0" />
                         Parar fluxo em andamento
                       </DropdownMenuItem>
-                    </>
+                    </div>
                   )}
+
                 </DropdownMenuContent>
               </DropdownMenu>
 
