@@ -19,7 +19,7 @@ import {
   Search, Send, MessageSquare, FileText, Check, CheckCheck,
   MoreVertical, ArrowLeft, Paperclip, Clock, MessageCircleReply,
   ShoppingBag, RotateCcw, Tag, X, AlertCircle, Bot, Users, PowerOff, Megaphone,
-  Info, Pencil, Columns3, Zap, Workflow, UserPlus, Pause, Play,
+  Info, Pencil, Columns3, Zap, Workflow, UserPlus, Pause, Play, Reply,
 } from "lucide-react";
 import { BulkBroadcastDialog } from "@/components/BulkBroadcastDialog";
 import { ContactInfoSheet } from "@/components/chat/ContactInfoSheet";
