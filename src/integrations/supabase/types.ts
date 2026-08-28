@@ -500,6 +500,7 @@ export type Database = {
           lead_id: string
           media_type: string | null
           media_url: string | null
+          quoted_message: Json | null
           read_at: string | null
           status: string
           zapi_message_id: string | null
@@ -517,6 +518,7 @@ export type Database = {
           lead_id: string
           media_type?: string | null
           media_url?: string | null
+          quoted_message?: Json | null
           read_at?: string | null
           status?: string
           zapi_message_id?: string | null
@@ -534,6 +536,7 @@ export type Database = {
           lead_id?: string
           media_type?: string | null
           media_url?: string | null
+          quoted_message?: Json | null
           read_at?: string | null
           status?: string
           zapi_message_id?: string | null

@@ -1009,11 +1009,31 @@ Deno.serve(async (req) => {
 
       const initialStatus = waData.messages?.[0]?.message_status === "accepted" ? "accepted" : "sent";
 
+      // Snapshot da mensagem citada para exibir no histórico do chat.
+      let quotedMessage: Record<string, unknown> | null = null;
+      if (reply_to_message_id && typeof reply_to_message_id === "string") {
+        const { data: quoted } = await supabase
+          .from("chat_messages")
+          .select("content, direction, media_type")
+          .eq("zapi_message_id", reply_to_message_id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (quoted) {
+          quotedMessage = {
+            content: quoted.content,
+            direction: quoted.direction,
+            media_type: quoted.media_type,
+          };
+        }
+      }
+
       await supabase.from("chat_messages").insert({
         lead_id, direction: "outbound", content: contentText,
         media_type: media_type || null, media_url: media_url || null,
         zapi_message_id: waMessageId, status: initialStatus,
         account_id: account_id || resolvedAccountId || null,
+        quoted_message: quotedMessage,
       });
 
       const { error: leadUpdateError } = await supabase
