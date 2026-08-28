@@ -1429,7 +1429,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                     <Workflow size={18} />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-80 max-h-[80vh] overflow-hidden p-0">
+                <DropdownMenuContent align="end" className="w-[30rem] max-h-[85vh] overflow-hidden p-0">
                   <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
                     {isPaused
                       ? "Fluxo pausado"
