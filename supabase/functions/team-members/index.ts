@@ -35,10 +35,20 @@ serve(async (req) => {
 
     // ── LIST ──────────────────────────────────────────────────────────────
     if (req.method === "GET" && action === "list") {
+      const { data: membership, error: membershipError } = await admin
+        .from("team_members")
+        .select("owner_id, access_level")
+        .eq("member_user_id", caller.id)
+        .eq("access_level", "manager")
+        .limit(1)
+        .maybeSingle();
+      if (membershipError) throw membershipError;
+
+      const ownerId = membership?.owner_id ?? caller.id;
       const { data: members, error } = await admin
         .from("team_members")
         .select("*")
-        .eq("owner_id", caller.id)
+        .eq("owner_id", ownerId)
         .order("created_at", { ascending: true });
       if (error) throw error;
 
@@ -54,6 +64,23 @@ serve(async (req) => {
           last_sign_in_at: u?.last_sign_in_at ?? null,
         };
       });
+
+      // O dono não possui uma linha em team_members. Para gerentes, inclua-o
+      // somente na listagem usada pelos filtros e pela transferência de leads.
+      if (membership) {
+        const owner = userMap.get(ownerId);
+        mapped.unshift({
+          id: `owner-${ownerId}`,
+          owner_id: ownerId,
+          member_user_id: ownerId,
+          access_level: "manager",
+          lead_scope: "all",
+          created_at: owner?.created_at ?? new Date(0).toISOString(),
+          email: owner?.email ?? "—",
+          display_name: (owner?.user_metadata?.full_name as string) || "Proprietário",
+          last_sign_in_at: owner?.last_sign_in_at ?? null,
+        });
+      }
 
       return json(mapped);
     }

@@ -106,10 +106,12 @@ async function teamFetch(action: string, method: string, body?: unknown) {
 }
 
 export function useTeamMembers(enabled = true) {
+  const { user } = useAuth();
+
   return useQuery<TeamMemberRow[]>({
-    queryKey: ["team-members"],
+    queryKey: ["team-members", user?.id],
     queryFn: () => teamFetch("list", "GET"),
-    enabled,
+    enabled: enabled && !!user,
     retry: false,
   });
 }

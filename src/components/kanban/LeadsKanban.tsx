@@ -132,7 +132,8 @@ export function LeadsKanban() {
     },
   });
 
-  const { data: members = [] } = useTeamMembers(!!team?.canManageTeam);
+  const canViewTeam = team?.accessLevel === "owner" || team?.accessLevel === "manager";
+  const { data: members = [] } = useTeamMembers(canViewTeam);
 
   const memberNames = useMemo(() => {
     const map = new Map<string, string>();

@@ -441,8 +441,9 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
 
   // ── TRANSFERIR ATENDIMENTO ──
   const { data: teamCtx } = useTeamContext();
-  // A listagem de membros só existe para o dono da conta (RLS/edge function).
-  const { data: teamMembers } = useTeamMembers(!!teamCtx?.isOwner);
+  // Donos e gerentes podem visualizar toda a equipe e filtrar os atendimentos.
+  const canViewTeam = teamCtx?.accessLevel === "owner" || teamCtx?.accessLevel === "manager";
+  const { data: teamMembers } = useTeamMembers(canViewTeam);
 
   /** Lista de atendentes disponíveis: o dono/eu + colaboradores. */
   const agents = useMemo(() => {
