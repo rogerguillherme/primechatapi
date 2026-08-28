@@ -92,8 +92,17 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [filterAccountId, setFilterAccountId] = useState<string | null>(null);
   const [filterLabelIds, setFilterLabelIds] = useState<Set<string>>(new Set());
-  // "" = todos os vendedores; UNASSIGNED_AGENT = conversas sem responsável.
-  const [filterAgentId, setFilterAgentId] = useState<string>("");
+  // Conjunto vazio = todos. UNASSIGNED_AGENT participa como se fosse um
+  // vendedor, para dar pra ver "Ana + sem responsável" numa tacada.
+  const [filterAgentIds, setFilterAgentIds] = useState<Set<string>>(new Set());
+
+  const toggleAgentFilter = (id: string) =>
+    setFilterAgentIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const [showLabelFilter, setShowLabelFilter] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -479,6 +488,17 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
     return list;
   }, [teamMembers, user?.id, user?.email]);
 
+  /** Rótulo do botão: nome quando é um só, contagem quando são vários. */
+  const agentFilterLabel = useMemo(() => {
+    if (filterAgentIds.size === 0) return "Todos os vendedores";
+    if (filterAgentIds.size === 1) {
+      const [id] = [...filterAgentIds];
+      if (id === UNASSIGNED_AGENT) return "Sem responsável";
+      return agents.find((a) => a.id === id)?.label ?? "1 vendedor";
+    }
+    return `${filterAgentIds.size} vendedores`;
+  }, [filterAgentIds, agents]);
+
   const transferLead = useMutation({
     mutationFn: async (assignedTo: string | null) => {
       if (!selectedLeadId) throw new Error("Nenhuma conversa selecionada");
@@ -828,10 +848,9 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
       }
       if (s && !l.name.toLowerCase().includes(s) && !l.phone.includes(s) && !l.email?.toLowerCase().includes(s)) return false;
       if (filterAccountId && !leadAccountMap?.get(filterAccountId)?.has(l.id)) return false;
-      if (filterAgentId === UNASSIGNED_AGENT) {
-        if (l.assigned_to) return false;
-      } else if (filterAgentId && l.assigned_to !== filterAgentId) {
-        return false;
+      if (filterAgentIds.size > 0) {
+        const chave = l.assigned_to || UNASSIGNED_AGENT;
+        if (!filterAgentIds.has(chave)) return false;
       }
       if (filterLabelIds.size > 0) {
         const leadLbls = leadLabelsMap?.get(l.id);
@@ -846,7 +865,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
       seen.add(key);
       return true;
     });
-  }, [leads, search, activeTab, filterAccountId, filterAgentId, leadAccountMap, filterLabelIds, leadLabelsMap, failedLeadIds]);
+  }, [leads, search, activeTab, filterAccountId, filterAgentIds, leadAccountMap, filterLabelIds, leadLabelsMap, failedLeadIds]);
 
   const tabCounts = useMemo(() => {
     if (!leads) return {} as Record<string, number>;
@@ -881,7 +900,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
   const [visibleCount, setVisibleCount] = useState(PAGE);
   useEffect(() => {
     setVisibleCount(PAGE);
-  }, [search, activeTab, filterAccountId, filterAgentId, filterLabelIds]);
+  }, [search, activeTab, filterAccountId, filterAgentIds, filterLabelIds]);
   const visibleLeads = useMemo(() => sortedLeads.slice(0, visibleCount), [sortedLeads, visibleCount]);
 
 
@@ -1032,18 +1051,38 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
               </select>
             )}
             {agents.length > 1 && (
-              <select
-                value={filterAgentId}
-                onChange={(e) => setFilterAgentId(e.target.value)}
-                className="flex-1 rounded-md border border-input bg-background px-2 py-1 text-xs"
-                aria-label="Filtrar por vendedor"
-              >
-                <option value="">Todos os vendedores</option>
-                <option value={UNASSIGNED_AGENT}>Sem responsável</option>
-                {agents.map((a) => (
-                  <option key={a.id} value={a.id}>{a.label}</option>
-                ))}
-              </select>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className="flex-1 rounded-md border border-input bg-background px-2 py-1 text-xs text-left truncate"
+                    aria-label="Filtrar por vendedor"
+                  >
+                    {agentFilterLabel}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  <DropdownMenuItem
+                    onClick={() => setFilterAgentIds(new Set())}
+                    className="gap-2"
+                  >
+                    <span className="flex-1">Todos os vendedores</span>
+                    {filterAgentIds.size === 0 && <Check size={14} className="opacity-60" />}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  {/* onSelect com preventDefault: sem isso o menu fecha a cada
+                      clique e escolher dois atendentes vira quatro cliques. */}
+                  {[{ id: UNASSIGNED_AGENT, label: "Sem responsável" }, ...agents].map((a) => (
+                    <DropdownMenuItem
+                      key={a.id}
+                      onSelect={(e) => { e.preventDefault(); toggleAgentFilter(a.id); }}
+                      className="gap-2"
+                    >
+                      <span className="flex-1 truncate">{a.label}</span>
+                      {filterAgentIds.has(a.id) && <Check size={14} className="opacity-60" />}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
             {(() => {
               const evoAccount =

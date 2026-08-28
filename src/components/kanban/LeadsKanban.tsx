@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   Plus, Loader2, Trash2, GripVertical, UserCheck, Columns3, Pencil, KanbanSquare,
+  Check, Users,
 } from "lucide-react";
 
 interface Stage {
@@ -73,7 +74,15 @@ export function LeadsKanban() {
   const [stageForm, setStageForm] = useState({ name: "", color: STAGE_COLORS[0] });
   // Filtro por vendedor. "" = todos; SEM_DONO = leads sem responsável, que é
   // o recorte que mais interessa a quem administra.
-  const [filterAgentId, setFilterAgentId] = useState<string>("");
+  const [filterAgentIds, setFilterAgentIds] = useState<Set<string>>(new Set());
+
+  const toggleAgentFilter = (id: string) =>
+    setFilterAgentIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const [draggingLeadId, setDraggingLeadId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
 
@@ -94,7 +103,7 @@ export function LeadsKanban() {
   const stageKey = stages.map((s) => s.id).join(",");
 
   const { data: columnData, isLoading: leadsLoading } = useQuery<Record<string, ColumnData>>({
-    queryKey: ["kanban-columns", ownerId, stageKey, filterAgentId],
+    queryKey: ["kanban-columns", ownerId, stageKey, [...filterAgentIds].sort().join(",")],
     enabled: !!ownerId && !stagesLoading,
     staleTime: 30_000,
     queryFn: async () => {
@@ -115,8 +124,19 @@ export function LeadsKanban() {
             q = stageId ? q.eq("stage_id", stageId) : q.is("stage_id", null);
             // Filtra no banco, não na tela: o contador de cada coluna e o
             // recorte de cartões vêm da própria consulta.
-            if (filterAgentId === UNASSIGNED) q = q.is("assigned_to", null);
-            else if (filterAgentId) q = q.eq("assigned_to", filterAgentId);
+            if (filterAgentIds.size > 0) {
+              const semDono = filterAgentIds.has(UNASSIGNED);
+              const ids = [...filterAgentIds].filter((v) => v !== UNASSIGNED);
+              if (semDono && ids.length > 0) {
+                // "Ana e sem responsável" precisa de OR: um `in` sozinho
+                // nunca casa com nulo.
+                q = q.or(`assigned_to.in.(${ids.join(",")}),assigned_to.is.null`);
+              } else if (semDono) {
+                q = q.is("assigned_to", null);
+              } else {
+                q = q.in("assigned_to", ids);
+              }
+            }
             return q;
           };
 
@@ -134,6 +154,18 @@ export function LeadsKanban() {
 
   const canViewTeam = team?.accessLevel === "owner" || team?.accessLevel === "manager";
   const { data: members = [] } = useTeamMembers(canViewTeam);
+
+  /** Nome quando é um só, contagem quando são vários. */
+  const agentFilterLabel = useMemo(() => {
+    if (filterAgentIds.size === 0) return "Todos os vendedores";
+    if (filterAgentIds.size === 1) {
+      const [id] = [...filterAgentIds];
+      if (id === UNASSIGNED) return "Sem responsável";
+      const m = members.find((x) => x.member_user_id === id);
+      return m ? (m.display_name || m.email) : "1 vendedor";
+    }
+    return `${filterAgentIds.size} vendedores`;
+  }, [filterAgentIds, members]);
 
   const memberNames = useMemo(() => {
     const map = new Map<string, string>();
@@ -275,20 +307,35 @@ export function LeadsKanban() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {members.length > 0 && (
-            <select
-              value={filterAgentId}
-              onChange={(e) => setFilterAgentId(e.target.value)}
-              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-              aria-label="Filtrar por vendedor"
-            >
-              <option value="">Todos os vendedores</option>
-              <option value={UNASSIGNED}>Sem responsável</option>
-              {members.map((m) => (
-                <option key={m.member_user_id} value={m.member_user_id}>
-                  {m.display_name || m.email}
-                </option>
-              ))}
-            </select>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="h-9 gap-2 font-normal">
+                  <Users size={15} className="opacity-60" />
+                  {agentFilterLabel}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuItem onClick={() => setFilterAgentIds(new Set())} className="gap-2">
+                  <span className="flex-1">Todos os vendedores</span>
+                  {filterAgentIds.size === 0 && <Check size={14} className="opacity-60" />}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {/* preventDefault mantém o menu aberto: escolher dois
+                    atendentes não pode custar quatro cliques. */}
+                {[{ id: UNASSIGNED, nome: "Sem responsável" },
+                  ...members.map((m) => ({ id: m.member_user_id, nome: m.display_name || m.email }))
+                ].map((a) => (
+                  <DropdownMenuItem
+                    key={a.id}
+                    onSelect={(e) => { e.preventDefault(); toggleAgentFilter(a.id); }}
+                    className="gap-2"
+                  >
+                    <span className="flex-1 truncate">{a.nome}</span>
+                    {filterAgentIds.has(a.id) && <Check size={14} className="opacity-60" />}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         {canManageStages && (
           <div className="flex gap-2">
