@@ -1484,6 +1484,23 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                             showTail && isOutbound && "rounded-tr-none",
                             showTail && !isOutbound && "rounded-tl-none"
                           )}>
+                            {(msg as any).quoted_message && (
+                              <div className={cn(
+                                "mb-1 rounded-md border-l-4 px-2 py-1.5 text-xs",
+                                isOutbound ? "border-primary bg-primary/15" : "border-primary bg-accent/60"
+                              )}>
+                                <p className="font-medium text-primary mb-0.5">
+                                  {(msg as any).quoted_message.direction === "outbound" ? "Você" : (selectedLead?.name || "Lead")}
+                                </p>
+                                <p className="text-muted-foreground line-clamp-2 break-words">
+                                  {(msg as any).quoted_message.content ||
+                                    ((msg as any).quoted_message.media_type === "audio" ? "🎤 Áudio"
+                                      : (msg as any).quoted_message.media_type === "image" ? "📷 Imagem"
+                                      : (msg as any).quoted_message.media_type === "video" ? "🎥 Vídeo"
+                                      : (msg as any).quoted_message.media_type ? "📎 Arquivo" : "Mensagem")}
+                                </p>
+                              </div>
+                            )}
                             {msg.media_url && msg.media_type ? (
                               <div className="mb-1">
                                 <ChatMediaBubble mediaType={msg.media_type} mediaUrl={msg.media_url} caption={msg.media_type !== "audio" ? msg.content : undefined} isOutbound={isOutbound} />
