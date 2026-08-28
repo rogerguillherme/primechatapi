@@ -884,10 +884,18 @@ Deno.serve(async (req) => {
       body = { messaging_product: "whatsapp", to: cleanPhone, type: "text", text: { body: withUniqueSignature(message) } };
     }
 
+    // Resposta citada (reply): a Meta aceita `context.message_id` com o ID (wamid)
+    // da mensagem original. Só aplicamos em mensagens não-template, pois templates
+    // de marketing não suportam contexto.
+    if (reply_to_message_id && typeof reply_to_message_id === "string" && !template_name) {
+      body.context = { message_id: reply_to_message_id };
+    }
+
     // 360dialog API uses the same body shape but without `messaging_product`
     if (isD360) {
       delete body.messaging_product;
     }
+
 
     console.log(`WhatsApp ${isD360 ? "360dialog" : "Cloud"} API request:`, JSON.stringify(body));
 
