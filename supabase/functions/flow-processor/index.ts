@@ -17,9 +17,23 @@ function stepDelayMs(step: any): number {
 
 const READY_STATUSES = ["waiting_delay", "waiting_no_response"];
 const RETRY_DELAY_MS = 5000;
-// Janela para considerar um envio idêntico como duplicata. Ampliada para 6h
-// para impedir que um reprocessamento reenvie mensagens que já foram aceitas.
-const DUPLICATE_SEND_WINDOW_MS = 6 * 60 * 60 * 1000;
+
+// Janela para considerar um envio idêntico como duplicata.
+//
+// A identidade da duplicata é o TEXTO da mensagem — não o passo. Com 6h, dois
+// fluxos diferentes com a mesma abertura colidiam: o segundo era descartado e
+// a execução avançava como se tivesse enviado. Era o "alguns fluxos enviam,
+// outros não".
+//
+// 15 min cobre o caso que a janela larga existia para proteger — o
+// reprocessamento de um passo, que acontece em segundos (RETRY_DELAY_MS) — sem
+// alcançar dois envios legítimos ao longo do dia.
+const DUPLICATE_SEND_WINDOW_MS = 15 * 60 * 1000;
+
+// Mídia mantém a janela larga: desde que a URL do arquivo entrou na identidade,
+// arquivos diferentes não colidem mais, então proteger por mais tempo é de
+// graça — e reenviar áudio por engano é o que mais incomoda quem recebe.
+const DUPLICATE_MEDIA_WINDOW_MS = 6 * 60 * 60 * 1000;
 // Somente envios que DERAM CERTO bloqueiam um novo envio; falhas (ex.: #131047)
 // devem poder ser reenviadas pelo número correto.
 const SUCCESS_STATUSES = ["sent", "delivered", "read", "pending"];
@@ -476,7 +490,8 @@ async function sendStepMessage(
   }
 
   if (expectedLogContent) {
-    const windowStart = new Date(Date.now() - DUPLICATE_SEND_WINDOW_MS).toISOString();
+    const janelaMs = body.media_url ? DUPLICATE_MEDIA_WINDOW_MS : DUPLICATE_SEND_WINDOW_MS;
+    const windowStart = new Date(Date.now() - janelaMs).toISOString();
     let duplicateQuery = supabase
       .from("chat_messages")
       .select("id, created_at, status")
@@ -512,6 +527,7 @@ async function sendStepMessage(
           original: recentDuplicate.id,
           content: expectedLogContent,
           media_url: body.media_url || null,
+          janela_min: Math.round(janelaMs / 60000),
         }),
       );
       return true;
