@@ -1552,6 +1552,7 @@ export type Database = {
           last_message_direction: string | null
           last_message_status: string | null
           last_outbound_at: string | null
+          manually_unread: boolean
           metadata: Json
           name: string
           origin: string | null
@@ -1583,6 +1584,7 @@ export type Database = {
           last_message_direction?: string | null
           last_message_status?: string | null
           last_outbound_at?: string | null
+          manually_unread?: boolean
           metadata?: Json
           name: string
           origin?: string | null
@@ -1614,6 +1616,7 @@ export type Database = {
           last_message_direction?: string | null
           last_message_status?: string | null
           last_outbound_at?: string | null
+          manually_unread?: boolean
           metadata?: Json
           name?: string
           origin?: string | null

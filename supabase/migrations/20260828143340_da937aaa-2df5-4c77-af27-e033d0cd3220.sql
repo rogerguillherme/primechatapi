@@ -1,0 +1,1 @@
+ALTER TABLE public.leads ADD COLUMN IF NOT EXISTS manually_unread boolean NOT NULL DEFAULT false;
