@@ -341,27 +341,7 @@ export function NodeEditPanel({ node, templates, onUpdate, onClose, variationEna
         )}
 
         {type === "no_response" && (
-          <div className="space-y-2">
-            <Label className="text-xs">Timeout (minutos)</Label>
-            <Input
-              type="number"
-              min={1}
-              value={(data.timeout_minutes as number) || 10}
-              onChange={(e) => onUpdate({ timeout_minutes: parseInt(e.target.value) || 10 })}
-              className="h-8 text-sm"
-            />
-            {((data.timeout_minutes as number) || 0) >= 60 && (
-              <p className="text-xs text-muted-foreground">
-                = {Math.floor(((data.timeout_minutes as number) || 0) / 60)}h
-                {((data.timeout_minutes as number) || 0) % 60 > 0
-                  ? ` ${((data.timeout_minutes as number) || 0) % 60}min`
-                  : ""}
-              </p>
-            )}
-            <p className="text-[11px] text-muted-foreground">
-              Se o lead não clicar no botão/link anterior dentro deste tempo, o fluxo avança para o próximo passo.
-            </p>
-          </div>
+          <NoResponseFields data={data} onUpdate={onUpdate} />
         )}
 
         {type === "ai_agent" && (
