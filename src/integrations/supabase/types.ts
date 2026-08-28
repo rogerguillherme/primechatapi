@@ -605,6 +605,30 @@ export type Database = {
           },
         ]
       }
+      chat_stickers: {
+        Row: {
+          created_at: string
+          id: string
+          label: string | null
+          url: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label?: string | null
+          url: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string | null
+          url?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       chat_templates: {
         Row: {
           category: string | null
