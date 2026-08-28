@@ -1522,19 +1522,22 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                           Nenhum atalho criado. Crie em Configurações → Atalhos do chat.
                         </div>
                       )}
-                      {(shortcuts || []).map((s: any) => (
-                        <DropdownMenuItem key={s.id} onClick={() => runShortcut(s)} className="gap-2 items-start">
-                          {s.action_type === "flow"
-                            ? <Workflow size={15} className="mt-0.5 text-primary flex-shrink-0" />
-                            : <Zap size={15} className="mt-0.5 text-primary flex-shrink-0" />}
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium truncate">/{s.command}</p>
-                            <p className="text-xs text-muted-foreground line-clamp-2">
-                              {s.description || (s.action_type === "flow" ? "Inicia um fluxo" : s.message)}
-                            </p>
-                          </div>
-                        </DropdownMenuItem>
-                      ))}
+                      <div className="max-h-64 overflow-y-auto">
+                        {(shortcuts || []).map((s: any) => (
+                          <DropdownMenuItem key={s.id} onClick={() => runShortcut(s)} className="gap-2 items-start">
+                            {s.action_type === "flow"
+                              ? <Workflow size={15} className="mt-0.5 text-primary flex-shrink-0" />
+                              : <Zap size={15} className="mt-0.5 text-primary flex-shrink-0" />}
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium truncate">/{s.command}</p>
+                              <p className="text-xs text-muted-foreground line-clamp-2">
+                                {s.description || (s.action_type === "flow" ? "Inicia um fluxo" : s.message)}
+                              </p>
+                            </div>
+                          </DropdownMenuItem>
+                        ))}
+                      </div>
+
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
