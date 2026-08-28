@@ -1523,6 +1523,32 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
             {/* Input */}
             <div className="px-4 py-2 bg-card border-t border-border">
               <input ref={fileInputRef} type="file" accept="image/*,video/*,audio/*,.pdf,.doc,.docx" className="hidden" onChange={handleFileSelect} />
+              {replyTo && (
+                <div className="max-w-3xl mx-auto mb-2 flex items-start gap-2 rounded-lg border-l-4 border-primary bg-accent/50 px-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium text-primary">
+                      {replyTo.direction === "outbound" ? "Você" : (selectedLead?.name || "Lead")}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {replyTo.content || (replyTo.media_type ? `[${replyTo.media_type}]` : "Mensagem")}
+                    </p>
+                    {!replyTo.zapi_message_id && (
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        Esta mensagem não tem ID da Meta — será enviada sem citação.
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReplyTo(null)}
+                    className="p-1 rounded-full hover:bg-accent text-muted-foreground"
+                    title="Cancelar resposta"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+              )}
+
               <div className="flex items-end gap-2 max-w-3xl mx-auto">
                 <div className="flex items-center gap-0.5 shrink-0 mb-[5px]">
                   {templates && templates.length > 0 && (
