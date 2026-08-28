@@ -5,6 +5,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useNotificationPrefs } from "@/hooks/use-notification-prefs";
+import { useNotificationSound } from "@/hooks/use-notification-sound";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
@@ -24,6 +26,9 @@ export function NotificationBell() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+
+  const { prefs } = useNotificationPrefs();
+  const tocarSom = useNotificationSound(prefs.sound);
 
   const { data: notifications } = useQuery({
     queryKey: ["notifications", user?.id],
@@ -47,11 +52,14 @@ export function NotificationBell() {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
-        () => queryClient.invalidateQueries({ queryKey: ["notifications", user.id] })
+        () => {
+          tocarSom();
+          queryClient.invalidateQueries({ queryKey: ["notifications", user.id] });
+        }
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [user?.id, queryClient]);
+  }, [user?.id, queryClient, tocarSom]);
 
   const unreadCount = notifications?.filter((n) => !n.read).length || 0;
 

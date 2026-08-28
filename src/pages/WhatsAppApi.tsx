@@ -107,6 +107,7 @@ import { StageAutomationsSettings } from "@/components/settings/StageAutomations
 import { ChatLabelsSettings } from "@/components/settings/ChatLabelsSettings";
 import { ChatShortcutsSettings } from "@/components/settings/ChatShortcutsSettings";
 import { MetritoSettings } from "@/components/settings/MetritoSettings";
+import { NotificationSettings } from "@/components/settings/NotificationSettings";
 import { useLeadsPicker } from "@/hooks/use-leads-picker";
 
 import { TemplateStudio } from "@/components/templates/TemplateStudio";
@@ -2581,6 +2582,9 @@ export default function WhatsAppApi() {
 
           {/* Atalhos digitáveis do chat (/fluxo1, /oi ...) */}
           <ChatShortcutsSettings />
+
+          {/* Notificações: o que faz o sino tocar, por usuário */}
+          <NotificationSettings />
 
           {/* Credenciais do Metrito desta conta (vazio = usa o padrão global) */}
           <MetritoSettings />
