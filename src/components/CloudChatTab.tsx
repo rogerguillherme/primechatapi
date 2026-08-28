@@ -1476,6 +1476,23 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                 </DropdownMenuContent>
               </DropdownMenu>
 
+              {/* Atalho direto: pausar/retomar o fluxo em andamento sem abrir o menu */}
+              {runningExecution && (
+                <button
+                  onClick={() => (isPaused ? resumeFlow.mutate() : pauseFlow.mutate())}
+                  disabled={pauseFlow.isPending || resumeFlow.isPending}
+                  title={isPaused ? "Retomar fluxo" : "Pausar fluxo"}
+                  className={cn(
+                    "p-2 rounded-full hover:bg-accent transition-colors disabled:opacity-50",
+                    isPaused ? "text-emerald-500" : "text-amber-500",
+                  )}
+                >
+                  {isPaused ? <Play size={18} /> : <Pause size={18} />}
+                </button>
+              )}
+
+
+
               {/* Mover para outra etapa do Kanban */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
