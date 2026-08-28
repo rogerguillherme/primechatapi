@@ -796,9 +796,16 @@ Deno.serve(async (req) => {
               const rawType = (fileRes.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
               const ext = (media_url.split("?")[0].split(".").pop() || "").toLowerCase();
               const { mime, fileExt } = resolveAudioMime(rawType, ext);
-              // Opus só é reconhecido como voice note quando o codec é declarado.
+              // O CAMPO `type` leva o codec: é assim que a Meta reconhece o
+              // arquivo como mensagem de voz.
+              //
+              // Já a PARTE do arquivo no multipart leva o mime puro. Com o
+              // parâmetro `; codecs=opus` ali, a Meta não interpreta o
+              // content-type da parte e trata o conteúdo como
+              // application/octet-stream — recusando com 131053, mesmo o
+              // arquivo sendo um Ogg/Opus válido.
               const uploadMime = mime === "audio/ogg" ? "audio/ogg; codecs=opus" : mime;
-              const blob = new Blob([await fileRes.arrayBuffer()], { type: uploadMime });
+              const blob = new Blob([await fileRes.arrayBuffer()], { type: mime });
               const form = new FormData();
               form.append("messaging_product", "whatsapp");
               form.append("type", uploadMime);
@@ -811,7 +818,9 @@ Deno.serve(async (req) => {
               if (upRes.ok && upJson?.id) {
                 audioPayload = { id: upJson.id };
               } else {
-                lastErr = `status=${upRes.status} mime=${uploadMime} meta=${JSON.stringify(upJson?.error || upJson)}`;
+                // Guarda também o content-type que veio do storage: quando a
+                // Meta reclama do tipo, é essa a informação que falta.
+                lastErr = `status=${upRes.status} campo_type=${uploadMime} parte=${mime} origem=${rawType || "vazio"} meta=${JSON.stringify(upJson?.error || upJson)}`;
                 console.error(`Upload de áudio falhou (tentativa ${attempt}/3): ${lastErr}`);
               }
             } catch (e) {
