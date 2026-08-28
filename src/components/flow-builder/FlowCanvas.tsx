@@ -88,6 +88,10 @@ const createDefaultNodeData = (type: InsertableStepType): Record<string, unknown
     return { reason: "opt-out via fluxo" };
   }
 
+  if (type === "no_response") {
+    return { timeout_minutes: 10, no_response_conditions: [] };
+  }
+
   return { timeout_minutes: 10 };
 };
 
