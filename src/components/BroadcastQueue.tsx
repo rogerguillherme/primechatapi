@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useLeadsPicker } from "@/hooks/use-leads-picker";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUserTemplates } from "@/hooks/use-user-templates";
 import { Card, CardContent } from "@/components/ui/card";
@@ -94,17 +95,7 @@ export function BroadcastQueue() {
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [activeJobs, setActiveJobs] = useState<Record<string, BroadcastJob>>({});
 
-  const { data: leads } = useQuery({
-    queryKey: ["broadcast-leads"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("leads")
-        .select("id, name, phone, email, photo_url")
-        .order("name")
-        .limit(10000);
-      return data || [];
-    },
-  });
+  const { data: leads } = useLeadsPicker();
 
   const { templates } = useUserTemplates();
 

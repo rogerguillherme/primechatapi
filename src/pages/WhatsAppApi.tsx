@@ -107,6 +107,7 @@ import { StageAutomationsSettings } from "@/components/settings/StageAutomations
 import { ChatLabelsSettings } from "@/components/settings/ChatLabelsSettings";
 import { ChatShortcutsSettings } from "@/components/settings/ChatShortcutsSettings";
 import { MetritoSettings } from "@/components/settings/MetritoSettings";
+import { useLeadsPicker } from "@/hooks/use-leads-picker";
 
 import { TemplateStudio } from "@/components/templates/TemplateStudio";
 import { TeamManagement } from "@/components/team/TeamManagement";
@@ -187,16 +188,7 @@ function TrackingTab() {
     });
   };
 
-  const { data: leads } = useQuery({
-    queryKey: ["tracking-leads"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("leads")
-        .select("id, name, phone, email, photo_url")
-        .order("name");
-      return data || [];
-    },
-  });
+  const { data: leads } = useLeadsPicker();
 
   const filteredLeads = useMemo(() => {
     if (!leads) return [];
@@ -466,16 +458,7 @@ function BroadcastTab() {
     });
   };
 
-  const { data: leads } = useQuery({
-    queryKey: ["broadcast-leads"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("leads")
-        .select("id, name, phone, email, photo_url")
-        .order("name");
-      return data || [];
-    },
-  });
+  const { data: leads } = useLeadsPicker();
 
   const { templates } = useUserTemplates();
 
