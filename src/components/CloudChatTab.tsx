@@ -1842,7 +1842,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                             )}
                             {msg.media_url && msg.media_type ? (
                               <div className="mb-1">
-                                <ChatMediaBubble mediaType={msg.media_type} mediaUrl={msg.media_url} caption={msg.media_type !== "audio" ? msg.content : undefined} isOutbound={isOutbound} />
+                                <ChatMediaBubble mediaType={msg.media_type} mediaUrl={msg.media_url} caption={msg.media_type !== "audio" ? msg.content : undefined} isOutbound={isOutbound} onSaveSticker={handleSaveSticker} />
                                 <span className="inline-block w-[60px]" />
                               </div>
                             ) : (
