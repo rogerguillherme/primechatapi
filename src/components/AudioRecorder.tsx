@@ -37,6 +37,38 @@ export function audioFileFromBlob(blob: Blob): File {
   return new File([blob], `audio.${EXT_BY_MIME[base] || "ogg"}`, { type: base });
 }
 
+/**
+ * Confere se o que saiu do gravador é mesmo um arquivo utilizável.
+ *
+ * A Meta recusava com "declarado audio/ogg, mas ao processar é
+ * application/octet-stream" — que é o jeito dela de dizer "isso não é um Ogg".
+ * Um arquivo vazio ou só com cabeçalho produz exatamente essa resposta, e a
+ * pessoa só descobria depois de gravar e enviar.
+ *
+ * Ogg começa sempre com a assinatura "OggS". Ler os primeiros bytes é barato
+ * e transforma um erro obscuro da Meta num aviso local e imediato.
+ */
+export async function validarAudio(blob: Blob): Promise<string | null> {
+  // Um Ogg/Opus de meio segundo já passa de 2 KB. Abaixo disso é cabeçalho solto.
+  if (blob.size < 2048) {
+    return "A gravação saiu vazia. Verifique se o microfone está liberado para o site e tente de novo.";
+  }
+
+  const base = (blob.type || "").split(";")[0].trim();
+  if (base === "audio/ogg") {
+    try {
+      const inicio = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
+      const assinatura = String.fromCharCode(...inicio);
+      if (assinatura !== "OggS") {
+        return "O áudio gravado saiu corrompido neste navegador. Tente novamente ou envie como arquivo.";
+      }
+    } catch {
+      /* não conseguiu ler: deixa seguir e a Meta decide */
+    }
+  }
+  return null;
+}
+
 interface AudioRecorderProps {
   onRecorded: (blob: Blob) => void;
   /** Avisa o operador quando não dá para gravar num formato aceito. */

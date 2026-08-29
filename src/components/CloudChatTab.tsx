@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ChatMediaBubble } from "@/components/ChatMediaBubble";
-import { AudioRecorder, audioFileFromBlob } from "@/components/AudioRecorder";
+import { AudioRecorder, audioFileFromBlob, validarAudio } from "@/components/AudioRecorder";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -775,7 +775,14 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
     }
   }, [selectedLead, sendMutation]);
 
-  const handleAudioRecorded = useCallback((blob: Blob) => {
+  const handleAudioRecorded = useCallback(async (blob: Blob) => {
+    // Confere antes de subir: arquivo vazio ou corrompido vira uma recusa
+    // obscura da Meta lá na frente.
+    const problema = await validarAudio(blob);
+    if (problema) {
+      toast.error(problema);
+      return;
+    }
     uploadAndSendMedia(audioFileFromBlob(blob));
   }, [uploadAndSendMedia]);
 

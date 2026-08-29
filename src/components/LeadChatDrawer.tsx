@@ -14,7 +14,7 @@ import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { ChatMediaBubble } from "@/components/ChatMediaBubble";
-import { AudioRecorder, audioFileFromBlob } from "@/components/AudioRecorder";
+import { AudioRecorder, audioFileFromBlob, validarAudio } from "@/components/AudioRecorder";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 import { ContactInfoSheet } from "@/components/chat/ContactInfoSheet";
 import { startFlowForLead } from "@/lib/startFlowForLead";
@@ -303,9 +303,14 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
     }
   }, [lead, sendMutation, toast]);
 
-  const handleAudioRecorded = useCallback((blob: Blob) => {
+  const handleAudioRecorded = useCallback(async (blob: Blob) => {
+    const problema = await validarAudio(blob);
+    if (problema) {
+      toast({ title: "Áudio", description: problema, variant: "destructive" });
+      return;
+    }
     uploadAndSendMedia(audioFileFromBlob(blob));
-  }, [uploadAndSendMedia]);
+  }, [uploadAndSendMedia, toast]);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
