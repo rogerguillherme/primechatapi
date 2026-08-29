@@ -836,6 +836,30 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
     queryClient.invalidateQueries({ queryKey: ["chat-stickers", user?.id] });
   }, [queryClient, user?.id]);
 
+  /**
+   * Guarda na biblioteca uma figurinha que apareceu na conversa.
+   *
+   * A mesma URL salva duas vezes encheria o seletor de repetições, então já
+   * existente é tratado como sucesso — o operador queria a figurinha lá, e ela
+   * está.
+   */
+  const handleSaveSticker = useCallback(async (mediaUrl: string) => {
+    if (!user?.id) return;
+    if (stickers.some((s) => s.url === mediaUrl)) {
+      toast.info("Essa figurinha já está na sua biblioteca");
+      return;
+    }
+    const { error } = await supabase
+      .from("chat_stickers")
+      .insert({ user_id: user.id, url: mediaUrl, label: "Recebida no chat" });
+    if (error) {
+      toast.error("Não foi possível salvar a figurinha");
+      throw error;
+    }
+    queryClient.invalidateQueries({ queryKey: ["chat-stickers", user.id] });
+    toast.success("Figurinha salva na biblioteca");
+  }, [user?.id, stickers, queryClient]);
+
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
