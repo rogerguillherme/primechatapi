@@ -1916,6 +1916,11 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                     disabled={sendMutation.isPending}
                     onSelect={(e) => handleMessageChange(message + e)}
                     onSendSticker={(e) => sendMutation.mutate({ text: e })}
+                    stickers={stickers}
+                    uploading={uploadingSticker}
+                    onUploadSticker={handleUploadSticker}
+                    onDeleteSticker={handleDeleteSticker}
+                    onSendStickerImage={(s) => sendMutation.mutate({ mediaUrl: s.url, mediaType: "sticker" })}
                   />
 
 
