@@ -1536,25 +1536,71 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                     </div>
                   )}
                   {/* Lista rolável: com muitos fluxos o menu não estoura a tela
-                      e as ações (pausar/parar) continuam sempre visíveis. */}
+                      e as ações (pausar/parar) continuam sempre visíveis.
+
+                      Cada linha tem botões explícitos: clicar no nome não
+                      dispara nada. Iniciar fluxo manda mensagem para o lead —
+                      um clique errado na lista não pode ser irreversível. */}
                   <div className="max-h-[34rem] overflow-y-auto overscroll-contain px-1 py-1">
-                    {(flows || []).map((flow: any) => (
-                      <DropdownMenuItem
-                        key={flow.id}
-                        onClick={() => startFlow.mutate(flow.id)}
-                        className="gap-2.5 py-2.5 text-sm"
-                      >
-                        <Workflow size={15} className="opacity-60 shrink-0" />
-                        {/* Nome inteiro em até duas linhas: fluxo costuma ter
-                            nome descritivo, e cortar no meio esconde
-                            justamente o que diferencia um do outro. */}
-                        <span className="flex-1 leading-snug line-clamp-2">{flow.name}</span>
-                        {!flow.active && (
-                          <span className="text-[10px] text-muted-foreground shrink-0">inativo</span>
-                        )}
-                        {runningExecution?.flow_id === flow.id && <Check size={14} className="opacity-60" />}
-                      </DropdownMenuItem>
-                    ))}
+                    {(flows || []).map((flow: any) => {
+                      const emAndamento = runningExecution?.flow_id === flow.id;
+                      const ocupado =
+                        startFlow.isPending || pauseFlow.isPending || resumeFlow.isPending;
+                      return (
+                        <div
+                          key={flow.id}
+                          className="flex items-center gap-2 rounded-sm px-2 py-2 text-sm hover:bg-accent/60"
+                        >
+                          <Workflow
+                            size={15}
+                            className={cn("shrink-0", emAndamento ? "text-primary" : "opacity-60")}
+                          />
+                          {/* Nome inteiro em até duas linhas: fluxo costuma ter
+                              nome descritivo, e cortar no meio esconde
+                              justamente o que diferencia um do outro. */}
+                          <div className="flex-1 min-w-0">
+                            <span className="block leading-snug line-clamp-2">{flow.name}</span>
+                            {emAndamento && (
+                              <span className="text-[10px] text-muted-foreground">
+                                {isPaused ? "pausado nesta conversa" : "em andamento nesta conversa"}
+                              </span>
+                            )}
+                          </div>
+                          {!flow.active && (
+                            <span className="text-[10px] text-muted-foreground shrink-0">inativo</span>
+                          )}
+
+                          {emAndamento ? (
+                            <button
+                              type="button"
+                              onClick={() => (isPaused ? resumeFlow.mutate() : pauseFlow.mutate())}
+                              disabled={ocupado}
+                              title={isPaused ? "Retomar fluxo" : "Pausar fluxo"}
+                              className={cn(
+                                "shrink-0 inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors disabled:opacity-50",
+                                isPaused
+                                  ? "border-emerald-500/40 text-emerald-500 hover:bg-emerald-500/10"
+                                  : "border-amber-500/40 text-amber-500 hover:bg-amber-500/10",
+                              )}
+                            >
+                              {isPaused ? <Play size={13} /> : <Pause size={13} />}
+                              {isPaused ? "Retomar" : "Pausar"}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => startFlow.mutate(flow.id)}
+                              disabled={ocupado}
+                              title="Iniciar este fluxo na conversa"
+                              className="shrink-0 inline-flex items-center gap-1 rounded-md border border-primary/40 px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
+                            >
+                              <Play size={13} />
+                              Iniciar
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
 
                   {runningExecution && (
