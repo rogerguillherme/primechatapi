@@ -494,6 +494,15 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
   }, [teamMembers, user?.id, user?.email]);
 
   /** Rótulo do botão: nome quando é um só, contagem quando são vários. */
+  /** Nome de quem enviou, para o histórico não perder a autoria numa
+   *  transferência. Só aparece quando há equipe: sozinho, dizer "Eu" em toda
+   *  mensagem é ruído. */
+  const nomeDoAutor = useMemo(() => {
+    const mapa = new Map<string, string>();
+    for (const a of agents) mapa.set(a.id, a.label);
+    return (id: string | null | undefined) => (id ? mapa.get(id) ?? "Atendente" : null);
+  }, [agents]);
+
   const agentFilterLabel = useMemo(() => {
     if (filterAgentIds.size === 0) return "Todos os vendedores";
     if (filterAgentIds.size === 1) {
@@ -1801,6 +1810,11 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                                       : (msg as any).quoted_message.media_type ? "📎 Arquivo" : "Mensagem")}
                                 </p>
                               </div>
+                            )}
+                            {isOutbound && agents.length > 1 && (msg as any).sent_by && (
+                              <p className="text-[10px] font-medium opacity-70 mb-0.5">
+                                {nomeDoAutor((msg as any).sent_by)}
+                              </p>
                             )}
                             {msg.media_url && msg.media_type ? (
                               <div className="mb-1">

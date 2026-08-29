@@ -332,6 +332,21 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Quem está enviando. Vem do JWT de quem chamou, não do corpo: um valor
+    // enviado pelo cliente poderia atribuir a mensagem a outra pessoa.
+    // Chamada interna (fluxo, disparo) usa a service role e não tem usuário —
+    // nesses casos fica nulo, que é o certo: não foi ninguém da equipe.
+    let sentBy: string | null = null;
+    try {
+      const jwt = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
+      if (jwt && jwt !== Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) {
+        const { data } = await supabase.auth.getUser(jwt);
+        sentBy = data?.user?.id ?? null;
+      }
+    } catch {
+      /* sem autor identificado: segue como automação */
+    }
+
     const body_payload = await req.json();
     console.log("whatsapp-cloud-send received request:", JSON.stringify(body_payload));
     const { phone, message, lead_id, media_url, media_type, template_name, template_language, template_params, interactive_buttons, cta_url, account_id, file_name, reply_to_message_id } = body_payload;
@@ -643,6 +658,7 @@ Deno.serve(async (req) => {
           media_url: media_url || null,
           status: "failed",
           account_id: account_id || resolvedAccountId || null,
+          sent_by: sentBy,
         });
 
         return new Response(
@@ -1070,6 +1086,7 @@ Deno.serve(async (req) => {
         zapi_message_id: waMessageId, status: initialStatus,
         account_id: account_id || resolvedAccountId || null,
         quoted_message: quotedMessage,
+        sent_by: sentBy,
       });
 
       const { error: leadUpdateError } = await supabase
