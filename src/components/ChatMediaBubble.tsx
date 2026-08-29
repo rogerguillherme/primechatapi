@@ -205,21 +205,13 @@ function AudioPlayer({ src, isOutbound }: { src: string; isOutbound: boolean }) 
   );
 }
 
-export function ChatMediaBubble({ mediaType, mediaUrl, caption, isOutbound }: ChatMediaBubbleProps) {
+export function ChatMediaBubble({ mediaType, mediaUrl, caption, isOutbound, onSaveSticker }: ChatMediaBubbleProps) {
   if (mediaType === "audio") {
     return <AudioPlayer src={mediaUrl} isOutbound={isOutbound} />;
   }
 
-  // Figurinha (.webp): sem moldura nem legenda — o WhatsApp também a mostra solta.
   if (mediaType === "sticker") {
-    return (
-      <img
-        src={mediaUrl}
-        alt={caption || "Figurinha"}
-        className="w-[140px] h-[140px] object-contain"
-        loading="lazy"
-      />
-    );
+    return <StickerBubble mediaUrl={mediaUrl} caption={caption} onSaveSticker={onSaveSticker} />;
   }
 
   if (mediaType === "image") {
