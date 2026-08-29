@@ -119,7 +119,15 @@ async function resolveMatchedFlowStep(
   candidateTriggers: string[],
   replyText?: string | null,
 ) {
-  if (!currentStepId || candidateTriggers.length === 0) {
+  // Sem etapa atual não há o que resolver.
+  //
+  // Lista de candidatos VAZIA, porém, não é motivo para desistir: é o caso de
+  // toda resposta sem texto — áudio, imagem, figurinha, documento. Desistir
+  // aqui deixava a execução presa em "aguardando resposta" para sempre, porque
+  // nem o ramo padrão chegava a ser avaliado. Uma resposta em áudio é uma
+  // resposta; ela só não casa com palavra-chave nenhuma, e deve seguir pelo
+  // mesmo caminho de um texto que não casou.
+  if (!currentStepId) {
     return null;
   }
 
