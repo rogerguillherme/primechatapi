@@ -1520,7 +1520,9 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
               {runningExecution && (
                 <div
                   className={cn(
-                    "hidden sm:flex items-center gap-1.5 h-8 pl-2 pr-1 rounded-full border text-xs max-w-[15rem]",
+                    // No celular fica compacto: só o ponto e o botão. O nome
+                    // do fluxo empurraria o nome do contato para fora da tela.
+                    "flex items-center gap-1.5 h-8 pl-1.5 sm:pl-2 pr-1 rounded-full border text-xs max-w-[15rem] shrink-0",
                     isPaused
                       ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400"
                       : "border-primary/30 bg-primary/10 text-primary",
@@ -1535,12 +1537,16 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                     "w-1.5 h-1.5 rounded-full shrink-0",
                     isPaused ? "bg-amber-500" : "bg-primary animate-pulse",
                   )} />
-                  <span className="truncate">{nomeFluxoAtivo}</span>
+                  <span className="truncate hidden sm:inline">{nomeFluxoAtivo}</span>
                   <button
                     type="button"
                     onClick={() => (isPaused ? resumeFlow.mutate() : pauseFlow.mutate())}
                     disabled={pauseFlow.isPending || resumeFlow.isPending}
-                    title={isPaused ? "Retomar nesta conversa" : "Pausar nesta conversa"}
+                    title={
+                      isPaused
+                        ? `Retomar "${nomeFluxoAtivo}" nesta conversa`
+                        : `Pausar "${nomeFluxoAtivo}" nesta conversa`
+                    }
                     aria-label={isPaused ? "Retomar fluxo nesta conversa" : "Pausar fluxo nesta conversa"}
                     className="p-1 rounded-full hover:bg-background/60 shrink-0"
                   >
