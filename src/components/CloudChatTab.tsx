@@ -585,12 +585,16 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
     queryFn: async () => {
       const { data } = await supabase
         .from("flow_executions")
-        .select("id, flow_id, status, next_action_at, metadata")
+        // A tabela não tem `created_at` — ordenar por ela fazia o Postgres
+        // rejeitar a query e o cartão de fluxo (com o botão de pausar) nunca
+        // aparecia no cabeçalho da conversa.
+        .select("id, flow_id, status, next_action_at, metadata, started_at")
         .eq("lead_id", selectedLeadId)
         .in("status", ["running", "waiting_delay", "waiting_reply", "waiting_no_response", "paused"])
-        .order("created_at", { ascending: false })
+        .order("started_at", { ascending: false })
         .limit(1)
         .maybeSingle();
+      if (error) console.error("[fluxo] falha ao carregar execução do lead:", error);
       return data;
     },
   });
