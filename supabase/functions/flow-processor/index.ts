@@ -18,11 +18,6 @@ function stepDelayMs(step: any): number {
 
 const READY_STATUSES = ["waiting_delay", "waiting_no_response"];
 const RETRY_DELAY_MS = 5000;
-// Quantos passos já enviados guardamos por execução. É a proteção contra
-// reenvio quando um passo é reprocessado — fluxo longo não precisa da lista
-// inteira, só do passado recente.
-const SENT_STEPS_MEMORY = 50;
-
 // Somente envios que DERAM CERTO bloqueiam um novo envio; falhas (ex.: #131047)
 // devem poder ser reenviadas pelo número correto.
 const SUCCESS_STATUSES = ["sent", "delivered", "read", "pending"];
@@ -337,11 +332,16 @@ Deno.serve(async (req) => {
           // dois fluxos diferentes com a mesma abertura colidiam e o segundo
           // não era enviado. Agora só bloqueia o que realmente é repetição: um
           // passo reprocessado depois de já ter saído.
-          const jaEnviados: string[] = Array.isArray(exec.metadata?.sent_steps)
-            ? exec.metadata.sent_steps
-            : [];
+          // Guarda apenas a ÚLTIMA etapa enviada, e ela é limpa ao avançar.
+          //
+          // Guardar a lista inteira parecia mais seguro e não era: fluxo em
+          // que dois caminhos convergem para a mesma mensagem ("sim" e "não"
+          // levando ao mesmo fechamento) pulava a segunda passagem em
+          // silêncio. Reenvio de verdade é reprocessar a MESMA etapa sem ter
+          // conseguido avançar — e nesse caso a marca ainda está aqui.
+          const etapaJaEnviada = exec.metadata?.sent_step_id === currentStep.id;
 
-          if (jaEnviados.includes(currentStep.id)) {
+          if (etapaJaEnviada) {
             console.log(
               "[fluxo] etapa ja enviada nesta execucao, seguindo adiante:",
               JSON.stringify({ execucao: exec.id, etapa: currentStep.id }),
@@ -355,8 +355,7 @@ Deno.serve(async (req) => {
             }
 
             // Marca DEPOIS do envio: falha tem que poder ser retentada.
-            const memoria = [...jaEnviados, currentStep.id].slice(-SENT_STEPS_MEMORY);
-            exec.metadata = { ...(exec.metadata || {}), sent_steps: memoria };
+            exec.metadata = { ...(exec.metadata || {}), sent_step_id: currentStep.id };
             const { error: marcaErr } = await supabase
               .from("flow_executions")
               .update({ metadata: exec.metadata })
@@ -410,22 +409,22 @@ Deno.serve(async (req) => {
       .order("next_action_at")
       .limit(1);
 
-    // Reagendamento imediato: serve só para esvaziar uma fila que já está
-    // pronta agora, sem esperar o próximo minuto do cron.
+    // Reagendamento da próxima rodada.
     //
     // Precisa de EdgeRuntime.waitUntil: a Supabase encerra o isolate assim que
-    // a resposta é devolvida, e um setTimeout solto morre junto — era por isso
-    // que a cadeia se perdia e o envio atrasava.
+    // a resposta é devolvida, e um setTimeout solto morre junto.
     //
-    // Espera longa NÃO é reagendada aqui: manter o isolate vivo por um minuto
-    // à toa custa caro e falha em silêncio se ele for reciclado. Quem cobre
-    // isso é o cron `flow-processor-heartbeat`, que roda a cada minuto.
+    // A janela é generosa de propósito. Encurtei isto uma vez para 15s,
+    // apostando que o cron `flow-processor-heartbeat` cobriria o resto — e
+    // onde o cron não existia, todo fluxo com espera maior que isso parou de
+    // andar. A corrente tem que se sustentar sozinha; o cron é rede de
+    // segurança, não o mecanismo principal.
     const proximo = moreReady && moreReady.length > 0
       ? new Date(moreReady[0].next_action_at).getTime()
       : null;
 
-    if (proximo !== null && proximo - Date.now() <= 15_000) {
-      const delayMs = Math.max(1000, proximo - Date.now());
+    if (proximo !== null && proximo - Date.now() <= 50_000) {
+      const delayMs = Math.min(50_000, Math.max(1000, proximo - Date.now()));
       const encadeia = new Promise<void>((resolve) => {
         setTimeout(async () => {
           try {
@@ -708,6 +707,8 @@ async function advanceToNextStep(
   // com todos os envios bem-sucedidos. Zeramos a cada avanço.
   const clearedMetadata = { ...(exec.metadata || {}), send_attempts: 0 };
   delete (clearedMetadata as any).no_response_started_at;
+  // A marca de "já enviei esta etapa" só vale enquanto não avançamos.
+  delete (clearedMetadata as any).sent_step_id;
 
   const { data: childSteps } = await supabase
     .from("flow_steps")
