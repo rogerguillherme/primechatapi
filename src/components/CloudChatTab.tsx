@@ -20,11 +20,12 @@ import {
   MoreVertical, ArrowLeft, Paperclip, Clock, MessageCircleReply,
   ShoppingBag, RotateCcw, Tag, X, AlertCircle, Bot, Users, PowerOff, Megaphone,
   Info, Pencil, Columns3, Zap, Workflow, UserPlus, Pause, Play, Reply,
-  CheckCircle2, Mail,
+  CheckCircle2, Mail, Forward,
 } from "lucide-react";
 import { BulkBroadcastDialog } from "@/components/BulkBroadcastDialog";
 import { ContactInfoSheet } from "@/components/chat/ContactInfoSheet";
 import { EmojiPicker } from "@/components/chat/EmojiPicker";
+import { ForwardMessageDialog, type ForwardableMessage } from "@/components/chat/ForwardMessageDialog";
 
 import { startFlowForLead } from "@/lib/startFlowForLead";
 import { functionErrorMessage } from "@/lib/functionError";
@@ -33,6 +34,7 @@ import { interpolateForLead } from "@/lib/interpolate";
 import { useTeamContext, useTeamMembers } from "@/hooks/use-team";
 import { useToggleLeadLabel } from "@/hooks/use-chat-labels";
 import { useAuth } from "@/contexts/AuthContext";
+import { useProfile } from "@/hooks/use-profile";
 
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -118,9 +120,14 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
   const [shortcutIndex, setShortcutIndex] = useState(0);
   /** Mensagem selecionada para responder (citação WhatsApp). */
   const [replyTo, setReplyTo] = useState<any | null>(null);
+  /** Mensagem escolhida para encaminhar a outros contatos. */
+  const [forwardMsg, setForwardMsg] = useState<ForwardableMessage | null>(null);
 
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { profile } = useProfile();
+  /** Configuração da conta: exibir ou não o botão do agente IA no cabeçalho. */
+  const mostrarBotaoIa = profile?.chat_ai_button !== false;
   const { accounts, defaultAccount } = useWhatsAppAccounts();
   const { templates } = useUserTemplates();
 
@@ -1861,6 +1868,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                 </DropdownMenuContent>
               </DropdownMenu>
 
+              {mostrarBotaoIa && (
               <Button
                 type="button"
                 size="sm"
@@ -1879,6 +1887,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                 <Bot size={14} />
                 IA {aiMode === "all" || leadAiEnabled ? "ON" : "OFF"}
               </Button>
+              )}
             </div>
 
             {/* Messages */}
@@ -1912,6 +1921,16 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                               className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-accent text-muted-foreground"
                             >
                               <Reply size={15} />
+                            </button>
+                          )}
+                          {isOutbound && (
+                            <button
+                              type="button"
+                              title="Encaminhar"
+                              onClick={() => setForwardMsg({ id: msg.id, content: msg.content, media_url: msg.media_url, media_type: msg.media_type })}
+                              className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-accent text-muted-foreground"
+                            >
+                              <Forward size={15} />
                             </button>
                           )}
                           <div className={cn(
@@ -1977,6 +1996,16 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                               className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-accent text-muted-foreground"
                             >
                               <Reply size={15} />
+                            </button>
+                          )}
+                          {!isOutbound && (
+                            <button
+                              type="button"
+                              title="Encaminhar"
+                              onClick={() => setForwardMsg({ id: msg.id, content: msg.content, media_url: msg.media_url, media_type: msg.media_type })}
+                              className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-accent text-muted-foreground"
+                            >
+                              <Forward size={15} />
                             </button>
                           )}
                         </div>
@@ -2175,6 +2204,12 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
           />
         );
       })()}
+
+      <ForwardMessageDialog
+        message={forwardMsg}
+        onClose={() => setForwardMsg(null)}
+        accountId={selectedAccountId || defaultAccount?.id || null}
+      />
 
       <ContactInfoSheet
         leadId={selectedLeadId}

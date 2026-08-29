@@ -1,0 +1,1 @@
+alter table public.profiles add column if not exists chat_ai_button boolean not null default true;

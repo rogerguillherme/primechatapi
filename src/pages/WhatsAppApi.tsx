@@ -101,6 +101,7 @@ import { useUserTemplates } from "@/hooks/use-user-templates";
 import { AccountSelector } from "@/components/AccountSelector";
 import { DashboardHome } from "@/pages/DashboardHome";
 import { HomeViewSetting } from "@/components/settings/HomeViewSetting";
+import { ChatAiButtonSetting } from "@/components/settings/ChatAiButtonSetting";
 import { LeadDistributionSettings } from "@/components/settings/LeadDistributionSettings";
 import { ShareLinksSettings } from "@/components/settings/ShareLinksSettings";
 import { StageAutomationsSettings } from "@/components/settings/StageAutomationsSettings";
@@ -2582,6 +2583,9 @@ export default function WhatsAppApi() {
 
           {/* Atalhos digitáveis do chat (/fluxo1, /oi ...) */}
           <ChatShortcutsSettings />
+
+          {/* Exibir ou não o botão do agente IA no chat */}
+          <ChatAiButtonSetting />
 
           {/* Notificações: o que faz o sino tocar, por usuário */}
           <NotificationSettings />
