@@ -1237,13 +1237,28 @@ Deno.serve(async (req) => {
               text,
             );
 
-            // Fallback: old linear approach (condition node by trigger_value)
+            // Fallback: abordagem linear antiga (nó de condição por trigger_value).
+            //
+            // ATENÇÃO: esta busca varre TODAS as condições do fluxo. Sem limite de
+            // posição, um "sim" dito no fim da conversa casava com uma condição do
+            // começo (ex.: "posso te mandar? → sim") e o fluxo rebobinava, reenviando
+            // vídeo/áudios que o lead já tinha recebido. Por isso só aceitamos
+            // condições que estão À FRENTE da etapa atual da execução.
             if (!matchedStep) {
+              const { data: curStep } = await supabase
+                .from("flow_steps")
+                .select("step_order")
+                .eq("id", currentStepId)
+                .maybeSingle();
+              const currentOrder = Number(curStep?.step_order ?? -1);
+
               const { data: conditionSteps } = await supabase
                 .from("flow_steps")
                 .select("*")
                 .eq("flow_id", exec.flow_id)
-                .eq("step_type", "condition");
+                .eq("step_type", "condition")
+                .gt("step_order", currentOrder)
+                .order("step_order");
 
               const conditionStep = (conditionSteps || []).find((s: any) =>
                 stepMatchesTriggers(s, candidateTriggers) || matchesStep(s, candidateTriggers)
@@ -1277,6 +1292,7 @@ Deno.serve(async (req) => {
                 }
               }
             }
+
 
             console.log("Flow reply resolution:", JSON.stringify({
               executionId: exec.id,
