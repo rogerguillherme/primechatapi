@@ -463,6 +463,7 @@ Deno.serve(async (req) => {
           video: "video",
           audio: "audio",
           document: "document",
+          sticker: "image",
         };
         const evoMediaType = mediaTypeMap[media_type] || "document";
 
@@ -490,7 +491,10 @@ Deno.serve(async (req) => {
           console.warn("Media download error, falling back to URL:", err);
         }
 
-        if (media_type === "audio") {
+        if (media_type === "sticker") {
+          endpoint = `${evoServerUrl}/message/sendSticker/${evoInstance}`;
+          evoBody = { number: cleanPhone, sticker: mediaPayload };
+        } else if (media_type === "audio") {
           endpoint = `${evoServerUrl}/message/sendWhatsAppAudio/${evoInstance}`;
           evoBody = { number: cleanPhone, audio: mediaPayload };
         } else {
@@ -520,7 +524,7 @@ Deno.serve(async (req) => {
           };
         }
         logContent = outgoingText || (
-          media_type === "audio" ? "🎤 Áudio" : media_type === "image" ? "📷 Imagem" : media_type === "video" ? "🎥 Vídeo" : "📎 Arquivo"
+          media_type === "audio" ? "🎤 Áudio" : media_type === "sticker" ? "🩷 Figurinha" : media_type === "image" ? "📷 Imagem" : media_type === "video" ? "🎥 Vídeo" : "📎 Arquivo"
         );
       } else {
         if (!outgoingText) outgoingText = "(sem conteúdo)";
@@ -783,7 +787,10 @@ Deno.serve(async (req) => {
       body = templateBody;
 
     } else if (media_url && media_type) {
-      if (media_type === "image") {
+      if (media_type === "sticker") {
+        // Figurinha real: WebP, sem legenda (a Meta rejeita caption em sticker).
+        body = { messaging_product: "whatsapp", to: cleanPhone, type: "sticker", sticker: { link: media_url } };
+      } else if (media_type === "image") {
         body = { messaging_product: "whatsapp", to: cleanPhone, type: "image", image: { link: media_url, caption: message || undefined } };
       } else if (media_type === "video") {
         body = { messaging_product: "whatsapp", to: cleanPhone, type: "video", video: { link: media_url, caption: message || undefined } };
@@ -1033,7 +1040,7 @@ Deno.serve(async (req) => {
       } else if (cta_url) {
         contentText = `🔗 ${message || "Botão com link"}`;
       } else if (!message) {
-        contentText = media_type === "audio" ? "🎤 Áudio" : media_type === "image" ? "📷 Imagem" : media_type === "video" ? "🎥 Vídeo" : "📎 Arquivo";
+        contentText = media_type === "audio" ? "🎤 Áudio" : media_type === "sticker" ? "🩷 Figurinha" : media_type === "image" ? "📷 Imagem" : media_type === "video" ? "🎥 Vídeo" : "📎 Arquivo";
       }
 
       const initialStatus = waData.messages?.[0]?.message_status === "accepted" ? "accepted" : "sent";
