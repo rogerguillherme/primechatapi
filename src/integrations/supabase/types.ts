@@ -502,6 +502,7 @@ export type Database = {
           media_url: string | null
           quoted_message: Json | null
           read_at: string | null
+          sent_by: string | null
           status: string
           zapi_message_id: string | null
         }
@@ -520,6 +521,7 @@ export type Database = {
           media_url?: string | null
           quoted_message?: Json | null
           read_at?: string | null
+          sent_by?: string | null
           status?: string
           zapi_message_id?: string | null
         }
@@ -538,6 +540,7 @@ export type Database = {
           media_url?: string | null
           quoted_message?: Json | null
           read_at?: string | null
+          sent_by?: string | null
           status?: string
           zapi_message_id?: string | null
         }
