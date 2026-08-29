@@ -583,7 +583,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
     queryKey: ["lead-flow-execution", selectedLeadId],
     enabled: !!selectedLeadId,
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("flow_executions")
         // A tabela não tem `created_at` — ordenar por ela fazia o Postgres
         // rejeitar a query e o cartão de fluxo (com o botão de pausar) nunca
