@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Play, Pause, Download } from "lucide-react";
+import { Play, Pause, Download, Loader2, Plus, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface ChatMediaBubbleProps {
@@ -7,6 +7,74 @@ interface ChatMediaBubbleProps {
   mediaUrl: string;
   caption?: string;
   isOutbound: boolean;
+  /**
+   * Salva a figurinha na biblioteca do usuário. Ausente = sem botão (telas que
+   * só leem o histórico não precisam da ação).
+   */
+  onSaveSticker?: (mediaUrl: string) => void | Promise<void>;
+}
+
+/**
+ * Figurinha no histórico, com atalho para guardar na biblioteca.
+ *
+ * Sem moldura nem legenda — o WhatsApp também a mostra solta. O botão aparece
+ * no hover para não competir com a imagem, e vira "✓" depois de salvar: sem
+ * confirmação visível, o operador clica de novo e duplica a figurinha.
+ */
+function StickerBubble({
+  mediaUrl,
+  caption,
+  onSaveSticker,
+}: Pick<ChatMediaBubbleProps, "mediaUrl" | "caption" | "onSaveSticker">) {
+  const [estado, setEstado] = useState<"idle" | "salvando" | "salvo">("idle");
+
+  const salvar = async () => {
+    if (!onSaveSticker || estado !== "idle") return;
+    setEstado("salvando");
+    try {
+      await onSaveSticker(mediaUrl);
+      setEstado("salvo");
+    } catch {
+      // O erro já é reportado por quem salva (toast); aqui só liberamos o botão.
+      setEstado("idle");
+    }
+  };
+
+  return (
+    <div className="relative group/sticker w-[140px]">
+      <img
+        src={mediaUrl}
+        alt={caption || "Figurinha"}
+        className="w-[140px] h-[140px] object-contain"
+        loading="lazy"
+      />
+      {onSaveSticker && (
+        <button
+          type="button"
+          onClick={salvar}
+          disabled={estado !== "idle"}
+          title={estado === "salvo" ? "Figurinha salva na biblioteca" : "Salvar figurinha"}
+          aria-label={estado === "salvo" ? "Figurinha salva na biblioteca" : "Salvar figurinha"}
+          className={cn(
+            "absolute top-0 right-0 p-1.5 rounded-full bg-background/90 border border-border shadow-sm",
+            "text-muted-foreground hover:text-foreground transition-opacity",
+            "focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring",
+            estado === "salvo"
+              ? "opacity-100 text-primary"
+              : "opacity-0 group-hover/sticker:opacity-100",
+          )}
+        >
+          {estado === "salvando" ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : estado === "salvo" ? (
+            <Check size={14} />
+          ) : (
+            <Plus size={14} />
+          )}
+        </button>
+      )}
+    </div>
+  );
 }
 
 /** Velocidades de reprodução, na ordem em que o botão alterna. */
@@ -137,21 +205,13 @@ function AudioPlayer({ src, isOutbound }: { src: string; isOutbound: boolean }) 
   );
 }
 
-export function ChatMediaBubble({ mediaType, mediaUrl, caption, isOutbound }: ChatMediaBubbleProps) {
+export function ChatMediaBubble({ mediaType, mediaUrl, caption, isOutbound, onSaveSticker }: ChatMediaBubbleProps) {
   if (mediaType === "audio") {
     return <AudioPlayer src={mediaUrl} isOutbound={isOutbound} />;
   }
 
-  // Figurinha (.webp): sem moldura nem legenda — o WhatsApp também a mostra solta.
   if (mediaType === "sticker") {
-    return (
-      <img
-        src={mediaUrl}
-        alt={caption || "Figurinha"}
-        className="w-[140px] h-[140px] object-contain"
-        loading="lazy"
-      />
-    );
+    return <StickerBubble mediaUrl={mediaUrl} caption={caption} onSaveSticker={onSaveSticker} />;
   }
 
   if (mediaType === "image") {
