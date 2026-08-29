@@ -590,6 +590,12 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
 
   const isPaused = runningExecution?.status === "paused";
 
+  /** Nome do fluxo que está rodando nesta conversa, para a marcação no topo. */
+  const nomeFluxoAtivo = useMemo(() => {
+    if (!runningExecution?.flow_id) return null;
+    return (flows || []).find((f: any) => f.id === runningExecution.flow_id)?.name ?? "Fluxo";
+  }, [runningExecution, flows]);
+
   const startFlow = useMutation({
     mutationFn: async (flowId: string) => {
       if (!selectedLead) throw new Error("Nenhuma conversa aberta");
@@ -1505,6 +1511,43 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
               >
                 <Pencil size={18} />
               </button>
+
+              {/* Marcação do fluxo em andamento NESTA conversa.
+                  Ficava só como cor no ícone, dentro do menu: não dava para
+                  ver de relance qual fluxo estava rodando nem pausar sem abrir
+                  o menu. Pausar aqui afeta só esta conversa — o fluxo segue
+                  normal para os outros contatos. */}
+              {runningExecution && (
+                <div
+                  className={cn(
+                    "hidden sm:flex items-center gap-1.5 h-8 pl-2 pr-1 rounded-full border text-xs max-w-[15rem]",
+                    isPaused
+                      ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                      : "border-primary/30 bg-primary/10 text-primary",
+                  )}
+                  title={
+                    isPaused
+                      ? `Fluxo "${nomeFluxoAtivo}" pausado nesta conversa`
+                      : `Fluxo "${nomeFluxoAtivo}" rodando nesta conversa`
+                  }
+                >
+                  <span className={cn(
+                    "w-1.5 h-1.5 rounded-full shrink-0",
+                    isPaused ? "bg-amber-500" : "bg-primary animate-pulse",
+                  )} />
+                  <span className="truncate">{nomeFluxoAtivo}</span>
+                  <button
+                    type="button"
+                    onClick={() => (isPaused ? resumeFlow.mutate() : pauseFlow.mutate())}
+                    disabled={pauseFlow.isPending || resumeFlow.isPending}
+                    title={isPaused ? "Retomar nesta conversa" : "Pausar nesta conversa"}
+                    aria-label={isPaused ? "Retomar fluxo nesta conversa" : "Pausar fluxo nesta conversa"}
+                    className="p-1 rounded-full hover:bg-background/60 shrink-0"
+                  >
+                    {isPaused ? <Play size={13} /> : <Pause size={13} />}
+                  </button>
+                </div>
+              )}
 
               {/* Fluxo ativo na conversa */}
               <DropdownMenu>
