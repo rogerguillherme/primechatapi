@@ -125,6 +125,9 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
 
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { profile } = useProfile();
+  /** Configuração da conta: exibir ou não o botão do agente IA no cabeçalho. */
+  const mostrarBotaoIa = profile?.chat_ai_button !== false;
   const { accounts, defaultAccount } = useWhatsAppAccounts();
   const { templates } = useUserTemplates();
 
@@ -2201,6 +2204,12 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
           />
         );
       })()}
+
+      <ForwardMessageDialog
+        message={forwardMsg}
+        onClose={() => setForwardMsg(null)}
+        accountId={selectedAccountId || defaultAccount?.id || null}
+      />
 
       <ContactInfoSheet
         leadId={selectedLeadId}
