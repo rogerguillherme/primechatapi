@@ -770,6 +770,64 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
     uploadAndSendMedia(audioFileFromBlob(blob));
   }, [uploadAndSendMedia]);
 
+  /* ---------------- Figurinhas reais (.webp) ---------------- */
+
+  const { data: stickers = [] } = useQuery({
+    queryKey: ["chat-stickers", user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("chat_stickers")
+        .select("id, url")
+        .order("created_at", { ascending: false })
+        .limit(60);
+      if (error) throw error;
+      return (data || []) as { id: string; url: string }[];
+    },
+  });
+
+  const [uploadingSticker, setUploadingSticker] = useState(false);
+
+  /** Sobe o .webp, guarda na biblioteca do usuário e já envia ao lead. */
+  const handleUploadSticker = useCallback(async (file: File) => {
+    if (!selectedLead || !user?.id) return;
+    const isWebp = file.type === "image/webp" || file.name.toLowerCase().endsWith(".webp");
+    if (!isWebp) {
+      toast.error("A figurinha precisa ser um arquivo .webp");
+      return;
+    }
+    setUploadingSticker(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("lead_id", selectedLead.id);
+      formData.append("as_sticker", "1");
+      const { data, error } = await supabase.functions.invoke("chat-upload-media", { body: formData });
+      if (error) throw error;
+      // Falha ao salvar na biblioteca não deve impedir o envio.
+      const { error: insErr } = await supabase
+        .from("chat_stickers")
+        .insert({ user_id: user.id, url: data.url, label: file.name });
+      if (insErr) console.warn("Figurinha não salva na biblioteca:", insErr.message);
+      queryClient.invalidateQueries({ queryKey: ["chat-stickers", user.id] });
+      sendMutation.mutate({ mediaUrl: data.url, mediaType: "sticker" });
+    } catch (err: any) {
+      toast.error(await functionErrorMessage(err, "Não foi possível enviar a figurinha"));
+    } finally {
+      setUploadingSticker(false);
+    }
+  }, [selectedLead, user?.id, queryClient, sendMutation]);
+
+  const handleDeleteSticker = useCallback(async (sticker: { id: string }) => {
+    const { error } = await supabase.from("chat_stickers").delete().eq("id", sticker.id);
+    if (error) {
+      toast.error("Não foi possível remover a figurinha");
+      return;
+    }
+    queryClient.invalidateQueries({ queryKey: ["chat-stickers", user?.id] });
+  }, [queryClient, user?.id]);
+
+
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) uploadAndSendMedia(file);
