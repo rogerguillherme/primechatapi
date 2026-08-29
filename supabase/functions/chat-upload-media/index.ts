@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
     const arrayBuffer = await file.arrayBuffer();
     const { error: uploadError } = await supabase.storage
       .from("chat-media")
-      .upload(path, arrayBuffer, { contentType: file.type, upsert: true });
+      .upload(path, arrayBuffer, { contentType: asSticker ? "image/webp" : file.type, upsert: true });
 
     if (uploadError) throw uploadError;
 
