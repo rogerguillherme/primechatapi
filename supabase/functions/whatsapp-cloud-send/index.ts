@@ -443,6 +443,48 @@ Deno.serve(async (req) => {
         "apikey": evoApiKey,
       };
 
+      // A Evolution aceita qualquer número e responde 201 mesmo quando o JID não
+      // existe no WhatsApp: a mensagem some no caminho e o chat mostra "enviada".
+      // Perguntar antes qual JID existe resolve o caso mais comum no Brasil — o
+      // nono dígito a mais ou a menos — e transforma o silêncio em erro visível.
+      // Se a consulta em si falhar (servidor antigo, endpoint ausente), envia
+      // como antes: a checagem é uma rede, não um novo ponto de quebra.
+      let evoNumber = cleanPhone;
+      try {
+        const chk = await fetch(`${evoServerUrl}/chat/whatsappNumbers/${evoInstance}`, {
+          method: "POST",
+          headers: evoHeaders,
+          body: JSON.stringify({ numbers: [cleanPhone] }),
+        });
+        if (chk.ok) {
+          const arr = await chk.json().catch(() => null);
+          const hit = Array.isArray(arr) ? arr[0] : null;
+          if (hit && hit.exists === false) {
+            const msg = `O número ${cleanPhone} não tem WhatsApp nesta instância. Confira o DDI, o DDD e o nono dígito.`;
+            if (lead_id) {
+              await supabase.from("chat_messages").insert({
+                lead_id,
+                direction: "outbound",
+                content: `❌ ${msg}`,
+                status: "failed",
+                account_id: account_id || resolvedAccountId || null,
+              });
+            }
+            return new Response(
+              JSON.stringify({ error: msg }),
+              { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+            );
+          }
+          // A própria Evolution devolve o JID correto — é ela quem sabe se o
+          // número real tem o nono dígito ou não.
+          const jid = String(hit?.jid || "");
+          const digits = jid.split("@")[0].replace(/[^0-9]/g, "");
+          if (digits) evoNumber = digits;
+        }
+      } catch (err) {
+        console.warn("whatsappNumbers check falhou, seguindo com o número original:", err);
+      }
+
       let endpoint = "";
       let evoBody: any = {};
       let logContent = outgoingText;
@@ -462,14 +504,14 @@ Deno.serve(async (req) => {
           .join("\n");
         const fullText = `${bodyText}\n\n${optionsList}\n\n_Responda com o número da opção._`;
         endpoint = `${evoServerUrl}/message/sendText/${evoInstance}`;
-        evoBody = { number: cleanPhone, text: fullText, linkPreview: true };
+        evoBody = { number: evoNumber, text: fullText, linkPreview: true };
         logContent = `🔘 ${bodyText}`;
       } else if (cta_url) {
         const bodyText = (outgoingText || "Acesse o link abaixo:").trim();
         const display = cta_url.display_text || "Acessar";
         const fullText = `${bodyText}\n\n👉 *${display}*\n${cta_url.url}`;
         endpoint = `${evoServerUrl}/message/sendText/${evoInstance}`;
-        evoBody = { number: cleanPhone, text: fullText, linkPreview: true };
+        evoBody = { number: evoNumber, text: fullText, linkPreview: true };
         logContent = `🔗 ${bodyText}`;
       } else if (media_url && media_type) {
         endpoint = `${evoServerUrl}/message/sendMedia/${evoInstance}`;
@@ -508,10 +550,10 @@ Deno.serve(async (req) => {
 
         if (media_type === "sticker") {
           endpoint = `${evoServerUrl}/message/sendSticker/${evoInstance}`;
-          evoBody = { number: cleanPhone, sticker: mediaPayload };
+          evoBody = { number: evoNumber, sticker: mediaPayload };
         } else if (media_type === "audio") {
           endpoint = `${evoServerUrl}/message/sendWhatsAppAudio/${evoInstance}`;
-          evoBody = { number: cleanPhone, audio: mediaPayload };
+          evoBody = { number: evoNumber, audio: mediaPayload };
         } else {
           // Pick filename + extension by mime/media type
           const extByType: Record<string, string> = {
@@ -530,7 +572,7 @@ Deno.serve(async (req) => {
             fileName = media_type === "document" ? `arquivo.${ext}` : `media.${ext}`;
           }
           evoBody = {
-            number: cleanPhone,
+            number: evoNumber,
             mediatype: evoMediaType,
             media: mediaPayload,
             mimetype: mimeType || undefined,
@@ -544,7 +586,7 @@ Deno.serve(async (req) => {
       } else {
         if (!outgoingText) outgoingText = "(sem conteúdo)";
         endpoint = `${evoServerUrl}/message/sendText/${evoInstance}`;
-        evoBody = { number: cleanPhone, text: outgoingText };
+        evoBody = { number: evoNumber, text: outgoingText };
         logContent = outgoingText;
       }
 
