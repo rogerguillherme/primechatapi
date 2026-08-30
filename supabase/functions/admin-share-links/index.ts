@@ -109,12 +109,16 @@ Deno.serve(async (req) => {
       const accountId = body?.account_id || null;
       const labelId = body?.label_id || null;
       const stageId = body?.stage_id || null;
+      const flowId = body?.flow_id || null;
 
       if (!(await owns("whatsapp_accounts", "user_id", accountId))) {
         return json({ error: "A conta escolhida não pertence a esse cliente" }, 400);
       }
       if (!(await owns("chat_labels", "user_id", labelId))) {
         return json({ error: "A etiqueta escolhida não pertence a esse cliente" }, 400);
+      }
+      if (!(await owns("flows", "user_id", flowId))) {
+        return json({ error: "O fluxo escolhido não pertence a esse cliente" }, 400);
       }
       if (!(await owns("pipeline_stages", "owner_id", stageId))) {
         return json({ error: "A coluna escolhida não pertence a esse cliente" }, 400);
@@ -128,6 +132,7 @@ Deno.serve(async (req) => {
         message: String(body?.message ?? ""),
         label_id: labelId,
         stage_id: stageId,
+        flow_id: flowId,
         active: body?.active !== false,
       };
 

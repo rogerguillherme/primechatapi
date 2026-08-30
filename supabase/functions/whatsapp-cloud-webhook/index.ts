@@ -881,7 +881,7 @@ Deno.serve(async (req) => {
 
           const { data: shareLinks } = await supabase
             .from("share_links")
-            .select("id, message, label_id, stage_id, click_count")
+            .select("id, message, label_id, stage_id, click_count, flow_id")
             .eq("user_id", resolvedUserId)
             .eq("active", true);
 
@@ -907,6 +907,65 @@ Deno.serve(async (req) => {
               .from("share_links")
               .update({ click_count: (matched.click_count ?? 0) + 1 })
               .eq("id", matched.id);
+
+            // Fluxo do link: é o caso do anúncio, em que o criativo leva a um
+            // wa.me com frase pronta e o atendimento já começa sozinho.
+            if (matched.flow_id) {
+              try {
+                const { data: execAtiva } = await supabase
+                  .from("flow_executions")
+                  .select("id")
+                  .eq("lead_id", lead.id)
+                  .in("status", ["running", "waiting_delay", "waiting_reply", "waiting_no_response", "paused"])
+                  .maybeSingle();
+
+                // Já existe fluxo rodando para este lead: não atropela. Quem
+                // clica duas vezes no anúncio não recebe a sequência em dobro.
+                if (!execAtiva) {
+                  const { data: primeiroPasso } = await supabase
+                    .from("flow_steps")
+                    .select("id, step_type, delay_minutes, delay_min_seconds, timeout_minutes")
+                    .eq("flow_id", matched.flow_id)
+                    .is("parent_step_id", null)
+                    .order("step_order")
+                    .limit(1)
+                    .maybeSingle();
+
+                  if (primeiroPasso) {
+                    const agora = Date.now();
+                    const status = primeiroPasso.step_type === "no_response"
+                      ? "waiting_no_response"
+                      : primeiroPasso.step_type === "condition"
+                        ? "waiting_reply"
+                        : "waiting_delay";
+                    const quando = primeiroPasso.step_type === "delay"
+                      ? agora + ((primeiroPasso.delay_minutes || 0) * 60 + (primeiroPasso.delay_min_seconds || 0)) * 1000
+                      : primeiroPasso.step_type === "no_response"
+                        ? agora + (primeiroPasso.timeout_minutes || 10) * 60 * 1000
+                        : agora;
+
+                    await supabase.from("flow_executions").insert({
+                      flow_id: matched.flow_id,
+                      lead_id: lead.id,
+                      current_step_id: primeiroPasso.id,
+                      status,
+                      next_action_at: new Date(quando).toISOString(),
+                      metadata: {
+                        trigger: "share_link",
+                        share_link_id: matched.id,
+                        account_id: resolvedAccountId,
+                      },
+                    });
+                    console.log(`[share-link] fluxo ${matched.flow_id} iniciado para o lead ${lead.id}`);
+                  } else {
+                    console.warn(`[share-link] fluxo ${matched.flow_id} sem primeira etapa`);
+                  }
+                }
+              } catch (e) {
+                // Etiqueta e coluna já foram aplicadas: não desfaz o que deu certo.
+                console.error("[share-link] falha ao iniciar fluxo:", e);
+              }
+            }
           }
         } catch (e) {
           console.error("[share-link] attribution failed:", e);

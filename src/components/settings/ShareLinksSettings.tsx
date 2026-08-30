@@ -30,6 +30,7 @@ interface ShareLink {
   message: string;
   label_id: string | null;
   stage_id: string | null;
+  flow_id: string | null;
   active: boolean;
   click_count: number;
 }
@@ -41,6 +42,7 @@ interface FormState {
   message: string;
   labelId: string;
   stageId: string;
+  flowId: string;
   active: boolean;
 }
 
@@ -51,6 +53,7 @@ const EMPTY_FORM: FormState = {
   message: "",
   labelId: NONE,
   stageId: NONE,
+  flowId: NONE,
   active: true,
 };
 
@@ -108,9 +111,11 @@ export function ShareLinksSettings() {
     queryKey: ["share-links", user?.id],
     enabled: !!user && !isRemote,
     queryFn: async () => {
-      const { data, error } = await supabase
+      // `as any`: os tipos do Supabase vêm do banco e só conhecerão `flow_id`
+      // depois que a migration for aplicada.
+      const { data, error } = await (supabase as any)
         .from("share_links")
-        .select("id, name, account_id, phone, message, label_id, stage_id, active, click_count")
+        .select("id, name, account_id, phone, message, label_id, stage_id, flow_id, active, click_count")
         .eq("user_id", user!.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -146,6 +151,21 @@ export function ShareLinksSettings() {
     },
   });
 
+  // Fluxos disponíveis para iniciar quando a frase do link chegar.
+  const { data: fluxos = [] } = useQuery({
+    queryKey: ["share-link-flows", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("flows")
+        .select("id, name, active")
+        .order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: 60_000,
+  });
+
   const links: ShareLink[] = isRemote ? (remote?.links ?? []) : ownLinks;
   const labels: any[] = isRemote ? (remote?.labels ?? []) : ownLabels;
   const stages: any[] = isRemote ? (remote?.stages ?? []) : ownStages;
@@ -174,6 +194,7 @@ export function ShareLinksSettings() {
         message: form.message,
         label_id: form.labelId === NONE ? null : form.labelId,
         stage_id: form.stageId === NONE ? null : form.stageId,
+        flow_id: form.flowId === NONE ? null : form.flowId,
         active: form.active,
       };
 
@@ -269,6 +290,7 @@ export function ShareLinksSettings() {
       message: link.message ?? "",
       labelId: link.label_id ?? NONE,
       stageId: link.stage_id ?? NONE,
+      flowId: link.flow_id ?? NONE,
       active: link.active,
     });
     setDialogOpen(true);
@@ -517,6 +539,26 @@ export function ShareLinksSettings() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Iniciar fluxo quando a frase chegar</Label>
+              <Select value={form.flowId} onValueChange={(v) => setForm({ ...form, flowId: v })}>
+                <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>Nenhum</SelectItem>
+                  {fluxos.map((f: any) => (
+                    <SelectItem key={f.id} value={f.id}>
+                      {f.name}{!f.active ? " · inativo" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                É assim que um anúncio inicia o atendimento sozinho: o criativo leva a
+                este link, o lead manda a frase e o fluxo começa. Se já houver fluxo
+                rodando para esse contato, o novo não é iniciado.
+              </p>
             </div>
 
             <div className="flex items-center justify-between rounded-lg border p-3">
