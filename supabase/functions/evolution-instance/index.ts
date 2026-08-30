@@ -261,7 +261,19 @@ Deno.serve(async (req) => {
       }
 
       // 3) Configura webhook automático apontando para esta plataforma
-      const webhookUrl = `${supabaseUrl}/functions/v1/evolution-webhook?account_id=${account.id}`;
+      //
+      // O segredo tem que ir na URL. O evolution-webhook roda com verify_jwt=false
+      // e exige EVOLUTION_WEBHOOK_SECRET — registrar a URL sem ele faz o servidor
+      // Evolution receber 403 em toda mensagem, calado, e nada chega no chat.
+      const evoSecret = Deno.env.get("EVOLUTION_WEBHOOK_SECRET") || "";
+      if (!evoSecret) {
+        console.error(
+          "EVOLUTION_WEBHOOK_SECRET ausente: o webhook será registrado sem segredo e o Evolution levará 403 em toda mensagem recebida.",
+        );
+      }
+      const webhookUrl =
+        `${supabaseUrl}/functions/v1/evolution-webhook?account_id=${account.id}` +
+        (evoSecret ? `&secret=${encodeURIComponent(evoSecret)}` : "");
       await evoFetch(
         { serverUrl: cleanServer, apiKey: apiKeyClean, instance: cleanInstance, accountId: account.id },
         `/webhook/set/${cleanInstance}`,
@@ -423,6 +435,37 @@ Deno.serve(async (req) => {
       // Conexão aberta → limpa backoff de QR
       if (state === "open") {
         await clearBackoffState(admin, `evo_qr_backoff:${account.id}`);
+      }
+
+      // Conserto de instâncias antigas: elas foram registradas com uma URL de
+      // webhook sem segredo, e desde que o evolution-webhook passou a exigir
+      // EVOLUTION_WEBHOOK_SECRET o servidor Evolution leva 403 em toda mensagem
+      // — sem erro visível em lugar nenhum, só o chat mudo. Reaponta uma vez por
+      // conta e marca, para não pagar uma chamada extra a cada consulta de status.
+      if (state === "open" && account.webhook_subscribed !== true) {
+        const evoSecret = Deno.env.get("EVOLUTION_WEBHOOK_SECRET") || "";
+        if (evoSecret) {
+          const fixUrl =
+            `${supabaseUrl}/functions/v1/evolution-webhook?account_id=${account.id}` +
+            `&secret=${encodeURIComponent(evoSecret)}`;
+          const setRes = await evoFetch(creds, `/webhook/set/${creds.instance}`, {
+            method: "POST",
+            body: JSON.stringify({
+              url: fixUrl,
+              enabled: true,
+              webhook_by_events: false,
+              events: ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "CONNECTION_UPDATE", "QRCODE_UPDATED"],
+            }),
+          }).catch(() => ({ ok: false }) as any);
+          if (setRes.ok) {
+            await admin
+              .from("whatsapp_accounts")
+              .update({ webhook_subscribed: true, webhook_last_check_at: new Date().toISOString() })
+              .eq("id", account.id);
+          } else {
+            console.error("evolution-instance: falha ao reapontar webhook", account.id);
+          }
+        }
       }
 
       // Inclui info do backoff atual para a UI exibir
