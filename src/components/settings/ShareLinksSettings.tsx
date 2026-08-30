@@ -152,9 +152,9 @@ export function ShareLinksSettings() {
   });
 
   // Fluxos disponíveis para iniciar quando a frase do link chegar.
-  const { data: fluxos = [] } = useQuery({
+  const { data: ownFluxos = [] } = useQuery({
     queryKey: ["share-link-flows", user?.id],
-    enabled: !!user,
+    enabled: !!user && !isRemote,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("flows")
@@ -170,6 +170,7 @@ export function ShareLinksSettings() {
   const labels: any[] = isRemote ? (remote?.labels ?? []) : ownLabels;
   const stages: any[] = isRemote ? (remote?.stages ?? []) : ownStages;
   const accounts: any[] = isRemote ? (remote?.accounts ?? []) : ownAccounts;
+  const fluxos: any[] = isRemote ? (remote?.flows ?? []) : ownFluxos;
   const isLoading = isRemote ? !remote : ownLoading;
 
   const refresh = () =>

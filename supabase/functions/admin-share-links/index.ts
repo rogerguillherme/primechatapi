@@ -74,15 +74,16 @@ Deno.serve(async (req) => {
     // ── Tudo que a tela precisa para o usuário alvo ──
     // Nunca devolve access_token: o front só precisa de nome e número.
     if (action === "list") {
-      const [links, accounts, labels, stages] = await Promise.all([
+      const [links, accounts, labels, stages, flows] = await Promise.all([
         admin.from("share_links")
-          .select("id, name, account_id, phone, message, label_id, stage_id, active, click_count")
+          .select("id, name, account_id, phone, message, label_id, stage_id, flow_id, active, click_count")
           .eq("user_id", targetUserId).order("created_at", { ascending: false }),
         admin.from("whatsapp_accounts")
           .select("id, name, display_phone_number, is_default")
           .eq("user_id", targetUserId).order("name"),
         admin.from("chat_labels").select("id, name, color").eq("user_id", targetUserId).order("name"),
         admin.from("pipeline_stages").select("id, name, color, position").eq("owner_id", targetUserId).order("position"),
+        admin.from("flows").select("id, name, active").eq("user_id", targetUserId).order("name"),
       ]);
 
       return json({
@@ -90,6 +91,7 @@ Deno.serve(async (req) => {
         accounts: accounts.data || [],
         labels: labels.data || [],
         stages: stages.data || [],
+        flows: flows.data || [],
       });
     }
 
