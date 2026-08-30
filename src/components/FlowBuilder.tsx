@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
-  Plus, Trash2, GitBranch, ChevronRight, Play, Pause, ArrowLeft, Save, Sparkles, Send, Loader2, Bot, X, MessageCircle, Code2, Settings2, Copy, Paperclip, FileText, ChevronUp, ChevronDown,
+  Plus, Trash2, GitBranch, ChevronRight, Play, Pause, ArrowLeft, Save, Sparkles, Send, Loader2, Bot, X, MessageCircle, Code2, Settings2, Copy, Paperclip, FileText, ChevronUp, ChevronDown, ArrowLeftRight,
 } from "lucide-react";
 import {
   extractFlowDocument, ACCEPT_ATTR, type ExtractedAttachment,
@@ -164,6 +164,62 @@ function FlowListView({ onEdit }: { onEdit: (flow: Flow | null, kind?: FlowKind)
     onError: (e: any) => toast.error(e?.message || "Não foi possível reordenar"),
   });
 
+  /**
+   * Troca o provedor do fluxo (Meta Cloud <-> WhatsApp/Evolution).
+   *
+   * Não é troca neutra: botões interativos e link com botão só existem no
+   * Meta Cloud, e template vira texto simples no outro provedor. Por isso a
+   * confirmação diz quantos passos são afetados antes de mudar qualquer coisa.
+   */
+  const migrateFlow = useMutation({
+    mutationFn: async (flow: Flow) => {
+      const atual: FlowKind = ((flow.flow_kind as FlowKind) || "api");
+      const destino: FlowKind = atual === "api" ? "whatsapp" : "api";
+
+      const { data: passos, error: passosErr } = await supabase
+        .from("flow_steps")
+        .select("step_type, template_id")
+        .eq("flow_id", flow.id);
+      if (passosErr) throw passosErr;
+
+      const interativos = (passos || []).filter(
+        (p: any) => p.step_type === "interactive_buttons" || p.step_type === "cta_url",
+      ).length;
+      const comTemplate = (passos || []).filter((p: any) => p.template_id).length;
+
+      const nomeDestino = destino === "api" ? "API (Meta Cloud)" : "WhatsApp (Evolution)";
+      const avisos: string[] = [];
+      if (destino === "whatsapp") {
+        if (interativos > 0) {
+          avisos.push(`${interativos} passo(s) com botões ou link clicável — o Evolution não envia interativo, eles vão como texto.`);
+        }
+        if (comTemplate > 0) {
+          avisos.push(`${comTemplate} passo(s) com template — no Evolution o template vira texto simples.`);
+        }
+      }
+
+      const texto = [
+        `Migrar "${flow.name}" para ${nomeDestino}?`,
+        "",
+        ...(avisos.length ? [...avisos, ""] : []),
+        "As execuções em andamento passam a enviar pelo novo provedor.",
+      ].join("\n");
+
+      if (!confirm(texto)) return null;
+
+      const { error } = await supabase.from("flows").update({ flow_kind: destino } as any).eq("id", flow.id);
+      if (error) throw error;
+      return destino;
+    },
+    onSuccess: (destino) => {
+      if (!destino) return;
+      toast.success(destino === "api" ? "Fluxo migrado para API (Meta Cloud)" : "Fluxo migrado para WhatsApp");
+      queryClient.invalidateQueries({ queryKey: ["flows"] });
+      queryClient.invalidateQueries({ queryKey: ["chat-flows-all"] });
+    },
+    onError: (e: any) => toast.error(e?.message || "Não foi possível migrar o fluxo"),
+  });
+
   const toggleActive = useMutation({
     mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
       const { error } = await supabase.from("flows").update({ active }).eq("id", id);
@@ -307,6 +363,20 @@ function FlowListView({ onEdit }: { onEdit: (flow: Flow | null, kind?: FlowKind)
                 title={flow.active ? "Desativar" : "Ativar"}
               >
                 {flow.active ? <Pause size={14} /> : <Play size={14} />}
+              </Button>
+              <Button
+                variant="ghost" size="icon" className="h-8 w-8"
+                onClick={() => migrateFlow.mutate(flow)}
+                disabled={migrateFlow.isPending}
+                title={
+                  ((flow.flow_kind as FlowKind) || "api") === "api"
+                    ? "Migrar para WhatsApp (Evolution)"
+                    : "Migrar para API (Meta Cloud)"
+                }
+              >
+                {migrateFlow.isPending
+                  ? <Loader2 size={14} className="animate-spin" />
+                  : <ArrowLeftRight size={14} />}
               </Button>
               <Button
                 variant="ghost" size="icon" className="h-8 w-8"
