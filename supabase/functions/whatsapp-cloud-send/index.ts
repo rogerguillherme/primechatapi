@@ -76,7 +76,7 @@ async function getAccountCredentials(
   accountId?: string,
   ownerUserId?: string | null,
 ): Promise<AccountCredentials> {
-  const baseSelect = "id, phone_number_id, access_token, business_account_id, provider, api_key, webhook_subscribed, webhook_last_check_at";
+  const baseSelect = "id, user_id, is_default, phone_number_id, access_token, business_account_id, provider, api_key, webhook_subscribed, webhook_last_check_at";
 
   const toCreds = (data: any): AccountCredentials => ({
     accountId: data.id,
@@ -366,6 +366,18 @@ Deno.serve(async (req) => {
       );
     }
 
+    // O dono do lead define o tenant: sem isso o fallback de conta podia pegar
+    // a conta de outro usuário (outro provedor) e o envio falhava.
+    let ownerUserId: string | null = null;
+    if (lead_id) {
+      const { data: ownerLead } = await supabase
+        .from("leads")
+        .select("user_id")
+        .eq("id", lead_id)
+        .maybeSingle();
+      ownerUserId = ownerLead?.user_id ?? null;
+    }
+
     const {
       accountId: resolvedAccountId,
       phoneNumberId: PHONE_NUMBER_ID,
@@ -375,7 +387,7 @@ Deno.serve(async (req) => {
       apiKey: D360_API_KEY,
       webhookSubscribed,
       webhookLastCheckAt,
-    } = await getAccountCredentials(supabase, account_id);
+    } = await getAccountCredentials(supabase, account_id, ownerUserId);
 
     const isD360 = provider === "d360";
     const isEvolution = provider === "evolution";
