@@ -23,7 +23,14 @@ export async function functionErrorMessage(
           const msg = json?.error || json?.message;
           if (typeof msg === "string" && msg.trim()) return msg;
         } catch {
-          // Corpo não era JSON: o texto cru já ajuda mais que a mensagem padrão.
+          // "Internal Server Error" em texto puro não vem da nossa função: é o
+          // Supabase respondendo por ela depois que o isolate morreu (estourou
+          // tempo ou memória). Repassar essas duas palavras não diz nada a quem
+          // está na tela, e manda procurar o erro no lugar errado.
+          if (/^\s*internal server error\s*$/i.test(bruto)) {
+            return "A função de envio não chegou a responder (tempo ou memória esgotados). Tente de novo; se repetir, é preciso olhar os logs da função.";
+          }
+          // Outro corpo não-JSON: o texto cru já ajuda mais que a mensagem padrão.
           return bruto.slice(0, 300);
         }
       }

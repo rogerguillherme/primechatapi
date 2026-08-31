@@ -1031,6 +1031,11 @@ Deno.serve(async (req) => {
       const isOutsideWindow = errorCode === 131047 || errorCode === 131051;
       const isInvalidPhone = errorCode === 131026 || errorCode === 131000;
       const isRateLimit = errorCode === 130429 || errorCode === 80007;
+      // Códigos 1 e 2 da Graph, e qualquer 5xx, são falha temporária do lado da
+      // Meta — nada a corrigir na conta nem na mensagem. O texto que ela devolve
+      // nesses casos é "Internal Server Error", que repassado cru vira um erro
+      // que não diz o que fazer.
+      const isMetaTemporario = errorCode === 1 || errorCode === 2 || waRes.status >= 500;
 
       // Friendly Portuguese error messages
       let friendlyMsg: string;
@@ -1049,6 +1054,8 @@ Deno.serve(async (req) => {
         friendlyMsg = `O número de telefone "${cleanPhone}" não é um WhatsApp válido ou não existe.`;
       } else if (isRateLimit) {
         friendlyMsg = `Limite de envios da Meta atingido. Aguarde alguns minutos e tente novamente.`;
+      } else if (isMetaTemporario) {
+        friendlyMsg = `A Meta falhou temporariamente (${metaMsg || `HTTP ${waRes.status}`}). Não é problema da conta nem da mensagem — reenvie em alguns instantes.`;
       } else {
         friendlyMsg = `Falha no envio: ${metaMsg || `erro HTTP ${waRes.status}`}.`;
       }
