@@ -833,6 +833,10 @@ Deno.serve(async (req) => {
       }
 
       await supabase.from("chat_messages").insert({
+        // O endereço que a Meta roteia, preservado na origem. O telefone do
+        // lead pode estar na variante errada do nono dígito; este campo é a
+        // única forma de saber o certo depois, sem esperar o contato escrever.
+        wa_from: cleanPhone,
         lead_id: lead!.id,
         direction: "inbound",
         content: contentText,

@@ -543,6 +543,9 @@ Deno.serve(async (req) => {
 
       // Insert chat message (inbound from contact OR outbound sent from the phone)
       await supabase.from("chat_messages").insert({
+        // Mesma ideia do lado Cloud: o JID é o endereço que de fato roteia.
+        // Só faz sentido no que vem do contato — em fromMe o JID é o destino.
+        wa_from: fromMe ? null : rawPhone,
         lead_id: leadId,
         direction,
         content: text || (mediaType ? `[${mediaType}]` : "(sem conteúdo)"),
