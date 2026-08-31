@@ -71,67 +71,73 @@ function shouldRefreshWebhookSubscription(account: AccountCredentials): boolean 
   return Date.now() - lastCheck > WEBHOOK_REFRESH_INTERVAL_MS;
 }
 
-async function getAccountCredentials(supabase: any, accountId?: string): Promise<AccountCredentials> {
+async function getAccountCredentials(
+  supabase: any,
+  accountId?: string,
+  ownerUserId?: string | null,
+): Promise<AccountCredentials> {
   const baseSelect = "id, phone_number_id, access_token, business_account_id, provider, api_key, webhook_subscribed, webhook_last_check_at";
 
+  const toCreds = (data: any): AccountCredentials => ({
+    accountId: data.id,
+    phoneNumberId: data.phone_number_id,
+    accessToken: data.access_token,
+    businessAccountId: data.business_account_id,
+    provider: (data.provider as string) || "meta_cloud",
+    apiKey: data.api_key as string | null,
+    webhookSubscribed: data.webhook_subscribed as boolean | null,
+    webhookLastCheckAt: data.webhook_last_check_at as string | null,
+  });
+
   if (accountId) {
-    const { data, error } = await supabase
+    let q = supabase.from("whatsapp_accounts").select(baseSelect).eq("id", accountId);
+    // Multi-tenant: uma conta explícita só vale se pertencer ao dono do lead.
+    if (ownerUserId) q = q.eq("user_id", ownerUserId);
+    const { data, error } = await q.maybeSingle();
+    if (error) throw new Error(`Failed to fetch account: ${error.message}`);
+    if (data) return toCreds(data);
+  }
+
+  // Fallback dentro do tenant. ANTES este trecho não filtrava por user_id: com
+  // account_id nulo qualquer envio caía na conta default/mais antiga do banco
+  // — que podia ser de outro usuário e de outro provedor (ex.: Evolution),
+  // devolvendo "Internal Server Error" para contas que são Cloud API.
+  if (ownerUserId) {
+    const { data: owned } = await supabase
       .from("whatsapp_accounts")
       .select(baseSelect)
-      .eq("id", accountId)
-      .maybeSingle();
-    if (error) throw new Error(`Failed to fetch account: ${error.message}`);
-    if (data) {
-      return {
-        accountId: data.id,
-        phoneNumberId: data.phone_number_id,
-        accessToken: data.access_token,
-        businessAccountId: data.business_account_id,
-        provider: (data.provider as string) || "meta_cloud",
-        apiKey: data.api_key as string | null,
-        webhookSubscribed: data.webhook_subscribed as boolean | null,
-        webhookLastCheckAt: data.webhook_last_check_at as string | null,
-      };
+      .eq("user_id", ownerUserId)
+      .order("is_default", { ascending: false })
+      .order("created_at")
+      .limit(50);
+
+    const list: any[] = owned || [];
+    if (list.length) {
+      // Prioriza Cloud API (meta_cloud) antes de provedores alternativos.
+      const preferred =
+        list.find((a) => a.is_default && (a.provider || "meta_cloud") === "meta_cloud") ||
+        list.find((a) => (a.provider || "meta_cloud") === "meta_cloud") ||
+        list[0];
+      return toCreds(preferred);
     }
   }
 
-  // Fallback: try default account from DB
-  const { data: defaultAcc } = await supabase
-    .from("whatsapp_accounts")
-    .select(baseSelect)
-    .eq("is_default", true)
-    .maybeSingle();
-  if (defaultAcc) {
-    return {
-      accountId: defaultAcc.id,
-      phoneNumberId: defaultAcc.phone_number_id,
-      accessToken: defaultAcc.access_token,
-      businessAccountId: defaultAcc.business_account_id,
-      provider: (defaultAcc.provider as string) || "meta_cloud",
-      apiKey: defaultAcc.api_key as string | null,
-      webhookSubscribed: defaultAcc.webhook_subscribed as boolean | null,
-      webhookLastCheckAt: defaultAcc.webhook_last_check_at as string | null,
-    };
-  }
+  // Sem dono conhecido: mantém o comportamento antigo (conta default global).
+  if (!ownerUserId) {
+    const { data: defaultAcc } = await supabase
+      .from("whatsapp_accounts")
+      .select(baseSelect)
+      .eq("is_default", true)
+      .maybeSingle();
+    if (defaultAcc) return toCreds(defaultAcc);
 
-  // Fallback: try first account
-  const { data: firstAcc } = await supabase
-    .from("whatsapp_accounts")
-    .select(baseSelect)
-    .order("created_at")
-    .limit(1)
-    .maybeSingle();
-  if (firstAcc) {
-    return {
-      accountId: firstAcc.id,
-      phoneNumberId: firstAcc.phone_number_id,
-      accessToken: firstAcc.access_token,
-      businessAccountId: firstAcc.business_account_id,
-      provider: (firstAcc.provider as string) || "meta_cloud",
-      apiKey: firstAcc.api_key as string | null,
-      webhookSubscribed: firstAcc.webhook_subscribed as boolean | null,
-      webhookLastCheckAt: firstAcc.webhook_last_check_at as string | null,
-    };
+    const { data: firstAcc } = await supabase
+      .from("whatsapp_accounts")
+      .select(baseSelect)
+      .order("created_at")
+      .limit(1)
+      .maybeSingle();
+    if (firstAcc) return toCreds(firstAcc);
   }
 
   // Final fallback: env vars (always meta_cloud)
@@ -141,6 +147,7 @@ async function getAccountCredentials(supabase: any, accountId?: string): Promise
 
   throw new Error("No WhatsApp account configured");
 }
+
 
 async function ensureWebhookSubscription(accessToken: string, businessAccountId?: string | null): Promise<WebhookEnsureResult> {
   if (!businessAccountId || !accessToken) return { ok: false, skipped: true, error: "missing credentials" };
