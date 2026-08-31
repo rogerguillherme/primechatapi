@@ -2,6 +2,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { matchesStep, aiMatchesStep, applyStepLabels } from "../_shared/flow-matching.ts";
 import { applyStageAutomations } from "../_shared/stage-automations.ts";
 import { interpolate } from "../_shared/interpolate.mjs";
+// `phoneVariants` já é nome de variável local mais abaixo; o apelido evita a colisão.
+import { normalizeWaId, phoneVariants as variantesDeTelefone } from "../_shared/phone.mjs";
 import {
   decodeWhatsAppText,
   resolveMetritoCreds,
@@ -70,29 +72,6 @@ function buildVars(lead: any, metadata: any): Record<string, string> {
 }
 
 
-function normalizePhone(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
-  if (digits.startsWith("55")) return digits;
-  return "55" + digits;
-}
-
-// Brazilian mobile numbers can have 11 digits (with 9) or 10 digits (without).
-// WhatsApp sometimes returns without the leading 9. Generate both variants.
-function brazilianPhoneVariants(phone: string): string[] {
-  const digits = phone.replace(/\D/g, "");
-  const clean = digits.startsWith("55") ? digits : "55" + digits;
-  const variants = [clean];
-  // clean = 55 + DDD(2) + number
-  const afterCountry = clean.slice(2); // DDD + number
-  if (afterCountry.length === 11 && afterCountry[2] === "9") {
-    // Has the 9 → also try without it
-    variants.push("55" + afterCountry.slice(0, 2) + afterCountry.slice(3));
-  } else if (afterCountry.length === 10) {
-    // Missing the 9 → also try with it
-    variants.push("55" + afterCountry.slice(0, 2) + "9" + afterCountry.slice(2));
-  }
-  return variants;
-}
 
 function normalizeTriggerValue(value: string | null | undefined): string {
   return (value || "").trim().toLowerCase();
@@ -761,8 +740,8 @@ Deno.serve(async (req) => {
 
       if (!text && !mediaUrl) continue;
 
-      const cleanPhone = normalizePhone(rawPhone);
-      const phoneVariants = brazilianPhoneVariants(rawPhone);
+      const cleanPhone = normalizeWaId(rawPhone);
+      const phoneVariants = variantesDeTelefone(rawPhone);
       const phoneFilter = phoneVariants.map(p => `phone.eq.${p}`).join(",");
 
       const activityAt = new Date().toISOString();
