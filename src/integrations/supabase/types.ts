@@ -504,6 +504,7 @@ export type Database = {
           read_at: string | null
           sent_by: string | null
           status: string
+          wa_from: string | null
           zapi_message_id: string | null
         }
         Insert: {
@@ -523,6 +524,7 @@ export type Database = {
           read_at?: string | null
           sent_by?: string | null
           status?: string
+          wa_from?: string | null
           zapi_message_id?: string | null
         }
         Update: {
@@ -542,6 +544,7 @@ export type Database = {
           read_at?: string | null
           sent_by?: string | null
           status?: string
+          wa_from?: string | null
           zapi_message_id?: string | null
         }
         Relationships: [
