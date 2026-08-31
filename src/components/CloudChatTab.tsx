@@ -29,6 +29,7 @@ import { ForwardMessageDialog, type ForwardableMessage } from "@/components/chat
 
 import { startFlowForLead } from "@/lib/startFlowForLead";
 import { functionErrorMessage } from "@/lib/functionError";
+import { metaFailureMessage } from "@/lib/metaFailure";
 import { takePendingLead } from "@/lib/openLeadInChat";
 import { interpolateForLead } from "@/lib/interpolate";
 import { useTeamContext, useTeamMembers } from "@/hooks/use-team";
@@ -2005,8 +2006,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                               que o operador consegue relatar. */}
                           {isOutbound && msg.status === "failed" && (
                             <p className="mt-1 text-[11px] leading-snug text-destructive break-words">
-                              {msg.error_title || "Falha no envio"}
-                              {msg.error_details ? `: ${msg.error_details}` : ""}
+                              {metaFailureMessage(msg.error_code, msg.error_title, msg.error_details)}
                               {msg.error_code ? ` (${msg.error_code})` : ""}
                             </p>
                           )}

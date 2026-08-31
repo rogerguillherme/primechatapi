@@ -805,6 +805,17 @@ Deno.serve(async (req) => {
           leadUpdates.name = senderName;
         }
 
+        // O lead foi achado por variante do nono dígito — ou seja, o número
+        // guardado NÃO é o que a Meta usa para rotear. Enviar para o guardado
+        // passa pela API (200) e falha depois, em silêncio, com 131026
+        // "Message undeliverable": a conversa recebe e nenhuma resposta chega.
+        // O wa_id é a Meta dizendo qual é o endereço que funciona; adotá-lo
+        // conserta o lead na primeira vez que ele escreve.
+        if (cleanPhone && lead.phone !== cleanPhone) {
+          console.log(`Lead ${lead.id}: telefone ${lead.phone} -> ${cleanPhone} (wa_id da Meta)`);
+          leadUpdates.phone = cleanPhone;
+        }
+
         const { error: leadUpdateError } = await supabase
           .from("leads")
           .update(leadUpdates)
