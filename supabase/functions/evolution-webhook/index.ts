@@ -560,7 +560,12 @@ Deno.serve(async (req) => {
       if (!fromMe) {
         const { data: lead } = await supabase
           .from("leads")
-          .select("id, name, phone")
+          // user_id é lido logo abaixo, na checagem de dono da execução. Sem
+          // ele no select o valor vinha undefined, a checagem virava sempre
+          // verdadeira, e a resposta do lead só destravava o fluxo quando a
+          // execução trazia account_id no metadata — as outras eram descartadas
+          // caladas, e o fluxo ficava parado esperando algo que já chegou.
+          .select("id, name, phone, user_id")
           .eq("id", leadId)
           .maybeSingle();
 
