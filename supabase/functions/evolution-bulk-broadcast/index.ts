@@ -6,6 +6,7 @@
 // Body retomar:  { resume_job_id }
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { evoErrorMessage } from "../_shared/evo-error.mjs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -208,7 +209,7 @@ Deno.serve(async (req) => {
               }),
             });
             const d = await r.json().catch(() => ({}));
-            if (!r.ok) throw new Error(`sendMedia ${r.status}: ${JSON.stringify(d)}`);
+            if (!r.ok) throw new Error(`sendMedia: ${evoErrorMessage(d, r.status)}`);
           } else {
             const r = await fetch(`${baseUrl}/message/sendText/${instance}`, {
               method: "POST",
@@ -216,7 +217,7 @@ Deno.serve(async (req) => {
               body: JSON.stringify({ number: lead.phone, text }),
             });
             const d = await r.json().catch(() => ({}));
-            if (!r.ok) throw new Error(`sendText ${r.status}: ${JSON.stringify(d)}`);
+            if (!r.ok) throw new Error(`sendText: ${evoErrorMessage(d, r.status)}`);
           }
 
           await supabase.from("chat_messages").insert({

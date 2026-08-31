@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { applyStageAutomations } from "../_shared/stage-automations.ts";
 import { resolveTemplateHeaderLink } from "../_shared/template-media.ts";
+import { evoErrorMessage } from "../_shared/evo-error.mjs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -604,7 +605,7 @@ Deno.serve(async (req) => {
       try { eData = JSON.parse(eText); } catch { eData = { raw: eText }; }
 
       if (!eRes.ok) {
-        const friendlyMsg = eData?.message || eData?.error || `Falha no envio via Evolution API (HTTP ${eRes.status}).`;
+        const friendlyMsg = evoErrorMessage(eData, eRes.status);
         if (lead_id) {
           await supabase.from("chat_messages").insert({
             lead_id,
