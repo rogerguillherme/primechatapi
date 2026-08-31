@@ -748,7 +748,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
   };
 
   const sendMutation = useMutation({
-    mutationFn: async ({ text, mediaUrl, mediaType }: { text?: string; mediaUrl?: string; mediaType?: string }) => {
+    mutationFn: async ({ text, mediaUrl, mediaType, templateName }: { text?: string; mediaUrl?: string; mediaType?: string; templateName?: string }) => {
       if (!selectedLead) throw new Error("No lead selected");
       // `zapi_message_id` guarda o ID da mensagem na Meta — necessário para citar (context).
       const replyToId: string | null = replyTo?.zapi_message_id || null;
@@ -759,6 +759,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
           lead_id: selectedLead.id,
           media_url: mediaUrl,
           media_type: mediaType,
+          template_name: templateName,
           account_id: selectedAccountId,
           reply_to_message_id: replyToId,
         },
@@ -906,6 +907,23 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
     const restamMs = 24 * 60 * 60 * 1000 - passouMs;
     return { aberta: restamMs > 0, restamHoras: Math.max(0, Math.floor(restamMs / 3600000)) };
   }, [messages]);
+
+  /**
+   * Fora da janela, a Meta só aceita template APROVADO POR ELA — o que exige
+   * template_name, o nome registrado lá. Um texto salvo aqui sem esse nome é
+   * mensagem livre com outro rótulo, e volta com 131047 igual.
+   * meta_status ausente ou "unknown" é template antigo, de antes de guardarmos
+   * o status: deixamos tentar, e a própria função barra se não estiver aprovado.
+   */
+  const templatesQueReabrem = useMemo(
+    () =>
+      (templates || []).filter(
+        (t: any) =>
+          t.template_name &&
+          (!t.meta_status || t.meta_status === "APPROVED" || t.meta_status === "unknown"),
+      ),
+    [templates],
+  );
 
   const handleSend = () => {
     const text = message.trim();
@@ -2054,11 +2072,38 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
               {selectedLead && !janela24h.aberta && (
                 <div className="max-w-3xl mx-auto mb-2 flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2">
                   <AlertCircle size={15} className="text-amber-600 dark:text-amber-500 mt-0.5 shrink-0" />
-                  <p className="text-xs leading-snug text-amber-700 dark:text-amber-400">
-                    <b>Fora da janela de 24 horas.</b> O contato não escreve há mais de um dia,
-                    então a Meta recusa mensagem livre — texto, áudio ou arquivo. Só um
-                    <b> template aprovado</b> reabre a conversa.
-                  </p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs leading-snug text-amber-700 dark:text-amber-400">
+                      <b>Fora da janela de 24 horas.</b> O contato não escreve há mais de um dia,
+                      então a Meta recusa mensagem livre — texto, áudio ou arquivo. Só um
+                      <b> template aprovado</b> reabre a conversa.
+                    </p>
+
+                    {/* Um clique reabre. O nome, o idioma e as variáveis o backend
+                        resolve sozinho a partir do template e do nome do lead. */}
+                    {templatesQueReabrem.length > 0 ? (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {templatesQueReabrem.map((t: any) => (
+                          <button
+                            key={t.id}
+                            type="button"
+                            disabled={sendMutation.isPending}
+                            onClick={() => sendMutation.mutate({ templateName: t.template_name })}
+                            title={t.content || t.template_name}
+                            className="inline-flex max-w-full items-center gap-1 rounded-full border border-amber-500/50 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-800 hover:bg-amber-500/20 disabled:opacity-50 dark:text-amber-300"
+                          >
+                            <FileText size={12} className="shrink-0" />
+                            <span className="truncate">{t.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-1.5 text-[11px] text-amber-700/80 dark:text-amber-400/80">
+                        Nenhum template aprovado vinculado a esta conta. Cadastre um em
+                        Configurações › Templates para conseguir reabrir conversas.
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
 
