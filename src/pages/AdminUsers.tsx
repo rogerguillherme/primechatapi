@@ -14,6 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Shield, User, Loader2, ArrowLeft, RefreshCw, Instagram, Clock, Infinity as InfinityIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { AccountHealthAlerts } from "@/components/admin/AccountHealthAlerts";
 
 interface AppUser {
   id: string;
@@ -280,6 +281,11 @@ export default function AdminUsers() {
           <Plus size={16} /> Novo Usuário
         </Button>
       </div>
+
+      {/* Antes da lista de usuários de propósito: é o que se lê primeiro ao
+          abrir a página, e é o único lugar onde o risco de uma conta de cliente
+          fica visível para quem pode agir. */}
+      <AccountHealthAlerts />
 
       <Card>
         <CardContent className="p-0">
