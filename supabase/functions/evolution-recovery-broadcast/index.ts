@@ -11,6 +11,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { evoErrorMessage } from "../_shared/evo-error.mjs";
+import { identificarChamador, contaPertenceAoChamador } from "../_shared/caller.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -111,6 +112,13 @@ Deno.serve(async (req) => {
 
       if (!account_id || !Array.isArray(lead_ids) || lead_ids.length === 0) {
         return json({ error: "account_id e lead_ids são obrigatórios" }, 400);
+      }
+
+      // Disparo em massa com a service role: sem confirmar o dono, a anon key
+      // (pública) bastava para mandar pela conta de qualquer cliente.
+      const chamador = await identificarChamador(req);
+      if (!(await contaPertenceAoChamador(supabase, chamador, account_id))) {
+        return json({ error: "Sem permissão sobre esta conta" }, 403);
       }
 
       const { data: acc } = await supabase

@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { identificarChamador } from "../_shared/caller.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -27,6 +28,35 @@ Deno.serve(async (req) => {
         JSON.stringify({ error: "lead_id is required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // Envia pelo número do cliente com credenciais compartilhadas, e o alvo
+    // vinha só do corpo. A anon key é pública: sem esta checagem, qualquer um
+    // mandava mensagem em nome do cliente para o lead que quisesse.
+    const chamador = await identificarChamador(req);
+    if (!chamador.interno) {
+      if (!chamador.userId) {
+        return new Response(
+          JSON.stringify({ error: "Não autenticado" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      const admin = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      );
+      const { data: dono } = await admin
+        .from("leads")
+        .select("id")
+        .eq("id", lead_id)
+        .eq("user_id", chamador.userId)
+        .maybeSingle();
+      if (!dono) {
+        return new Response(
+          JSON.stringify({ error: "Sem permissão sobre este lead" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
     }
 
     if (!message && !media_url) {
@@ -92,9 +122,10 @@ Deno.serve(async (req) => {
     }
 
     // Save to database
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
 
     const activityAt = new Date().toISOString();
     const contentText = message || (sentMediaType === "audio" ? "🎤 Áudio" : sentMediaType === "image" ? "📷 Imagem" : sentMediaType === "video" ? "🎥 Vídeo" : "📎 Arquivo");
@@ -125,7 +156,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error("Error sending message:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

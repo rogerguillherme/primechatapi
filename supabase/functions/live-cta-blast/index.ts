@@ -3,6 +3,7 @@
 // Chunked + self-invoke para não estourar o tempo de execução.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { identificarChamador, contaPertenceAoChamador } from "../_shared/caller.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -33,6 +34,15 @@ Deno.serve(async (req) => {
 
     if (!account_id || !message || !url) {
       return json({ error: "account_id, message e url são obrigatórios" }, 400);
+    }
+
+    // Esta função dispara para TODOS os leads com janela aberta da conta, com a
+    // service role, e a conta vinha só do corpo. Sem esta checagem, qualquer
+    // pessoa com a anon key — que é pública, vai no bundle do front — mandava
+    // uma mensagem em massa pela conta de qualquer cliente.
+    const chamador = await identificarChamador(req);
+    if (!(await contaPertenceAoChamador(supabase, chamador, account_id))) {
+      return json({ error: "Sem permissão sobre esta conta" }, 403);
     }
 
     // Leads com mensagem recebida nas últimas 24h nesta conta (janela aberta)
