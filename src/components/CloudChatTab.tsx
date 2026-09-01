@@ -41,6 +41,19 @@ import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 
+/**
+ * Último item que satisfaz o teste. A lista de mensagens vem do mais antigo
+ * para o mais novo (ela é buscada em ordem decrescente e revertida), então
+ * `find` devolve a PRIMEIRA ocorrência — o oposto do que quase todo cálculo
+ * sobre a conversa precisa.
+ */
+function ultima<T>(lista: T[], teste: (item: T) => boolean): T | undefined {
+  for (let i = lista.length - 1; i >= 0; i--) {
+    if (teste(lista[i])) return lista[i];
+  }
+  return undefined;
+}
+
 /** Valor sentinela do filtro por vendedor: conversas sem responsável. */
 const UNASSIGNED_AGENT = "__sem_dono__";
 
@@ -614,7 +627,9 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
       await startFlowForLead({
         flowId,
         leadId: selectedLead.id,
-        accountId: selectedAccountId || defaultAccount?.id || null,
+        // O fluxo inteiro sai por esta conta: se começar pela errada, toda a
+        // sequência fala por um número que o contato não conhece.
+        accountId: contaDaConversa || selectedAccountId || defaultAccount?.id || null,
       });
     },
     onSuccess: (_data, flowId) => {
@@ -718,7 +733,8 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
         body: {
           lead_id: selectedLead.id,
           message: lastInbound.content,
-          account_id: selectedAccountId || lastInbound.account_id || undefined,
+          // Mesma regra do envio manual: quem responde é a conta da conversa.
+          account_id: contaDaConversa || selectedAccountId || undefined,
         },
       });
       if (error) throw error;
@@ -761,7 +777,9 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
           media_url: mediaUrl,
           media_type: mediaType,
           template_name: templateName,
-          account_id: selectedAccountId,
+          // Conversa existente responde pela conta dela; conta selecionada só
+          // vale para lead novo, que ainda não tem histórico.
+          account_id: contaDaConversa || selectedAccountId,
           reply_to_message_id: replyToId,
         },
       });
@@ -901,8 +919,29 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
    * Sem nenhuma mensagem recebida na conversa, a janela está fechada: ela só
    * abre quando o contato escreve.
    */
+  /**
+   * A conta pela qual esta conversa acontece.
+   *
+   * Um usuário com Evolution e Cloud API ao mesmo tempo tem duas contas, dois
+   * números. Responder pela conta errada manda a mensagem de um número que o
+   * contato nunca viu: na Cloud isso é a janela de 24h fechada de saída, na
+   * Evolution é outro aparelho falando. O seletor de contas do topo é filtro
+   * de listagem e cai na conta padrão sozinho — não é escolha de quem responde.
+   *
+   * Quem decide é a própria conversa. É o mesmo critério que o motor de fluxos
+   * já usava (entrada mais recente, depois saída); o chat é que ficou de fora.
+   */
+  const contaDaConversa = useMemo(() => {
+    const entrada = ultima(messages || [], (m: any) => m.direction === "inbound" && m.account_id);
+    if (entrada) return (entrada as any).account_id as string;
+    const saida = ultima(messages || [], (m: any) => m.direction === "outbound" && m.account_id);
+    return ((saida as any)?.account_id as string) ?? null;
+  }, [messages]);
+
   const janela24h = useMemo(() => {
-    const ultimaEntrada = (messages || []).find((m: any) => m.direction === "inbound");
+    // `find` aqui pegava a entrada MAIS ANTIGA das 300 carregadas: numa conversa
+    // longa a janela aparecia fechada mesmo com o contato tendo escrito agora.
+    const ultimaEntrada = ultima(messages || [], (m: any) => m.direction === "inbound");
     if (!ultimaEntrada) return { aberta: false, restamHoras: 0 };
     const passouMs = Date.now() - new Date(ultimaEntrada.created_at).getTime();
     const restamMs = 24 * 60 * 60 * 1000 - passouMs;
@@ -942,7 +981,9 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
         await startFlowForLead({
           flowId: shortcut.flow_id,
           leadId: selectedLead.id,
-          accountId: selectedAccountId || defaultAccount?.id || null,
+          // O fluxo inteiro sai por esta conta: se começar pela errada, toda a
+          // sequência fala por um número que o contato não conhece.
+          accountId: contaDaConversa || selectedAccountId || defaultAccount?.id || null,
         });
         setMessage("");
         toast.success(`Fluxo /${shortcut.command} iniciado`);
