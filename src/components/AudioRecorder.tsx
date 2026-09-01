@@ -1,5 +1,5 @@
-import { useState, useRef, useCallback } from "react";
-import { Mic, Square } from "lucide-react";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { Mic, Square, Play, Pause, Send, Trash2 } from "lucide-react";
 
 // O WhatsApp só exibe o áudio como MENSAGEM DE VOZ quando ele vem em OGG/Opus.
 // Qualquer outro container aceito (mp4, mpeg, aac) chega como arquivo anexado.
@@ -70,6 +70,7 @@ export async function validarAudio(blob: Blob): Promise<string | null> {
 }
 
 interface AudioRecorderProps {
+  /** Chamado só quando a pessoa confirma o envio, nunca ao parar a gravação. */
   onRecorded: (blob: Blob) => void;
   /** Avisa o operador quando não dá para gravar num formato aceito. */
   onError?: (mensagem: string) => void;
@@ -86,6 +87,30 @@ export function AudioRecorder({ onRecorded, onError, disabled }: AudioRecorderPr
   const [duration, setDuration] = useState(0);
   const recorderRef = useRef<Stoppable | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Parar de gravar deixou de ser o mesmo que enviar. Antes o áudio saía no
+  // instante em que se soltava o botão: sem ouvir antes, sem desistir depois.
+  // Um engano custava uma mensagem de voz errada no WhatsApp do cliente.
+  const [gravado, setGravado] = useState<Blob | null>(null);
+  const [tocando, setTocando] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const urlRef = useRef<string | null>(null);
+
+  const descartarPreview = useCallback(() => {
+    audioRef.current?.pause();
+    audioRef.current = null;
+    if (urlRef.current) {
+      URL.revokeObjectURL(urlRef.current);
+      urlRef.current = null;
+    }
+    setTocando(false);
+    setGravado(null);
+    setDuration(0);
+  }, []);
+
+  // A URL do blob vive enquanto a prévia existir; sem revogar, cada gravação
+  // descartada fica presa na memória da aba.
+  useEffect(() => descartarPreview, [descartarPreview]);
 
   const beginTimer = () => {
     setRecording(true);
@@ -111,14 +136,14 @@ export function AudioRecorder({ onRecorded, onError, disabled }: AudioRecorderPr
       if (e.data.size > 0) chunks.push(e.data);
     };
     rec.onstop = () => {
-      onRecorded(new Blob(chunks, { type: rec.mimeType || mimeType }));
+      setGravado(new Blob(chunks, { type: rec.mimeType || mimeType }));
       stream.getTracks().forEach((t) => t.stop());
     };
 
     rec.start(100);
     recorderRef.current = rec;
     beginTimer();
-  }, [onRecorded]);
+  }, []);
 
   const startRecording = useCallback(async () => {
     try {
@@ -143,7 +168,7 @@ export function AudioRecorder({ onRecorded, onError, disabled }: AudioRecorderPr
         // para SharedArrayBuffer, que o construtor de Blob não aceita.
         const bytes = new Uint8Array(data.byteLength);
         bytes.set(data);
-        onRecorded(new Blob([bytes.buffer], { type: OGG_MIME }));
+        setGravado(new Blob([bytes.buffer], { type: OGG_MIME }));
       };
 
       await rec.start();
@@ -170,7 +195,7 @@ export function AudioRecorder({ onRecorded, onError, disabled }: AudioRecorderPr
         onError?.("Não foi possível acessar o microfone.");
       }
     }
-  }, [onRecorded, onError, startWithMediaRecorder]);
+  }, [onError, startWithMediaRecorder]);
 
   const stopRecording = useCallback(() => {
     recorderRef.current?.stop();
@@ -179,11 +204,72 @@ export function AudioRecorder({ onRecorded, onError, disabled }: AudioRecorderPr
     clearTimer();
   }, []);
 
+  const alternarReproducao = useCallback(() => {
+    if (!gravado) return;
+    if (!audioRef.current) {
+      urlRef.current = URL.createObjectURL(gravado);
+      const el = new Audio(urlRef.current);
+      el.onended = () => setTocando(false);
+      el.onpause = () => setTocando(false);
+      el.onplay = () => setTocando(true);
+      audioRef.current = el;
+    }
+    if (audioRef.current.paused) void audioRef.current.play();
+    else audioRef.current.pause();
+  }, [gravado]);
+
+  const enviar = useCallback(() => {
+    if (!gravado) return;
+    const blob = gravado;
+    descartarPreview();
+    onRecorded(blob);
+  }, [gravado, descartarPreview, onRecorded]);
+
   const formatTime = (t: number) => {
     const m = Math.floor(t / 60);
     const s = t % 60;
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
+
+  // Gravado e ainda não enviado: ouvir, apagar ou mandar.
+  if (gravado) {
+    return (
+      <div className="flex items-center gap-1.5 rounded-full border border-border bg-muted/40 pl-1 pr-1.5 py-1">
+        <button
+          onClick={alternarReproducao}
+          aria-label={tocando ? "Pausar áudio" : "Ouvir áudio gravado"}
+          title={tocando ? "Pausar" : "Ouvir"}
+          className="p-1.5 rounded-full hover:bg-accent text-foreground transition-colors"
+        >
+          {tocando ? <Pause size={16} /> : <Play size={16} />}
+        </button>
+
+        <span className="text-xs font-medium tabular-nums text-muted-foreground px-0.5">
+          {formatTime(duration)}
+        </span>
+
+        <button
+          onClick={descartarPreview}
+          disabled={disabled}
+          aria-label="Descartar áudio"
+          title="Descartar"
+          className="p-1.5 rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-50"
+        >
+          <Trash2 size={16} />
+        </button>
+
+        <button
+          onClick={enviar}
+          disabled={disabled}
+          aria-label="Enviar áudio"
+          title="Enviar"
+          className="p-1.5 rounded-full bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
+        >
+          <Send size={16} />
+        </button>
+      </div>
+    );
+  }
 
   if (recording) {
     return (
