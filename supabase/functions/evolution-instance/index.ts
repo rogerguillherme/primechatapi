@@ -440,15 +440,43 @@ Deno.serve(async (req) => {
       // Conserto de instâncias antigas: elas foram registradas com uma URL de
       // webhook sem segredo, e desde que o evolution-webhook passou a exigir
       // EVOLUTION_WEBHOOK_SECRET o servidor Evolution leva 403 em toda mensagem
-      // — sem erro visível em lugar nenhum, só o chat mudo. Reaponta uma vez por
-      // conta e marca, para não pagar uma chamada extra a cada consulta de status.
-      if (state === "open" && account.webhook_subscribed !== true) {
+      // — sem erro visível em lugar nenhum, só o chat mudo.
+      //
+      // Esta consulta de status é chamada a cada 20 segundos pelo monitor de
+      // saúde da tela. A primeira versão disto só marcava a conta quando o
+      // reaponte DAVA CERTO — então, falhando, ela repetia o POST de webhook a
+      // cada 20 segundos, para sempre, contra o servidor Evolution. Instância
+      // Baileys não gosta de ter o webhook reescrito o tempo todo: ela cai, o
+      // monitor vê "close" e abre o QR. O conserto virava a doença.
+      //
+      // Agora a tentativa é marcada nos DOIS desfechos, e só se repete depois
+      // da janela abaixo.
+      const JANELA_REPARO_MS = 10 * 60 * 1000;
+      const ultimoReparo = account.webhook_last_check_at
+        ? new Date(account.webhook_last_check_at).getTime()
+        : 0;
+      const podeTentarReparo =
+        !Number.isFinite(ultimoReparo) || Date.now() - ultimoReparo > JANELA_REPARO_MS;
+
+      if (state === "open" && account.webhook_subscribed !== true && podeTentarReparo) {
         const evoSecret = Deno.env.get("EVOLUTION_WEBHOOK_SECRET") || "";
         if (evoSecret) {
           const fixUrl =
             `${supabaseUrl}/functions/v1/evolution-webhook?account_id=${account.id}` +
             `&secret=${encodeURIComponent(evoSecret)}`;
-          const setRes = await evoFetch(creds, `/webhook/set/${creds.instance}`, {
+
+          // Pergunta antes de escrever. Ler o webhook atual não mexe em nada;
+          // reescrevê-lo mexe. Se já estiver certo, não há o que consertar —
+          // só marcar a conta e parar de olhar.
+          const atual = await evoFetch(creds, `/webhook/find/${creds.instance}`, { method: "GET" })
+            .catch(() => ({ ok: false, body: null }) as any);
+          const urlAtual = String(atual?.body?.url || atual?.body?.webhook?.url || "");
+          const jaEstaCerto =
+            atual.ok && urlAtual.includes(`secret=${encodeURIComponent(evoSecret)}`);
+
+          const setRes = jaEstaCerto
+            ? ({ ok: true } as any)
+            : await evoFetch(creds, `/webhook/set/${creds.instance}`, {
             method: "POST",
             body: JSON.stringify({
               url: fixUrl,
@@ -457,12 +485,15 @@ Deno.serve(async (req) => {
               events: ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "CONNECTION_UPDATE", "QRCODE_UPDATED"],
             }),
           }).catch(() => ({ ok: false }) as any);
-          if (setRes.ok) {
-            await admin
-              .from("whatsapp_accounts")
-              .update({ webhook_subscribed: true, webhook_last_check_at: new Date().toISOString() })
-              .eq("id", account.id);
-          } else {
+          // Carimba mesmo falhando: é o carimbo que segura a repetição.
+          await admin
+            .from("whatsapp_accounts")
+            .update({
+              webhook_subscribed: setRes.ok ? true : account.webhook_subscribed ?? false,
+              webhook_last_check_at: new Date().toISOString(),
+            })
+            .eq("id", account.id);
+          if (!setRes.ok) {
             console.error("evolution-instance: falha ao reapontar webhook", account.id);
           }
         }
