@@ -592,12 +592,24 @@ Deno.serve(async (req) => {
     let resolvedAccountId: string | null = null;
     let resolvedUserId: string | null = null;
     if (incomingPhoneNumberId) {
-      const { data: matchedAccount } = await supabase
+      // `maybeSingle` devolve ERRO quando vem mais de uma linha, e o número
+      // cadastrado duas vezes — em contas de donos diferentes — é um caso que
+      // já aconteceu aqui. O resultado era ficar sem dono resolvido e cair no
+      // caminho que escrevia sem isolamento. Pedindo duas linhas, o caso vira
+      // um aviso nomeado em vez de um efeito colateral.
+      const { data: contas } = await supabase
         .from("whatsapp_accounts")
         .select("id, access_token, user_id")
         .eq("phone_number_id", incomingPhoneNumberId)
-        .maybeSingle();
-      if (matchedAccount) {
+        .limit(2);
+
+      if ((contas || []).length > 1) {
+        console.error(
+          `phone_number_id ${incomingPhoneNumberId} está cadastrado em ${contas!.length}+ contas ` +
+          `(donos: ${contas!.map((c: any) => c.user_id).join(", ")}). Não dá para saber de quem é a mensagem.`,
+        );
+      } else if (contas && contas.length === 1) {
+        const matchedAccount = contas[0];
         ACCESS_TOKEN = matchedAccount.access_token;
         resolvedAccountId = matchedAccount.id;
         resolvedUserId = matchedAccount.user_id;
@@ -746,17 +758,49 @@ Deno.serve(async (req) => {
 
       const activityAt = new Date().toISOString();
 
-      // Find or create lead (scoped by user_id for multi-tenant isolation)
-      let leadQuery = supabase
-        .from("leads")
-        .select("id, name, phone")
-        .or(phoneFilter);
-      
-      if (resolvedUserId) {
-        leadQuery = leadQuery.eq("user_id", resolvedUserId);
+      // Sem dono resolvido não se escreve nada.
+      //
+      // O filtro por user_id era condicional, e o comentário dizia "scoped by
+      // user_id for multi-tenant isolation" — mas quando o phone_number_id da
+      // mensagem não casava com conta nenhuma, o if não valia e a busca corria
+      // A BASE INTEIRA por telefone. A mensagem então grudava no lead de
+      // qualquer cliente que tivesse aquele número, e conversa de um aparecia
+      // no CRM de outro. Não havendo lead, criava-se um com user_id nulo:
+      // órfão, invisível para as políticas de acesso, e ninguém sabia.
+      //
+      // Não dá para adivinhar o dono. O certo é registrar e não escrever — o
+      // caso real é conta que ainda não foi cadastrada, e aí a saída é
+      // cadastrá-la, não espalhar a mensagem.
+      if (!resolvedUserId) {
+        console.error(
+          `Inbound sem dono: phone_number_id=${incomingPhoneNumberId || "(vazio)"} de=${rawPhone}. ` +
+          `Nenhuma conta cadastrada casa com esse número — mensagem NÃO gravada.`,
+        );
+        try {
+          await supabase.from("audit_logs").insert({
+            action: "inbound_sem_conta",
+            table_name: "chat_messages",
+            details: {
+              phone_number_id: incomingPhoneNumberId || null,
+              de: rawPhone,
+              message_id: messageId,
+              motivo: "phone_number_id não corresponde a nenhuma whatsapp_accounts",
+            },
+          });
+        } catch {
+          /* auditoria não pode derrubar o webhook */
+        }
+        continue;
       }
 
-      let { data: lead } = await leadQuery.limit(1).maybeSingle();
+      const { data: lead0 } = await supabase
+        .from("leads")
+        .select("id, name, phone")
+        .or(phoneFilter)
+        .eq("user_id", resolvedUserId)
+        .limit(1)
+        .maybeSingle();
+      let lead = lead0;
       const isNewLead = !lead;
 
       if (!lead) {
