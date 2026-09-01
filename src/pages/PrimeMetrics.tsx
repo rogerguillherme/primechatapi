@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ArrowLeft, Trophy, Target, TrendingUp, Users, Loader2 } from "lucide-react";
+import { ArrowLeft, Trophy, Target, TrendingUp, Users, Loader2, Megaphone } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -17,6 +17,8 @@ import {
   progressoNoElo,
   comissao,
   progressoMeta,
+  roas,
+  roi,
 } from "../../supabase/functions/_shared/metrics-engine.mjs";
 
 /**
@@ -55,6 +57,28 @@ export default function PrimeMetrics() {
   const ownerId = team?.ownerId ?? user?.id ?? null;
 
   const [mes] = useState(() => new Date());
+
+  // Com ou sem ROI/ROAS.
+  //
+  // Nem toda operação anuncia, e para quem não anuncia essas colunas só ocupam
+  // espaço e confundem — o gasto é zero, o indicador não se aplica, e uma
+  // coluna de traços passa a impressão de que algo está quebrado. A escolha
+  // fica com quem olha, e é lembrada.
+  const [comAds, setComAds] = useState(() => {
+    try {
+      return localStorage.getItem("prime-metrics:com-ads") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const alternarAds = (v: boolean) => {
+    setComAds(v);
+    try {
+      localStorage.setItem("prime-metrics:com-ads", v ? "1" : "0");
+    } catch {
+      /* navegador sem storage: a escolha vale só nesta sessão */
+    }
+  };
   const inicio = useMemo(() => startOfMonth(mes), [mes]);
   const fim = useMemo(() => endOfMonth(mes), [mes]);
 
@@ -144,6 +168,35 @@ export default function PrimeMetrics() {
     },
   });
 
+  // ── Gasto em anúncio do período ──
+  // Só é consultado quando a visão com ROI/ROAS está ligada: quem não anuncia
+  // não paga uma consulta a cada abertura da tela.
+  const { data: gastos = [] } = useQuery({
+    queryKey: ["metrics-ad-spend", ownerId, inicio.toISOString()],
+    enabled: !!ownerId && comAds,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("metrics_ad_spend")
+        .select("member_user_id, amount")
+        .eq("owner_id", ownerId)
+        .lte("period_start", format(fim, "yyyy-MM-dd"))
+        .gte("period_end", format(inicio, "yyyy-MM-dd"));
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const gastoPor = useMemo(() => {
+    const m = new Map<string, number>();
+    let empresa = 0;
+    for (const g of gastos as any[]) {
+      const v = Number(g.amount) || 0;
+      if (g.member_user_id) m.set(g.member_user_id, (m.get(g.member_user_id) || 0) + v);
+      else empresa += v;
+    }
+    return { porVendedor: m, empresa };
+  }, [gastos]);
+
   // Os nomes vêm da mesma API que a tela de equipe usa. Consultar team_members
   // direto daqui daria outra lista, com outras regras de acesso — duas verdades
   // sobre quem é vendedor é o começo de um ranking que ninguém confia.
@@ -175,6 +228,16 @@ export default function PrimeMetrics() {
     .reduce((s, l) => s + (comissao(l.faturamento, tiers) as number), 0);
   const progColetiva = progressoMeta(faturamentoTotal, metaColetiva ?? 0) as number | null;
 
+  const gastoTotal = comAds
+    ? gastoPor.empresa + [...gastoPor.porVendedor.values()].reduce((s, v) => s + v, 0)
+    : 0;
+  const roasTotal = comAds ? (roas(faturamentoTotal, gastoTotal) as number | null) : null;
+  const roiTotal = comAds ? (roi(faturamentoTotal, gastoTotal) as number | null) : null;
+
+  /** "não se aplica" é uma resposta; um número inventado no lugar dela não é. */
+  const mostraIndice = (v: number | null, sufixo: string) =>
+    v === null ? "—" : `${v.toFixed(2)}${sufixo}`;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -187,6 +250,27 @@ export default function PrimeMetrics() {
             {temporada?.name ||
               `Temporada de ${format(mes, "MMMM 'de' yyyy", { locale: ptBR })}`}
           </p>
+        </div>
+
+        <div className="ml-auto flex rounded-lg border border-border p-0.5">
+          {[
+            { valor: false, rotulo: "Sem ROI/ROAS" },
+            { valor: true, rotulo: "Com ROI/ROAS" },
+          ].map((op) => (
+            <button
+              key={op.rotulo}
+              type="button"
+              onClick={() => alternarAds(op.valor)}
+              className={cn(
+                "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                comAds === op.valor
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {op.rotulo}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -222,11 +306,22 @@ export default function PrimeMetrics() {
       </Card>
 
       {/* ── KPIs ── */}
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className={cn("grid gap-3", comAds ? "sm:grid-cols-3 lg:grid-cols-6" : "sm:grid-cols-3")}>
         {[
           { rotulo: "Faturamento", valor: moeda(faturamentoTotal), icone: TrendingUp },
           { rotulo: "Vendas aprovadas", valor: String(vendasTotal), icone: Trophy },
           { rotulo: "Comissão do período", valor: moeda(comissaoTotal), icone: Users },
+          ...(comAds
+            ? [
+                { rotulo: "Investido em anúncio", valor: moeda(gastoTotal), icone: Megaphone },
+                { rotulo: "ROAS", valor: mostraIndice(roasTotal, "x"), icone: TrendingUp },
+                {
+                  rotulo: "ROI",
+                  valor: roiTotal === null ? "—" : `${(roiTotal * 100).toFixed(0)}%`,
+                  icone: TrendingUp,
+                },
+              ]
+            : []),
         ].map((k) => (
           <Card key={k.rotulo}>
             <CardContent className="pt-5">
@@ -262,6 +357,14 @@ export default function PrimeMetrics() {
           </p>
         )}
 
+        {comAds && gastoTotal === 0 && ranking.length > 0 && (
+          <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+            Nenhum gasto de anúncio cadastrado neste período, então ROI e ROAS aparecem como
+            <b> —</b>. Não é erro: sem investimento não existe retorno sobre investimento.
+            Lance o valor em <b>metrics_ad_spend</b> para os índices ganharem sentido.
+          </p>
+        )}
+
         {tiers.length === 0 && ranking.length > 0 && (
           <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
             Nenhum elo cadastrado ainda — o ranking mostra faturamento, mas sem elo não há
@@ -277,6 +380,17 @@ export default function PrimeMetrics() {
             : null;
           const prog = l.userId ? (progressoNoElo(tiers, l.faturamento) as number) : 0;
           const com = l.userId ? (comissao(l.faturamento, tiers) as number) : 0;
+
+          // Só o gasto ATRIBUÍDO ao vendedor entra aqui. Ratear o gasto da
+          // empresa entre todos daria a cada um um ROAS que ele não construiu,
+          // e ranking com número emprestado não se sustenta numa conversa.
+          const gastoDoVendedor = l.userId ? gastoPor.porVendedor.get(l.userId) || 0 : 0;
+          const roasVendedor = comAds
+            ? (roas(l.faturamento, gastoDoVendedor) as number | null)
+            : null;
+          const roiVendedor = comAds
+            ? (roi(l.faturamento, gastoDoVendedor) as number | null)
+            : null;
 
           return (
             <Card key={l.userId || "sem"} className={cn(!l.userId && "border-dashed")}>
@@ -302,6 +416,17 @@ export default function PrimeMetrics() {
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                   <span>{l.vendas} venda(s)</span>
                   {l.userId && elo && <span>Comissão {moeda(com)}</span>}
+                  {comAds && l.userId && (
+                    <>
+                      <span>Ads {moeda(gastoDoVendedor)}</span>
+                      {/* Traço, não zero: sem gasto atribuído o índice não se
+                          aplica, e um "0.00x" faria parecer desempenho ruim. */}
+                      <span>ROAS {mostraIndice(roasVendedor, "x")}</span>
+                      <span>
+                        ROI {roiVendedor === null ? "—" : `${(roiVendedor * 100).toFixed(0)}%`}
+                      </span>
+                    </>
+                  )}
                   {l.userId && prox && (
                     <span>
                       Faltam {moeda(prox.falta)} para {prox.tier.name}

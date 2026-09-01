@@ -77,3 +77,32 @@ export function progressoMeta(valor, alvo) {
   if (a <= 0) return null;
   return Math.min(1, Math.max(0, (Number(valor) || 0) / a));
 }
+
+/**
+ * ROAS: quanto voltou para cada real gasto em anúncio.
+ *
+ * Gasto zero devolve null, NÃO "100.00x" nem "0.00x". É a armadilha que o
+ * plano registra do sistema avaliado, e ela não é cosmética: um vendedor que
+ * não recebeu tráfego apareceria como o mais eficiente da equipe, e o ranking
+ * inteiro deixaria de significar alguma coisa.
+ *
+ * Sem gasto não existe retorno SOBRE gasto. A resposta certa é "não se aplica",
+ * e cabe à tela dizer isso em vez de inventar um número.
+ */
+export function roas(faturamento, gastoAds) {
+  const g = Number(gastoAds) || 0;
+  if (g <= 0) return null;
+  return (Number(faturamento) || 0) / g;
+}
+
+/**
+ * ROI: o retorno acima do que foi gasto, como proporção do gasto.
+ *
+ * Negativo é resultado legítimo — significa que se gastou mais do que voltou, e
+ * esconder isso seria pior. O que não é legítimo é dividir por zero.
+ */
+export function roi(faturamento, gastoAds) {
+  const g = Number(gastoAds) || 0;
+  if (g <= 0) return null;
+  return ((Number(faturamento) || 0) - g) / g;
+}

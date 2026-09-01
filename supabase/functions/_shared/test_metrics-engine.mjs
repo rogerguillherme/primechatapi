@@ -1,7 +1,7 @@
 // Run: node supabase/functions/_shared/test_metrics-engine.mjs
 import assert from "node:assert/strict";
 import {
-  eloAtual, proximoElo, progressoNoElo, comissao, progressoMeta,
+  eloAtual, proximoElo, progressoNoElo, comissao, progressoMeta, roas, roi,
 } from "./metrics-engine.mjs";
 
 const ELOS = [
@@ -58,5 +58,25 @@ assert.equal(progressoMeta(15000, 10000), 1, "passou da meta não passa de 100%"
 assert.equal(progressoMeta(5000, 0), null);
 assert.equal(progressoMeta(0, 0), null);
 assert.equal(progressoMeta(0, 10000), 0);
+
+// ── ROAS e ROI ──
+assert.equal(roas(10000, 2000), 5, "cinco reais de volta por real gasto");
+assert.equal(roi(10000, 2000), 4, "quatro reais de lucro por real gasto");
+
+// Gastar mais do que voltou é resultado real, não erro: aparece negativo.
+assert.equal(roi(1000, 2000), -0.5);
+assert.equal(roas(1000, 2000), 0.5);
+
+// Gasto ZERO não é retorno infinito nem zero — é "não se aplica".
+// Sem isto, quem não recebeu tráfego vira o mais eficiente da equipe e o
+// ranking deixa de significar qualquer coisa. É a armadilha do plano.
+assert.equal(roas(10000, 0), null, "faturou sem gastar: ROAS não se aplica");
+assert.equal(roi(10000, 0), null);
+assert.equal(roas(0, 0), null);
+assert.equal(roas(10000, -50), null, "gasto negativo é dado ruim, não divisor");
+
+// Faturamento zero com gasto real é -100%: perdeu tudo o que investiu.
+assert.equal(roi(0, 500), -1);
+assert.equal(roas(0, 500), 0);
 
 console.log("metrics-engine: all assertions passed");
