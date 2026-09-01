@@ -1255,7 +1255,17 @@ Deno.serve(async (req) => {
       // Check for flow executions waiting for user reply.
       // IMPORTANT: a Brazilian phone can exist as two leads (with/without the 9th digit),
       // so look up all leads matching any phone variant for this tenant and consider their executions.
-      if ((buttonPayload || text) && lead) {
+      // Áudio, imagem, figurinha e documento SÃO resposta. A porta aqui exigia
+      // texto ou botão, então uma resposta em áudio nem chegava a ser avaliada:
+      // a execução ficava presa em "aguardando resposta" para sempre, esperando
+      // uma resposta que já tinha chegado.
+      //
+      // A avaliação lá dentro já sabe lidar com isso — sem palavra para casar,
+      // ela cai no ramo padrão, que é justamente "qualquer resposta segue".
+      // Faltava deixar entrar. Corrigi a avaliação antes e o problema voltou,
+      // porque o que barrava era esta linha, não ela.
+      const leadRespondeu = !!(buttonPayload || text || mediaUrl);
+      if (leadRespondeu && lead) {
         let siblingLeadsQuery = supabase
           .from("leads")
           .select("id")

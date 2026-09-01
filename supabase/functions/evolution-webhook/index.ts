@@ -62,7 +62,15 @@ async function resolveMatchedFlowStep(
   currentStepId: string | null,
   candidateTriggers: string[],
 ) {
-  if (!currentStepId || candidateTriggers.length === 0) {
+  // Sem etapa atual não há o que resolver. Lista de candidatos VAZIA, porém,
+  // não é motivo para desistir: é o caso de toda resposta sem texto — áudio,
+  // imagem, figurinha, documento. Desistir aqui prendia a execução em
+  // "aguardando resposta" para sempre.
+  //
+  // Esta função é uma CÓPIA da que vive no whatsapp-cloud-webhook, e as duas
+  // divergiram: a correção foi feita lá e não chegou aqui, então o mesmo bug
+  // continuou vivo do lado da Evolution. Vale unificar.
+  if (!currentStepId) {
     return null;
   }
 
@@ -121,6 +129,16 @@ async function resolveMatchedFlowStep(
   if (conditionBranches.length === 1) {
     return conditionBranches[0];
   }
+
+  // Ramo padrão: filho sem palavra-chave nenhuma é o "qualquer resposta segue".
+  // É por aqui que uma resposta em áudio anda, já que ela não casa com termo
+  // algum. Ramo de timeout (no_response) fica de fora: ele é o caminho de quem
+  // NÃO respondeu, e escolhê-lo agora seria tratar quem respondeu como ausente.
+  const ramoPadrao = branchSteps.find(
+    (s: any) => s.step_type !== "no_response" && (!s.trigger_value || String(s.trigger_value).trim() === ""),
+  );
+  if (ramoPadrao) return ramoPadrao;
+
   return null;
 }
 
@@ -569,7 +587,10 @@ Deno.serve(async (req) => {
           .eq("id", leadId)
           .maybeSingle();
 
-        if (lead && text) {
+        // Mesma porta que travava o fluxo no webhook da Cloud API: áudio e
+        // mídia são resposta, e exigir texto aqui deixa a execução esperando
+        // algo que já chegou.
+        if (lead && (text || mediaUrl)) {
           const { data: executions } = await supabase
             .from("flow_executions")
             .select("id, current_step_id, flow_id, metadata")
