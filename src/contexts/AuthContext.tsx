@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, ReactNode } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -27,8 +27,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const currentUserId = session?.user?.id ?? null;
-    if (lastUserIdRef.current !== null && lastUserIdRef.current !== currentUserId) {
-      // User switched (login as different user, or signed out). Clear all cached queries.
+
+    // Limpar o cache só quando é OUTRA pessoa. Antes, qualquer ida a null
+    // limpava tudo — e a sessão vai a null sozinha em situações banais: uma
+    // renovação de token que falha por um instante, uma validação que volta
+    // 401 numa oscilação de rede. O efeito era brutal e desproporcional: sem
+    // cache, o trial volta a "carregando", o ProtectedRoute troca o app
+    // inteiro por um spinner, e tudo o que estava aberto se perde. Era isto
+    // que piscava e deixava a tela em branco.
+    //
+    // Sair de verdade não precisa disto: a rota vai para /auth, e entrar com
+    // outro usuário cai no caso de troca aqui embaixo.
+    const trocouDePessoa =
+      lastUserIdRef.current !== null &&
+      currentUserId !== null &&
+      lastUserIdRef.current !== currentUserId;
+
+    if (trocouDePessoa) {
       queryClient.clear();
     }
     lastUserIdRef.current = currentUserId;
@@ -116,8 +131,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
   };
 
+  // Sem isto, o objeto é novo a cada render do provider e TODO consumidor de
+  // useAuth re-renderiza junto — inclusive quando nada de fato mudou.
+  const valorDoContexto = useMemo(
+    () => ({ session, user: session?.user ?? null, loading, signOut }),
+    [session, loading],
+  );
+
   return (
-    <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, signOut }}>
+    <AuthContext.Provider value={valorDoContexto}>
       {children}
     </AuthContext.Provider>
   );

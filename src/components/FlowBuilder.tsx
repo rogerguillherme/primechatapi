@@ -110,15 +110,20 @@ function FlowListView({ onEdit }: { onEdit: (flow: Flow | null, kind?: FlowKind)
   const queryClient = useQueryClient();
   const [activeKind, setActiveKind] = useState<FlowKind>("api");
 
-  const { data: flows, isLoading } = useQuery({
+  const { data: flows, isLoading, error: flowsError } = useQuery({
     queryKey: ["flows"],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("flows")
         .select("*")
         // Ordem escolhida pelo usuário; nome só desempata.
         .order("position", { ascending: true })
         .order("name", { ascending: true });
+      // O erro era descartado e a falha virava lista vazia: "nenhum fluxo
+      // ainda" e "não consegui carregar seus fluxos" apareciam idênticos na
+      // tela. Se a coluna `position` não existir no banco, por exemplo, é isto
+      // que acontece — e não há como saber olhando.
+      if (error) throw error;
       return (data || []) as Flow[];
     },
   });
@@ -306,6 +311,23 @@ function FlowListView({ onEdit }: { onEdit: (flow: Flow | null, kind?: FlowKind)
   const renderList = () => {
     if (isLoading) {
       return <p className="text-sm text-muted-foreground text-center py-8">Carregando...</p>;
+    }
+    if (flowsError) {
+      return (
+        <div className="py-8 px-4 text-center">
+          <p className="text-sm text-destructive">Não foi possível carregar os fluxos.</p>
+          <p className="mt-1 text-xs text-muted-foreground break-words">
+            {(flowsError as { message?: string })?.message || String(flowsError)}
+          </p>
+          <button
+            type="button"
+            onClick={() => queryClient.invalidateQueries({ queryKey: ["flows"] })}
+            className="mt-3 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-accent"
+          >
+            Tentar de novo
+          </button>
+        </div>
+      );
     }
     if (!filteredFlows.length) {
       return (
