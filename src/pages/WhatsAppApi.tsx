@@ -2613,6 +2613,32 @@ export default function WhatsAppApi() {
                     </a>
                   </CardDescription>
                 </div>
+                <div className="flex items-center gap-2">
+                {/* Estava escondido dentro do menu "Nova Conta" — lugar de ação
+                    de criar, não de interruptor de comportamento. E este aqui
+                    liga uma automação que abre o QR sozinha: quando ela começa
+                    a atrapalhar, é o primeiro botão que se procura, e não se
+                    achava. Só aparece havendo conta Evolution, que é a única
+                    que ele afeta. */}
+                {(accounts || []).some((a: any) => a.provider === "evolution") && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => toggleAutoReconnect(!autoReconnect)}
+                    title={
+                      autoReconnect
+                        ? "Ligada: se uma instância cair, o QR reabre sozinho"
+                        : "Desligada: instância que cair fica esperando você"
+                    }
+                    className={cn(
+                      "gap-1.5",
+                      autoReconnect && "border-emerald-500/50 text-emerald-700 dark:text-emerald-400",
+                    )}
+                  >
+                    <RefreshCw size={14} />
+                    Reconexão automática: {autoReconnect ? "ON" : "OFF"}
+                  </Button>
+                )}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button size="sm" className="gap-1.5">
@@ -2635,12 +2661,9 @@ export default function WhatsAppApi() {
                     <DropdownMenuItem onClick={openQrDialogForNew} className="gap-2">
                       <QrCode size={14} /> Conectar via QR Code (Evolution)
                     </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => toggleAutoReconnect(!autoReconnect)} className="gap-2">
-                      <RefreshCw size={14} /> Reconexão automática: {autoReconnect ? "ON" : "OFF"}
-                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
