@@ -4,6 +4,7 @@ import { applyStageAutomations } from "../_shared/stage-automations.ts";
 import { interpolate } from "../_shared/interpolate.mjs";
 // `phoneVariants` já é nome de variável local mais abaixo; o apelido evita a colisão.
 import { normalizeWaId, phoneVariants as variantesDeTelefone } from "../_shared/phone.mjs";
+import { bloqueioDeConta } from "../_shared/meta-block.mjs";
 import {
   decodeWhatsAppText,
   resolveMetritoCreds,
@@ -427,6 +428,25 @@ Deno.serve(async (req) => {
             updates.error_code = fErr?.code != null ? String(fErr.code) : null;
             updates.error_title = fErr?.title || fErr?.message || null;
             updates.error_details = fErr?.error_data?.details || fErr?.message || null;
+
+            // Alguns erros valem para a conta inteira, não para esta mensagem.
+            // Marcar a conta transforma "mais uma bolha vermelha" numa causa
+            // única e visível — e é o que permite parar de insistir num envio
+            // que nunca vai passar. Insistir custa caro: entrega falhada é
+            // exatamente o número que a Meta usa para decidir banir.
+            const motivoBloqueio = bloqueioDeConta(fErr?.code);
+            if (motivoBloqueio && resolvedAccountId) {
+              await sb
+                .from("whatsapp_accounts")
+                .update({
+                  blocked_at: new Date().toISOString(),
+                  blocked_reason: `${fErr?.title || ""} ${fErr?.message || ""}`.trim() || motivoBloqueio,
+                })
+                .eq("id", resolvedAccountId);
+              console.error(
+                `Conta ${resolvedAccountId} marcada como bloqueada pela Meta (${fErr?.code}).`,
+              );
+            }
           }
 
           await sb.from("chat_messages")

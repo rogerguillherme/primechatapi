@@ -4,6 +4,7 @@ import { resolveTemplateHeaderLink } from "../_shared/template-media.ts";
 import { evoErrorMessage } from "../_shared/evo-error.mjs";
 import { videoRecusadoPelaUrl } from "../_shared/media-limits.mjs";
 import { telefoneImplausivel } from "../_shared/phone.mjs";
+import { bloqueioDeConta } from "../_shared/meta-block.mjs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -48,6 +49,8 @@ type AccountCredentials = {
   apiKey?: string | null;
   webhookSubscribed?: boolean | null;
   webhookLastCheckAt?: string | null;
+  blockedAt?: string | null;
+  blockedReason?: string | null;
 };
 
 type WebhookEnsureResult = {
@@ -89,6 +92,8 @@ async function getAccountCredentials(
     apiKey: data.api_key as string | null,
     webhookSubscribed: data.webhook_subscribed as boolean | null,
     webhookLastCheckAt: data.webhook_last_check_at as string | null,
+    blockedAt: (data.blocked_at as string | null) ?? null,
+    blockedReason: (data.blocked_reason as string | null) ?? null,
   });
 
   if (accountId) {
@@ -389,7 +394,37 @@ Deno.serve(async (req) => {
       apiKey: D360_API_KEY,
       webhookSubscribed,
       webhookLastCheckAt,
+      blockedAt,
+      blockedReason,
     } = await getAccountCredentials(supabase, account_id, ownerUserId);
+
+    // Conta travada pela Meta: insistir não passa, e cada tentativa vira mais
+    // uma entrega falhada — o número que ela usa para decidir banir.
+    //
+    // A trava se solta sozinha. Passados 30 minutos, um envio é deixado passar
+    // como sonda; dando certo, a marca é apagada logo abaixo. Assim a conta
+    // volta sem ninguém precisar destravar na mão, e sem martelar enquanto isso.
+    const JANELA_SONDA_MS = 30 * 60 * 1000;
+    const bloqueadaAgora =
+      !!blockedAt && Date.now() - new Date(blockedAt).getTime() < JANELA_SONDA_MS;
+    if (bloqueadaAgora) {
+      const msg =
+        blockedReason ||
+        "A conta está bloqueada pela Meta e não consegue enviar. O recebimento continua funcionando.";
+      if (lead_id) {
+        await supabase.from("chat_messages").insert({
+          lead_id,
+          direction: "outbound",
+          content: `❌ ${msg}`,
+          status: "failed",
+          account_id: account_id || resolvedAccountId || null,
+        });
+      }
+      return new Response(
+        JSON.stringify({ error: msg, account_blocked: true }),
+        { status: 423, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     const isD360 = provider === "d360";
     const isEvolution = provider === "evolution";
@@ -1108,6 +1143,14 @@ Deno.serve(async (req) => {
         friendlyMsg = `O número de telefone "${cleanPhone}" não é um WhatsApp válido ou não existe.`;
       } else if (isRateLimit) {
         friendlyMsg = `Limite de envios da Meta atingido. Aguarde alguns minutos e tente novamente.`;
+      } else if (bloqueioDeConta(errorCode)) {
+        friendlyMsg = bloqueioDeConta(errorCode)!;
+        if (resolvedAccountId) {
+          await supabase
+            .from("whatsapp_accounts")
+            .update({ blocked_at: new Date().toISOString(), blocked_reason: friendlyMsg })
+            .eq("id", resolvedAccountId);
+        }
       } else if (isMetaTemporario) {
         friendlyMsg = `A Meta falhou temporariamente (${metaMsg || `HTTP ${waRes.status}`}). Não é problema da conta nem da mensagem — reenvie em alguns instantes.`;
       } else {
@@ -1211,6 +1254,15 @@ Deno.serve(async (req) => {
         trigger: "outbound_message",
         messageText: contentText,
       });
+    }
+
+    // Passou: a Meta liberou. Apagar a marca é o que faz a conta voltar
+    // sozinha, sem ninguém destravar na mão.
+    if (blockedAt && resolvedAccountId) {
+      await supabase
+        .from("whatsapp_accounts")
+        .update({ blocked_at: null, blocked_reason: null })
+        .eq("id", resolvedAccountId);
     }
 
     return new Response(
