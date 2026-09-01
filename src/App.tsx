@@ -22,6 +22,7 @@ const TrialExpired = lazy(() => import("./pages/TrialExpired"));
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const AdminUsers = lazy(() => import("./pages/AdminUsers"));
 const WabaHealth = lazy(() => import("./pages/WabaHealth"));
+const PrimeMetrics = lazy(() => import("./pages/PrimeMetrics"));
 import { Loader2 } from "lucide-react";
 import { BroadcastProgressFloat } from "@/components/BroadcastProgressFloat";
 import { useTrialStatus } from "@/hooks/use-trial-status";
@@ -153,6 +154,19 @@ function AppRoutes() {
               </main>
             </div>
           </AdminOnlyRoute>
+        }
+      />
+      <Route
+        path="/metrics"
+        element={
+          <ProtectedRoute>
+            <div className="min-h-screen flex flex-col">
+              <AppHeader />
+              <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-7xl mx-auto w-full">
+                <PrimeMetrics />
+              </main>
+            </div>
+          </ProtectedRoute>
         }
       />
       <Route

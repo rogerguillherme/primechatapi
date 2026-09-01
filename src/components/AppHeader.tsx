@@ -1,4 +1,4 @@
-import { MessageCircle, LogOut, Users, Plug, Instagram } from "lucide-react";
+import { MessageCircle, LogOut, Users, Plug, Instagram, Trophy } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePlatform, Platform } from "@/contexts/PlatformContext";
@@ -86,6 +86,18 @@ export function AppHeader() {
                 <Plug size={16} />
               </Button>
             )}
+            {/* Prime Metrics: rota própria, entrada no cabeçalho para não
+                depender de alguém saber a URL de cor. */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate("/metrics")}
+              title="Prime Metrics"
+              aria-label="Prime Metrics"
+              className="text-white/60 hover:text-white hover:bg-white/10"
+            >
+              <Trophy size={18} />
+            </Button>
             {user?.email === "admin@primechat.com" && (
               <Button variant="ghost" size="icon" onClick={() => navigate("/admin/users")} className="text-white/60 hover:text-white hover:bg-white/10">
                 <Users size={16} />
