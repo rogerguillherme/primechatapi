@@ -2047,7 +2047,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                               que o operador consegue relatar. */}
                           {isOutbound && msg.status === "failed" && (
                             <p className="mt-1 text-[11px] leading-snug text-destructive break-words">
-                              {metaFailureMessage(msg.error_code, msg.error_title, msg.error_details)}
+                              {metaFailureMessage(msg.error_code, msg.error_title, msg.error_details, selectedLead?.phone)}
                               {msg.error_code ? ` (${msg.error_code})` : ""}
                             </p>
                           )}

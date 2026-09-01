@@ -24,15 +24,34 @@ const MOTIVOS: Record<string, string> = {
 };
 
 /**
+ * Um número guardado com mais dígitos do que qualquer número real tem quase
+ * sempre um código de país duplicado. Foi o que aconteceu com um contato de
+ * Portugal: 351927092084 virou 55351927092084 porque o webhook grudava 55 no
+ * que não começasse com 55. Dizer "confira o nono dígito" nesse caso manda a
+ * pessoa procurar no lugar errado.
+ */
+function numeroImplausivel(phone?: string | null): boolean {
+  const d = String(phone || "").replace(/\D/g, "");
+  return d.length > 13;
+}
+
+/**
  * @param code  error_code gravado pelo webhook (vem como texto)
  * @param title error_title da Meta, usado quando o código é desconhecido
  * @param details error_details da Meta
+ * @param phone telefone guardado do lead, quando disponível
  */
 export function metaFailureMessage(
   code?: string | null,
   title?: string | null,
   details?: string | null,
+  phone?: string | null,
 ): string {
+  if (String(code || "").trim() === "131026" && numeroImplausivel(phone)) {
+    const d = String(phone).replace(/\D/g, "");
+    return `A Meta não conseguiu entregar, e o número guardado tem ${d.length} dígitos — mais do que qualquer número real. Provavelmente o código do país foi duplicado: confira o cadastro do contato.`;
+  }
+
   const conhecido = code ? MOTIVOS[String(code).trim()] : undefined;
   if (conhecido) return conhecido;
 
