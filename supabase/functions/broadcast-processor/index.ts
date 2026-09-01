@@ -628,11 +628,27 @@ Deno.serve(async (req) => {
     const templateLanguage = job.template_language || "pt_BR";
     const templateParams = job.template_params || [];
     const retryMap: Record<string, number> = job.retry_map || {};
-    const rateLimit = job.messages_per_second || 75;
-    // Per-job timing controls (jitter window between sends).
-    // Falls back to legacy 0.3-1.5s window when not set.
-    const delayMinSec = typeof job.delay_min_seconds === "number" ? job.delay_min_seconds : 0.3;
-    const delayMaxSec = typeof job.delay_max_seconds === "number" ? job.delay_max_seconds : 1.5;
+    // `messages_per_second` não regulava nada: a variável que o lia era
+    // declarada e nunca usada, com um padrão de 75/s que não batia nem com o
+    // padrão de 1/s usado dez linhas acima. Como é NESSE campo que o anti-ban
+    // escrevia a vazão reduzida, a redução nunca existiu — nem em enforce.
+    //
+    // Quem sempre regulou de verdade é a janela de espera entre envios. Então é
+    // nela que o multiplicador entra: metade da vazão é o dobro da espera.
+    const delayMinBase = typeof job.delay_min_seconds === "number" ? job.delay_min_seconds : 0.3;
+    const delayMaxBase = typeof job.delay_max_seconds === "number" ? job.delay_max_seconds : 1.5;
+    const freio =
+      enforceMode === "enforce" && throughputMultiplier > 0 && throughputMultiplier < 1
+        ? 1 / throughputMultiplier
+        : 1;
+    const delayMinSec = delayMinBase * freio;
+    const delayMaxSec = delayMaxBase * freio;
+    if (freio > 1) {
+      console.log(
+        `Anti-ban: espera entre envios multiplicada por ${freio.toFixed(1)} ` +
+        `(${delayMinSec.toFixed(1)}s a ${delayMaxSec.toFixed(1)}s).`,
+      );
+    }
 
     let sentInBatch = 0;
     let errorsInBatch = 0;
