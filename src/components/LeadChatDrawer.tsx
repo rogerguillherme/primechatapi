@@ -66,12 +66,19 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
     queryKey: ["chat-messages", lead?.id],
     queryFn: async () => {
       if (!lead) return [];
-      const { data } = await supabase
+      // Não havia limite, e a ordem era crescente. O PostgREST corta em 1000
+      // sem avisar — então numa conversa longa o drawer mostrava as MIL
+      // MENSAGENS MAIS ANTIGAS e escondia as recentes, que é justamente o que
+      // se abre o drawer para ver. Pegar as últimas e inverter resolve as duas
+      // coisas de uma vez.
+      const { data, error } = await supabase
         .from("chat_messages")
         .select("*")
         .eq("lead_id", lead.id)
-        .order("created_at", { ascending: true });
-      return data || [];
+        .order("created_at", { ascending: false })
+        .limit(300);
+      if (error) throw error;
+      return (data || []).slice().reverse();
     },
     enabled: !!lead && open,
   });

@@ -181,21 +181,35 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
   });
 
 
+  // ── JANELA DE HISTÓRICO ──
+  // O chat abre com os últimos 3 dias e cresce de 3 em 3 no "Ver mais". O
+  // corte é feito na CONSULTA, não na tela: filtrar depois de trazer tudo não
+  // economiza nada: o custo está no payload, não no render.
+  const PASSO_DIAS = 3;
+  const [janelaDias, setJanelaDias] = useState(PASSO_DIAS);
+  const desde = useMemo(
+    () => new Date(Date.now() - janelaDias * 24 * 60 * 60 * 1000).toISOString(),
+    [janelaDias],
+  );
+  const verMais = useCallback(() => setJanelaDias((d) => d + PASSO_DIAS), []);
+
   // Fetch leads (already carries the denormalized last-message summary).
   // 5000 leads por refetch travava a aba: o payload chegava a alguns MB e todo
   // evento de realtime refazia a conta. 800 cobre a caixa de entrada real
   // (a busca por telefone/nome continua feita no servidor quando preciso).
   const { data: leads } = useQuery({
-    queryKey: ["chat-leads", "cloud", user?.id],
+    queryKey: ["chat-leads", "cloud", user?.id, janelaDias],
     enabled: !!user,
     queryFn: async () => {
-      const { data } = await (supabase as any)
+      const { data, error } = await (supabase as any)
         .from("leads")
         .select(
           "id, name, phone, email, photo_url, chat_status, ai_enabled, assigned_to, updated_at, last_outbound_at, last_message_content, last_message_at, last_message_direction, last_message_status, last_message_account_id, account_ids, manually_unread"
         )
+        .gte("updated_at", desde)
         .order("updated_at", { ascending: false, nullsFirst: false })
         .limit(800);
+      if (error) throw error;
       return (data || []) as any[];
     },
     // O canal de realtime já invalida esta query; o polling só duplicava carga.
@@ -321,18 +335,22 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
   // Messages for selected lead — apenas as 300 mais recentes.
   // Conversas antigas chegavam a milhares de mensagens: o React renderizava
   // tudo de uma vez e a aba congelava ao abrir o contato.
-  const { data: messages } = useQuery({
-    queryKey: ["chat-messages", selectedLeadId],
+  const { data: messages, isFetching: carregandoMensagens } = useQuery({
+    queryKey: ["chat-messages", selectedLeadId, janelaDias],
     queryFn: async () => {
       if (!selectedLeadId) return [];
       // `*` já inclui error_code/error_title/error_details — são eles que
       // explicam a falha na bolha.
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("chat_messages")
         .select("*")
         .eq("lead_id", selectedLeadId)
+        .gte("created_at", desde)
         .order("created_at", { ascending: false })
+        // O teto continua: janela larga em conversa movimentada ainda
+        // precisa de um limite, e 300 é o que a tela usa de verdade.
         .limit(300);
+      if (error) throw error;
       return (data || []).slice().reverse();
     },
     enabled: !!selectedLeadId,
@@ -460,7 +478,30 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
     }
   }, [message]);
 
-  const selectedLead = leads?.find((l) => l.id === selectedLeadId);
+  const naListaCarregada = !!selectedLeadId && !!leads?.some((l) => l.id === selectedLeadId);
+
+  // Abrir uma conversa antiga pelo kanban, pela busca ou por link continua
+  // funcionando: se ela estiver fora da janela, o lead é buscado sozinho. Sem
+  // isto, `selectedLead` viria indefinido e o chat abriria sem cabeçalho, sem
+  // conseguir responder — e nada na tela diria por quê.
+  const { data: leadAvulso } = useQuery({
+    queryKey: ["chat-lead-avulso", selectedLeadId],
+    enabled: !!selectedLeadId && !!leads && !naListaCarregada,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("leads")
+        .select(
+          "id, name, phone, email, photo_url, chat_status, ai_enabled, assigned_to, updated_at, last_outbound_at, last_message_content, last_message_at, last_message_direction, last_message_status, last_message_account_id, account_ids, manually_unread"
+        )
+        .eq("id", selectedLeadId)
+        .maybeSingle();
+      if (error) throw error;
+      return data as any;
+    },
+    staleTime: 60_000,
+  });
+
+  const selectedLead = leads?.find((l) => l.id === selectedLeadId) ?? leadAvulso ?? undefined;
   const leadAiEnabled = !!selectedLead?.ai_enabled;
 
   // ── ETAPAS DO KANBAN ──
@@ -1523,12 +1564,22 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
               </div>
             );
           })}
-          {visibleLeads.length < sortedLeads.length && (
+          {/* Duas etapas, uma de cada vez: primeiro mostrar o que já veio do
+              servidor, e só quando isso acabar buscar mais histórico. Dois
+              botões concorrentes na mesma lista confundiriam. */}
+          {visibleLeads.length < sortedLeads.length ? (
             <button
               onClick={() => setVisibleCount((c) => c + 60)}
               className="w-full py-3 text-xs text-muted-foreground hover:bg-accent/40 transition-colors"
             >
               Carregar mais ({sortedLeads.length - visibleLeads.length} restantes)
+            </button>
+          ) : (
+            <button
+              onClick={verMais}
+              className="w-full py-3 text-xs text-muted-foreground hover:bg-accent/40 transition-colors"
+            >
+              Ver mais 3 dias · mostrando {janelaDias}
             </button>
           )}
         </ScrollArea>
@@ -1957,10 +2008,27 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
             {/* Messages */}
             <div className="flex-1 overflow-y-auto px-4 lg:px-8 py-4 bg-muted/20">
               <div className="max-w-3xl mx-auto space-y-1">
+                {/* Fica no topo porque é para lá que se rola atrás do passado,
+                    e some quando não há mais janela a abrir. */}
+                <div className="flex justify-center pb-2">
+                  <button
+                    type="button"
+                    onClick={verMais}
+                    disabled={carregandoMensagens}
+                    className="rounded-full border border-border bg-card px-3.5 py-1.5 text-[11px] font-medium text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+                  >
+                    {carregandoMensagens
+                      ? "Carregando…"
+                      : `Ver mais 3 dias · mostrando ${janelaDias}`}
+                  </button>
+                </div>
+
                 {messages?.length === 0 && (
                   <div className="flex justify-center py-10">
                     <div className="bg-card rounded-lg px-6 py-3 shadow-sm">
-                      <p className="text-sm text-muted-foreground">Nenhuma mensagem ainda. Envie a primeira! 💬</p>
+                      <p className="text-sm text-muted-foreground">
+                        Nenhuma mensagem nos últimos {janelaDias} dias. Use "Ver mais" para abrir o histórico anterior.
+                      </p>
                     </div>
                   </div>
                 )}
