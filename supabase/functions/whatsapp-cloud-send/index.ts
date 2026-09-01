@@ -3,6 +3,7 @@ import { applyStageAutomations } from "../_shared/stage-automations.ts";
 import { resolveTemplateHeaderLink } from "../_shared/template-media.ts";
 import { evoErrorMessage } from "../_shared/evo-error.mjs";
 import { videoRecusadoPelaUrl } from "../_shared/media-limits.mjs";
+import { telefoneImplausivel } from "../_shared/phone.mjs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -424,6 +425,29 @@ Deno.serve(async (req) => {
     }
 
     const cleanPhone = phone.replace(/\D/g, "");
+
+    // Entrega falhada conta contra a qualidade da conta, e qualidade baixa é o
+    // que faz a Meta banir. Enquanto o app corrompia números — código de país
+    // duplicado, nono dígito trocado — cada um virava uma falha registrada.
+    // Barrar o impossível aqui não substitui a validação da Meta: serve para
+    // que ERRO NOSSO pare de virar estatística ruim na conta do cliente.
+    const implausivel = telefoneImplausivel(cleanPhone);
+    if (implausivel) {
+      const msg = `Não enviei: ${implausivel}. Corrija o telefone no cadastro do contato.`;
+      if (lead_id) {
+        await supabase.from("chat_messages").insert({
+          lead_id,
+          direction: "outbound",
+          content: `❌ ${msg}`,
+          status: "failed",
+          account_id: account_id || resolvedAccountId || null,
+        });
+      }
+      return new Response(
+        JSON.stringify({ error: msg }),
+        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     // ============= EVOLUTION API (self-hosted) =============
     // business_account_id stores Server URL; phone_number_id stores Instance Name; api_key stores apikey.

@@ -52,3 +52,27 @@ export function normalizeTypedPhone(phone) {
   if (d.length === 10 || d.length === 11) return "55" + d;
   return d;
 }
+
+/**
+ * O número tem cara de número?
+ *
+ * Mandar para número que não existe no WhatsApp é um dos sinais que a Meta usa
+ * para medir qualidade da conta — e conta com qualidade baixa é banida. O app
+ * vinha corrompendo números (código de país duplicado, nono dígito trocado) e
+ * cada um desses virava uma entrega falhada contando contra a conta.
+ *
+ * Isto não substitui a validação da Meta: só barra o que é impossível, para
+ * que erro nosso pare de virar estatística ruim. E-164 permite no máximo 15
+ * dígitos; abaixo de 8 não existe número internacional discável.
+ */
+export function telefoneImplausivel(phone) {
+  const d = normalizeWaId(phone);
+  if (d.length < 8) return `número curto demais (${d.length} dígitos)`;
+  if (d.length > 15) return `número longo demais (${d.length} dígitos)`;
+  // Brasil: 55 + DDD(2) + 8 ou 9 dígitos = 12 ou 13. Mais que isso é código de
+  // país duplicado, que foi exatamente o defeito encontrado.
+  if (d.startsWith("55") && d.length > 13) {
+    return `número com ${d.length} dígitos começando em 55 — provável código de país duplicado`;
+  }
+  return null;
+}

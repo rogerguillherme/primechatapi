@@ -1,6 +1,6 @@
 // Run: node supabase/functions/_shared/test_phone.mjs
 import assert from "node:assert/strict";
-import { normalizeWaId, phoneVariants, normalizeTypedPhone } from "./phone.mjs";
+import { normalizeWaId, phoneVariants, normalizeTypedPhone, telefoneImplausivel } from "./phone.mjs";
 
 // ── o caso que motivou isto ──
 // +351 927 092 084, de Portugal. O código antigo grudava 55 e gravava
@@ -44,5 +44,14 @@ assert.equal(normalizeTypedPhone("14155552671"), "5514155552671", "EUA de 11 dí
 // Lixo não vira número.
 assert.equal(normalizeTypedPhone(""), "");
 assert.equal(normalizeTypedPhone("123"), "123");
+
+// ── plausibilidade: barrar erro nosso antes de virar estatística ruim ──
+assert.equal(telefoneImplausivel("5511987654321"), null, "celular BR válido");
+assert.equal(telefoneImplausivel("351927092084"), null, "Portugal válido");
+assert.equal(telefoneImplausivel("14155552671"), null, "EUA válido");
+
+assert.match(telefoneImplausivel("55351927092084"), /duplicado/, "o caso do Gabriel");
+assert.match(telefoneImplausivel("123"), /curto/);
+assert.match(telefoneImplausivel("1234567890123456"), /longo/);
 
 console.log("phone: all assertions passed");
