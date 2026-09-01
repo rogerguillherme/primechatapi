@@ -770,7 +770,22 @@ Deno.serve(async (req) => {
         console.log("Quick reply received:", buttonPayload);
       }
 
-      if (!text && !mediaUrl) continue;
+      // A pergunta certa aqui é "chegou mensagem?", não "conseguimos guardar a
+      // mídia?". Áudio cujo download falhou — id expirado na Meta, token ruim,
+      // storage fora — tem texto vazio e mediaUrl nulo, e este `continue`
+      // descartava a mensagem INTEIRA: nada no chat, last_inbound_at intocado,
+      // fluxo parado esperando uma resposta que chegou e foi jogada fora.
+      //
+      // É o modo de falha mais perverso da série, porque some sem rastro: a
+      // pessoa vê a mensagem entregue no celular dela e nada acontece do nosso
+      // lado. `mediaType` é a prova de que a mensagem existiu.
+      if (!text && !mediaUrl && !mediaType) continue;
+      if (mediaType && !mediaUrl) {
+        console.error(
+          `Mídia ${mediaType} de ${rawPhone} não pôde ser baixada (msg ${messageId}). ` +
+          `A mensagem é registrada mesmo assim para o fluxo andar.`,
+        );
+      }
 
       const cleanPhone = normalizeWaId(rawPhone);
       const phoneVariants = variantesDeTelefone(rawPhone);
@@ -869,6 +884,9 @@ Deno.serve(async (req) => {
 
       // Save message — include button info for visibility
       let contentText = text || (mediaType === "audio" ? "🎤 Áudio" : mediaType === "image" ? "📷 Imagem" : mediaType === "video" ? "🎥 Vídeo" : "📎 Arquivo");
+      // O atendente precisa saber que houve mídia e que ela não veio; um áudio
+      // que aparece sem player e sem explicação parece falha da tela.
+      if (mediaType && !mediaUrl) contentText += " (não foi possível baixar)";
       
       // If it's a button reply, prefix with emoji for clarity
       if (buttonPayload && !contentText.startsWith("🔘")) {
@@ -1264,7 +1282,9 @@ Deno.serve(async (req) => {
       // ela cai no ramo padrão, que é justamente "qualquer resposta segue".
       // Faltava deixar entrar. Corrigi a avaliação antes e o problema voltou,
       // porque o que barrava era esta linha, não ela.
-      const leadRespondeu = !!(buttonPayload || text || mediaUrl);
+      // `mediaType` e não `mediaUrl`: responder é ter mandado alguma coisa, e
+      // isso independe de a gente ter conseguido guardar o arquivo.
+      const leadRespondeu = !!(buttonPayload || text || mediaType);
       if (leadRespondeu && lead) {
         let siblingLeadsQuery = supabase
           .from("leads")
