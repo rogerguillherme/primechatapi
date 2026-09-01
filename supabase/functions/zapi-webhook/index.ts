@@ -3,6 +3,7 @@ import { checkWebhookSecret } from "../_shared/webhook-secret.ts";
 // O telefone vem do provedor já com código de país; grudar 55 aqui corrompia
 // todo número estrangeiro. Mesmo bug que quebrou o webhook da Cloud API.
 import { normalizeWaId } from "../_shared/phone.mjs";
+import { donoDaIntegracao } from "../_shared/owner.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -185,9 +186,26 @@ Deno.serve(async (req) => {
         console.log("Could not fetch profile picture:", e);
       }
 
+      // Sem user_id, o lead nasce órfão: a busca por telefone deixa de ser
+      // isolada por dono, e a conversa pode acabar no CRM de outro cliente.
+      // A credencial da Z-API é global e não diz de quem é — então o dono vem
+      // de um lead que já exista com esse telefone, ou de app_settings.
+      const donoZapi = await donoDaIntegracao(supabase, "zapi_owner_user_id", {
+        telefones: [cleanPhone],
+      });
+      if (!donoZapi) {
+        console.error(
+          `Z-API sem dono para ${cleanPhone}: configure app_settings.zapi_owner_user_id ` +
+          `com o user_id do cliente que usa essa instância. Lead NÃO criado.`,
+        );
+        return new Response(JSON.stringify({ ok: true, skipped: "sem_dono" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       const { data: newLead, error: createError } = await supabase
         .from("leads")
-        .insert({ name: newName, phone: cleanPhone, origin: "whatsapp", photo_url: photoUrl })
+        .insert({ name: newName, phone: cleanPhone, origin: "whatsapp", photo_url: photoUrl, user_id: donoZapi })
         .select("id, name")
         .single();
       if (createError) throw createError;

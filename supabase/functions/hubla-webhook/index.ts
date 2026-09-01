@@ -3,6 +3,7 @@ import { checkWebhookSecret } from "../_shared/webhook-secret.ts";
 // Telefone de checkout pode vir sem DDI de verdade, então o comprimento decide.
 // Grudar 55 em tudo transformava comprador estrangeiro em número inexistente.
 import { normalizeTypedPhone } from "../_shared/phone.mjs";
+import { donoDaIntegracao } from "../_shared/owner.ts";
 import {
   resolveMetritoCreds,
   sendMetritoEvent,
@@ -183,7 +184,7 @@ async function resolveOrCreateLead(
   name: string,
   email: string | null,
   hublaId: string | null
-): Promise<string> {
+): Promise<string | null> {
   // Try to find existing lead by phone first, then by CPF
   let existingLead = null;
 
@@ -218,10 +219,26 @@ async function resolveOrCreateLead(
     return existingLead.id;
   }
 
+  // O comprador novo nascia sem dono, e isso fecha um ciclo: mais adiante esta
+  // mesma função LÊ o user_id do lead para escolher as credenciais e a conta de
+  // WhatsApp do envio. Órfão, tudo aquilo degrada em silêncio — e a busca por
+  // telefone deixa de ser isolada, podendo levar a compra para o CRM errado.
+  const dono = await donoDaIntegracao(supabase, "hubla_owner_user_id", {
+    telefones: [phone].filter(Boolean),
+    email,
+  });
+  if (!dono) {
+    console.error(
+      `Hubla sem dono para ${email || phone || "(sem contato)"}: configure ` +
+      `app_settings.hubla_owner_user_id. Lead NÃO criado.`,
+    );
+    return null;
+  }
+
   const { data: newLead, error } = await supabase
     .from("leads")
     .insert({
-      name, email, phone, origin: "hubla",
+      name, email, phone, origin: "hubla", user_id: dono,
       ...(cpf ? { cpf } : {}),
       ...(hublaId ? { hubla_id: hublaId } : {}),
     })
@@ -325,6 +342,16 @@ Deno.serve(async (req) => {
       supabase, extracted.buyerPhone, extracted.buyerCpf,
       extracted.buyerName, extracted.buyerEmail, extracted.hublaId
     );
+
+    // Sem dono não se grava. Responder 200 é de propósito: a Hubla reenvia em
+    // qualquer outra resposta, e reenviar não resolve nada aqui — o que falta é
+    // configuração, não uma nova tentativa.
+    if (!leadId) {
+      return new Response(
+        JSON.stringify({ ok: true, skipped: "sem_dono_configurado" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     // Resolve product
     let productId: string | null = null;
