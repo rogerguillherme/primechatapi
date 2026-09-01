@@ -26,6 +26,9 @@ export function DeleteOldLeadsDialog({ trigger }: Props) {
   const [previewCount, setPreviewCount] = useState<number | null>(null);
   const [confirmText, setConfirmText] = useState("");
 
+  /** Teto que o PostgREST aplica por consulta; buscar mais exige paginar. */
+  const LOTE = 1000;
+
   const applyFilters = (q: any) => {
     if (!user) throw new Error("Sem sessão");
     const startIso = new Date(start + "T00:00:00").toISOString();
@@ -51,16 +54,44 @@ export function DeleteOldLeadsDialog({ trigger }: Props) {
 
   const doDelete = useMutation({
     mutationFn: async () => {
-      const { data: ids, error } = await applyFilters(supabase.from("leads").select("id"));
-      if (error) throw error;
-      const leadIds = (ids || []).map((r: any) => r.id);
-      if (leadIds.length === 0) return 0;
+      // A prévia conta com `count: exact` e mostra o total verdadeiro. A
+      // exclusão buscava os ids sem limite — e o PostgREST devolve no máximo
+      // 1000 por consulta, calado. O diálogo dizia "5.000 leads" e apagava
+      // 1.000; era preciso repetir a operação sem entender por quê.
+      //
+      // Em lotes até esgotar. Cada lote é uma consulta nova e os já apagados
+      // saem do filtro, então buscar sempre a primeira página termina.
+      let total = 0;
+      for (let volta = 0; ; volta++) {
+        const { data: ids, error } = await applyFilters(
+          supabase.from("leads").select("id").limit(LOTE),
+        );
+        if (error) throw error;
+        const leadIds = (ids || []).map((r: any) => r.id);
+        if (leadIds.length === 0) break;
 
-      // Apaga mensagens antes (chat_messages não tem cascade garantida)
-      await supabase.from("chat_messages").delete().in("lead_id", leadIds);
-      const { error: delErr } = await supabase.from("leads").delete().in("id", leadIds);
-      if (delErr) throw delErr;
-      return leadIds.length;
+        // Apaga mensagens antes (chat_messages não tem cascade garantida).
+        // O erro aqui não era conferido: falhando, os leads sumiam e as
+        // mensagens ficavam órfãs, sem dono e sem como achar.
+        const { error: msgErr } = await supabase
+          .from("chat_messages")
+          .delete()
+          .in("lead_id", leadIds);
+        if (msgErr) throw msgErr;
+
+        const { error: delErr } = await supabase.from("leads").delete().in("id", leadIds);
+        if (delErr) throw delErr;
+        total += leadIds.length;
+
+        // Trava de segurança: se algum lead resistir ao delete (RLS, por
+        // exemplo), a mesma página voltaria para sempre.
+        if (volta > 200) {
+          throw new Error(
+            `Parei em ${total} leads: a exclusão não estava avançando. Rode de novo ou reduza o período.`,
+          );
+        }
+      }
+      return total;
     },
     onSuccess: (n) => {
       toast({ title: `${n} lead(s) removido(s)`, description: "Chat atualizado." });

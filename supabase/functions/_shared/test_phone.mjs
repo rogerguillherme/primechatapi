@@ -1,6 +1,6 @@
 // Run: node supabase/functions/_shared/test_phone.mjs
 import assert from "node:assert/strict";
-import { normalizeWaId, phoneVariants } from "./phone.mjs";
+import { normalizeWaId, phoneVariants, normalizeTypedPhone } from "./phone.mjs";
 
 // ── o caso que motivou isto ──
 // +351 927 092 084, de Portugal. O código antigo grudava 55 e gravava
@@ -29,5 +29,20 @@ assert.deepEqual(phoneVariants("55351927092084"), ["55351927092084"]);
 assert.deepEqual(phoneVariants(""), []);
 assert.deepEqual(phoneVariants(null), []);
 assert.equal(normalizeWaId(undefined), "");
+
+// ── telefone digitado (checkout, importação, cadastro) ──
+// Aqui o DDI pode faltar de verdade, e o comprimento decide.
+assert.equal(normalizeTypedPhone("11987654321"), "5511987654321", "celular BR sem DDI");
+assert.equal(normalizeTypedPhone("1132654321"), "551132654321", "fixo BR sem DDI");
+assert.equal(normalizeTypedPhone("(11) 98765-4321"), "5511987654321", "com pontuação");
+
+// Já tem DDI: não se mexe.
+assert.equal(normalizeTypedPhone("5511987654321"), "5511987654321", "BR com DDI");
+assert.equal(normalizeTypedPhone("351927092084"), "351927092084", "Portugal intacto");
+assert.equal(normalizeTypedPhone("14155552671"), "5514155552671", "EUA de 11 dígitos vira BR — limite conhecido da heurística");
+
+// Lixo não vira número.
+assert.equal(normalizeTypedPhone(""), "");
+assert.equal(normalizeTypedPhone("123"), "123");
 
 console.log("phone: all assertions passed");

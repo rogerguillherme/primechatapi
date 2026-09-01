@@ -34,3 +34,21 @@ export function phoneVariants(phone) {
   }
   return variants;
 }
+
+/**
+ * Telefone digitado por uma pessoa — checkout, importação, cadastro manual.
+ *
+ * Aqui, ao contrário do wa_id, o DDI pode faltar de verdade: um checkout
+ * brasileiro costuma guardar "11987654321". Mas grudar 55 em tudo que não
+ * começa com 55 corrompe todo número estrangeiro — foi assim que um contato
+ * de Portugal virou 55351927092084 e parou de receber.
+ *
+ * O comprimento resolve sem tabela de países: número nacional brasileiro tem
+ * 10 ou 11 dígitos (DDD + 8 ou 9). Qualquer outro comprimento já carrega DDI,
+ * e a única coisa certa a fazer é não mexer.
+ */
+export function normalizeTypedPhone(phone) {
+  const d = normalizeWaId(phone);
+  if (d.length === 10 || d.length === 11) return "55" + d;
+  return d;
+}

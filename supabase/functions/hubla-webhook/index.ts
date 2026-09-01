@@ -1,5 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkWebhookSecret } from "../_shared/webhook-secret.ts";
+// Telefone de checkout pode vir sem DDI de verdade, então o comprimento decide.
+// Grudar 55 em tudo transformava comprador estrangeiro em número inexistente.
+import { normalizeTypedPhone } from "../_shared/phone.mjs";
 import {
   resolveMetritoCreds,
   sendMetritoEvent,
@@ -13,12 +16,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-function normalizePhone(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
-  // Ensure Brazilian country code 55 prefix
-  if (digits.startsWith("55")) return digits;
-  return "55" + digits;
-}
+
 
 function normalizeCpf(cpf: string): string {
   return cpf.replace(/\D/g, "");
@@ -81,7 +79,7 @@ function extractPayload(payload: any) {
 
   const buyerEmail = payer?.email || payload.buyer?.email || payload.customer?.email || payload.email || null;
 
-  const buyerPhone = normalizePhone(
+  const buyerPhone = normalizeTypedPhone(
     payer?.phone || payload.buyer?.phone || payload.customer?.phone || payload.phone || ""
   );
 

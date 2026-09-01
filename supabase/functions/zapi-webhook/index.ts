@@ -1,5 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkWebhookSecret } from "../_shared/webhook-secret.ts";
+// O telefone vem do provedor já com código de país; grudar 55 aqui corrompia
+// todo número estrangeiro. Mesmo bug que quebrou o webhook da Cloud API.
+import { normalizeWaId } from "../_shared/phone.mjs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,11 +10,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-function normalizePhone(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
-  if (digits.startsWith("55")) return digits;
-  return "55" + digits;
-}
+
 
 async function downloadAndStoreMedia(
   supabase: any,
@@ -152,7 +151,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const cleanPhone = normalizePhone(rawPhone);
+    const cleanPhone = normalizeWaId(rawPhone);
 
     // Find or create lead
     let { data: lead } = await supabase
