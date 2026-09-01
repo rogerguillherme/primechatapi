@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { recusaDeMidia } from "../_shared/media-limits.mjs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -52,6 +53,19 @@ Deno.serve(async (req) => {
     else if (file.type.startsWith("audio/")) mediaType = "audio";
     else if (file.type.startsWith("video/")) mediaType = "video";
 
+    // Recusar aqui, antes de subir. O caminho antigo aceitava qualquer
+    // `video/*`, gravava no storage e mandava por link — e a Meta recusava
+    // depois, em inglês e por código. Com vídeo isso é pior que com áudio: a
+    // pessoa espera o upload de dezenas de MB para só então descobrir que o
+    // formato nunca serviu.
+    const recusa = recusaDeMidia(mediaType, file.type, file.name, file.size);
+    if (recusa) {
+      return new Response(
+        JSON.stringify({ error: recusa }),
+        { status: 415, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const ext = file.name.split(".").pop() || "bin";
     const path = asSticker
       ? `stickers/${leadId}/${crypto.randomUUID()}.webp`
@@ -82,7 +96,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error("Error uploading media:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

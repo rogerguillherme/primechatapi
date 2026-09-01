@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { applyStageAutomations } from "../_shared/stage-automations.ts";
 import { resolveTemplateHeaderLink } from "../_shared/template-media.ts";
 import { evoErrorMessage } from "../_shared/evo-error.mjs";
+import { videoRecusadoPelaUrl } from "../_shared/media-limits.mjs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -871,6 +872,16 @@ Deno.serve(async (req) => {
       } else if (media_type === "image") {
         body = { messaging_product: "whatsapp", to: cleanPhone, type: "image", image: { link: media_url, caption: message || undefined } };
       } else if (media_type === "video") {
+        // O envio do chat já barra formato errado no upload, mas vídeo posto
+        // num passo de fluxo não passa por lá. Sem isto, a recusa da Meta
+        // chega depois, em inglês, e um fluxo inteiro trava por causa dela.
+        const recusaVideo = videoRecusadoPelaUrl(media_url);
+        if (recusaVideo) {
+          return new Response(
+            JSON.stringify({ error: recusaVideo }),
+            { status: 415, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
         body = { messaging_product: "whatsapp", to: cleanPhone, type: "video", video: { link: media_url, caption: message || undefined } };
       } else if (media_type === "audio") {
         // Para o WhatsApp exibir como ÁUDIO GRAVADO (voice note), a mídia precisa

@@ -2151,7 +2151,10 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
 
             {/* Input */}
             <div className="px-4 py-2 bg-card border-t border-border">
-              <input ref={fileInputRef} type="file" accept="image/*,video/*,audio/*,.pdf,.doc,.docx" className="hidden" onChange={handleFileSelect} />
+              <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,video/mp4,video/3gpp,audio/*,.pdf,.doc,.docx"
+                /* Lista os formatos que a Meta aceita em vez de `image/*,video/*`.
+                   O seletor do sistema já filtra, então o MOV do iPhone e o HEIC
+                   nem aparecem — melhor que aceitar, subir e recusar depois. */ className="hidden" onChange={handleFileSelect} />
               {replyTo && (
                 <div className="max-w-3xl mx-auto mb-2 flex items-start gap-2 rounded-lg border-l-4 border-primary bg-accent/50 px-3 py-2">
                   <div className="min-w-0 flex-1">
