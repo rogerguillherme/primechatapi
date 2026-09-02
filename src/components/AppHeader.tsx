@@ -9,7 +9,6 @@ import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/NotificationBell";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { WabaHealthBanner } from "@/components/WabaHealthBanner";
-import { MetrikLogo } from "@/components/MetrikLogo";
 
 export function AppHeader() {
   const { user, signOut } = useAuth();
@@ -97,9 +96,11 @@ export function AppHeader() {
               aria-label="Métrik"
               className="text-white/60 hover:text-white hover:bg-white/10"
             >
-              {/* A mesma marca dos dois lados: o atalho aqui e o cabeçalho de
-                  lá precisam ser reconhecíveis como a mesma coisa. */}
-              <MetrikLogo size={18} />
+              {/* O SVG e não a arte cheia: este cabeçalho abre em TODA página
+                  do Prime Chat, e o PNG da marca tem 637 KB. Para um atalho de
+                  18 pixels o desenho simplificado é indistinguível e custa
+                  1 KB. A arte de verdade fica nas telas do Métrik. */}
+              <img src="/metrik-favicon.svg" alt="" aria-hidden="true" width={18} height={18} />
             </Button>
             {user?.email === "admin@primechat.com" && (
               <Button variant="ghost" size="icon" onClick={() => navigate("/admin/users")} className="text-white/60 hover:text-white hover:bg-white/10">
