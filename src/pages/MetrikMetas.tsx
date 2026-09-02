@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { format, startOfMonth, endOfMonth } from "date-fns";
+import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useMetrikData } from "@/hooks/use-metrik-data";
+import { useMetrikPeriodo } from "@/hooks/use-metrik-periodo";
+import { SeletorPeriodo } from "@/components/metrics/SeletorPeriodo";
 import { useFavicon } from "@/hooks/use-favicon";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -25,9 +27,7 @@ export default function MetrikMetas() {
   useFavicon("/metrik-favicon.svg");
   const qc = useQueryClient();
 
-  const [mes] = useState(() => new Date());
-  const inicio = useMemo(() => startOfMonth(mes), [mes]);
-  const fim = useMemo(() => endOfMonth(mes), [mes]);
+  const { inicio, fim } = useMetrikPeriodo();
 
   const { ownerId, podeConfigurar, vendedores, totais, tiers, meta } = useMetrikData(inicio, fim);
   const [coletiva, setColetiva] = useState("");
@@ -93,6 +93,8 @@ export default function MetrikMetas() {
         titulo="Metas"
         sub={`${format(inicio, "dd 'de' MMMM", { locale: ptBR })} a ${format(fim, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}`}
       />
+
+      <SeletorPeriodo />
 
       {/* ── Coletiva ── */}
       <Card destaque>

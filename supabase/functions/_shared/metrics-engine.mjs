@@ -106,3 +106,36 @@ export function roi(faturamento, gastoAds) {
   if (g <= 0) return null;
   return ((Number(faturamento) || 0) - g) / g;
 }
+
+/**
+ * A base sobre a qual se comissiona.
+ *
+ * Não é o faturamento cru. A plataforma de checkout retém a taxa dela antes de
+ * o dinheiro chegar, e reembolso é dinheiro que voltou. Comissionar sobre o
+ * bruto paga o vendedor por dinheiro que a empresa não recebeu — e isso só
+ * aparece no fim do mês, no extrato, quando a comissão já foi combinada.
+ *
+ * A taxa incide sobre o que de fato ficou, ou seja depois do reembolso: o
+ * checkout devolve a taxa proporcional do que foi estornado.
+ */
+export function baseComissao(faturamento, reembolsos = 0, taxaPct = 0) {
+  const liquido = (Number(faturamento) || 0) - (Number(reembolsos) || 0);
+  if (liquido <= 0) return 0;
+  const taxa = Math.min(100, Math.max(0, Number(taxaPct) || 0));
+  return Math.round(liquido * (1 - taxa / 100) * 100) / 100;
+}
+
+/**
+ * Comissão sobre a base, no percentual do elo alcançado.
+ *
+ * Sem elo alcançado usa o percentual padrão da empresa em vez de zerar: uma
+ * equipe que ainda não cadastrou elos precisa ver comissão, senão a tela de
+ * comissionados nasce inútil e ninguém volta nela.
+ */
+export function comissaoSobreBase(base, tiers, faturamento, pctPadrao = 0) {
+  const b = Number(base) || 0;
+  if (b <= 0) return 0;
+  const elo = eloAtual(tiers, Number(faturamento) || 0);
+  const pct = elo ? Number(elo.commission_pct) || 0 : Number(pctPadrao) || 0;
+  return Math.round(b * pct) / 100;
+}

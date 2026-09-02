@@ -1,14 +1,17 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { format, startOfMonth, endOfMonth } from "date-fns";
+import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { DollarSign, Clock, RotateCcw, Search } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useMetrikData } from "@/hooks/use-metrik-data";
+import { useMetrikPeriodo } from "@/hooks/use-metrik-periodo";
+import { SeletorPeriodo } from "@/components/metrics/SeletorPeriodo";
 import { useFavicon } from "@/hooks/use-favicon";
 import { Input } from "@/components/ui/input";
 import { Card, Kpi, TituloPagina, Vazio, moeda } from "@/components/metrics/ui";
+import { NovaVendaDialog } from "@/components/metrics/NovaVendaDialog";
 import { cn } from "@/lib/utils";
 
 const ROTULO: Record<string, { texto: string; classe: string }> = {
@@ -22,10 +25,8 @@ const ROTULO: Record<string, { texto: string; classe: string }> = {
 export default function MetrikVendas() {
   useFavicon("/metrik-favicon.svg");
 
-  const [mes] = useState(() => new Date());
-  const inicio = useMemo(() => startOfMonth(mes), [mes]);
-  const fim = useMemo(() => endOfMonth(mes), [mes]);
-  const { membros } = useMetrikData(inicio, fim);
+  const { inicio, fim } = useMetrikPeriodo();
+  const { membros, ownerId, podeConfigurar } = useMetrikData(inicio, fim);
 
   const [busca, setBusca] = useState("");
   const [status, setStatus] = useState<string>("todos");
@@ -90,7 +91,10 @@ export default function MetrikVendas() {
       <TituloPagina
         titulo="Vendas"
         sub={`${format(inicio, "dd 'de' MMMM", { locale: ptBR })} a ${format(fim, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}`}
+        acao={podeConfigurar ? <NovaVendaDialog ownerId={ownerId} /> : undefined}
       />
+
+      <SeletorPeriodo />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Kpi rotulo="Valor confirmado" valor={moeda(totais.confirmado)} nota={`${totais.qtdConfirmada} venda(s)`} icone={DollarSign} destaque />

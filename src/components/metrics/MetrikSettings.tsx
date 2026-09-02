@@ -48,6 +48,8 @@ interface Props {
   fim: Date;
   metaAtual: number | null;
   membros: { member_user_id: string; display_name: string; email: string }[];
+  taxaAtual?: number;
+  pctAtual?: number;
 }
 
 /** Ponto de partida do plano: quatro faixas com comissão crescente. */
@@ -60,13 +62,38 @@ const ELOS_PADRAO = [
 
 const dia = (d: Date) => format(d, "yyyy-MM-dd");
 
-export function MetrikSettings({ ownerId, tiers, inicio, fim, metaAtual, membros }: Props) {
+export function MetrikSettings({ ownerId, tiers, inicio, fim, metaAtual, membros, taxaAtual, pctAtual }: Props) {
   const qc = useQueryClient();
   const [aberto, setAberto] = useState(false);
   const [meta, setMeta] = useState(metaAtual != null ? String(metaAtual) : "");
   const [gasto, setGasto] = useState("");
   const [gastoDe, setGastoDe] = useState("__empresa__");
   const [novo, setNovo] = useState({ name: "", min_value: "", commission_pct: "" });
+  const [taxa, setTaxa] = useState("");
+  const [pctPadrao, setPctPadrao] = useState("");
+
+  const salvarConfig = useMutation({
+    mutationFn: async () => {
+      const t = taxa.trim() === "" ? null : Number(taxa.replace(",", "."));
+      const p = pctPadrao.trim() === "" ? null : Number(pctPadrao.replace(",", "."));
+      if (t !== null && (!Number.isFinite(t) || t < 0 || t > 100)) throw new Error("Taxa deve ficar entre 0 e 100");
+      if (p !== null && (!Number.isFinite(p) || p < 0 || p > 100)) throw new Error("Percentual deve ficar entre 0 e 100");
+
+      const payload: Record<string, unknown> = { owner_id: ownerId, updated_at: new Date().toISOString() };
+      if (t !== null) payload.platform_fee_pct = t;
+      if (p !== null) payload.commission_pct = p;
+
+      const { error } = await (supabase as any)
+        .from("metrics_settings")
+        .upsert(payload, { onConflict: "owner_id" });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Configuração salva.");
+      qc.invalidateQueries({ queryKey: ["metrics-settings"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const recarregar = () => {
     qc.invalidateQueries({ queryKey: ["metrics-tiers"] });
@@ -317,6 +344,41 @@ export function MetrikSettings({ ownerId, tiers, inicio, fim, metaAtual, membros
             Colunas: cor, nome, faturamento a partir do qual o elo vale, e % de comissão.
             As mudanças salvam ao sair do campo.
           </p>
+        </section>
+
+        {/* ── Taxas e comissão ── */}
+        <section className="space-y-2 border-t border-border pt-4">
+          <h3 className="text-sm font-semibold">Taxa da plataforma e comissão padrão</h3>
+          <p className="text-[11px] text-muted-foreground">
+            A taxa é descontada antes de comissionar: o checkout retém a parte dele antes de
+            o dinheiro chegar, e comissionar sobre o bruto paga o vendedor por dinheiro que
+            a empresa não recebeu. O percentual padrão vale para quem ainda não alcançou elo.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <div className="space-y-1">
+              <Label htmlFor="taxa" className="text-xs">Taxa da plataforma (%)</Label>
+              <Input
+                id="taxa"
+                value={taxa}
+                onChange={(e) => setTaxa(e.target.value)}
+                placeholder={String(taxaAtual ?? 0)}
+                className="h-9 w-32 tabular-nums"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="pct" className="text-xs">Comissão padrão (%)</Label>
+              <Input
+                id="pct"
+                value={pctPadrao}
+                onChange={(e) => setPctPadrao(e.target.value)}
+                placeholder={String(pctAtual ?? 10)}
+                className="h-9 w-32 tabular-nums"
+              />
+            </div>
+            <Button className="self-end" onClick={() => salvarConfig.mutate()} disabled={salvarConfig.isPending}>
+              Salvar
+            </Button>
+          </div>
         </section>
 
         {/* ── Meta ── */}

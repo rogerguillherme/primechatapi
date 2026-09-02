@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
-import { format, startOfMonth, endOfMonth } from "date-fns";
+import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Crown, Search } from "lucide-react";
 
 import { useMetrikData, type Vendedor } from "@/hooks/use-metrik-data";
+import { useMetrikPeriodo } from "@/hooks/use-metrik-periodo";
+import { SeletorPeriodo } from "@/components/metrics/SeletorPeriodo";
 import { MetrikSettings } from "@/components/metrics/MetrikSettings";
 import { useFavicon } from "@/hooks/use-favicon";
 import { Input } from "@/components/ui/input";
@@ -59,11 +61,9 @@ function Metrica({ rotulo, valor, tom }: { rotulo: string; valor: string; tom?: 
 export default function MetrikRanking() {
   useFavicon("/metrik-favicon.svg");
 
-  const [mes] = useState(() => new Date());
-  const inicio = useMemo(() => startOfMonth(mes), [mes]);
-  const fim = useMemo(() => endOfMonth(mes), [mes]);
+  const { inicio, fim } = useMetrikPeriodo();
 
-  const { ownerId, podeConfigurar, membros, tiers, temporada, meta, vendedores, totais } =
+  const { ownerId, podeConfigurar, membros, tiers, temporada, meta, vendedores, totais, config } =
     useMetrikData(inicio, fim);
 
   const [ordem, setOrdem] = useState<Ordem>("rank");
@@ -94,7 +94,7 @@ export default function MetrikRanking() {
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             <span className="font-medium text-foreground/80">
-              {temporada || `Temporada de ${format(mes, "MMMM 'de' yyyy", { locale: ptBR })}`}
+              {temporada || `Temporada de ${format(inicio, "MMMM 'de' yyyy", { locale: ptBR })}`}
             </span>
             {" · "}
             {format(inicio, "dd/MM")} a {format(fim, "dd/MM")}
@@ -109,10 +109,14 @@ export default function MetrikRanking() {
               fim={fim}
               metaAtual={meta}
               membros={membros}
+              taxaAtual={config.taxaPct}
+              pctAtual={config.comissaoPct}
             />
           </div>
         )}
       </div>
+
+      <SeletorPeriodo />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
         {/* ── Meta coletiva ── */}

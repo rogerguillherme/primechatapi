@@ -1,12 +1,18 @@
-import { useMemo, useState } from "react";
-import { format, startOfMonth, endOfMonth } from "date-fns";
+import { useMemo } from "react";
+import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { DollarSign, Megaphone, RotateCcw, TrendingUp, Wallet, PiggyBank } from "lucide-react";
+import {
+  DollarSign, Megaphone, RotateCcw, TrendingUp, Wallet, PiggyBank, Percent,
+} from "lucide-react";
 
 import { useMetrikData } from "@/hooks/use-metrik-data";
+import { useMetrikPeriodo } from "@/hooks/use-metrik-periodo";
+import { SeletorPeriodo } from "@/components/metrics/SeletorPeriodo";
 import { useFavicon } from "@/hooks/use-favicon";
 import { Card, Kpi, TituloPagina, Vazio, moeda } from "@/components/metrics/ui";
-import { eloAtual, comissao, roi } from "../../supabase/functions/_shared/metrics-engine.mjs";
+import {
+  eloAtual, baseComissao, comissaoSobreBase, roi,
+} from "../../supabase/functions/_shared/metrics-engine.mjs";
 
 /**
  * Comissionados: o fechamento do ciclo.
@@ -19,27 +25,35 @@ import { eloAtual, comissao, roi } from "../../supabase/functions/_shared/metric
 export default function MetrikComissionados() {
   useFavicon("/metrik-favicon.svg");
 
-  const [mes] = useState(() => new Date());
-  const inicio = useMemo(() => startOfMonth(mes), [mes]);
-  const fim = useMemo(() => endOfMonth(mes), [mes]);
-  const { vendedores, totais, tiers } = useMetrikData(inicio, fim);
+  const { inicio, fim } = useMetrikPeriodo();
+  const { vendedores, totais, tiers, config } = useMetrikData(inicio, fim);
 
   const linhas = useMemo(
     () =>
       vendedores
         .filter((v) => v.userId)
-        .map((v) => ({
-          ...v,
-          elo: eloAtual(tiers, v.faturamento) as any,
-          comissao: comissao(v.faturamento, tiers) as number,
-          roi: roi(v.faturamento, v.investimento) as number | null,
-        }))
+        .map((v) => {
+          // A conta, em ordem: tira o que voltou, tira a taxa que a plataforma
+          // reteve, e só então aplica o percentual. Comissionar sobre o bruto
+          // pagaria o vendedor por dinheiro que a empresa não recebeu.
+          const base = baseComissao(v.faturamento, v.reembolsos, config.taxaPct) as number;
+          return {
+            ...v,
+            elo: eloAtual(tiers, v.faturamento) as any,
+            base,
+            taxa:
+              Math.round((v.faturamento - v.reembolsos) * (config.taxaPct / 100) * 100) / 100,
+            comissao: comissaoSobreBase(base, tiers, v.faturamento, config.comissaoPct) as number,
+            roi: roi(v.faturamento, v.investimento) as number | null,
+          };
+        })
         .sort((a, b) => b.comissao - a.comissao),
-    [vendedores, tiers],
+    [vendedores, tiers, config],
   );
 
   const comissaoTotal = linhas.reduce((s, l) => s + l.comissao, 0);
-  const lucroBruto = totais.faturamento - totais.reembolsos - totais.investimento;
+  const taxaTotal = linhas.reduce((s, l) => s + (l.taxa > 0 ? l.taxa : 0), 0);
+  const lucroBruto = totais.faturamento - totais.reembolsos - taxaTotal - totais.investimento;
   const lucroLiquido = lucroBruto - comissaoTotal;
 
   return (
@@ -49,9 +63,17 @@ export default function MetrikComissionados() {
         sub={`Ciclo de ${format(inicio, "dd/MM")} a ${format(fim, "dd/MM 'de' yyyy", { locale: ptBR })}`}
       />
 
+      <SeletorPeriodo />
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <Kpi rotulo="Faturamento" valor={moeda(totais.faturamento)} icone={DollarSign} destaque />
         <Kpi rotulo="Custo de anúncios" valor={moeda(totais.investimento)} icone={Megaphone} />
+        <Kpi
+          rotulo="Taxa da plataforma"
+          valor={moeda(taxaTotal)}
+          nota={config.taxaPct > 0 ? `${config.taxaPct}% sobre o líquido` : "não configurada"}
+          icone={Percent}
+        />
         <Kpi
           rotulo="Reembolsos"
           valor={moeda(totais.reembolsos)}
@@ -74,7 +96,9 @@ export default function MetrikComissionados() {
         <div className="border-b border-border px-5 py-4">
           <h2 className="font-semibold">Detalhamento por vendedor</h2>
           <p className="text-xs text-muted-foreground">
-            A comissão sai do percentual do elo alcançado sobre o faturamento do período.
+            Base = faturamento − reembolsos − taxa da plataforma. A comissão é o percentual
+            do elo alcançado sobre essa base; sem elo, vale o percentual padrão
+            ({config.comissaoPct}%).
           </p>
         </div>
 
@@ -85,8 +109,9 @@ export default function MetrikComissionados() {
                 <th className="px-5 py-3 font-medium">Vendedor</th>
                 <th className="px-5 py-3 font-medium">Elo</th>
                 <th className="px-5 py-3 font-medium">Faturamento</th>
-                <th className="px-5 py-3 font-medium">Lucro</th>
-                <th className="px-5 py-3 font-medium">Anúncio</th>
+                <th className="px-5 py-3 font-medium">Reembolsos</th>
+                <th className="px-5 py-3 font-medium">Taxa</th>
+                <th className="px-5 py-3 font-medium">Base</th>
                 <th className="px-5 py-3 font-medium">Comissão</th>
                 <th className="px-5 py-3 font-medium">ROI</th>
               </tr>
@@ -108,10 +133,14 @@ export default function MetrikComissionados() {
                     )}
                   </td>
                   <td className="px-5 py-3 tabular-nums">{moeda(l.faturamento)}</td>
-                  <td className={l.lucro < 0 ? "px-5 py-3 tabular-nums text-destructive" : "px-5 py-3 tabular-nums"}>
-                    {moeda(l.lucro)}
+                  <td className={l.reembolsos > 0 ? "px-5 py-3 tabular-nums text-destructive" : "px-5 py-3 tabular-nums text-muted-foreground"}>
+                    {moeda(l.reembolsos)}
                   </td>
-                  <td className="px-5 py-3 tabular-nums text-muted-foreground">{moeda(l.investimento)}</td>
+                  <td className="px-5 py-3 tabular-nums text-muted-foreground">{moeda(l.taxa)}</td>
+                  {/* A base aparece na tabela de propósito: é sobre ela que a
+                      conta é feita, e vendedor que não vê a base contesta a
+                      comissão. */}
+                  <td className="px-5 py-3 tabular-nums font-medium">{moeda(l.base)}</td>
                   <td className="px-5 py-3 tabular-nums font-semibold text-primary">
                     {moeda(l.comissao)}
                     {l.elo && (

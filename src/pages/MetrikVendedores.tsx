@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
-import { startOfMonth, endOfMonth } from "date-fns";
+import { endOfMonth } from "date-fns";
 import { Users, DollarSign, Target, Link2, Check } from "lucide-react";
 import { toast } from "sonner";
 
 import { useMetrikData } from "@/hooks/use-metrik-data";
+import { useMetrikPeriodo } from "@/hooks/use-metrik-periodo";
+import { SeletorPeriodo } from "@/components/metrics/SeletorPeriodo";
 import { useFavicon } from "@/hooks/use-favicon";
 import { Button } from "@/components/ui/button";
 import { Card, Kpi, TituloPagina, Vazio, moeda } from "@/components/metrics/ui";
@@ -20,9 +22,7 @@ import { cn } from "@/lib/utils";
 export default function MetrikVendedores() {
   useFavicon("/metrik-favicon.svg");
 
-  const [mes] = useState(() => new Date());
-  const inicio = useMemo(() => startOfMonth(mes), [mes]);
-  const fim = useMemo(() => endOfMonth(mes), [mes]);
+  const { inicio, fim } = useMetrikPeriodo();
   const { vendedores, totais, tiers } = useMetrikData(inicio, fim);
 
   const [base, setBase] = useState("");
@@ -46,6 +46,8 @@ export default function MetrikVendedores() {
   return (
     <div className="space-y-6">
       <TituloPagina titulo="Vendedores" sub="Quem está no time e o que cada um trouxe no período" />
+
+      <SeletorPeriodo />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Kpi rotulo="Vendedores" valor={String(comVendas.length)} nota={`${totais.ativos} com venda no período`} icone={Users} destaque />

@@ -50,6 +50,23 @@ export function useMetrikData(inicio: Date, fim: Date) {
 
   const chaveperiodo = `${dia(inicio)}_${dia(fim)}`;
 
+  const configQ = useQuery({
+    queryKey: ["metrics-settings", ownerId],
+    enabled: !!ownerId,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("metrics_settings")
+        .select("platform_fee_pct, commission_pct")
+        .eq("owner_id", ownerId)
+        .maybeSingle();
+      if (error) throw error;
+      return {
+        taxaPct: Number(data?.platform_fee_pct) || 0,
+        comissaoPct: data?.commission_pct != null ? Number(data.commission_pct) : 10,
+      };
+    },
+  });
+
   const tiersQ = useQuery({
     queryKey: ["metrics-tiers", ownerId],
     enabled: !!ownerId,
@@ -255,21 +272,27 @@ export function useMetrikData(inicio: Date, fim: Date) {
     const vendas = vendedores.reduce((s, v) => s + v.vendas, 0);
     const investimento =
       gastoPor.empresa + [...gastoPor.porVendedor.values()].reduce((s, v) => s + v, 0);
+    const taxaPct = configQ.data?.taxaPct ?? 0;
+    const taxa = Math.round((faturamento - reembolsos) * (taxaPct / 100) * 100) / 100;
     return {
       faturamento,
       reembolsos,
       vendas,
       investimento,
-      lucro: faturamento - reembolsos - investimento,
+      // A taxa da plataforma sai do lucro junto com o resto: ela é dinheiro
+      // que nunca chegou na conta, não uma despesa opcional.
+      taxa: taxa > 0 ? taxa : 0,
+      lucro: faturamento - reembolsos - (taxa > 0 ? taxa : 0) - investimento,
       ativos: vendedores.filter((v) => v.vendas > 0).length,
     };
-  }, [vendedores, gastoPor]);
+  }, [vendedores, gastoPor, configQ.data]);
 
   return {
     ownerId,
     podeConfigurar,
     membros,
     tiers: tiersQ.data || [],
+    config: configQ.data || { taxaPct: 0, comissaoPct: 10 },
     temporada: temporadaQ.data ?? null,
     meta: metaQ.data ?? null,
     vendedores,

@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import {
   eloAtual, proximoElo, progressoNoElo, comissao, progressoMeta, roas, roi,
+  baseComissao, comissaoSobreBase,
 } from "./metrics-engine.mjs";
 
 const ELOS = [
@@ -78,5 +79,28 @@ assert.equal(roas(10000, -50), null, "gasto negativo é dado ruim, não divisor"
 // Faturamento zero com gasto real é -100%: perdeu tudo o que investiu.
 assert.equal(roi(0, 500), -1);
 assert.equal(roas(0, 500), 0);
+
+// ── base de comissão ──
+// Faturamento cru NÃO é base: a plataforma retém a taxa e reembolso voltou.
+assert.equal(baseComissao(1000, 0, 0), 1000, "sem taxa e sem reembolso, base é o bruto");
+assert.equal(baseComissao(1000, 0, 10), 900, "taxa de 10% sai da base");
+assert.equal(baseComissao(1000, 200, 0), 800, "reembolso sai da base");
+// A taxa incide sobre o que sobrou: o checkout devolve a taxa do estornado.
+assert.equal(baseComissao(1000, 200, 10), 720, "reembolso primeiro, taxa depois");
+
+// Devolveu mais do que entrou: não existe base negativa para comissionar.
+assert.equal(baseComissao(500, 900, 10), 0, "base nunca fica negativa");
+assert.equal(baseComissao(0, 0, 10), 0);
+
+// Taxa fora da faixa não vira multiplicador maluco.
+assert.equal(baseComissao(1000, 0, -5), 1000, "taxa negativa é ignorada");
+assert.equal(baseComissao(1000, 0, 150), 0, "taxa acima de 100% zera, não inverte");
+
+// ── comissão sobre a base ──
+// 10% sobre 720 = 72. É a conta que o Roger descreveu.
+assert.equal(comissaoSobreBase(720, [], 1000, 10), 72, "padrão quando não há elo");
+// Havendo elo, o percentual dele manda.
+assert.equal(comissaoSobreBase(720, ELOS, 10000, 10), 57.6, "8% de Prata sobre a base");
+assert.equal(comissaoSobreBase(0, ELOS, 10000, 10), 0, "base zero não comissiona");
 
 console.log("metrics-engine: all assertions passed");
