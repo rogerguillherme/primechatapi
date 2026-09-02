@@ -1806,6 +1806,39 @@ export type Database = {
         }
         Relationships: []
       }
+      metrics_ad_spend: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          member_user_id: string | null
+          owner_id: string
+          period_end: string
+          period_start: string
+          source: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          id?: string
+          member_user_id?: string | null
+          owner_id: string
+          period_end: string
+          period_start: string
+          source?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          member_user_id?: string | null
+          owner_id?: string
+          period_end?: string
+          period_start?: string
+          source?: string
+        }
+        Relationships: []
+      }
       metrics_goals: {
         Row: {
           created_at: string
