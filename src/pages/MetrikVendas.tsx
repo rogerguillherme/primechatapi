@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -12,6 +12,18 @@ import { useFavicon } from "@/hooks/use-favicon";
 import { Input } from "@/components/ui/input";
 import { Card, Kpi, TituloPagina, Vazio, moeda } from "@/components/metrics/ui";
 import { NovaVendaDialog } from "@/components/metrics/NovaVendaDialog";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
+} from "@/components/ui/dialog";
+import { Upload } from "lucide-react";
+
+// A importação já existe pronta no Prime Chat: lê a planilha, mapeia colunas,
+// evita duplicata por external_order_id, cria o lead e grava em `orders`.
+// Reescrever aqui daria dois importadores divergindo na primeira correção.
+const SalesImporter = lazy(() =>
+  import("@/components/sales/SalesImporter").then((m) => ({ default: m.SalesImporter })),
+);
 import { cn } from "@/lib/utils";
 
 const ROTULO: Record<string, { texto: string; classe: string }> = {
@@ -91,7 +103,32 @@ export default function MetrikVendas() {
       <TituloPagina
         titulo="Vendas"
         sub={`${format(inicio, "dd 'de' MMMM", { locale: ptBR })} a ${format(fim, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}`}
-        acao={podeConfigurar ? <NovaVendaDialog ownerId={ownerId} /> : undefined}
+        acao={
+          podeConfigurar ? (
+            <div className="flex gap-2">
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button size="sm" variant="outline" className="gap-1.5">
+                    <Upload size={15} /> Importar planilha
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Importar planilha de vendas</DialogTitle>
+                    <DialogDescription>
+                      CSV da plataforma. Vendas já existentes são ignoradas pelo número do
+                      pedido, então reimportar o mesmo arquivo não duplica nada.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <Suspense fallback={<p className="text-sm text-muted-foreground">Carregando…</p>}>
+                    <SalesImporter />
+                  </Suspense>
+                </DialogContent>
+              </Dialog>
+              <NovaVendaDialog ownerId={ownerId} />
+            </div>
+          ) : undefined
+        }
       />
 
       <SeletorPeriodo />
