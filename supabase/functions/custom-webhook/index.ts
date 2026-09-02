@@ -95,6 +95,28 @@ function extractLead(payload: any, fieldMapping: FieldMapping = {}): { phone: st
   return { phone, name, email, cpf, orderId, amount, productName };
 }
 
+/**
+ * Status da venda a partir do tipo de evento do endpoint.
+ *
+ * Null = o evento não é uma venda (carrinho abandonado, por exemplo) e não
+ * gera linha em `orders`. Registrar carrinho como venda inflaria o faturamento
+ * com dinheiro que nunca entrou.
+ */
+function statusDaVenda(eventType: string): string | null {
+  switch (eventType) {
+    case "compra_aprovada":
+    case "pix":
+    case "cartao":
+      return "approved";
+    case "reembolso":
+      return "refunded";
+    case "cancelamento":
+      return "cancelled";
+    default:
+      return null;
+  }
+}
+
 async function resolveOrCreateLead(
   admin: any,
   userId: string,
@@ -331,6 +353,35 @@ Deno.serve(async (req) => {
     let flowsStarted = 0;
     try {
       leadId = await resolveOrCreateLead(adminClient, endpoint.user_id, info);
+
+      // A venda entra em `orders`. Antes só a Hubla criava venda, então tudo
+      // que chegava por este webhook virava lead e sumia do faturamento — o
+      // Métrik mostrava zero para plataformas que estavam vendendo.
+      //
+      // Uma função por plataforma seria treze cópias divergindo na primeira
+      // correção; o que muda entre elas é o mapeamento de campo, que já é
+      // configurável por endpoint.
+      const statusVenda = statusDaVenda(endpoint.event_type);
+      if (leadId && statusVenda && info.orderId && Number(info.amount) > 0) {
+        const { error: ordemErro } = await adminClient.from("orders").upsert(
+          {
+            lead_id: leadId,
+            user_id: endpoint.user_id,
+            external_order_id: String(info.orderId),
+            amount: Number(info.amount),
+            status: statusVenda,
+            platform: (endpoint.platform || "").toLowerCase() || null,
+            payment_method: endpoint.event_type === "pix" ? "pix"
+              : endpoint.event_type === "cartao" ? "cartao" : null,
+            webhook_payload: payload,
+          },
+          // A plataforma reenvia o mesmo evento em retentativa. Sem isto, cada
+          // reenvio viraria uma venda a mais no faturamento.
+          { onConflict: "external_order_id" },
+        );
+        if (ordemErro) console.error("custom-webhook: falha ao gravar venda", ordemErro);
+      }
+
       if (leadId) {
         flowsStarted = await triggerMatchingFlows(
           adminClient,
