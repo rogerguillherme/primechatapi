@@ -1902,20 +1902,32 @@ export type Database = {
       metrics_settings: {
         Row: {
           commission_pct: number
+          deduct_ads: boolean
+          deduct_fees: boolean
+          deduct_refunds: boolean
           owner_id: string
           platform_fee_pct: number
+          tier_base: string
           updated_at: string
         }
         Insert: {
           commission_pct?: number
+          deduct_ads?: boolean
+          deduct_fees?: boolean
+          deduct_refunds?: boolean
           owner_id: string
           platform_fee_pct?: number
+          tier_base?: string
           updated_at?: string
         }
         Update: {
           commission_pct?: number
+          deduct_ads?: boolean
+          deduct_fees?: boolean
+          deduct_refunds?: boolean
           owner_id?: string
           platform_fee_pct?: number
+          tier_base?: string
           updated_at?: string
         }
         Relationships: []
@@ -2096,6 +2108,7 @@ export type Database = {
           id: string
           lead_id: string
           payment_method: string | null
+          platform: string | null
           product_id: string | null
           status: string
           updated_at: string
@@ -2109,6 +2122,7 @@ export type Database = {
           id?: string
           lead_id: string
           payment_method?: string | null
+          platform?: string | null
           product_id?: string | null
           status?: string
           updated_at?: string
@@ -2122,6 +2136,7 @@ export type Database = {
           id?: string
           lead_id?: string
           payment_method?: string | null
+          platform?: string | null
           product_id?: string | null
           status?: string
           updated_at?: string
@@ -2835,6 +2850,8 @@ export type Database = {
           access_token: string
           api_key: string | null
           app_id: string | null
+          blocked_at: string | null
+          blocked_reason: string | null
           business_account_id: string | null
           business_id: string | null
           created_at: string
@@ -2864,6 +2881,8 @@ export type Database = {
           access_token: string
           api_key?: string | null
           app_id?: string | null
+          blocked_at?: string | null
+          blocked_reason?: string | null
           business_account_id?: string | null
           business_id?: string | null
           created_at?: string
@@ -2893,6 +2912,8 @@ export type Database = {
           access_token?: string
           api_key?: string | null
           app_id?: string | null
+          blocked_at?: string | null
+          blocked_reason?: string | null
           business_account_id?: string | null
           business_id?: string | null
           created_at?: string
