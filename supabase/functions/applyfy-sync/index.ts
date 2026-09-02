@@ -30,15 +30,6 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const publicKey = Deno.env.get("APPLYFY_PUBLIC_KEY");
-    const secretKey = Deno.env.get("APPLYFY_SECRET_KEY");
-    if (!publicKey || !secretKey) {
-      return json(
-        { error: "Configure os secrets APPLYFY_PUBLIC_KEY e APPLYFY_SECRET_KEY." },
-        400,
-      );
-    }
-
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -52,6 +43,26 @@ Deno.serve(async (req) => {
       ? body?.owner_id ?? null
       : chamador.userId;
     if (!ownerId) return json({ error: "Não autenticado" }, 401);
+
+    // A credencial é da EMPRESA, não da plataforma: cada cliente tem a conta
+    // ApplyFy dele. Um secret global usaria a chave de um para puxar as vendas
+    // de outro. O secret de ambiente fica como saída para instalação de conta
+    // única, mas o cadastro por empresa manda.
+    const { data: cred } = await admin
+      .from("metrics_platform_credentials")
+      .select("public_key, secret_key")
+      .eq("owner_id", ownerId)
+      .eq("platform", "applyfy")
+      .maybeSingle();
+
+    const publicKey = cred?.public_key || Deno.env.get("APPLYFY_PUBLIC_KEY");
+    const secretKey = cred?.secret_key || Deno.env.get("APPLYFY_SECRET_KEY");
+    if (!publicKey || !secretKey) {
+      return json(
+        { error: "Credenciais da ApplyFy não configuradas para esta conta." },
+        400,
+      );
+    }
 
     // O caminho da listagem fica em secret porque é a única coisa da API que
     // ainda não está confirmada na documentação. Trocar uma string não deve

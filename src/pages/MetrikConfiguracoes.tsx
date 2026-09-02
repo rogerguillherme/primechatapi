@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Percent, RotateCcw, Megaphone, Plus, Trash2, Target } from "lucide-react";
+import { Percent, RotateCcw, Megaphone, Plus, Trash2, Target, KeyRound, Check } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -38,6 +38,39 @@ export default function MetrikConfiguracoes() {
   const { ownerId, config, regrasTaxa, podeConfigurar } = useMetrikData(inicio, fim);
 
   const [nova, setNova] = useState({ platform: "", payment_method: "", percent: "", fixed: "" });
+  const [chaves, setChaves] = useState({ publica: "", secreta: "" });
+
+  const salvarCredencial = useMutation({
+    mutationFn: async () => {
+      if (!chaves.publica.trim() || !chaves.secreta.trim()) {
+        throw new Error("Informe as duas chaves");
+      }
+      const { error } = await (supabase as any).from("metrics_platform_credentials").upsert(
+        {
+          owner_id: ownerId,
+          platform: "applyfy",
+          public_key: chaves.publica.trim(),
+          secret_key: chaves.secreta.trim(),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "owner_id,platform" },
+      );
+      if (error) throw error;
+
+      // Marca separada porque a tabela de credenciais não devolve leitura para
+      // ninguém: a tela precisa de outra forma de saber que está configurada.
+      await (supabase as any).from("metrics_settings").upsert(
+        { owner_id: ownerId, applyfy_configured_at: new Date().toISOString() },
+        { onConflict: "owner_id" },
+      );
+    },
+    onSuccess: () => {
+      setChaves({ publica: "", secreta: "" });
+      toast.success("Credenciais salvas.");
+      qc.invalidateQueries({ queryKey: ["metrics-settings"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const salvarFlag = useMutation({
     mutationFn: async (patch: Record<string, unknown>) => {
@@ -219,6 +252,45 @@ export default function MetrikConfiguracoes() {
           </p>
         </Card>
       </div>
+
+      {/* ── Credenciais de API ── */}
+      <Card>
+        <div className="flex items-center gap-2">
+          <KeyRound size={15} className="text-primary" />
+          <h2 className="font-semibold">Credenciais da ApplyFy</h2>
+          {config.applyfyConfiguradaEm && (
+            <span className="ml-auto flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary">
+              <Check size={11} /> Configurada
+            </span>
+          )}
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Usadas para conferir as vendas por API, além do webhook. As chaves são gravadas e
+          <b> nunca devolvidas para a tela</b> — nem para você. Para trocar, cole as duas de
+          novo. Guardar e depois mostrar seria o mesmo que não proteger.
+        </p>
+
+        {podeConfigurar && (
+          <div className="mt-3 flex flex-wrap items-end gap-2">
+            <Input
+              value={chaves.publica}
+              onChange={(e) => setChaves({ ...chaves, publica: e.target.value })}
+              placeholder="Chave pública (Client ID)"
+              className="h-9 w-64 font-mono text-xs"
+            />
+            <Input
+              type="password"
+              value={chaves.secreta}
+              onChange={(e) => setChaves({ ...chaves, secreta: e.target.value })}
+              placeholder="Chave privada (Client Secret)"
+              className="h-9 w-64 font-mono text-xs"
+            />
+            <Button size="sm" onClick={() => salvarCredencial.mutate()} disabled={salvarCredencial.isPending}>
+              Salvar chaves
+            </Button>
+          </div>
+        )}
+      </Card>
 
       {/* ── Taxas por plataforma ── */}
       <Card className="p-0 overflow-hidden">

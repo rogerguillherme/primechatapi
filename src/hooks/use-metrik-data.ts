@@ -59,7 +59,7 @@ export function useMetrikData(inicio: Date, fim: Date) {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("metrics_settings")
-        .select("platform_fee_pct, commission_pct, deduct_fees, deduct_refunds, deduct_ads, tier_base")
+        .select("platform_fee_pct, commission_pct, deduct_fees, deduct_refunds, deduct_ads, tier_base, applyfy_configured_at")
         .eq("owner_id", ownerId)
         .maybeSingle();
       if (error) throw error;
@@ -70,6 +70,7 @@ export function useMetrikData(inicio: Date, fim: Date) {
         descontarReembolsos: data?.deduct_refunds !== false,
         descontarAds: data?.deduct_ads === true,
         baseElo: (data?.tier_base as string) || "faturamento",
+        applyfyConfiguradaEm: (data?.applyfy_configured_at as string) || null,
       };
     },
   });
@@ -326,6 +327,7 @@ export function useMetrikData(inicio: Date, fim: Date) {
         descontarReembolsos: true,
         descontarAds: false,
         baseElo: "faturamento",
+        applyfyConfiguradaEm: null,
       },
     regrasTaxa: taxasQ.data || [],
     temporada: temporadaQ.data ?? null,
