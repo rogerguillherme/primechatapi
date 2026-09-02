@@ -384,6 +384,7 @@ Deno.serve(async (req) => {
         amount: extracted.amount,
         status,
         payment_method: extracted.paymentMethod,
+        platform: "hubla",
         webhook_payload: payload,
       })
       .select("id")

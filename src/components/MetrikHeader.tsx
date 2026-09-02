@@ -1,6 +1,6 @@
 import {
   LogOut, MessageCircle, LayoutGrid, Trophy, DollarSign,
-  Contact, Users, Flag, Wallet, Plug,
+  Contact, Users, Flag, Wallet, Plug, Settings,
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 
@@ -30,6 +30,7 @@ const SECOES = [
   { rota: "/metrik/metas", rotulo: "Metas", icone: Flag },
   { rota: "/metrik/comissionados", rotulo: "Comissionados", icone: Wallet },
   { rota: "/metrik/integracoes", rotulo: "Integrações", icone: Plug },
+  { rota: "/metrik/configuracoes", rotulo: "Configurações", icone: Settings },
 ];
 
 export function MetrikHeader() {

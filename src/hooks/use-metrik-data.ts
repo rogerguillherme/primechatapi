@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTeamContext, useTeamMembers } from "@/hooks/use-team";
+import { taxaDaVenda } from "../../supabase/functions/_shared/metrics-fees.mjs";
 
 /**
  * Fonte única dos números do Metrik.
@@ -36,6 +37,8 @@ export interface Vendedor {
   lucro: number;
   /** Acumulado de todos os tempos, para a barra de carreira. */
   acumulado: number;
+  /** Quanto a plataforma reteve das vendas dele no período. */
+  taxas: number;
 }
 
 const dia = (d: Date) => format(d, "yyyy-MM-dd");
@@ -56,14 +59,31 @@ export function useMetrikData(inicio: Date, fim: Date) {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("metrics_settings")
-        .select("platform_fee_pct, commission_pct")
+        .select("platform_fee_pct, commission_pct, deduct_fees, deduct_refunds, deduct_ads, tier_base")
         .eq("owner_id", ownerId)
         .maybeSingle();
       if (error) throw error;
       return {
         taxaPct: Number(data?.platform_fee_pct) || 0,
         comissaoPct: data?.commission_pct != null ? Number(data.commission_pct) : 10,
+        descontarTaxas: data?.deduct_fees !== false,
+        descontarReembolsos: data?.deduct_refunds !== false,
+        descontarAds: data?.deduct_ads === true,
+        baseElo: (data?.tier_base as string) || "faturamento",
       };
+    },
+  });
+
+  const taxasQ = useQuery({
+    queryKey: ["metrics-platform-fees", ownerId],
+    enabled: !!ownerId,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("metrics_platform_fees")
+        .select("id, platform, payment_method, percent, fixed")
+        .eq("owner_id", ownerId);
+      if (error) throw error;
+      return data || [];
     },
   });
 
@@ -141,7 +161,7 @@ export function useMetrikData(inicio: Date, fim: Date) {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("orders")
-        .select("amount, status, created_at, leads!inner(assigned_to)")
+        .select("amount, status, created_at, platform, payment_method, leads!inner(assigned_to)")
         .in("status", ["approved", "refunded", "chargeback"])
         .gte("created_at", inicio.toISOString())
         .lte("created_at", fim.toISOString())
@@ -210,12 +230,17 @@ export function useMetrikData(inicio: Date, fim: Date) {
           investimento: dono ? gastoPor.porVendedor.get(dono) || 0 : 0,
           lucro: 0,
           acumulado: dono ? historicoQ.data?.get(dono) || 0 : 0,
+          taxas: 0,
         } as Vendedor);
 
       const valor = Number(o.amount) || 0;
       if (o.status === "approved") {
         linha.faturamento += valor;
         linha.vendas += 1;
+        // Venda a venda, porque a taxa tem parte fixa: aplicar o percentual
+        // sobre o total do mês ignoraria os R$ 2,49 de cada pedido, e o erro
+        // cresce com o número de vendas, não com o valor delas.
+        linha.taxas += taxaDaVenda(valor, taxasQ.data || [], o.platform, o.payment_method) as number;
       } else {
         // Devolvido e chargeback contam como dinheiro que voltou, não como
         // venda que nunca houve: some do lucro e fica visível.
@@ -225,7 +250,7 @@ export function useMetrikData(inicio: Date, fim: Date) {
     }
 
     for (const v of acc.values()) {
-      v.lucro = v.faturamento - v.reembolsos - v.investimento;
+      v.lucro = v.faturamento - v.reembolsos - v.taxas - v.investimento;
     }
 
     // Vendedor sem venda no período existe e precisa aparecer: sumir da lista
@@ -241,11 +266,12 @@ export function useMetrikData(inicio: Date, fim: Date) {
         investimento: gastoPor.porVendedor.get(m.member_user_id) || 0,
         lucro: -(gastoPor.porVendedor.get(m.member_user_id) || 0),
         acumulado: historicoQ.data?.get(m.member_user_id) || 0,
+        taxas: 0,
       });
     }
 
     return [...acc.values()].sort((a, b) => b.faturamento - a.faturamento);
-  }, [vendasQ.data, nomePor, gastoPor, historicoQ.data, membros]);
+  }, [vendasQ.data, nomePor, gastoPor, historicoQ.data, membros, taxasQ.data]);
 
   // Série diária para o gráfico. Sai das MESMAS vendas já carregadas — buscar
   // de novo agrupado por dia daria uma segunda fonte para o mesmo número.
@@ -272,8 +298,8 @@ export function useMetrikData(inicio: Date, fim: Date) {
     const vendas = vendedores.reduce((s, v) => s + v.vendas, 0);
     const investimento =
       gastoPor.empresa + [...gastoPor.porVendedor.values()].reduce((s, v) => s + v, 0);
-    const taxaPct = configQ.data?.taxaPct ?? 0;
-    const taxa = Math.round((faturamento - reembolsos) * (taxaPct / 100) * 100) / 100;
+    // Soma das taxas reais de cada venda, não um percentual sobre o total.
+    const taxa = Math.round(vendedores.reduce((s, v) => s + v.taxas, 0) * 100) / 100;
     return {
       faturamento,
       reembolsos,
@@ -292,7 +318,16 @@ export function useMetrikData(inicio: Date, fim: Date) {
     podeConfigurar,
     membros,
     tiers: tiersQ.data || [],
-    config: configQ.data || { taxaPct: 0, comissaoPct: 10 },
+    config:
+      configQ.data || {
+        taxaPct: 0,
+        comissaoPct: 10,
+        descontarTaxas: true,
+        descontarReembolsos: true,
+        descontarAds: false,
+        baseElo: "faturamento",
+      },
+    regrasTaxa: taxasQ.data || [],
     temporada: temporadaQ.data ?? null,
     meta: metaQ.data ?? null,
     vendedores,

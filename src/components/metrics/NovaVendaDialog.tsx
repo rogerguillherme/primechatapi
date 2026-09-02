@@ -65,6 +65,7 @@ export function NovaVendaDialog({ ownerId }: { ownerId: string | null }) {
         amount: v,
         status: "approved",
         payment_method: "manual",
+        platform: "manual",
         // O id externo é obrigatório e único. Prefixo próprio para a venda
         // manual nunca colidir com a de um checkout.
         external_order_id: `manual-${crypto.randomUUID()}`,
