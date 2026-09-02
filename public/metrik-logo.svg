@@ -1,0 +1,9 @@
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Metrik">
+  <!-- Pódio: segundo, primeiro, terceiro. Versão estática para uso fora do
+       React (favicon, og:image, material impresso). A cor neutra aqui é fixa
+       porque não há texto ao redor de quem herdar. -->
+  <rect x="2.5" y="11" width="5" height="10" rx="1.6" fill="#94a3b8"/>
+  <rect x="9.5" y="4" width="5" height="17" rx="1.6" fill="#f59e0b"/>
+  <rect x="16.5" y="14" width="5" height="7" rx="1.6" fill="#cbd5e1"/>
+  <rect x="1.5" y="21.6" width="21" height="1.6" rx="0.8" fill="#64748b"/>
+</svg>

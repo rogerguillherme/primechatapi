@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AppHeader } from "@/components/AppHeader";
+import { MetrikHeader } from "@/components/MetrikHeader";
 import { AiAssistantChat } from "@/components/AiAssistantChat";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { PlatformProvider } from "@/contexts/PlatformContext";
@@ -166,7 +167,7 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <div className="min-h-screen flex flex-col">
-              <AppHeader />
+              <MetrikHeader />
               <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-7xl mx-auto w-full">
                 <Metrik />
               </main>

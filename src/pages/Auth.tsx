@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { MessageCircle, Mail, Lock, Loader2, Trophy } from "lucide-react";
 import { toast } from "sonner";
+import { MetrikLogo } from "@/components/MetrikLogo";
 
 /**
  * Uma tela de login por produto.
@@ -35,7 +36,7 @@ const PRODUTOS = {
     icone: Trophy,
     rota: "/metrik/entrar",
     destino: "/metrik",
-    fundoIcone: "bg-amber-500",
+    fundoIcone: "bg-slate-900",
     corIcone: "text-white",
   },
 } as const;
@@ -114,7 +115,11 @@ export default function Auth({ produto = "chat" }: { produto?: ProdutoAuth }) {
           <div
             className={`mx-auto w-12 h-12 rounded-xl flex items-center justify-center ${marca.fundoIcone}`}
           >
-            <marca.icone className={`h-6 w-6 ${marca.corIcone}`} />
+            {produto === "metrics" ? (
+              <MetrikLogo size={26} className="text-white" />
+            ) : (
+              <marca.icone className={`h-6 w-6 ${marca.corIcone}`} />
+            )}
           </div>
           <CardTitle className="text-2xl font-display">{marca.nome}</CardTitle>
           <CardDescription>{marca.descricao}</CardDescription>

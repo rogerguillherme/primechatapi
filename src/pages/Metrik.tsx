@@ -1,14 +1,12 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ArrowLeft, Trophy, Target, TrendingUp, Users, Loader2, Megaphone } from "lucide-react";
+import { Trophy, Target, TrendingUp, Users, Loader2, Megaphone } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTeamContext, useTeamMembers } from "@/hooks/use-team";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { MetrikSettings } from "@/components/metrics/MetrikSettings";
@@ -52,7 +50,6 @@ interface LinhaVendedor {
 }
 
 export default function Metrik() {
-  const navigate = useNavigate();
   const { user } = useAuth();
   const { data: team } = useTeamContext();
   const ownerId = team?.ownerId ?? user?.id ?? null;
@@ -242,15 +239,18 @@ export default function Metrik() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
-          <ArrowLeft size={18} />
-        </Button>
+      {/* O nome do produto e a saída moram no cabeçalho agora. Repetir os dois
+          aqui roubaria a linha mais alta da página do que ela deve dizer: qual
+          período está sendo mostrado. */}
+      <div className="flex flex-wrap items-center gap-3">
         <div>
-          <h1 className="text-2xl font-display font-bold">Metrik</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-2xl font-display font-bold">
             {temporada?.name ||
               `Temporada de ${format(mes, "MMMM 'de' yyyy", { locale: ptBR })}`}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {format(inicio, "dd 'de' MMMM", { locale: ptBR })} a{" "}
+            {format(fim, "dd 'de' MMMM", { locale: ptBR })}
           </p>
         </div>
 

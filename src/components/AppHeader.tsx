@@ -1,4 +1,4 @@
-import { MessageCircle, LogOut, Users, Plug, Instagram, Trophy } from "lucide-react";
+import { MessageCircle, LogOut, Users, Plug, Instagram } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePlatform, Platform } from "@/contexts/PlatformContext";
@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/NotificationBell";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { WabaHealthBanner } from "@/components/WabaHealthBanner";
+import { MetrikLogo } from "@/components/MetrikLogo";
 
 export function AppHeader() {
   const { user, signOut } = useAuth();
@@ -96,7 +97,9 @@ export function AppHeader() {
               aria-label="Metrik"
               className="text-white/60 hover:text-white hover:bg-white/10"
             >
-              <Trophy size={18} />
+              {/* A mesma marca dos dois lados: o atalho aqui e o cabeçalho de
+                  lá precisam ser reconhecíveis como a mesma coisa. */}
+              <MetrikLogo size={18} />
             </Button>
             {user?.email === "admin@primechat.com" && (
               <Button variant="ghost" size="icon" onClick={() => navigate("/admin/users")} className="text-white/60 hover:text-white hover:bg-white/10">
