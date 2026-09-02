@@ -1899,6 +1899,27 @@ export type Database = {
         }
         Relationships: []
       }
+      metrics_settings: {
+        Row: {
+          commission_pct: number
+          owner_id: string
+          platform_fee_pct: number
+          updated_at: string
+        }
+        Insert: {
+          commission_pct?: number
+          owner_id: string
+          platform_fee_pct?: number
+          updated_at?: string
+        }
+        Update: {
+          commission_pct?: number
+          owner_id?: string
+          platform_fee_pct?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       metrics_tiers: {
         Row: {
           color: string
