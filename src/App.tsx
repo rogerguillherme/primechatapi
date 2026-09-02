@@ -25,6 +25,11 @@ const AdminUsers = lazy(() => import("./pages/AdminUsers"));
 const WabaHealth = lazy(() => import("./pages/WabaHealth"));
 const Metrik = lazy(() => import("./pages/Metrik"));
 const MetrikRanking = lazy(() => import("./pages/MetrikRanking"));
+const MetrikVendas = lazy(() => import("./pages/MetrikVendas"));
+const MetrikClientes = lazy(() => import("./pages/MetrikClientes"));
+const MetrikVendedores = lazy(() => import("./pages/MetrikVendedores"));
+const MetrikMetas = lazy(() => import("./pages/MetrikMetas"));
+const MetrikComissionados = lazy(() => import("./pages/MetrikComissionados"));
 import { Loader2 } from "lucide-react";
 import { BroadcastProgressFloat } from "@/components/BroadcastProgressFloat";
 import { useTrialStatus } from "@/hooks/use-trial-status";
@@ -173,6 +178,71 @@ function AppRoutes() {
               <MetrikHeader />
               <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto w-full">
                 <Metrik />
+              </main>
+            </div>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/metrik/vendas"
+        element={
+          <ProtectedRoute>
+            <div className="metrik-shell min-h-screen flex flex-col">
+              <MetrikHeader />
+              <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto w-full">
+                <MetrikVendas />
+              </main>
+            </div>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/metrik/clientes"
+        element={
+          <ProtectedRoute>
+            <div className="metrik-shell min-h-screen flex flex-col">
+              <MetrikHeader />
+              <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto w-full">
+                <MetrikClientes />
+              </main>
+            </div>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/metrik/vendedores"
+        element={
+          <ProtectedRoute>
+            <div className="metrik-shell min-h-screen flex flex-col">
+              <MetrikHeader />
+              <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto w-full">
+                <MetrikVendedores />
+              </main>
+            </div>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/metrik/metas"
+        element={
+          <ProtectedRoute>
+            <div className="metrik-shell min-h-screen flex flex-col">
+              <MetrikHeader />
+              <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto w-full">
+                <MetrikMetas />
+              </main>
+            </div>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/metrik/comissionados"
+        element={
+          <ProtectedRoute>
+            <div className="metrik-shell min-h-screen flex flex-col">
+              <MetrikHeader />
+              <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto w-full">
+                <MetrikComissionados />
               </main>
             </div>
           </ProtectedRoute>

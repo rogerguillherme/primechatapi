@@ -116,7 +116,7 @@ export default function MetrikRanking() {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
         {/* ── Meta coletiva ── */}
-        <div className="metrik-glow rounded-xl border border-border bg-card p-5">
+        <div className="metrik-glow metrik-card metrik-card-hover rounded-xl p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 className="font-semibold">Meta coletiva</h2>
@@ -134,9 +134,9 @@ export default function MetrikRanking() {
             </span>
           </div>
 
-          <div className="mt-4 h-2 rounded-full bg-muted overflow-hidden">
+          <div className="mt-4 h-2 metrik-trilho rounded-full overflow-hidden">
             <div
-              className="h-full rounded-full bg-primary transition-all"
+              className="metrik-preenchimento h-full rounded-full bg-primary transition-all"
               style={{ width: `${(progMeta ?? 0) * 100}%` }}
             />
           </div>
@@ -157,7 +157,7 @@ export default function MetrikRanking() {
         </div>
 
         {/* ── Filtros ── */}
-        <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+        <div className="metrik-card metrik-card-hover rounded-xl p-5 space-y-4">
           <h2 className="font-semibold">Filtros</h2>
 
           <div className="flex flex-wrap items-end gap-4">
@@ -241,7 +241,7 @@ export default function MetrikRanking() {
             <div
               key={v.userId || "sem"}
               className={cn(
-                "rounded-xl border border-border bg-card p-5",
+                "metrik-card metrik-card-hover rounded-xl p-5",
                 !v.userId && "border-dashed",
               )}
             >
@@ -297,9 +297,9 @@ export default function MetrikRanking() {
                     <span>Progresso de elo</span>
                     <span className="tabular-nums">{Math.round(prog * 100)}%</span>
                   </div>
-                  <div className="mt-1.5 h-1.5 rounded-full bg-muted overflow-hidden">
+                  <div className="mt-1.5 h-1.5 metrik-trilho rounded-full overflow-hidden">
                     <div
-                      className="h-full rounded-full transition-all"
+                      className="metrik-preenchimento h-full rounded-full transition-all"
                       style={{
                         width: `${prog * 100}%`,
                         backgroundColor: elo?.color || "hsl(var(--primary))",
@@ -326,7 +326,7 @@ export default function MetrikRanking() {
                       {moeda(v.acumulado)}
                     </span>
                   </div>
-                  <div className="mt-1.5 h-1.5 rounded-full bg-muted overflow-hidden">
+                  <div className="mt-1.5 h-1.5 metrik-trilho rounded-full overflow-hidden">
                     <div
                       className="h-full rounded-full bg-gradient-to-r from-primary/50 to-primary transition-all"
                       style={{ width: `${carreira * 100}%` }}

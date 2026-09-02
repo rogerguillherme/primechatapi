@@ -351,3 +351,53 @@
     radial-gradient(60% 55% at 15% 0%, hsl(152 62% 45% / 0.10), transparent 70%),
     radial-gradient(50% 50% at 90% 10%, hsl(168 55% 40% / 0.07), transparent 70%);
 }
+
+/* Relevo dos cartões do Metrik.
+   O Prime Chat ganha profundidade com sombra sobre fundo claro. No escuro
+   sombra some — o que dá volume ali é a LUZ: uma borda superior clara imitando
+   reflexo, um fundo levemente mais alto que a página, e a sombra descendo
+   forte. Copiar a sombra do claro e parar por aí deixaria tudo chapado. */
+.metrik-shell .metrik-card {
+  background:
+    linear-gradient(180deg, hsl(158 24% 11%) 0%, hsl(158 26% 8%) 100%);
+  border: 1px solid hsl(158 18% 16%);
+  border-top-color: hsl(152 25% 24%);
+  box-shadow:
+    0 1px 0 0 hsl(150 40% 70% / 0.06) inset,
+    0 10px 30px -12px hsl(0 0% 0% / 0.75),
+    0 2px 8px -4px hsl(0 0% 0% / 0.5);
+  transition: box-shadow 160ms ease, transform 160ms ease;
+}
+
+.metrik-shell .metrik-card-hover:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 1px 0 0 hsl(150 40% 70% / 0.09) inset,
+    0 16px 40px -14px hsl(0 0% 0% / 0.8),
+    0 3px 10px -4px hsl(0 0% 0% / 0.55);
+}
+
+/* Cartão de destaque: o mesmo relevo com um halo verde por baixo, para o KPI
+   principal não competir de igual para igual com os secundários. */
+.metrik-shell .metrik-card-primary {
+  background:
+    linear-gradient(180deg, hsl(152 30% 13%) 0%, hsl(155 28% 9%) 100%);
+  border-top-color: hsl(152 45% 30%);
+  box-shadow:
+    0 1px 0 0 hsl(150 60% 75% / 0.10) inset,
+    0 10px 34px -12px hsl(152 60% 20% / 0.55),
+    0 2px 8px -4px hsl(0 0% 0% / 0.5);
+}
+
+/* Barra de progresso com volume: sulco escuro embaixo, preenchimento com
+   brilho em cima. Barra chapada no escuro parece desativada. */
+.metrik-shell .metrik-trilho {
+  background: hsl(158 20% 12%);
+  box-shadow: 0 1px 2px 0 hsl(0 0% 0% / 0.6) inset;
+}
+
+.metrik-shell .metrik-preenchimento {
+  box-shadow:
+    0 0 12px 0 hsl(152 62% 45% / 0.45),
+    0 1px 0 0 hsl(150 60% 80% / 0.35) inset;
+}

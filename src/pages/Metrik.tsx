@@ -38,7 +38,7 @@ function Kpi({
   tom?: string;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-5">
+    <div className="metrik-card metrik-card-hover rounded-xl p-5">
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm text-muted-foreground">{rotulo}</p>
         <div className="rounded-lg bg-primary/10 p-2 text-primary">
@@ -146,7 +146,7 @@ export default function Metrik() {
       </div>
 
       {/* ── Evolução ── */}
-      <div className="rounded-xl border border-border bg-card p-5">
+      <div className="metrik-card metrik-card-hover rounded-xl p-5">
         <h2 className="font-semibold">Evolução no período</h2>
         <p className="text-xs text-muted-foreground">Faturamento e reembolsos por dia</p>
 
@@ -211,7 +211,7 @@ export default function Metrik() {
 
       {/* ── Elos ── */}
       {tiers.length > 0 && (
-        <div className="rounded-xl border border-border bg-card p-5">
+        <div className="metrik-card metrik-card-hover rounded-xl p-5">
           <h2 className="font-semibold">Elos e comissão</h2>
           <div className="mt-3 flex flex-wrap gap-2">
             {tiers.map((t) => (

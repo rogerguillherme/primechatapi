@@ -1,4 +1,7 @@
-import { LogOut, MessageCircle, LayoutGrid, Trophy } from "lucide-react";
+import {
+  LogOut, MessageCircle, LayoutGrid, Trophy, DollarSign,
+  Contact, Users, Flag, Wallet,
+} from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -14,13 +17,18 @@ import { cn } from "@/lib/utils";
  * coisa alguma num painel de performance, e ícone sem sentido no contexto é
  * ruído que ensina a ignorar a barra inteira.
  *
- * A navegação lista SÓ o que existe. Uma barra com sete abas em que cinco
- * abrem vazio é pior que duas que funcionam: ensina que clicar não leva a
- * lugar nenhum, e aí ninguém clica na que passa a funcionar depois.
+ * As sete seções do painel de referência. Todas abrem com dado real: nenhuma é
+ * casca esperando conteúdo, porque aba que abre vazia ensina que clicar não
+ * leva a lugar nenhum.
  */
 const SECOES = [
   { rota: "/metrik", rotulo: "Dashboard", icone: LayoutGrid },
   { rota: "/metrik/ranking", rotulo: "Ranking", icone: Trophy },
+  { rota: "/metrik/vendas", rotulo: "Vendas", icone: DollarSign },
+  { rota: "/metrik/clientes", rotulo: "Clientes", icone: Contact },
+  { rota: "/metrik/vendedores", rotulo: "Vendedores", icone: Users },
+  { rota: "/metrik/metas", rotulo: "Metas", icone: Flag },
+  { rota: "/metrik/comissionados", rotulo: "Comissionados", icone: Wallet },
 ];
 
 export function MetrikHeader() {
