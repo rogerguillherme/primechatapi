@@ -1806,6 +1806,99 @@ export type Database = {
         }
         Relationships: []
       }
+      metrics_goals: {
+        Row: {
+          created_at: string
+          id: string
+          member_user_id: string | null
+          owner_id: string
+          period_end: string
+          period_start: string
+          scope: string
+          target_value: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          member_user_id?: string | null
+          owner_id: string
+          period_end: string
+          period_start: string
+          scope?: string
+          target_value?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          member_user_id?: string | null
+          owner_id?: string
+          period_end?: string
+          period_start?: string
+          scope?: string
+          target_value?: number
+        }
+        Relationships: []
+      }
+      metrics_seasons: {
+        Row: {
+          created_at: string
+          ends_at: string
+          id: string
+          name: string
+          owner_id: string
+          starts_at: string
+        }
+        Insert: {
+          created_at?: string
+          ends_at: string
+          id?: string
+          name: string
+          owner_id: string
+          starts_at: string
+        }
+        Update: {
+          created_at?: string
+          ends_at?: string
+          id?: string
+          name?: string
+          owner_id?: string
+          starts_at?: string
+        }
+        Relationships: []
+      }
+      metrics_tiers: {
+        Row: {
+          color: string
+          commission_pct: number
+          created_at: string
+          id: string
+          min_value: number
+          name: string
+          owner_id: string
+          position: number
+        }
+        Insert: {
+          color?: string
+          commission_pct?: number
+          created_at?: string
+          id?: string
+          min_value?: number
+          name: string
+          owner_id: string
+          position?: number
+        }
+        Update: {
+          color?: string
+          commission_pct?: number
+          created_at?: string
+          id?: string
+          min_value?: number
+          name?: string
+          owner_id?: string
+          position?: number
+        }
+        Relationships: []
+      }
       metrito_settings: {
         Row: {
           api_key: string | null
