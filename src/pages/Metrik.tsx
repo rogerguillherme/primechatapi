@@ -356,6 +356,35 @@ export default function Metrik() {
         ))}
       </div>
 
+      {/* ── Elos configurados ──
+          Antes, o elo só aparecia colado num vendedor do ranking. Sem venda no
+          período o ranking fica vazio, e quem acabou de cadastrar os cortes não
+          via nada — nem os elos, nem um aviso: a tela ficava idêntica a antes
+          de configurar, e a única leitura possível era "não salvou".
+          A escada fica visível por si, e serve de referência para o time. */}
+      {tiers.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="text-base font-semibold">Elos</h2>
+          <div className="flex flex-wrap gap-2">
+            {tiers.map((t) => (
+              <div
+                key={t.id}
+                className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5"
+              >
+                <span
+                  className="h-2.5 w-2.5 rounded-full shrink-0"
+                  style={{ backgroundColor: t.color }}
+                />
+                <span className="text-sm font-medium">{t.name}</span>
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  a partir de {moeda(Number(t.min_value))} · {Number(t.commission_pct)}%
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* ── Ranking ── */}
       <section className="space-y-3">
         <h2 className="text-base font-semibold">Ranking</h2>
@@ -375,7 +404,9 @@ export default function Metrik() {
 
         {!isLoading && !erroVendas && ranking.length === 0 && (
           <p className="text-sm text-muted-foreground">
-            Nenhuma venda aprovada neste período.
+            Nenhuma venda aprovada neste período — o ranking se preenche sozinho quando a
+            primeira entrar. O vendedor de uma venda é o atendente responsável pelo lead no
+            CRM.
           </p>
         )}
 
