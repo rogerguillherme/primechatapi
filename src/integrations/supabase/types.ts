@@ -2700,6 +2700,7 @@ export type Database = {
           field_mapping: Json
           id: string
           is_active: boolean
+          platform: string | null
           updated_at: string
           user_id: string
           webhook_token: string
@@ -2711,6 +2712,7 @@ export type Database = {
           field_mapping?: Json
           id?: string
           is_active?: boolean
+          platform?: string | null
           updated_at?: string
           user_id: string
           webhook_token?: string
@@ -2722,6 +2724,7 @@ export type Database = {
           field_mapping?: Json
           id?: string
           is_active?: boolean
+          platform?: string | null
           updated_at?: string
           user_id?: string
           webhook_token?: string
