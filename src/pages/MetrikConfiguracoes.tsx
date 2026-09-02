@@ -4,6 +4,7 @@ import { Percent, RotateCcw, Megaphone, Plus, Trash2, Target, KeyRound, Check } 
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
+import { functionErrorMessage } from "@/lib/functionError";
 import { useMetrikData } from "@/hooks/use-metrik-data";
 import { useMetrikPeriodo } from "@/hooks/use-metrik-periodo";
 import { useFavicon } from "@/hooks/use-favicon";
@@ -45,24 +46,18 @@ export default function MetrikConfiguracoes() {
       if (!chaves.publica.trim() || !chaves.secreta.trim()) {
         throw new Error("Informe as duas chaves");
       }
-      const { error } = await (supabase as any).from("metrics_platform_credentials").upsert(
-        {
-          owner_id: ownerId,
+      // A gravação vai por função, não direto na tabela: o navegador entrega o
+      // valor e quem escreve é o servidor, depois de conferir quem pediu. Isso
+      // evita dar privilégio de escrita numa tabela de segredo ao cliente.
+      const { data, error } = await supabase.functions.invoke("metrik-credentials", {
+        body: {
           platform: "applyfy",
           public_key: chaves.publica.trim(),
           secret_key: chaves.secreta.trim(),
-          updated_at: new Date().toISOString(),
         },
-        { onConflict: "owner_id,platform" },
-      );
-      if (error) throw error;
-
-      // Marca separada porque a tabela de credenciais não devolve leitura para
-      // ninguém: a tela precisa de outra forma de saber que está configurada.
-      await (supabase as any).from("metrics_settings").upsert(
-        { owner_id: ownerId, applyfy_configured_at: new Date().toISOString() },
-        { onConflict: "owner_id" },
-      );
+      });
+      if (error) throw new Error(await functionErrorMessage(error, "Não consegui salvar as chaves"));
+      if ((data as any)?.error) throw new Error((data as any).error);
     },
     onSuccess: () => {
       setChaves({ publica: "", secreta: "" });
