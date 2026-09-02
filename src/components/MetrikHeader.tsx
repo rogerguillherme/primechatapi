@@ -1,6 +1,6 @@
 import {
   LogOut, MessageCircle, LayoutGrid, Trophy, DollarSign,
-  Contact, Users, Flag, Wallet, Plug, Settings,
+  Contact, Users, Flag, Wallet, Plug, Settings, Medal,
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 
@@ -29,6 +29,7 @@ const SECOES = [
   { rota: "/metrik/vendedores", rotulo: "Vendedores", icone: Users },
   { rota: "/metrik/metas", rotulo: "Metas", icone: Flag },
   { rota: "/metrik/comissionados", rotulo: "Comissionados", icone: Wallet },
+  { rota: "/metrik/missoes", rotulo: "Missões", icone: Medal },
   { rota: "/metrik/integracoes", rotulo: "Integrações", icone: Plug },
   { rota: "/metrik/configuracoes", rotulo: "Configurações", icone: Settings },
 ];

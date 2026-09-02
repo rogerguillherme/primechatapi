@@ -32,6 +32,7 @@ const MetrikMetas = lazy(() => import("./pages/MetrikMetas"));
 const MetrikComissionados = lazy(() => import("./pages/MetrikComissionados"));
 const MetrikIntegracoes = lazy(() => import("./pages/MetrikIntegracoes"));
 const MetrikConfiguracoes = lazy(() => import("./pages/MetrikConfiguracoes"));
+const MetrikMissoes = lazy(() => import("./pages/MetrikMissoes"));
 import { Loader2 } from "lucide-react";
 import { BroadcastProgressFloat } from "@/components/BroadcastProgressFloat";
 import { useTrialStatus } from "@/hooks/use-trial-status";
@@ -232,6 +233,19 @@ function AppRoutes() {
               <MetrikHeader />
               <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto w-full">
                 <MetrikMetas />
+              </main>
+            </div>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/metrik/missoes"
+        element={
+          <ProtectedRoute>
+            <div className="metrik-shell min-h-screen flex flex-col">
+              <MetrikHeader />
+              <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto w-full">
+                <MetrikMissoes />
               </main>
             </div>
           </ProtectedRoute>
