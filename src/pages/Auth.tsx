@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { MessageCircle, Mail, Lock, Loader2, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { MetrikLogo } from "@/components/MetrikLogo";
+import { useFavicon } from "@/hooks/use-favicon";
 
 /**
  * Uma tela de login por produto.
@@ -45,6 +46,8 @@ export type ProdutoAuth = keyof typeof PRODUTOS;
 
 export default function Auth({ produto = "chat" }: { produto?: ProdutoAuth }) {
   const marca = PRODUTOS[produto];
+  // A porta já tem a cara do produto; o ícone da aba faz parte disso.
+  useFavicon(produto === "metrics" ? "/metrik-favicon.svg" : "/favicon.png");
   const { session, loading } = useAuth();
   const [searchParams] = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);

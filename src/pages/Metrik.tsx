@@ -10,6 +10,7 @@ import { useTeamContext, useTeamMembers } from "@/hooks/use-team";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { MetrikSettings } from "@/components/metrics/MetrikSettings";
+import { useFavicon } from "@/hooks/use-favicon";
 import {
   eloAtual,
   proximoElo,
@@ -54,6 +55,10 @@ export default function Metrik() {
   const { data: team } = useTeamContext();
   const ownerId = team?.ownerId ?? user?.id ?? null;
   const podeConfigurar = !team || team.accessLevel === "owner" || team.accessLevel === "manager";
+
+  // Quem deixa o Metrik numa aba e o chat em outra precisa distinguir as duas
+  // pelo ícone, que é como se acha aba sem ler título.
+  useFavicon("/metrik-favicon.svg");
 
   const [mes] = useState(() => new Date());
 

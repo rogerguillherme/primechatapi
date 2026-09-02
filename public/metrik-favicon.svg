@@ -1,0 +1,12 @@
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Metrik">
+  <!-- Variante para favicon: 32x32, fundo sólido e barras mais grossas.
+       A marca do app é vazada e herda a cor do texto ao redor; num favicon
+       não há texto ao redor e o fundo é a aba do navegador, que muda de cor
+       conforme o tema. Sem fundo próprio, a marca some numa aba clara ou numa
+       escura — dependendo de qual cor neutra eu escolhesse. -->
+  <rect width="32" height="32" rx="7" fill="#0f172a"/>
+  <rect x="5" y="15" width="6" height="10" rx="2" fill="#94a3b8"/>
+  <rect x="13" y="7" width="6" height="18" rx="2" fill="#f59e0b"/>
+  <rect x="21" y="18" width="6" height="7" rx="2" fill="#64748b"/>
+  <rect x="4" y="25.5" width="24" height="2" rx="1" fill="#94a3b8"/>
+</svg>
