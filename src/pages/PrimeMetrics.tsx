@@ -11,6 +11,7 @@ import { useTeamContext, useTeamMembers } from "@/hooks/use-team";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { MetricsSettings } from "@/components/metrics/MetricsSettings";
 import {
   eloAtual,
   proximoElo,
@@ -55,6 +56,7 @@ export default function PrimeMetrics() {
   const { user } = useAuth();
   const { data: team } = useTeamContext();
   const ownerId = team?.ownerId ?? user?.id ?? null;
+  const podeConfigurar = !team || team.accessLevel === "owner" || team.accessLevel === "manager";
 
   const [mes] = useState(() => new Date());
 
@@ -252,7 +254,22 @@ export default function PrimeMetrics() {
           </p>
         </div>
 
-        <div className="ml-auto flex rounded-lg border border-border p-0.5">
+        {/* Configurar só para quem manda na conta: o vendedor vê o ranking —
+            é o ponto da gamificação — mas não mexe no próprio corte de elo. */}
+        {ownerId && podeConfigurar && (
+          <div className="ml-auto">
+            <MetricsSettings
+              ownerId={ownerId}
+              tiers={tiers}
+              inicio={inicio}
+              fim={fim}
+              metaAtual={metaColetiva ?? null}
+              membros={membros}
+            />
+          </div>
+        )}
+
+        <div className={cn("flex rounded-lg border border-border p-0.5", !podeConfigurar && "ml-auto")}>
           {[
             { valor: false, rotulo: "Sem ROI/ROAS" },
             { valor: true, rotulo: "Com ROI/ROAS" },
