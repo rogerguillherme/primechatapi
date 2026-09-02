@@ -1,71 +1,92 @@
-import { LogOut, MessageCircle } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { LogOut, MessageCircle, LayoutGrid, Trophy } from "lucide-react";
+import { useNavigate, useLocation } from "react-router-dom";
 
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { MetrikLogo } from "@/components/MetrikLogo";
+import { cn } from "@/lib/utils";
 
 /**
- * Cabeçalho do Metrik.
+ * Cabeçalho e navegação do Metrik.
  *
- * Separado do AppHeader de propósito: aquele carrega o seletor de plataforma,
- * a busca de leads, o sino de notificações do chat e o aviso de saúde da WABA —
- * nada disso significa coisa alguma num painel de performance comercial, e
- * ícone que não faz sentido no contexto é ruído que ensina a ignorar a barra.
+ * Separado do AppHeader de propósito: aquele carrega seletor de plataforma,
+ * busca de leads, sino do chat e aviso de saúde da WABA — nada disso significa
+ * coisa alguma num painel de performance, e ícone sem sentido no contexto é
+ * ruído que ensina a ignorar a barra inteira.
  *
- * O que os dois compartilham é o que de fato é comum: tema, sair, e a mesma
- * altura e proporção, para a troca entre os produtos não parecer um salto.
+ * A navegação lista SÓ o que existe. Uma barra com sete abas em que cinco
+ * abrem vazio é pior que duas que funcionam: ensina que clicar não leva a
+ * lugar nenhum, e aí ninguém clica na que passa a funcionar depois.
  */
+const SECOES = [
+  { rota: "/metrik", rotulo: "Dashboard", icone: LayoutGrid },
+  { rota: "/metrik/ranking", rotulo: "Ranking", icone: Trophy },
+];
+
 export function MetrikHeader() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
 
   return (
-    <header className="bg-slate-900 text-white dark:bg-slate-950">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+    <header className="border-b border-border/60 bg-card/40 backdrop-blur">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center gap-6 h-16">
           <button
             onClick={() => navigate("/metrik")}
-            className="flex items-center gap-3 text-left"
+            className="flex items-center gap-2.5 shrink-0 text-left"
             aria-label="Início do Metrik"
           >
-            <div className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center">
-              <MetrikLogo size={22} className="text-white" />
-            </div>
-            <div>
-              <h1 className="text-base font-display font-bold tracking-tight">Metrik</h1>
-              <p className="text-[11px] text-white/50 leading-none">Performance comercial</p>
-            </div>
+            <MetrikLogo size={26} className="text-foreground" />
+            <span className="text-lg font-display font-bold tracking-tight">Metrik</span>
           </button>
 
-          <div className="flex items-center gap-2">
+          <nav className="flex items-center gap-1 overflow-x-auto">
+            {SECOES.map((s) => {
+              const ativo = pathname === s.rota;
+              return (
+                <button
+                  key={s.rota}
+                  onClick={() => navigate(s.rota)}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors",
+                    ativo
+                      ? "bg-primary/15 text-primary"
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent",
+                  )}
+                >
+                  <s.icone size={15} />
+                  {s.rotulo}
+                </button>
+              );
+            })}
+          </nav>
+
+          <div className="ml-auto flex items-center gap-2 shrink-0">
             {user && (
-              <span className="text-xs text-white/60 hidden sm:inline">{user.email}</span>
+              <span className="text-xs text-muted-foreground hidden lg:inline">{user.email}</span>
             )}
 
-            {/* A volta para o chat é explícita e escrita. O caminho de ida é um
-                ícone no cabeçalho de lá; sem o de volta, sair do Metrik viraria
-                digitar a URL ou apertar o botão do navegador. */}
+            {/* A volta é escrita, não só um ícone: o caminho de ida é um atalho
+                no cabeçalho do chat, e sem o de volta sair daqui viraria
+                digitar URL. */}
             <Button
               variant="ghost"
               size="sm"
               onClick={() => navigate("/")}
-              className="gap-1.5 text-white/60 hover:text-white hover:bg-white/10"
+              className="gap-1.5 text-muted-foreground hover:text-foreground"
               title="Ir para o Prime Chat"
             >
               <MessageCircle size={15} />
               <span className="hidden sm:inline text-xs">Prime Chat</span>
             </Button>
 
-            <ThemeToggle collapsed={true} />
-
             {user && (
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={signOut}
-                className="text-white/60 hover:text-white hover:bg-white/10"
+                className="text-muted-foreground hover:text-foreground"
                 title="Sair"
               >
                 <LogOut size={16} />

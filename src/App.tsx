@@ -24,6 +24,7 @@ const LandingPage = lazy(() => import("./pages/LandingPage"));
 const AdminUsers = lazy(() => import("./pages/AdminUsers"));
 const WabaHealth = lazy(() => import("./pages/WabaHealth"));
 const Metrik = lazy(() => import("./pages/Metrik"));
+const MetrikRanking = lazy(() => import("./pages/MetrikRanking"));
 import { Loader2 } from "lucide-react";
 import { BroadcastProgressFloat } from "@/components/BroadcastProgressFloat";
 import { useTrialStatus } from "@/hooks/use-trial-status";
@@ -162,14 +163,29 @@ function AppRoutes() {
           </AdminOnlyRoute>
         }
       />
+      {/* O casco escuro envolve TODAS as telas do Metrik: os tokens de cor
+          vivem nele, então uma tela fora do casco herdaria o tema do chat. */}
       <Route
         path="/metrik"
         element={
           <ProtectedRoute>
-            <div className="min-h-screen flex flex-col">
+            <div className="metrik-shell min-h-screen flex flex-col">
               <MetrikHeader />
-              <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-7xl mx-auto w-full">
+              <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto w-full">
                 <Metrik />
+              </main>
+            </div>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/metrik/ranking"
+        element={
+          <ProtectedRoute>
+            <div className="metrik-shell min-h-screen flex flex-col">
+              <MetrikHeader />
+              <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto w-full">
+                <MetrikRanking />
               </main>
             </div>
           </ProtectedRoute>
