@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/select";
 
 /**
- * Configuração do Prime Metrics: elos, meta do período e gasto de anúncio.
+ * Configuração do Metrik: elos, meta do período e gasto de anúncio.
  *
  * Sem esta tela o módulo dependia de alguém escrever SQL para ligar a
  * gamificação — o que na prática significa que ela não liga. As regras de elo e
@@ -60,7 +60,7 @@ const ELOS_PADRAO = [
 
 const dia = (d: Date) => format(d, "yyyy-MM-dd");
 
-export function MetricsSettings({ ownerId, tiers, inicio, fim, metaAtual, membros }: Props) {
+export function MetrikSettings({ ownerId, tiers, inicio, fim, metaAtual, membros }: Props) {
   const qc = useQueryClient();
   const [aberto, setAberto] = useState(false);
   const [meta, setMeta] = useState(metaAtual != null ? String(metaAtual) : "");
@@ -201,7 +201,7 @@ export function MetricsSettings({ ownerId, tiers, inicio, fim, metaAtual, membro
       </DialogTrigger>
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Configurar Prime Metrics</DialogTitle>
+          <DialogTitle>Configurar Metrik</DialogTitle>
           <DialogDescription>
             Elos, meta e investimento do período de{" "}
             {format(inicio, "dd/MM")} a {format(fim, "dd/MM")}.

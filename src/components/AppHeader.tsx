@@ -86,14 +86,14 @@ export function AppHeader() {
                 <Plug size={16} />
               </Button>
             )}
-            {/* Prime Metrics: rota própria, entrada no cabeçalho para não
+            {/* Metrik: rota própria, entrada no cabeçalho para não
                 depender de alguém saber a URL de cor. */}
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate("/metrics")}
-              title="Prime Metrics"
-              aria-label="Prime Metrics"
+              onClick={() => navigate("/metrik")}
+              title="Metrik"
+              aria-label="Metrik"
               className="text-white/60 hover:text-white hover:bg-white/10"
             >
               <Trophy size={18} />

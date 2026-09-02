@@ -7,10 +7,43 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { MessageCircle, Mail, Lock, Loader2 } from "lucide-react";
+import { MessageCircle, Mail, Lock, Loader2, Trophy } from "lucide-react";
 import { toast } from "sonner";
 
-export default function Auth() {
+/**
+ * Uma tela de login por produto.
+ *
+ * Duplicar o arquivo daria duas telas que divergem: a correção de um bug de
+ * sessão entraria em uma e não na outra — foi assim que os dois webhooks deste
+ * app passaram semanas com o mesmo bug corrigido só de um lado. Aqui o que muda
+ * entre os produtos é identidade e para onde se entra, e é só isso que fica
+ * parametrizado.
+ */
+const PRODUTOS = {
+  chat: {
+    nome: "Prime Chat",
+    descricao: "Atendimento e disparos no WhatsApp",
+    icone: MessageCircle,
+    rota: "/auth",
+    destino: "/",
+    fundoIcone: "gradient-primary",
+    corIcone: "text-primary-foreground",
+  },
+  metrics: {
+    nome: "Metrik",
+    descricao: "Performance comercial do time de vendas",
+    icone: Trophy,
+    rota: "/metrik/entrar",
+    destino: "/metrik",
+    fundoIcone: "bg-amber-500",
+    corIcone: "text-white",
+  },
+} as const;
+
+export type ProdutoAuth = keyof typeof PRODUTOS;
+
+export default function Auth({ produto = "chat" }: { produto?: ProdutoAuth }) {
+  const marca = PRODUTOS[produto];
   const { session, loading } = useAuth();
   const [searchParams] = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
@@ -20,12 +53,19 @@ export default function Auth() {
   const redirectTo = useMemo(() => {
     const rawRedirect = searchParams.get("redirect");
 
-    if (!rawRedirect || !rawRedirect.startsWith("/") || rawRedirect.startsWith("//") || rawRedirect === "/auth") {
-      return "/";
+    // Entrar pela porta do Metrics leva ao Metrics. Sem isto, quem abre o link
+    // do painel comercial cairia no chat depois de se autenticar.
+    if (
+      !rawRedirect ||
+      !rawRedirect.startsWith("/") ||
+      rawRedirect.startsWith("//") ||
+      rawRedirect === marca.rota
+    ) {
+      return marca.destino;
     }
 
     return rawRedirect;
-  }, [searchParams]);
+  }, [searchParams, marca]);
 
   if (loading) {
     return (
@@ -55,7 +95,11 @@ export default function Auth() {
   const handleGoogleLogin = async () => {
     setIsLoading(true);
     const { error } = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: `${window.location.origin}/auth${redirectTo !== "/" ? `?redirect=${encodeURIComponent(redirectTo)}` : ""}`,
+      // Volta pela MESMA porta: voltar pela outra trocaria o produto no meio do
+      // login, e o destino final junto.
+      redirect_uri: `${window.location.origin}${marca.rota}${
+        redirectTo !== marca.destino ? `?redirect=${encodeURIComponent(redirectTo)}` : ""
+      }`,
     });
     if (error) {
       toast.error("Erro ao fazer login com Google");
@@ -67,11 +111,13 @@ export default function Auth() {
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md shadow-elevated">
         <CardHeader className="text-center space-y-3">
-          <div className="mx-auto w-12 h-12 rounded-xl gradient-primary flex items-center justify-center">
-            <MessageCircle className="h-6 w-6 text-primary-foreground" />
+          <div
+            className={`mx-auto w-12 h-12 rounded-xl flex items-center justify-center ${marca.fundoIcone}`}
+          >
+            <marca.icone className={`h-6 w-6 ${marca.corIcone}`} />
           </div>
-          <CardTitle className="text-2xl font-display">Prime Chat</CardTitle>
-          <CardDescription>Business Platform API</CardDescription>
+          <CardTitle className="text-2xl font-display">{marca.nome}</CardTitle>
+          <CardDescription>{marca.descricao}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <Button

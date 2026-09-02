@@ -11,7 +11,7 @@ import { useTeamContext, useTeamMembers } from "@/hooks/use-team";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { MetricsSettings } from "@/components/metrics/MetricsSettings";
+import { MetrikSettings } from "@/components/metrics/MetrikSettings";
 import {
   eloAtual,
   proximoElo,
@@ -23,7 +23,7 @@ import {
 } from "../../supabase/functions/_shared/metrics-engine.mjs";
 
 /**
- * Prime Metrics — performance comercial com elos, metas e comissão.
+ * Metrik — performance comercial com elos, metas e comissão.
  *
  * Nada de venda é gravado aqui. Faturamento, elo e comissão saem de `orders`
  * na leitura: número guardado em dois lugares é número que diverge, e comissão
@@ -51,7 +51,7 @@ interface LinhaVendedor {
   vendas: number;
 }
 
-export default function PrimeMetrics() {
+export default function Metrik() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { data: team } = useTeamContext();
@@ -247,7 +247,7 @@ export default function PrimeMetrics() {
           <ArrowLeft size={18} />
         </Button>
         <div>
-          <h1 className="text-2xl font-display font-bold">Prime Metrics</h1>
+          <h1 className="text-2xl font-display font-bold">Metrik</h1>
           <p className="text-sm text-muted-foreground">
             {temporada?.name ||
               `Temporada de ${format(mes, "MMMM 'de' yyyy", { locale: ptBR })}`}
@@ -258,7 +258,7 @@ export default function PrimeMetrics() {
             é o ponto da gamificação — mas não mexe no próprio corte de elo. */}
         {ownerId && podeConfigurar && (
           <div className="ml-auto">
-            <MetricsSettings
+            <MetrikSettings
               ownerId={ownerId}
               tiers={tiers}
               inicio={inicio}

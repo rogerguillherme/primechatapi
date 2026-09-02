@@ -22,7 +22,7 @@ const TrialExpired = lazy(() => import("./pages/TrialExpired"));
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const AdminUsers = lazy(() => import("./pages/AdminUsers"));
 const WabaHealth = lazy(() => import("./pages/WabaHealth"));
-const PrimeMetrics = lazy(() => import("./pages/PrimeMetrics"));
+const Metrik = lazy(() => import("./pages/Metrik"));
 import { Loader2 } from "lucide-react";
 import { BroadcastProgressFloat } from "@/components/BroadcastProgressFloat";
 import { useTrialStatus } from "@/hooks/use-trial-status";
@@ -53,7 +53,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!session) {
     const redirectTo = `${location.pathname}${location.search}${location.hash}`;
-    return <Navigate to={`/auth?redirect=${encodeURIComponent(redirectTo)}`} replace />;
+    // Cada produto tem a sua porta. Mandar quem tentou abrir o painel
+    // comercial para a tela do chat faz parecer que ele errou de sistema.
+    const porta = location.pathname.startsWith("/metrik") ? "/metrik/entrar" : "/auth";
+    return <Navigate to={`${porta}?redirect=${encodeURIComponent(redirectTo)}`} replace />;
   }
 
   if (isExpired) {
@@ -102,6 +105,8 @@ function AppRoutes() {
     <Suspense fallback={<RouteFallback />}>
     <Routes>
       <Route path="/auth" element={<Auth />} />
+      {/* Porta própria do Metrik: mesma tela, outra identidade e outro destino. */}
+      <Route path="/metrik/entrar" element={<Auth produto="metrics" />} />
       <Route path="/teste-gratis" element={<TrialSignup />} />
       <Route path="/trial-expirado" element={<TrialExpired />} />
       <Route
@@ -157,13 +162,13 @@ function AppRoutes() {
         }
       />
       <Route
-        path="/metrics"
+        path="/metrik"
         element={
           <ProtectedRoute>
             <div className="min-h-screen flex flex-col">
               <AppHeader />
               <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-7xl mx-auto w-full">
-                <PrimeMetrics />
+                <Metrik />
               </main>
             </div>
           </ProtectedRoute>
