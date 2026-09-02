@@ -7,6 +7,8 @@
  * inglês, curto e repetido ("Message undeliverable: Message Undeliverable."),
  * e era mostrado cru ao lado da mensagem.
  */
+import { bloqueioDeConta } from "../../supabase/functions/_shared/meta-block.mjs";
+
 const MOTIVOS: Record<string, string> = {
   // O caso mais comum no Brasil: o número guardado não é o que a Meta usa para
   // rotear — quase sempre o nono dígito sobrando ou faltando. A conversa recebe
@@ -51,6 +53,12 @@ export function metaFailureMessage(
     const d = String(phone).replace(/\D/g, "");
     return `A Meta não conseguiu entregar, e o número guardado tem ${d.length} dígitos — mais do que qualquer número real. Provavelmente o código do país foi duplicado: confira o cadastro do contato.`;
   }
+
+  // Erros que valem para a conta inteira já estão mapeados no lado do
+  // servidor. Manter uma segunda lista aqui foi o que deixou o 131031 sair em
+  // inglês: o backend sabia traduzir, o front não, e é o front que a pessoa lê.
+  const daConta = bloqueioDeConta(code);
+  if (daConta) return daConta;
 
   const conhecido = code ? MOTIVOS[String(code).trim()] : undefined;
   if (conhecido) return conhecido;
