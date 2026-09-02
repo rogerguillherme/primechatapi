@@ -1872,6 +1872,30 @@ export type Database = {
         }
         Relationships: []
       }
+      metrics_platform_credentials: {
+        Row: {
+          owner_id: string
+          platform: string
+          public_key: string
+          secret_key: string
+          updated_at: string
+        }
+        Insert: {
+          owner_id: string
+          platform: string
+          public_key: string
+          secret_key: string
+          updated_at?: string
+        }
+        Update: {
+          owner_id?: string
+          platform?: string
+          public_key?: string
+          secret_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       metrics_seasons: {
         Row: {
           created_at: string
@@ -1901,6 +1925,7 @@ export type Database = {
       }
       metrics_settings: {
         Row: {
+          applyfy_configured_at: string | null
           commission_pct: number
           deduct_ads: boolean
           deduct_fees: boolean
@@ -1911,6 +1936,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          applyfy_configured_at?: string | null
           commission_pct?: number
           deduct_ads?: boolean
           deduct_fees?: boolean
@@ -1921,6 +1947,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          applyfy_configured_at?: string | null
           commission_pct?: number
           deduct_ads?: boolean
           deduct_fees?: boolean
