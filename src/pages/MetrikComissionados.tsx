@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -10,6 +10,8 @@ import { useMetrikPeriodo } from "@/hooks/use-metrik-periodo";
 import { SeletorPeriodo } from "@/components/metrics/SeletorPeriodo";
 import { useFavicon } from "@/hooks/use-favicon";
 import { Card, Kpi, TituloPagina, Vazio, moeda } from "@/components/metrics/ui";
+import { HistoricoCiclos } from "@/components/metrics/HistoricoCiclos";
+import { cn } from "@/lib/utils";
 import {
   eloAtual, baseComissao, comissaoSobreBase, roi,
 } from "../../supabase/functions/_shared/metrics-engine.mjs";
@@ -26,7 +28,8 @@ export default function MetrikComissionados() {
   useFavicon("/metrik-favicon.svg");
 
   const { inicio, fim } = useMetrikPeriodo();
-  const { vendedores, totais, tiers, config } = useMetrikData(inicio, fim);
+  const { vendedores, totais, tiers, config, ownerId } = useMetrikData(inicio, fim);
+  const [aba, setAba] = useState<"atual" | "historico">("atual");
 
   const linhas = useMemo(
     () =>
@@ -63,6 +66,37 @@ export default function MetrikComissionados() {
         sub={`Ciclo de ${format(inicio, "dd/MM")} a ${format(fim, "dd/MM 'de' yyyy", { locale: ptBR })}`}
       />
 
+      {/* Atual e Histórico como abas: são a mesma pergunta em recortes
+          diferentes — "quanto pagar agora" e "como isso vem se comportando" —
+          e separá-las em telas faria a segunda nunca ser aberta. */}
+      <div className="flex rounded-lg border border-border p-0.5 w-fit">
+        {([
+          { chave: "atual", rotulo: "Ciclo atual" },
+          { chave: "historico", rotulo: "Histórico" },
+        ] as const).map((t) => (
+          <button
+            key={t.chave}
+            onClick={() => setAba(t.chave)}
+            className={cn(
+              "rounded-md px-4 py-1.5 text-xs font-medium transition-colors",
+              aba === t.chave
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {t.rotulo}
+          </button>
+        ))}
+      </div>
+
+      {aba === "historico" ? (
+        <HistoricoCiclos
+          ownerId={ownerId}
+          taxaPct={config.taxaPct}
+          comissaoPct={config.comissaoPct}
+        />
+      ) : (
+      <>
       <SeletorPeriodo />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -167,7 +201,10 @@ export default function MetrikComissionados() {
         )}
       </Card>
 
-      {tiers.length === 0 && (
+      </>
+      )}
+
+      {aba === "atual" && tiers.length === 0 && (
         <Card className="border-amber-500/40">
           <p className="text-sm text-amber-500">
             Nenhum elo cadastrado — sem os cortes não há percentual, e toda comissão sai
