@@ -10,7 +10,7 @@ import { MetrikLogo } from "@/components/MetrikLogo";
 import { cn } from "@/lib/utils";
 
 /**
- * Cabeçalho e navegação do Metrik.
+ * Cabeçalho e navegação do Métrik.
  *
  * Separado do AppHeader de propósito: aquele carrega seletor de plataforma,
  * busca de leads, sino do chat e aviso de saúde da WABA — nada disso significa
@@ -43,10 +43,10 @@ export function MetrikHeader() {
           <button
             onClick={() => navigate("/metrik")}
             className="flex items-center gap-2.5 shrink-0 text-left"
-            aria-label="Início do Metrik"
+            aria-label="Início do Métrik"
           >
             <MetrikLogo size={26} className="text-foreground" />
-            <span className="text-lg font-display font-bold tracking-tight">Metrik</span>
+            <span className="text-lg font-display font-bold tracking-tight">Métrik</span>
           </button>
 
           <nav className="flex items-center gap-1 overflow-x-auto">

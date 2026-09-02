@@ -1,12 +1,20 @@
-<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Metrik">
-  <!-- Variante para favicon: 32x32, fundo sólido e barras mais grossas.
-       A marca do app é vazada e herda a cor do texto ao redor; num favicon
-       não há texto ao redor e o fundo é a aba do navegador, que muda de cor
-       conforme o tema. Sem fundo próprio, a marca some numa aba clara ou numa
-       escura — dependendo de qual cor neutra eu escolhesse. -->
-  <rect width="32" height="32" rx="7" fill="#0f172a"/>
-  <rect x="5" y="15" width="6" height="10" rx="2" fill="#94a3b8"/>
-  <rect x="13" y="7" width="6" height="18" rx="2" fill="#f59e0b"/>
-  <rect x="21" y="18" width="6" height="7" rx="2" fill="#64748b"/>
-  <rect x="4" y="25.5" width="24" height="2" rx="1" fill="#94a3b8"/>
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Métrik">
+  <!-- Favicon: o mesmo gesto da marca — o M e a seta subindo — reduzido ao que
+       sobrevive a 16 pixels. A arte cheia tem degradê e relevo que viram
+       borrão nesse tamanho, e um borrão não é reconhecível como marca nenhuma.
+       Fundo sólido porque a aba muda de cor com o tema do sistema, e verde
+       escuro sobre aba escura desaparece. -->
+  <rect width="32" height="32" rx="7" fill="#062018"/>
+  <!-- O M -->
+  <path d="M6 24 V10.5 a1.2 1.2 0 0 1 2.2-.7L14 18.5 l2.4-3.4"
+        stroke="#1f9d63" stroke-width="3.1" stroke-linecap="round"
+        stroke-linejoin="round" fill="none"/>
+  <!-- A seta atravessando, subindo à direita -->
+  <path d="M17.5 19 L25 10" stroke="#34d98a" stroke-width="3.1"
+        stroke-linecap="round" fill="none"/>
+  <path d="M20.5 8.5 H26 V14" stroke="#34d98a" stroke-width="3.1"
+        stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- As barras -->
+  <rect x="20.2" y="19" width="2.6" height="5" rx="1" fill="#1f9d63"/>
+  <rect x="24.4" y="15.5" width="2.6" height="8.5" rx="1" fill="#2bbd78"/>
 </svg>

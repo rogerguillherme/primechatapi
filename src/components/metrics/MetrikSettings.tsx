@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/select";
 
 /**
- * Configuração do Metrik: elos, meta do período e gasto de anúncio.
+ * Configuração do Métrik: elos, meta do período e gasto de anúncio.
  *
  * Sem esta tela o módulo dependia de alguém escrever SQL para ligar a
  * gamificação — o que na prática significa que ela não liga. As regras de elo e
@@ -228,7 +228,7 @@ export function MetrikSettings({ ownerId, tiers, inicio, fim, metaAtual, membros
       </DialogTrigger>
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Configurar Metrik</DialogTitle>
+          <DialogTitle>Configurar Métrik</DialogTitle>
           <DialogDescription>
             Elos, meta e investimento do período de{" "}
             {format(inicio, "dd/MM")} a {format(fim, "dd/MM")}.

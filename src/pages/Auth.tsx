@@ -32,7 +32,7 @@ const PRODUTOS = {
     corIcone: "text-primary-foreground",
   },
   metrics: {
-    nome: "Metrik",
+    nome: "Métrik",
     descricao: "Performance comercial do time de vendas",
     icone: Trophy,
     rota: "/metrik/entrar",
@@ -115,15 +115,19 @@ export default function Auth({ produto = "chat" }: { produto?: ProdutoAuth }) {
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md shadow-elevated">
         <CardHeader className="text-center space-y-3">
-          <div
-            className={`mx-auto w-12 h-12 rounded-xl flex items-center justify-center ${marca.fundoIcone}`}
-          >
-            {produto === "metrics" ? (
-              <MetrikLogo size={26} className="text-white" />
-            ) : (
+          {/* A marca do Métrik já tem forma e relevo próprios: encaixá-la num
+              quadrado colorido competiria com ela. O Prime Chat mantém o
+              ladrilho porque o ícone dele é um traço simples e precisa de um
+              fundo para ter presença. */}
+          {produto === "metrics" ? (
+            <MetrikLogo size={72} className="mx-auto" />
+          ) : (
+            <div
+              className={`mx-auto w-12 h-12 rounded-xl flex items-center justify-center ${marca.fundoIcone}`}
+            >
               <marca.icone className={`h-6 w-6 ${marca.corIcone}`} />
-            )}
-          </div>
+            </div>
+          )}
           <CardTitle className="text-2xl font-display">{marca.nome}</CardTitle>
           <CardDescription>{marca.descricao}</CardDescription>
         </CardHeader>

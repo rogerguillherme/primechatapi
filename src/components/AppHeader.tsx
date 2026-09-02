@@ -87,14 +87,14 @@ export function AppHeader() {
                 <Plug size={16} />
               </Button>
             )}
-            {/* Metrik: rota própria, entrada no cabeçalho para não
+            {/* Métrik: rota própria, entrada no cabeçalho para não
                 depender de alguém saber a URL de cor. */}
             <Button
               variant="ghost"
               size="icon"
               onClick={() => navigate("/metrik")}
-              title="Metrik"
-              aria-label="Metrik"
+              title="Métrik"
+              aria-label="Métrik"
               className="text-white/60 hover:text-white hover:bg-white/10"
             >
               {/* A mesma marca dos dois lados: o atalho aqui e o cabeçalho de

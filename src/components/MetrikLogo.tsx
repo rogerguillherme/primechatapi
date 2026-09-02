@@ -1,46 +1,60 @@
 /**
- * Marca do Metrik.
+ * Marca do Métrik.
  *
- * Três barras em arranjo de pódio: a do meio mais alta, a da esquerda em
- * segundo, a da direita em terceiro. Lê como gráfico de barras e como pódio ao
- * mesmo tempo — que é a diferença entre este produto e um painel de analytics
- * qualquer. O Metrik não mostra números, ele classifica gente.
+ * A arte é a que o Roger enviou: o M em relevo com a seta de crescimento
+ * atravessando e as barras subindo. Vem como PNG e não como SVG porque o
+ * degradê e o brilho de relevo do original não sobrevivem a uma vetorização
+ * feita no olho — e marca redesenhada "quase igual" fica pior que a original.
  *
- * Um troféu diria "prêmio" e não diria "medição"; barras crescendo da esquerda
- * para a direita diriam "medição" e não diriam "disputa". O pódio diz as duas.
- *
- * A barra do primeiro lugar carrega o acento; as outras herdam a cor do texto
- * ao redor, então a marca funciona sobre fundo claro e escuro sem duas versões.
+ * O arquivo traz símbolo em cima e wordmark embaixo. Num cabeçalho de 30px o
+ * wordmark viraria borrão, e o dele é verde quase preto: sobre o casco escuro
+ * do app sumiria de vez. Então recortamos a faixa do símbolo e escrevemos
+ * "Métrik" ao lado como texto — legível, acompanha o tema, e lido por leitor
+ * de tela.
  */
+
+/** Fração da altura da arte ocupada pelo símbolo, antes do wordmark começar. */
+const FAIXA_SIMBOLO = 0.72;
+
 export function MetrikLogo({
   size = 32,
-  accent = "#f59e0b",
   className,
 }: {
   size?: number;
-  accent?: string;
   className?: string;
 }) {
+  // Para a faixa do símbolo preencher o quadrado, a arte inteira precisa ser
+  // maior que ele na mesma proporção — e recentrada, já que sobra dos lados.
+  const escala = 1 / FAIXA_SIMBOLO;
+  const sobra = (escala - 1) / 2;
+
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
+    <span
       className={className}
+      style={{
+        width: size,
+        height: size,
+        display: "inline-block",
+        position: "relative",
+        overflow: "hidden",
+        flexShrink: 0,
+      }}
       role="img"
-      aria-label="Metrik"
+      aria-label="Métrik"
     >
-      {/* Segundo lugar */}
-      <rect x="2.5" y="11" width="5" height="10" rx="1.6" fill="currentColor" opacity="0.45" />
-      {/* Primeiro lugar — o único elemento com cor própria */}
-      <rect x="9.5" y="4" width="5" height="17" rx="1.6" fill={accent} />
-      {/* Terceiro lugar */}
-      <rect x="16.5" y="14" width="5" height="7" rx="1.6" fill="currentColor" opacity="0.28" />
-      {/* A linha de base fecha o pódio; sem ela as barras flutuam e viram
-          três retângulos soltos. */}
-      <rect x="1.5" y="21.6" width="21" height="1.6" rx="0.8" fill="currentColor" opacity="0.7" />
-    </svg>
+      <img
+        src="/metrik-logo.png"
+        alt=""
+        aria-hidden="true"
+        draggable={false}
+        style={{
+          position: "absolute",
+          top: `-${sobra * 30}%`,
+          left: `-${sobra * 100}%`,
+          width: `${escala * 100}%`,
+          height: "auto",
+        }}
+      />
+    </span>
   );
 }
