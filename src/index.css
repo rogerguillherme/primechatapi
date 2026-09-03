@@ -140,10 +140,10 @@
 
 @layer utilities {
   .gradient-primary {
-    background: linear-gradient(135deg, hsl(152 58% 38%), hsl(142 70% 45%));
+    background: linear-gradient(135deg, hsl(262 72% 54%), hsl(285 70% 60%));
   }
   .gradient-header {
-    background: linear-gradient(135deg, hsl(160 18% 8%), hsl(152 44% 22%));
+    background: linear-gradient(135deg, hsl(258 32% 8%), hsl(265 55% 26%));
   }
   .gradient-instagram {
     background: linear-gradient(135deg, hsl(280 60% 15%), hsl(330 70% 25%), hsl(15 80% 30%));
