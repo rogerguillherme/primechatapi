@@ -153,14 +153,18 @@ export function LeadsKanban() {
             .order("last_message_at", { ascending: false, nullsFirst: false })
             .range(0, CARDS_PER_COLUMN - 1);
 
-          // Total: só conta quem já trocou mensagem — é o número que
-          // corresponde a "entrou no chat", diferente do total de leads.
+          // Total: só conta quem já MANDOU mensagem — last_message_at não
+          // serve aqui porque também é gravado em envio da própria conta (um
+          // disparo pra lead comprado via Hubla, por exemplo, carimba
+          // last_message_at sem o lead nunca ter respondido). last_inbound_at
+          // só é preenchido pelo trigger quando direction='inbound', então é
+          // o sinal real de "entrou no chat".
           const countQuery = withFilters(
             supabase
               .from("leads")
               .select("id", { count: "exact", head: true })
               .eq("user_id", ownerId!)
-              .not("last_message_at", "is", null),
+              .not("last_inbound_at", "is", null),
           );
 
           const [cardsRes, countRes] = await Promise.all([cardsQuery, countQuery]);
