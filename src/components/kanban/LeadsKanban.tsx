@@ -120,7 +120,11 @@ export function LeadsKanban() {
               .select("id, name, phone, stage_id, assigned_to, last_message_content, last_message_at", {
                 count: "exact",
               })
-              .eq("user_id", ownerId!);
+              .eq("user_id", ownerId!)
+              // Leads que nunca trocaram mensagem (ex.: criados só por compra
+              // via Hubla) não são "leads que entraram no chat" — inflam o
+              // total do Kanban sem corresponder a nenhuma conversa real.
+              .not("last_message_at", "is", null);
             q = stageId ? q.eq("stage_id", stageId) : q.is("stage_id", null);
             // Filtra no banco, não na tela: o contador de cada coluna e o
             // recorte de cartões vêm da própria consulta.
