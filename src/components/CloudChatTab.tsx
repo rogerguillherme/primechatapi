@@ -2132,7 +2132,13 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                               banco: a tela mostrava um ícone vermelho e nada
                               mais. Sem isto, "não está funcionando" é tudo o
                               que o operador consegue relatar. */}
-                          {isOutbound && msg.status === "failed" && (
+                          {/* Só quando a Meta mandou um motivo. Recusa nossa
+                              (fora da janela, conta travada, telefone inválido)
+                              já vem escrita no content com ❌ — e sem esta
+                              condição saía um "Falha no envio" genérico logo
+                              abaixo do motivo real, apagando-o. */}
+                          {isOutbound && msg.status === "failed" &&
+                            (msg.error_code || msg.error_title || msg.error_details) && (
                             <p className="mt-1 text-[11px] leading-snug text-destructive break-words">
                               {metaFailureMessage(msg.error_code, msg.error_title, msg.error_details, selectedLead?.phone)}
                               {msg.error_code ? ` (${msg.error_code})` : ""}
