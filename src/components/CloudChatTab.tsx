@@ -1459,10 +1459,29 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
           </div>
         </div>
 
+        {/* A janela precisa ficar VISÍVEL no topo, não só num botão no fim da
+            lista. Com poucas conversas no período, o botão some da vista e a
+            lista curta parece conversa perdida — não limite de carregamento. */}
+        <div className="flex items-center gap-2 border-b border-border px-3 py-1.5">
+          <span className="text-[11px] text-muted-foreground">
+            Últimos {janelaDias} dias
+          </span>
+          <button
+            type="button"
+            onClick={verMais}
+            className="ml-auto text-[11px] font-medium text-primary hover:underline"
+          >
+            + 3 dias
+          </button>
+        </div>
+
         {/* Contact list */}
         <ScrollArea className="flex-1">
           {sortedLeads.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-8">Nenhum contato encontrado.</p>
+            <p className="text-sm text-muted-foreground text-center py-8">
+              Nenhuma conversa nos últimos {janelaDias} dias. Use "+ 3 dias" acima para
+              alcançar o histórico anterior — nada foi apagado.
+            </p>
           )}
           {visibleLeads.map((lead) => {
             const latest = latestMessages?.get(lead.id);
