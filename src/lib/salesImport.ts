@@ -22,7 +22,13 @@ export type FieldKey =
   | "amount"
   | "status"
   | "payment_method"
-  | "date";
+  | "date"
+  // O líquido e as parcelas: o CSV de checkout costuma trazer só o líquido e
+  // o valor da parcela, e o bruto é parcela × parcelas. Sem essas três, uma
+  // venda de R$ 383 em 12x entra como R$ 294 e a taxa de 23% some.
+  | "net_amount"
+  | "installments"
+  | "installment_amount";
 
 /** Coluna da planilha -> campo do pedido. Colunas ausentes = ignoradas. */
 export type ColumnMapping = Partial<Record<FieldKey, string>>;
@@ -39,6 +45,9 @@ export const FIELD_LABEL: Record<FieldKey, string> = {
   status: "Status",
   payment_method: "Forma de pagamento",
   date: "Data da compra",
+  net_amount: "Valor líquido (o que sobrou)",
+  installments: "Número de parcelas",
+  installment_amount: "Valor da parcela",
 };
 
 /**
@@ -49,6 +58,12 @@ export const FIELD_LABEL: Record<FieldKey, string> = {
  * "E-mail do cliente" viraria nome) e `external_order_id` antes de tudo.
  */
 const DETECTORS: [FieldKey, RegExp][] = [
+  // As específicas vêm ANTES de `amount`, senão "Valor líquido" seria lida
+  // como o valor da venda — e aí o faturamento entraria já descontado, sem
+  // registrar taxa nenhuma.
+  ["net_amount", /l[ií]quido|liquido|net.?(amount|value)|minha comiss[ãa]o/i],
+  ["installment_amount", /valor.*parcela|parcela.*valor|installment.*(amount|value)/i],
+  ["installments", /(n[uú]mero|qtd|quantidade|n[ºo°]).*parcela|parcelas?$|installments/i],
   [
     "external_order_id",
     /(id|c[oó]digo|codigo|n[uú]mero).*(pedido|venda|transa|fatura|compra|order|invoice)|^(order|transaction|invoice)[_ ]?id$|^id$|^c[oó]digo$|charge.?id/i,
@@ -56,7 +71,7 @@ const DETECTORS: [FieldKey, RegExp][] = [
   ["email", /e-?mail/i],
   ["phone", /telefone|celular|whatsapp|phone|fone|^ddd|contato/i],
   ["date", /data|date|criad|pago em|aprovad|created/i],
-  ["amount", /valor|pre[cç]o|total|amount|price|receita|l[ií]quido|liquido|bruto/i],
+  ["amount", /valor|pre[cç]o|total|amount|price|receita|bruto/i],
   ["status", /status|situa[cç][aã]o|estado/i],
   ["payment_method", /pagamento|payment|m[eé]todo|forma/i],
   ["product", /produto|product|oferta|plano|item|curso/i],
@@ -218,6 +233,8 @@ export interface ParsedOrder {
   email: string | null;
   productName: string | null;
   amount: number;
+  /** Líquido informado pela planilha; nulo = a plataforma não separou taxa. */
+  netAmount: number | null;
   status: string;
   paymentMethod: string | null;
   createdAt: string | null;
@@ -267,8 +284,25 @@ export function parseRow(
     };
   }
 
+  const liquido = mapping.net_amount ? parseAmountBR(row[mapping.net_amount]) : null;
+  const valorParcela = mapping.installment_amount
+    ? parseAmountBR(row[mapping.installment_amount])
+    : null;
+  const parcelas = mapping.installments
+    ? Math.max(1, Math.round(Number(String(row[mapping.installments] ?? "").replace(/\D/g, "")) || 1))
+    : null;
+
   const rawAmount = mapping.amount ? row[mapping.amount] : null;
-  const amount = parseAmountBR(rawAmount);
+  // Ordem de preferência do faturamento: a coluna de valor, depois o bruto
+  // reconstruído das parcelas, depois o líquido. O bruto é o que o cliente
+  // pagou; usar o líquido como faturamento esconde a taxa e faz a base de
+  // comissão ser descontada duas vezes.
+  const amount =
+    parseAmountBR(rawAmount) ??
+    (valorParcela != null && parcelas != null
+      ? Math.round(valorParcela * parcelas * 100) / 100
+      : null) ??
+    liquido;
   if (mapping.amount && rawAmount !== "" && rawAmount != null && amount === null) {
     return {
       ok: false,
@@ -299,6 +333,9 @@ export function parseRow(
       email,
       productName,
       amount: amount ?? 0,
+      // Só vale como líquido se for MENOR que o bruto: planilha que traz o
+      // mesmo número nas duas colunas não tem taxa a registrar.
+      netAmount: liquido != null && amount != null && liquido < amount ? liquido : null,
       status: normalizeStatus(mapping.status ? row[mapping.status] : "", defaultStatus),
       paymentMethod,
       createdAt,

@@ -140,10 +140,28 @@ describe("autoDetectMapping", () => {
       email: "Email",
       phone: "Celular",
       product: "Produto",
-      amount: "Valor líquido",
+      // "Valor líquido" passa a ser lido como LÍQUIDO, não como o valor da
+      // venda: numa planilha que traga as duas colunas, confundir os dois faz
+      // o faturamento entrar já descontado e a taxa desaparecer.
+      net_amount: "Valor líquido",
       status: "Status",
       date: "Data de criação",
     });
+  });
+
+  it("com só o líquido na planilha, ele ainda vira o valor da venda", () => {
+    // Não havendo bruto nem parcelas, o líquido é o melhor número disponível —
+    // e aí não se registra taxa, porque não há de onde tirá-la.
+    const m = autoDetectMapping(["ID", "Celular", "Valor líquido", "Status"]);
+    const r = parseRow(
+      { ID: "x1", Celular: "11999998888", "Valor líquido": "97,00", Status: "Pago" },
+      m,
+      2,
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.order.amount).toBe(97);
+    expect(r.order.netAmount).toBeNull();
   });
 });
 
@@ -200,13 +218,74 @@ describe("parseRow", () => {
   });
 });
 
+describe("bruto e líquido do CSV de checkout", () => {
+  // O relatório da ApplyFy não tem coluna de bruto: ele traz o líquido e o
+  // valor da parcela. Uma venda de R$ 383,64 em 12x aparece como "31,97" e
+  // "294,51" — e sem reconstruir o bruto, a taxa de 23% desaparece.
+  const colunas = [
+    "ID da transação", "Telefone do comprador", "Status",
+    "Valor líquido (minha comissão)", "Número de parcelas", "Valor da parcela",
+    "Data da transação",
+  ];
+
+  it("não confunde o líquido com o valor da venda", () => {
+    const m = autoDetectMapping(colunas);
+    expect(m.net_amount).toBe("Valor líquido (minha comissão)");
+    expect(m.installment_amount).toBe("Valor da parcela");
+    expect(m.installments).toBe("Número de parcelas");
+    // Sem coluna de bruto, `amount` fica sem par — o bruto vem das parcelas.
+    expect(m.amount).toBeUndefined();
+  });
+
+  it("reconstrói o bruto das parcelas e guarda o líquido", () => {
+    const r = parseRow(
+      {
+        "ID da transação": "tx1",
+        "Telefone do comprador": "11999998888",
+        "Status": "Concluído",
+        "Valor líquido (minha comissão)": "294,51",
+        "Número de parcelas": "12",
+        "Valor da parcela": "31,97",
+        "Data da transação": "02/09/2026 - 22:38",
+      },
+      autoDetectMapping(colunas),
+      2,
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.order.amount).toBe(383.64);
+    expect(r.order.netAmount).toBe(294.51);
+    expect(r.order.status).toBe("approved");
+  });
+
+  it("não inventa líquido quando ele é igual ao bruto", () => {
+    const r = parseRow(
+      {
+        "ID da transação": "tx2",
+        "Telefone do comprador": "11999998888",
+        "Status": "Concluído",
+        "Valor líquido (minha comissão)": "100,00",
+        "Número de parcelas": "1",
+        "Valor da parcela": "100,00",
+        "Data da transação": "02/09/2026 - 10:00",
+      },
+      autoDetectMapping(colunas),
+      3,
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.order.amount).toBe(100);
+    expect(r.order.netAmount).toBeNull();
+  });
+});
+
 describe("planImport", () => {
   const order = (id: string, rowNumber: number): ParseResult => ({
     ok: true,
     order: {
       externalOrderId: id, phone: "5511999998888", name: "Maria", email: null,
-      productName: null, amount: 97, status: "approved", paymentMethod: null,
-      createdAt: null, rowNumber,
+      productName: null, amount: 97, netAmount: null, status: "approved",
+      paymentMethod: null, createdAt: null, rowNumber,
     },
   });
 

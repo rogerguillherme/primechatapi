@@ -155,6 +155,10 @@ export function SalesImporter() {
         product_id: o.productName ? productIdByName.get(o.productName) ?? null : null,
         external_order_id: o.externalOrderId,
         amount: o.amount,
+        // O líquido informado pela planilha dá a taxa exata da venda. Sem ele,
+        // o cálculo cai na regra percentual configurada — que erra muito em
+        // venda parcelada, justamente onde a taxa é maior.
+        net_amount: o.netAmount,
         status: o.status,
         payment_method: o.paymentMethod,
         ...(o.createdAt ? { created_at: o.createdAt } : {}),
@@ -169,9 +173,18 @@ export function SalesImporter() {
         gravados += part.length;
       }
 
-      toast.success(`${gravados} pedidos importados`);
+      const comLiquido = all.filter((o) => o.netAmount != null).length;
+      toast.success(
+        `${gravados} pedidos importados` +
+          (comLiquido ? `, ${comLiquido} com taxa real da plataforma` : ""),
+      );
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       queryClient.invalidateQueries({ queryKey: ["abandoned-carts"] });
+      // As telas do Métrik leem por outras chaves; sem isto os números
+      // continuariam os de antes da importação.
+      for (const k of ["metrik-orders", "metrik-vendas", "metrik-historico", "metrik-historico-ciclos"]) {
+        queryClient.invalidateQueries({ queryKey: [k] });
+      }
       reset();
     } catch (e: any) {
       console.error("[importação] falha ao gravar:", e);
