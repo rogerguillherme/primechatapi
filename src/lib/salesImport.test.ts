@@ -129,6 +129,19 @@ describe("autoDetectMapping", () => {
     expect(m.name).toBe("Nome do cliente");
   });
 
+  it("não confunde coluna de ID com o campo que ela parece", () => {
+    // "ID do comprador" contém "comprador" e vinha ANTES de "Nome do
+    // comprador" no arquivo real da ApplyFy — o nome do cliente virava um
+    // identificador opaco em todas as 3.556 linhas.
+    const m = autoDetectMapping([
+      "ID do pedido", "ID da transação", "ID do comprador",
+      "Nome do comprador", "Email do comprador", "Status",
+    ]);
+    expect(m.name).toBe("Nome do comprador");
+    expect(m.email).toBe("Email do comprador");
+    expect(m.external_order_id).toBe("ID do pedido");
+  });
+
   it("acha as colunas de uma exportação típica", () => {
     const m = autoDetectMapping([
       "ID da transação", "Comprador", "Email", "Celular",

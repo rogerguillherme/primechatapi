@@ -78,11 +78,24 @@ const DETECTORS: [FieldKey, RegExp][] = [
   ["name", /nome|name|cliente|comprador|customer|buyer/i],
 ];
 
+/**
+ * Colunas de identificador: "ID do comprador", "ID do afiliado", "Código do
+ * produto". Elas casam com os mesmos padrões dos campos de verdade — "ID do
+ * comprador" contém "comprador" e virava o NOME do cliente — mas só servem
+ * como identificador do pedido. Ficam fora de todos os outros campos.
+ */
+const COLUNA_DE_ID = /^\s*(id|c[oó]digo|codigo)\b/i;
+
 export function autoDetectMapping(columns: string[]): ColumnMapping {
   const mapping: ColumnMapping = {};
   const taken = new Set<string>();
   for (const [field, re] of DETECTORS) {
-    const col = columns.find((c) => !taken.has(c) && re.test(c));
+    const col = columns.find(
+      (c) =>
+        !taken.has(c) &&
+        (field === "external_order_id" || !COLUNA_DE_ID.test(c)) &&
+        re.test(c),
+    );
     if (col) {
       mapping[field] = col;
       taken.add(col);
