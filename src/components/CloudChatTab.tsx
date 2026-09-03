@@ -182,10 +182,10 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
 
 
   // ── JANELA DE HISTÓRICO ──
-  // O chat abre com os últimos 3 dias e cresce de 3 em 3 no "Ver mais". O
+  // O chat abre com os últimos 5 dias e cresce de 5 em 5 no "Ver mais". O
   // corte é feito na CONSULTA, não na tela: filtrar depois de trazer tudo não
   // economiza nada: o custo está no payload, não no render.
-  const PASSO_DIAS = 3;
+  const PASSO_DIAS = 5;
   const [janelaDias, setJanelaDias] = useState(PASSO_DIAS);
   const desde = useMemo(
     () => new Date(Date.now() - janelaDias * 24 * 60 * 60 * 1000).toISOString(),
@@ -1471,7 +1471,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
             onClick={verMais}
             className="ml-auto text-[11px] font-medium text-primary hover:underline"
           >
-            + 3 dias
+            + {PASSO_DIAS} dias
           </button>
         </div>
 
@@ -1479,7 +1479,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
         <ScrollArea className="flex-1">
           {sortedLeads.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-8">
-              Nenhuma conversa nos últimos {janelaDias} dias. Use "+ 3 dias" acima para
+              Nenhuma conversa nos últimos {janelaDias} dias. Use "+ {PASSO_DIAS} dias" acima para
               alcançar o histórico anterior — nada foi apagado.
             </p>
           )}
@@ -1598,7 +1598,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
               onClick={verMais}
               className="w-full py-3 text-xs text-muted-foreground hover:bg-accent/40 transition-colors"
             >
-              Ver mais 3 dias · mostrando {janelaDias}
+              Ver mais {PASSO_DIAS} dias · mostrando {janelaDias}
             </button>
           )}
         </ScrollArea>
@@ -2038,7 +2038,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                   >
                     {carregandoMensagens
                       ? "Carregando…"
-                      : `Ver mais 3 dias · mostrando ${janelaDias}`}
+                      : `Ver mais ${PASSO_DIAS} dias · mostrando ${janelaDias}`}
                   </button>
                 </div>
 
