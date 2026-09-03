@@ -107,18 +107,18 @@ export default function Metrik() {
           icone={DollarSign}
         />
         <Kpi
-          rotulo="Lucro"
-          valor={moeda(totais.lucro)}
-          nota="faturamento − reembolsos − anúncio"
+          rotulo="Líquido"
+          valor={moeda(totais.liquido)}
+          nota="depois de reembolsos e taxas"
           icone={TrendingUp}
-          tom={totais.lucro < 0 ? "text-destructive" : undefined}
+          tom={totais.liquido < 0 ? "text-destructive" : undefined}
         />
         <Kpi
-          rotulo="Reembolsos"
-          valor={moeda(totais.reembolsos)}
-          nota="devoluções e chargebacks"
+          rotulo="Taxas"
+          valor={moeda(totais.taxa)}
+          nota="retido pela plataforma"
           icone={CheckCircle2}
-          tom={totais.reembolsos > 0 ? "text-destructive" : undefined}
+          tom={totais.taxa > 0 ? "text-destructive" : undefined}
         />
         <Kpi
           rotulo="Vendedores ativos"

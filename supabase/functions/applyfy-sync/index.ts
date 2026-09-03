@@ -126,6 +126,9 @@ Deno.serve(async (req) => {
         .update({
           status: t.status,
           amount: t.amount,
+          // A API separa o que o cliente pagou do que sobra para o produtor;
+          // guardar os dois dá a taxa exata sem configuração.
+          net_amount: t.taxaReal > 0 ? t.amount - t.taxaReal : null,
           payment_method: t.method,
           updated_at: new Date().toISOString(),
         })

@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTeamContext, useTeamMembers } from "@/hooks/use-team";
-import { taxaDaVenda } from "../../supabase/functions/_shared/metrics-fees.mjs";
+import { taxaEfetiva } from "../../supabase/functions/_shared/metrics-fees.mjs";
 
 /**
  * Fonte única dos números do Metrik.
@@ -39,6 +39,8 @@ export interface Vendedor {
   acumulado: number;
   /** Quanto a plataforma reteve das vendas dele no período. */
   taxas: number;
+  /** O que sobrou depois da taxa — o dinheiro que de fato entrou. */
+  liquido: number;
 }
 
 const dia = (d: Date) => format(d, "yyyy-MM-dd");
@@ -162,7 +164,7 @@ export function useMetrikData(inicio: Date, fim: Date) {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("orders")
-        .select("amount, status, created_at, platform, payment_method, leads!inner(assigned_to)")
+        .select("amount, net_amount, status, created_at, platform, payment_method, leads!inner(assigned_to)")
         .in("status", ["approved", "refunded", "chargeback"])
         .gte("created_at", inicio.toISOString())
         .lte("created_at", fim.toISOString())
@@ -230,6 +232,7 @@ export function useMetrikData(inicio: Date, fim: Date) {
           reembolsos: 0,
           investimento: dono ? gastoPor.porVendedor.get(dono) || 0 : 0,
           lucro: 0,
+          liquido: 0,
           acumulado: dono ? historicoQ.data?.get(dono) || 0 : 0,
           taxas: 0,
         } as Vendedor);
@@ -241,7 +244,11 @@ export function useMetrikData(inicio: Date, fim: Date) {
         // Venda a venda, porque a taxa tem parte fixa: aplicar o percentual
         // sobre o total do mês ignoraria os R$ 2,49 de cada pedido, e o erro
         // cresce com o número de vendas, não com o valor delas.
-        linha.taxas += taxaDaVenda(valor, taxasQ.data || [], o.platform, o.payment_method) as number;
+        // O líquido informado pela plataforma vence a regra configurada: ele é
+        // exato e não depende de alguém ter cadastrado o percentual certo.
+        linha.taxas += taxaEfetiva(
+          valor, o.net_amount, taxasQ.data || [], o.platform, o.payment_method,
+        ) as number;
       } else {
         // Devolvido e chargeback contam como dinheiro que voltou, não como
         // venda que nunca houve: some do lucro e fica visível.
@@ -251,7 +258,8 @@ export function useMetrikData(inicio: Date, fim: Date) {
     }
 
     for (const v of acc.values()) {
-      v.lucro = v.faturamento - v.reembolsos - v.taxas - v.investimento;
+      v.liquido = Math.round((v.faturamento - v.reembolsos - v.taxas) * 100) / 100;
+      v.lucro = v.liquido - v.investimento;
     }
 
     // Vendedor sem venda no período existe e precisa aparecer: sumir da lista
@@ -266,6 +274,7 @@ export function useMetrikData(inicio: Date, fim: Date) {
         reembolsos: 0,
         investimento: gastoPor.porVendedor.get(m.member_user_id) || 0,
         lucro: -(gastoPor.porVendedor.get(m.member_user_id) || 0),
+        liquido: 0,
         acumulado: historicoQ.data?.get(m.member_user_id) || 0,
         taxas: 0,
       });
@@ -309,6 +318,9 @@ export function useMetrikData(inicio: Date, fim: Date) {
       // A taxa da plataforma sai do lucro junto com o resto: ela é dinheiro
       // que nunca chegou na conta, não uma despesa opcional.
       taxa: taxa > 0 ? taxa : 0,
+      // Líquido: o que entrou de verdade, depois de devolução e taxa. É o
+      // número que bate com o extrato, e por isso o que se mostra.
+      liquido: Math.round((faturamento - reembolsos - (taxa > 0 ? taxa : 0)) * 100) / 100,
       lucro: faturamento - reembolsos - (taxa > 0 ? taxa : 0) - investimento,
       ativos: vendedores.filter((v) => v.vendas > 0).length,
     };

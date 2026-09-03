@@ -281,9 +281,9 @@ export default function MetrikRanking() {
                 <div className="grid grid-cols-3 gap-x-4 gap-y-3">
                   <Metrica rotulo="Faturamento" valor={moeda(v.faturamento)} />
                   <Metrica
-                    rotulo="Lucro"
-                    valor={moeda(v.lucro)}
-                    tom={v.lucro < 0 ? "text-destructive" : undefined}
+                    rotulo="Líquido"
+                    valor={moeda(v.liquido)}
+                    tom={v.liquido < 0 ? "text-destructive" : undefined}
                   />
                   <Metrica rotulo="Investimento" valor={moeda(v.investimento)} />
                   <Metrica

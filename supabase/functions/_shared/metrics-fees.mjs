@@ -54,3 +54,25 @@ export function baseConfigurada({ faturamento, reembolsos = 0, taxas = 0, ads = 
   if (descontarAds) base -= Number(ads) || 0;
   return base > 0 ? Math.round(base * 100) / 100 : 0;
 }
+
+/**
+ * Taxa de uma venda, preferindo o número REAL ao configurado.
+ *
+ * Quando a plataforma informa quanto sobrou para o produtor, a taxa é a
+ * diferença — exata, sem depender de alguém ter cadastrado o percentual certo,
+ * e imune a venda parcelada, promoção de taxa e mudança de regra sem aviso.
+ *
+ * A regra configurada fica como saída para plataforma que não informa nada.
+ */
+export function taxaEfetiva(valor, liquido, regras, platform, method) {
+  const v = Number(valor) || 0;
+  if (liquido !== null && liquido !== undefined && liquido !== "") {
+    const l = Number(liquido);
+    if (Number.isFinite(l)) {
+      const diff = v - l;
+      // Líquido maior que o bruto é dado ruim, não taxa negativa.
+      return diff > 0 ? Math.round(diff * 100) / 100 : 0;
+    }
+  }
+  return taxaDaVenda(v, regras, platform, method);
+}

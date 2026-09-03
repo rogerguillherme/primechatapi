@@ -1,6 +1,6 @@
 // Run: node supabase/functions/_shared/test_metrics-fees.mjs
 import assert from "node:assert/strict";
-import { taxaAplicavel, taxaDaVenda, baseConfigurada } from "./metrics-fees.mjs";
+import { taxaAplicavel, taxaDaVenda, baseConfigurada, taxaEfetiva } from "./metrics-fees.mjs";
 
 const REGRAS = [
   { platform: "applyfy", payment_method: "pix", percent: 3, fixed: 2.49 },
@@ -43,5 +43,20 @@ assert.equal(
 );
 // Descontos maiores que o faturamento não produzem base negativa.
 assert.equal(baseConfigurada({ faturamento: 100, reembolsos: 500 }), 0);
+
+// ── taxa real vence a configurada ──
+// A venda do CSV: cliente pagou 383,64 em 12x e sobraram 294,51. A taxa real
+// é 89,13 — a regra de "3% + R$2,49" daria 14,00 e erraria em 75 reais.
+assert.equal(taxaEfetiva(383.64, 294.51, REGRAS, "applyfy", "cartao"), 89.13);
+
+// Sem líquido informado, a regra configurada assume.
+assert.equal(taxaEfetiva(1000, null, REGRAS, "applyfy", "pix"), 32.49);
+assert.equal(taxaEfetiva(1000, undefined, REGRAS, "applyfy", "pix"), 32.49);
+assert.equal(taxaEfetiva(1000, "", REGRAS, "applyfy", "pix"), 32.49);
+
+// Líquido igual ao bruto = plataforma sem taxa, não "usar a regra".
+assert.equal(taxaEfetiva(500, 500, REGRAS, "applyfy", "pix"), 0);
+// Líquido maior que o bruto é dado ruim: taxa zero, nunca negativa.
+assert.equal(taxaEfetiva(500, 600, REGRAS, "applyfy", "pix"), 0);
 
 console.log("metrics-fees: all assertions passed");

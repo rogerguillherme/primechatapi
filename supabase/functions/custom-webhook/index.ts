@@ -56,7 +56,7 @@ function mapped(mapping: FieldMapping | null | undefined, key: keyof FieldMappin
   return getByPath(payload, mapping?.[key]);
 }
 
-function extractLead(payload: any, fieldMapping: FieldMapping = {}): { phone: string | null; name: string | null; email: string | null; cpf: string | null; orderId: string | null; amount: number | null; productName: string | null; } {
+function extractLead(payload: any, fieldMapping: FieldMapping = {}): { phone: string | null; name: string | null; email: string | null; cpf: string | null; orderId: string | null; amount: number | null; productName: string | null; liquido: number | null; } {
   const p = payload || {};
   const data = p.data || {};
   const client = data.client || {};
@@ -93,7 +93,16 @@ function extractLead(payload: any, fieldMapping: FieldMapping = {}): { phone: st
   const amount = mappedAmount ?? (amountCents > 0 ? amountCents / 100 : parseAmount(p.amount ?? p.valor ?? p.total));
   const productName = pickFirst(mapped(fieldMapping, "product_name", p), product.name, offer.name, p.product_name, p.produto);
 
-  return { phone, name, email, cpf, orderId, amount, productName };
+  // O que sobrou para o produtor, quando a plataforma informa. Com isso a taxa
+  // é exata (bruto − líquido) e ninguém precisa acertar um percentual na mão.
+  const liquidoBruto = pickFirst(
+    (p as any).net_amount, (p as any).netAmount, (p as any).net,
+    (p as any).valor_liquido, (p as any).liquido,
+    tx.amount, data.net_amount, (p as any).producer_amount,
+  );
+  const liquido = parseAmount(liquidoBruto);
+
+  return { phone, name, email, cpf, orderId, amount, productName, liquido };
 }
 
 async function resolveOrCreateLead(
@@ -351,6 +360,12 @@ Deno.serve(async (req) => {
             user_id: endpoint.user_id,
             external_order_id: String(info.orderId),
             amount: Number(info.amount),
+            // Só grava se for menor que o bruto: alguns payloads repetem o
+            // mesmo valor nos dois campos, e aí não há taxa a registrar.
+            net_amount:
+              info.liquido != null && Number(info.liquido) < Number(info.amount)
+                ? Number(info.liquido)
+                : null,
             status: statusVenda,
             platform: (endpoint.platform || "").toLowerCase() || null,
             payment_method: endpoint.event_type === "pix" ? "pix"
