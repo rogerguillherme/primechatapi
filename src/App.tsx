@@ -33,6 +33,9 @@ const MetrikComissionados = lazy(() => import("./pages/MetrikComissionados"));
 const MetrikIntegracoes = lazy(() => import("./pages/MetrikIntegracoes"));
 const MetrikConfiguracoes = lazy(() => import("./pages/MetrikConfiguracoes"));
 const MetrikMissoes = lazy(() => import("./pages/MetrikMissoes"));
+const MetrikMetaAds = lazy(() => import("./pages/MetrikMetaAds"));
+const MetrikTracker = lazy(() => import("./pages/MetrikTracker"));
+const MetrikFinanceiro = lazy(() => import("./pages/MetrikFinanceiro"));
 import { Loader2 } from "lucide-react";
 import { BroadcastProgressFloat } from "@/components/BroadcastProgressFloat";
 import { useTrialStatus } from "@/hooks/use-trial-status";
@@ -298,6 +301,45 @@ function AppRoutes() {
               <MetrikHeader />
               <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto w-full">
                 <MetrikRanking />
+              </main>
+            </div>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/metrik/meta-ads"
+        element={
+          <ProtectedRoute>
+            <div className="metrik-shell min-h-screen flex flex-col">
+              <MetrikHeader />
+              <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto w-full">
+                <MetrikMetaAds />
+              </main>
+            </div>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/metrik/tracker"
+        element={
+          <ProtectedRoute>
+            <div className="metrik-shell min-h-screen flex flex-col">
+              <MetrikHeader />
+              <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto w-full">
+                <MetrikTracker />
+              </main>
+            </div>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/metrik/financeiro"
+        element={
+          <ProtectedRoute>
+            <div className="metrik-shell min-h-screen flex flex-col">
+              <MetrikHeader />
+              <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto w-full">
+                <MetrikFinanceiro />
               </main>
             </div>
           </ProtectedRoute>
