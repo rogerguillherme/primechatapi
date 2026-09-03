@@ -375,10 +375,21 @@ Deno.serve(async (req) => {
     }
 
     // Create order
+    // De quem é a venda. Sem isto ela nasce com user_id nulo — e a política de
+    // acesso é `auth.uid() = user_id`, que NULL nunca satisfaz. A venda existe
+    // no banco e é invisível para todo mundo, inclusive para o dono: some do
+    // faturamento, do ranking e da comissão sem erro nenhum em lugar nenhum.
+    const { data: donoDaVenda } = await supabase
+      .from("leads")
+      .select("user_id")
+      .eq("id", leadId)
+      .maybeSingle();
+
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .insert({
         lead_id: leadId,
+        user_id: donoDaVenda?.user_id ?? null,
         product_id: productId,
         external_order_id: externalOrderId,
         amount: extracted.amount,
