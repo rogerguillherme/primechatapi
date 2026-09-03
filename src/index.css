@@ -345,7 +345,7 @@
   color-scheme: dark;
 }
 
-/* O brilho ambiente do painel: violeta subindo do rodapé, como no modelo. */
+/* O brilho ambiente do painel: esmeralda subindo do rodapé, como no modelo. */
 .metrik-glow {
   background:
     radial-gradient(60% 55% at 15% 0%, hsl(152 83% 64% / 0.12), transparent 70%),
@@ -381,7 +381,7 @@
     0 3px 10px -4px hsl(152 60% 30% / 0.45);
 }
 
-/* Cartão de destaque: mesmo relevo com halo violeta por baixo. */
+/* Cartão de destaque: mesmo relevo com halo esmeralda por baixo. */
 .metrik-shell .metrik-card-primary {
   background:
     linear-gradient(180deg, hsl(158 34% 15%) 0%, hsl(152 30% 10%) 100%);
