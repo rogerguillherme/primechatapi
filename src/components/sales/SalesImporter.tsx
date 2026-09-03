@@ -52,7 +52,29 @@ export function SalesImporter() {
     try {
       const XLSX = await import("xlsx");
       const buf = await file.arrayBuffer();
-      const wb = XLSX.read(buf, { type: "array" });
+
+      // CSV precisa ser decodificado por nós. O leitor de planilha assume
+      // CP1252 quando recebe bytes, e o relatório vem em UTF-8: "Valor
+      // líquido" chegava como "Valor lÃ­quido" e a detecção não reconhecia a
+      // coluna — o líquido caía em "Valor" e o faturamento entrava já
+      // descontado, sem taxa nenhuma registrada. Some sem erro na tela.
+      //
+      // XLSX é binário e continua indo como bytes; só o texto é decodificado.
+      const ehTexto = /\.(csv|txt|tsv)$/i.test(file.name);
+      let wb;
+      if (ehTexto) {
+        let texto: string;
+        try {
+          // fatal: arquivo que não for UTF-8 lança em vez de virar lixo.
+          texto = new TextDecoder("utf-8", { fatal: true }).decode(buf);
+        } catch {
+          // Planilha antiga exportada em Windows-1252 ainda é comum.
+          texto = new TextDecoder("windows-1252").decode(buf);
+        }
+        wb = XLSX.read(texto.replace(/^﻿/, ""), { type: "string" });
+      } else {
+        wb = XLSX.read(buf, { type: "array" });
+      }
       const sheet = wb.Sheets[wb.SheetNames[0]];
       const parsed = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
 
