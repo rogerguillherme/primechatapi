@@ -59,7 +59,10 @@ const CARDS_PER_COLUMN = 100;
 
 interface ColumnData {
   leads: KanbanLead[];
+  /** Só quem já trocou mensagem — é o número que corresponde a "entrou no chat". */
   total: number;
+  /** Todo lead da etapa, qualquer origem — usado só pra saber se falta carregar cartão. */
+  totalAll: number;
 }
 
 export function LeadsKanban() {
@@ -114,20 +117,11 @@ export function LeadsKanban() {
 
       const results = await Promise.all(
         targets.map(async ({ key, stageId }) => {
-          const base = () => {
-            let q = supabase
-              .from("leads")
-              .select("id, name, phone, stage_id, assigned_to, last_message_content, last_message_at", {
-                count: "exact",
-              })
-              .eq("user_id", ownerId!)
-              // Leads que nunca trocaram mensagem (ex.: criados só por compra
-              // via Hubla) não são "leads que entraram no chat" — inflam o
-              // total do Kanban sem corresponder a nenhuma conversa real.
-              .not("last_message_at", "is", null);
+          // Compartilhado por cartões e pela contagem "com conversa": os
+          // filtros de etapa/vendedor valem pros dois, só a exigência de
+          // mensagem muda entre eles.
+          const withFilters = (q: any) => {
             q = stageId ? q.eq("stage_id", stageId) : q.is("stage_id", null);
-            // Filtra no banco, não na tela: o contador de cada coluna e o
-            // recorte de cartões vêm da própria consulta.
             if (filterAgentIds.size > 0) {
               const semDono = filterAgentIds.has(UNASSIGNED);
               const ids = [...filterAgentIds].filter((v) => v !== UNASSIGNED);
@@ -144,11 +138,39 @@ export function LeadsKanban() {
             return q;
           };
 
-          const { data, error, count } = await base()
+          // Cartões: continuam mostrando todo lead da etapa, mesmo os criados
+          // só por compra (ex.: Hubla) sem conversa — quem move um pedido pro
+          // funil manualmente não pode ver o cartão sumir. O count aqui (sem
+          // filtro) alimenta só o aviso de paginação, não o total exibido.
+          const cardsQuery = withFilters(
+            supabase
+              .from("leads")
+              .select("id, name, phone, stage_id, assigned_to, last_message_content, last_message_at", {
+                count: "exact",
+              })
+              .eq("user_id", ownerId!),
+          )
             .order("last_message_at", { ascending: false, nullsFirst: false })
             .range(0, CARDS_PER_COLUMN - 1);
-          if (error) throw error;
-          return [key, { leads: (data ?? []) as KanbanLead[], total: count ?? 0 }] as const;
+
+          // Total: só conta quem já trocou mensagem — é o número que
+          // corresponde a "entrou no chat", diferente do total de leads.
+          const countQuery = withFilters(
+            supabase
+              .from("leads")
+              .select("id", { count: "exact", head: true })
+              .eq("user_id", ownerId!)
+              .not("last_message_at", "is", null),
+          );
+
+          const [cardsRes, countRes] = await Promise.all([cardsQuery, countQuery]);
+          if (cardsRes.error) throw cardsRes.error;
+          if (countRes.error) throw countRes.error;
+          return [key, {
+            leads: (cardsRes.data ?? []) as KanbanLead[],
+            total: countRes.count ?? 0,
+            totalAll: cardsRes.count ?? 0,
+          }] as const;
         }),
       );
 
@@ -376,7 +398,7 @@ export function LeadsKanban() {
         <div className="flex-1 min-h-0 overflow-x-auto pb-3">
           <div className="flex gap-3 h-full min-h-[400px]">
             {columns.map((col) => {
-              const colInfo = columnData?.[col.id] ?? { leads: [], total: 0 };
+              const colInfo = columnData?.[col.id] ?? { leads: [], total: 0, totalAll: 0 };
               const colLeads = colInfo.leads;
 
               return (
@@ -514,9 +536,9 @@ export function LeadsKanban() {
                     {colLeads.length === 0 && (
                       <p className="text-xs text-muted-foreground text-center py-6">Nenhum lead</p>
                     )}
-                    {colInfo.total > colLeads.length && (
+                    {colInfo.totalAll > colLeads.length && (
                       <p className="text-[11px] text-muted-foreground text-center py-2">
-                        +{(colInfo.total - colLeads.length).toLocaleString("pt-BR")} leads não exibidos
+                        +{(colInfo.totalAll - colLeads.length).toLocaleString("pt-BR")} leads não exibidos
                       </p>
                     )}
 
