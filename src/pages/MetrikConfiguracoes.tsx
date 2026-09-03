@@ -1,12 +1,15 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Percent, RotateCcw, Megaphone, Plus, Trash2, Target, KeyRound, Check } from "lucide-react";
+import {
+  Percent, RotateCcw, Megaphone, Plus, Trash2, Target, KeyRound, Check, RefreshCw, Loader2,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { functionErrorMessage } from "@/lib/functionError";
 import { useMetrikData } from "@/hooks/use-metrik-data";
 import { useMetrikPeriodo } from "@/hooks/use-metrik-periodo";
+import { format } from "date-fns";
 import { useFavicon } from "@/hooks/use-favicon";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -63,6 +66,32 @@ export default function MetrikConfiguracoes() {
       setChaves({ publica: "", secreta: "" });
       toast.success("Credenciais salvas.");
       qc.invalidateQueries({ queryKey: ["metrics-settings"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const sincronizar = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("applyfy-sync", {
+        // A partir do início do período selecionado: conciliar o mês inteiro é
+        // o caso normal, e puxar sempre 30 dias fixos ignoraria o recorte que
+        // a pessoa acabou de escolher na tela.
+        body: { desde: format(inicio, "yyyy-MM-dd") },
+      });
+      if (error) throw new Error(await functionErrorMessage(error, "Falha na sincronização"));
+      if ((data as any)?.error) throw new Error((data as any).error);
+      return data as any;
+    },
+    onSuccess: (d) => {
+      toast.success(
+        `${d.gravadas} venda(s) conciliada(s) de ${d.recebidas} recebida(s).` +
+          (d.sem_telefone ? ` ${d.sem_telefone} sem telefone, fora da conta.` : ""),
+      );
+      // Toda tela do Métrik lê das mesmas consultas; sem invalidar, os números
+      // continuariam os de antes da conciliação.
+      for (const k of ["metrik-orders", "metrik-vendas", "metrik-historico", "metrik-historico-ciclos"]) {
+        qc.invalidateQueries({ queryKey: [k] });
+      }
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -264,6 +293,29 @@ export default function MetrikConfiguracoes() {
           <b> nunca devolvidas para a tela</b> — nem para você. Para trocar, cole as duas de
           novo. Guardar e depois mostrar seria o mesmo que não proteger.
         </p>
+
+        {config.applyfyConfiguradaEm && podeConfigurar && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5"
+              onClick={() => sincronizar.mutate()}
+              disabled={sincronizar.isPending}
+            >
+              {sincronizar.isPending ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <RefreshCw size={14} />
+              )}
+              Sincronizar vendas do período
+            </Button>
+            <span className="text-[11px] text-muted-foreground">
+              Puxa as transações desde {format(inicio, "dd/MM/yyyy")} e concilia com o que já
+              existe. Rodar de novo não duplica.
+            </span>
+          </div>
+        )}
 
         {podeConfigurar && (
           <div className="mt-3 flex flex-wrap items-end gap-2">
