@@ -89,8 +89,19 @@ function extractLead(payload: any, fieldMapping: FieldMapping = {}): { phone: st
   const email = pickFirst(mapped(fieldMapping, "email", p), client.email, user.email, customer.email, buyer.email, invoice?.customer?.email, p.email);
   const cpf = pickFirst(mapped(fieldMapping, "cpf", p), client.document, user.document, customer.document, buyer.document, p.cpf, p.documento);
   const orderId = pickFirst(mapped(fieldMapping, "order_id", p), tx.id, p.order_id, data.order_id, invoice?.id, p.id, p.pedido);
+  // Faturamento é o que o CLIENTE pagou. A ApplyFy chama isso de
+  // `chargeAmount` e usa `amount` para o que sobra depois da taxa — ler
+  // `amount` como valor da venda gravaria o líquido como faturamento e
+  // apagaria a taxa, que é exatamente o erro que o CSV já tinha.
+  const brutoDireto = pickFirst(
+    (p as any).chargeAmount, (p as any).charge_amount, data.chargeAmount,
+    tx.chargeAmount, (p as any).gross_amount, (p as any).valor_bruto,
+  );
   const amountCents = Number(tx.amount ?? offer.amount ?? 0);
-  const amount = mappedAmount ?? (amountCents > 0 ? amountCents / 100 : parseAmount(p.amount ?? p.valor ?? p.total));
+  const amount =
+    mappedAmount ??
+    parseAmount(brutoDireto) ??
+    (amountCents > 0 ? amountCents / 100 : parseAmount(p.amount ?? p.valor ?? p.total));
   const productName = pickFirst(mapped(fieldMapping, "product_name", p), product.name, offer.name, p.product_name, p.produto);
 
   // O que sobrou para o produtor, quando a plataforma informa. Com isso a taxa
@@ -98,7 +109,11 @@ function extractLead(payload: any, fieldMapping: FieldMapping = {}): { phone: st
   const liquidoBruto = pickFirst(
     (p as any).net_amount, (p as any).netAmount, (p as any).net,
     (p as any).valor_liquido, (p as any).liquido,
-    tx.amount, data.net_amount, (p as any).producer_amount,
+    data.net_amount, (p as any).producer_amount,
+    // `amount` só vale como líquido quando existe um bruto SEPARADO para
+    // comparar. Sem isso ele É o valor da venda, e tratá-lo como líquido
+    // zeraria a taxa contra ele mesmo.
+    brutoDireto != null ? (p as any).amount : null,
   );
   const liquido = parseAmount(liquidoBruto);
 
