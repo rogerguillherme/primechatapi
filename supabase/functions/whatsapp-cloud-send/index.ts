@@ -5,6 +5,7 @@ import { evoErrorMessage } from "../_shared/evo-error.mjs";
 import { videoRecusadoPelaUrl } from "../_shared/media-limits.mjs";
 import { telefoneImplausivel } from "../_shared/phone.mjs";
 import { bloqueioDeConta } from "../_shared/meta-block.mjs";
+import { identificarChamador } from "../_shared/caller.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -81,7 +82,10 @@ async function getAccountCredentials(
   accountId?: string,
   ownerUserId?: string | null,
 ): Promise<AccountCredentials> {
-  const baseSelect = "id, user_id, is_default, phone_number_id, access_token, business_account_id, provider, api_key, webhook_subscribed, webhook_last_check_at";
+  // blocked_at e blocked_reason precisam vir na consulta: toCreds os lê, e sem
+  // pedi-los eles chegavam sempre nulos — a proteção de conta travada existia
+  // no código e nunca disparava, deixando o app martelar uma WABA bloqueada.
+  const baseSelect = "id, user_id, is_default, phone_number_id, access_token, business_account_id, provider, api_key, webhook_subscribed, webhook_last_check_at, blocked_at, blocked_reason";
 
   const toCreds = (data: any): AccountCredentials => ({
     accountId: data.id,
@@ -350,16 +354,22 @@ Deno.serve(async (req) => {
     // Quem está enviando. Vem do JWT de quem chamou, não do corpo: um valor
     // enviado pelo cliente poderia atribuir a mensagem a outra pessoa.
     // Chamada interna (fluxo, disparo) usa a service role e não tem usuário —
-    // nesses casos fica nulo, que é o certo: não foi ninguém da equipe.
-    let sentBy: string | null = null;
-    try {
-      const jwt = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
-      if (jwt && jwt !== Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) {
-        const { data } = await supabase.auth.getUser(jwt);
-        sentBy = data?.user?.id ?? null;
-      }
-    } catch {
-      /* sem autor identificado: segue como automação */
+    // nesses casos sentBy fica nulo, que é o certo: não foi ninguém da equipe.
+    const chamador = await identificarChamador(req);
+    const sentBy: string | null = chamador.userId;
+
+    // Esta função MANDA MENSAGEM pelo WhatsApp do cliente. Ela não exigia
+    // identificação nenhuma — lia o JWT só para saber a quem atribuir. Como a
+    // anon key é pública (vai no bundle do front), qualquer pessoa com a URL
+    // disparava mensagem pela conta padrão da plataforma.
+    //
+    // Chamada interna (fluxo, disparo, webhook) continua passando: ela usa a
+    // service role.
+    if (!chamador.interno && !chamador.userId) {
+      return new Response(
+        JSON.stringify({ error: "Não autenticado" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     const body_payload = await req.json();
@@ -384,6 +394,13 @@ Deno.serve(async (req) => {
         .maybeSingle();
       ownerUserId = ownerLead?.user_id ?? null;
     }
+
+    // Sem lead conhecido, o dono é quem está chamando. Antes disso o código
+    // caía numa "conta padrão global" — a mais antiga do banco inteiro, que
+    // pode ser de outro cliente e de outro provedor. Foi assim que uma chamada
+    // de teste minha, sem lead nenhum, chegou até a instância Evolution de
+    // outra conta.
+    if (!ownerUserId && chamador.userId) ownerUserId = chamador.userId;
 
     const {
       accountId: resolvedAccountId,
