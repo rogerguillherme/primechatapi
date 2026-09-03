@@ -6,44 +6,44 @@
 
 @layer base {
   :root {
-    --background: 258 22% 98%;
-    --foreground: 258 25% 11%;
+    --background: 160 22% 98%;
+    --foreground: 160 25% 11%;
 
     --card: 0 0% 100%;
-    --card-foreground: 258 25% 11%;
+    --card-foreground: 160 25% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 258 25% 11%;
+    --popover-foreground: 160 25% 11%;
 
-    --primary: 262 72% 54%;
+    --primary: 152 72% 54%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 258 20% 94%;
-    --secondary-foreground: 258 25% 20%;
+    --secondary: 160 20% 94%;
+    --secondary-foreground: 160 25% 20%;
 
-    --muted: 258 18% 95%;
-    --muted-foreground: 258 8% 46%;
+    --muted: 160 18% 95%;
+    --muted-foreground: 160 8% 46%;
 
-    --accent: 262 45% 94%;
-    --accent-foreground: 262 60% 40%;
+    --accent: 152 45% 94%;
+    --accent-foreground: 152 60% 40%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 258 18% 90%;
-    --input: 258 18% 90%;
-    --ring: 262 72% 54%;
+    --border: 160 18% 90%;
+    --input: 160 18% 90%;
+    --ring: 152 72% 54%;
 
     --radius: 0.625rem;
 
-    --sidebar-background: 258 32% 8%;
-    --sidebar-foreground: 258 15% 85%;
-    --sidebar-primary: 262 80% 64%;
+    --sidebar-background: 160 32% 8%;
+    --sidebar-foreground: 160 15% 85%;
+    --sidebar-primary: 152 80% 64%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 258 26% 15%;
-    --sidebar-accent-foreground: 258 15% 92%;
-    --sidebar-border: 258 22% 17%;
-    --sidebar-ring: 262 80% 64%;
+    --sidebar-accent: 160 26% 15%;
+    --sidebar-accent-foreground: 160 15% 92%;
+    --sidebar-border: 160 22% 17%;
+    --sidebar-ring: 152 80% 64%;
 
     --success: 152 60% 42%;
     --success-foreground: 0 0% 100%;
@@ -59,8 +59,8 @@
     --revenue-soft: 152 65% 95%;
     --revenue-foreground: 0 0% 100%;
 
-    --ai-accent: 262 75% 60%;
-    --ai-accent-soft: 262 75% 96%;
+    --ai-accent: 152 75% 60%;
+    --ai-accent-soft: 152 75% 96%;
     --ai-accent-foreground: 0 0% 100%;
 
     --hot: 0 78% 56%;
@@ -72,34 +72,34 @@
   }
 
   .dark {
-    --background: 258 30% 6%;
-    --foreground: 258 15% 94%;
-    --card: 258 26% 9%;
-    --card-foreground: 258 15% 94%;
-    --popover: 258 26% 10%;
-    --popover-foreground: 258 15% 94%;
-    --primary: 262 83% 66%;
+    --background: 160 30% 6%;
+    --foreground: 160 15% 94%;
+    --card: 160 26% 9%;
+    --card-foreground: 160 15% 94%;
+    --popover: 160 26% 10%;
+    --popover-foreground: 160 15% 94%;
+    --primary: 152 83% 66%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 258 20% 14%;
-    --secondary-foreground: 258 15% 88%;
-    --muted: 258 20% 14%;
-    --muted-foreground: 258 10% 62%;
-    --accent: 262 30% 18%;
-    --accent-foreground: 262 80% 76%;
+    --secondary: 160 20% 14%;
+    --secondary-foreground: 160 15% 88%;
+    --muted: 160 20% 14%;
+    --muted-foreground: 160 10% 62%;
+    --accent: 152 30% 18%;
+    --accent-foreground: 152 80% 76%;
     --destructive: 0 62% 54%;
     --destructive-foreground: 0 0% 100%;
-    --border: 258 20% 16%;
-    --input: 258 20% 16%;
-    --ring: 262 83% 66%;
+    --border: 160 20% 16%;
+    --input: 160 20% 16%;
+    --ring: 152 83% 66%;
 
-    --sidebar-background: 258 34% 5%;
-    --sidebar-foreground: 258 15% 82%;
-    --sidebar-primary: 262 83% 66%;
+    --sidebar-background: 160 34% 5%;
+    --sidebar-foreground: 160 15% 82%;
+    --sidebar-primary: 152 83% 66%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 258 26% 12%;
-    --sidebar-accent-foreground: 258 15% 92%;
-    --sidebar-border: 258 22% 12%;
-    --sidebar-ring: 262 83% 66%;
+    --sidebar-accent: 160 26% 12%;
+    --sidebar-accent-foreground: 160 15% 92%;
+    --sidebar-border: 160 22% 12%;
+    --sidebar-ring: 152 83% 66%;
 
     --whatsapp: 142 70% 45%;
     --whatsapp-foreground: 0 0% 100%;
@@ -110,8 +110,8 @@
     --revenue-soft: 152 40% 14%;
     --revenue-foreground: 0 0% 100%;
 
-    --ai-accent: 262 75% 68%;
-    --ai-accent-soft: 262 40% 16%;
+    --ai-accent: 152 75% 68%;
+    --ai-accent-soft: 152 40% 16%;
     --ai-accent-foreground: 0 0% 100%;
 
     --hot: 0 78% 62%;
@@ -140,10 +140,10 @@
 
 @layer utilities {
   .gradient-primary {
-    background: linear-gradient(135deg, hsl(262 72% 54%), hsl(285 70% 60%));
+    background: linear-gradient(135deg, hsl(152 72% 54%), hsl(168 70% 60%));
   }
   .gradient-header {
-    background: linear-gradient(135deg, hsl(258 32% 8%), hsl(265 55% 26%));
+    background: linear-gradient(135deg, hsl(160 32% 8%), hsl(158 55% 26%));
   }
   .gradient-instagram {
     background: linear-gradient(135deg, hsl(280 60% 15%), hsl(330 70% 25%), hsl(15 80% 30%));
@@ -156,10 +156,10 @@
     background: linear-gradient(135deg, hsl(var(--revenue) / 0.08), hsl(142 70% 45% / 0.04));
   }
   .gradient-ai {
-    background: linear-gradient(135deg, hsl(var(--ai-accent)), hsl(280 75% 65%));
+    background: linear-gradient(135deg, hsl(var(--ai-accent)), hsl(168 65% 65%));
   }
   .gradient-ai-soft {
-    background: linear-gradient(135deg, hsl(var(--ai-accent) / 0.08), hsl(280 75% 60% / 0.04));
+    background: linear-gradient(135deg, hsl(var(--ai-accent) / 0.08), hsl(168 65% 60% / 0.04));
   }
   .shadow-card {
     box-shadow: 0 1px 3px 0 hsl(0 0% 0% / 0.04), 0 1px 2px -1px hsl(0 0% 0% / 0.04);
@@ -312,33 +312,33 @@
    Os tokens são redefinidos no escopo do casco em vez de globalmente, senão
    entrar no Metrik mudaria o chat de aparência ao voltar. */
 .metrik-shell {
-  --background: 258 34% 5%;
-  --foreground: 258 15% 96%;
+  --background: 160 34% 5%;
+  --foreground: 160 15% 96%;
 
-  --card: 258 28% 8%;
-  --card-foreground: 258 15% 96%;
+  --card: 160 28% 8%;
+  --card-foreground: 160 15% 96%;
 
-  --popover: 258 28% 10%;
-  --popover-foreground: 258 15% 96%;
+  --popover: 160 28% 10%;
+  --popover-foreground: 160 15% 96%;
 
-  --primary: 262 83% 64%;
+  --primary: 152 83% 64%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 258 22% 14%;
-  --secondary-foreground: 258 15% 92%;
+  --secondary: 160 22% 14%;
+  --secondary-foreground: 160 15% 92%;
 
-  --muted: 258 20% 13%;
-  --muted-foreground: 258 10% 64%;
+  --muted: 160 20% 13%;
+  --muted-foreground: 160 10% 64%;
 
-  --accent: 262 30% 18%;
-  --accent-foreground: 258 15% 96%;
+  --accent: 152 30% 18%;
+  --accent-foreground: 160 15% 96%;
 
   --destructive: 0 66% 58%;
   --destructive-foreground: 0 0% 100%;
 
-  --border: 258 20% 16%;
-  --input: 258 20% 16%;
-  --ring: 262 83% 64%;
+  --border: 160 20% 16%;
+  --input: 160 20% 16%;
+  --ring: 152 83% 64%;
 
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
@@ -348,13 +348,13 @@
 /* O brilho ambiente do painel: violeta subindo do rodapé, como no modelo. */
 .metrik-glow {
   background:
-    radial-gradient(60% 55% at 15% 0%, hsl(262 83% 64% / 0.12), transparent 70%),
-    radial-gradient(50% 50% at 90% 10%, hsl(280 70% 60% / 0.08), transparent 70%);
+    radial-gradient(60% 55% at 15% 0%, hsl(152 83% 64% / 0.12), transparent 70%),
+    radial-gradient(50% 50% at 90% 10%, hsl(168 65% 60% / 0.08), transparent 70%);
 }
 
 .metrik-shell {
   background-image:
-    radial-gradient(120% 60% at 50% 120%, hsl(265 60% 30% / 0.45), transparent 70%);
+    radial-gradient(120% 60% at 50% 120%, hsl(158 60% 30% / 0.45), transparent 70%);
   background-attachment: fixed;
 }
 
@@ -363,11 +363,11 @@
    descendo forte. */
 .metrik-shell .metrik-card {
   background:
-    linear-gradient(180deg, hsl(258 26% 11%) 0%, hsl(258 28% 8%) 100%);
-  border: 1px solid hsl(258 20% 17%);
-  border-top-color: hsl(262 30% 26%);
+    linear-gradient(180deg, hsl(160 26% 11%) 0%, hsl(160 28% 8%) 100%);
+  border: 1px solid hsl(160 20% 17%);
+  border-top-color: hsl(152 30% 26%);
   box-shadow:
-    0 1px 0 0 hsl(262 60% 85% / 0.06) inset,
+    0 1px 0 0 hsl(152 60% 85% / 0.06) inset,
     0 10px 30px -12px hsl(0 0% 0% / 0.75),
     0 2px 8px -4px hsl(0 0% 0% / 0.5);
   transition: box-shadow 160ms ease, transform 160ms ease;
@@ -376,30 +376,30 @@
 .metrik-shell .metrik-card-hover:hover {
   transform: translateY(-1px);
   box-shadow:
-    0 1px 0 0 hsl(262 60% 85% / 0.10) inset,
+    0 1px 0 0 hsl(152 60% 85% / 0.10) inset,
     0 16px 40px -14px hsl(0 0% 0% / 0.8),
-    0 3px 10px -4px hsl(262 60% 30% / 0.45);
+    0 3px 10px -4px hsl(152 60% 30% / 0.45);
 }
 
 /* Cartão de destaque: mesmo relevo com halo violeta por baixo. */
 .metrik-shell .metrik-card-primary {
   background:
-    linear-gradient(180deg, hsl(264 34% 15%) 0%, hsl(262 30% 10%) 100%);
-  border-top-color: hsl(262 55% 38%);
+    linear-gradient(180deg, hsl(158 34% 15%) 0%, hsl(152 30% 10%) 100%);
+  border-top-color: hsl(152 55% 38%);
   box-shadow:
-    0 1px 0 0 hsl(262 80% 88% / 0.12) inset,
-    0 10px 34px -12px hsl(262 70% 40% / 0.5),
+    0 1px 0 0 hsl(152 80% 88% / 0.12) inset,
+    0 10px 34px -12px hsl(152 70% 40% / 0.5),
     0 2px 8px -4px hsl(0 0% 0% / 0.5);
 }
 
 /* Barra de progresso com volume: sulco escuro embaixo, brilho em cima. */
 .metrik-shell .metrik-trilho {
-  background: hsl(258 22% 13%);
+  background: hsl(160 22% 13%);
   box-shadow: 0 1px 2px 0 hsl(0 0% 0% / 0.6) inset;
 }
 
 .metrik-shell .metrik-preenchimento {
   box-shadow:
-    0 0 12px 0 hsl(262 83% 64% / 0.5),
-    0 1px 0 0 hsl(262 80% 90% / 0.35) inset;
+    0 0 12px 0 hsl(152 83% 64% / 0.5),
+    0 1px 0 0 hsl(152 80% 90% / 0.35) inset;
 }
