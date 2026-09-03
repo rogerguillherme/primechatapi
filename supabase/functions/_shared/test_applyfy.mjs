@@ -1,44 +1,42 @@
 // Run: node supabase/functions/_shared/test_applyfy.mjs
 import assert from "node:assert/strict";
-import { valorDaTransacao, statusDaTransacao, mapearTransacao, listaDeTransacoes } from "./applyfy.mjs";
+import { mapearTransacao } from "./applyfy.mjs";
 
-// ── valor: centavos denunciados pelo nome do campo ──
-assert.equal(valorDaTransacao({ amount_cents: 49700 }), 497);
-assert.equal(valorDaTransacao({ amountInCents: 4999 }), 49.99);
-assert.equal(valorDaTransacao({ amount: 497.5 }), 497.5);
-assert.equal(valorDaTransacao({ valor: "1.234,56".replace(".", "") }), 1234.56);
-assert.equal(valorDaTransacao({}), 0);
+const base = {
+  id: "tx_1", status: "COMPLETED", paymentMethod: "PIX",
+  chargeAmount: 200, amount: 190, exchangeRate: 1,
+  createdAt: "2026-09-01T10:00:00Z",
+};
 
-// ── status ──
-assert.equal(statusDaTransacao({ status: "paid" }), "approved");
-assert.equal(statusDaTransacao({ status: "APROVADO" }), "approved");
-assert.equal(statusDaTransacao({ status: "refunded" }), "refunded");
-assert.equal(statusDaTransacao({ status: "pending" }), "pending");
-assert.equal(statusDaTransacao({ status: "recusado" }), "cancelled");
-// Status desconhecido NÃO vira aprovado: inflaria faturamento e comissão.
-assert.equal(statusDaTransacao({ status: "coisa_nova" }), null);
-assert.equal(statusDaTransacao({}), null);
-
-// ── mapeamento ──
-const t = mapearTransacao({
-  id: "tx_1", status: "paid", amount_cents: 19700,
-  payment_method: "PIX", created_at: "2026-09-01T10:00:00Z",
-  customer: { name: "Ana", phone: "5511999998888", email: "a@b.com" },
-});
-assert.equal(t.externalId, "tx_1");
-assert.equal(t.amount, 197);
+// ── faturamento é o que o CLIENTE pagou, não o que sobrou ──
+// Usar o líquido esconderia a taxa e faria a base de comissão ser descontada
+// duas vezes: uma pela API, outra pela configuração de taxas.
+const t = mapearTransacao(base);
+assert.equal(t.amount, 200);
+assert.equal(t.taxaReal, 10);
+assert.equal(t.status, "approved");
 assert.equal(t.method, "pix");
-assert.equal(t.phone, "5511999998888");
 
-// Sem id ou sem status reconhecido, a transação é descartada em vez de virar
-// venda torta.
-assert.equal(mapearTransacao({ status: "paid" }), null);
-assert.equal(mapearTransacao({ id: "x", status: "???" }), null);
+// ── todos os status do enum viram algo conhecido ──
+assert.equal(mapearTransacao({ ...base, status: "PENDING" }).status, "pending");
+assert.equal(mapearTransacao({ ...base, status: "REFUNDED" }).status, "refunded");
+assert.equal(mapearTransacao({ ...base, status: "CHARGED_BACK" }).status, "chargeback");
+assert.equal(mapearTransacao({ ...base, status: "FAILED" }).status, "cancelled");
 
-// ── envelope da lista ──
-assert.equal(listaDeTransacoes([{ id: 1 }]).length, 1);
-assert.equal(listaDeTransacoes({ data: [{ id: 1 }, { id: 2 }] }).length, 2);
-assert.equal(listaDeTransacoes({ transactions: [{ id: 1 }] }).length, 1);
-assert.equal(listaDeTransacoes({}).length, 0);
+// Status novo NÃO vira aprovado.
+assert.equal(mapearTransacao({ ...base, status: "SOMETHING_NEW" }), null);
+assert.equal(mapearTransacao({ ...base, id: null }), null);
+
+// ── câmbio: moeda estrangeira precisa ser convertida ──
+const usd = mapearTransacao({ ...base, chargeAmount: 100, amount: 95, exchangeRate: 5.4 });
+assert.equal(usd.amount, 540);
+assert.equal(usd.taxaReal, 27);
+
+// Sem chargeAmount, o amount é o que há.
+assert.equal(mapearTransacao({ ...base, chargeAmount: undefined }).amount, 190);
+
+// Cartão e assinatura são reconhecidos.
+assert.equal(mapearTransacao({ ...base, paymentMethod: "CREDIT_CARD" }).method, "cartao");
+assert.equal(mapearTransacao({ ...base, purchaseType: "RECURRING" }).recorrente, true);
 
 console.log("applyfy: all assertions passed");

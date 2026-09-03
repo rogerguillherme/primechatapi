@@ -1,17 +1,17 @@
-// Puxa transações da ApplyFy e concilia com `orders`.
+// Reconfere na ApplyFy o status das vendas que já conhecemos.
 //
-// O webhook é quem traz a venda em tempo real; isto aqui é a CONFERÊNCIA.
-// Webhook perde evento em pico — já aconteceu com a Hubla neste projeto — e
-// puxar por API é como se descobre o que faltou. Rodar isto de tempos em
-// tempos fecha o buraco sem depender da plataforma reenviar.
+// A API da ApplyFy tem UMA rota de consulta — busca por id, uma transação por
+// vez — e a documentação pede explicitamente para não fazer polling: quem traz
+// venda nova é o webhook. Então isto não descobre vendas; resolve o caso em que
+// o webhook de ATUALIZAÇÃO não chegou e a venda ficou parada em "pendente" aqui
+// enquanto já foi paga ou estornada lá.
 //
-// As chaves vivem em secrets, nunca no repositório: segredo em git fica no
-// histórico para sempre, mesmo depois de removido.
+// Por isso o alvo é fechado: só as vendas ApplyFy pendentes do nosso lado.
+// Varrer tudo seria o polling que a plataforma pede para não fazer.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { identificarChamador } from "../_shared/caller.ts";
-import { mapearTransacao, listaDeTransacoes } from "../_shared/applyfy.mjs";
-import { normalizeTypedPhone } from "../_shared/phone.mjs";
+import { mapearTransacao } from "../_shared/applyfy.mjs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,6 +26,9 @@ const json = (b: unknown, s = 200) =>
 
 const BASE = "https://app.applyfy.com.br/api/v1";
 
+/** Teto por execução: a consulta é uma requisição por venda. */
+const MAX_POR_RODADA = 100;
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -35,19 +38,13 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // Esta função grava venda. Sem porta, qualquer pessoa com a URL mandaria
-    // faturamento para dentro da conta de um cliente.
     const chamador = await identificarChamador(req);
     const body = await req.json().catch(() => ({}));
-    const ownerId: string | null = chamador.interno
-      ? body?.owner_id ?? null
-      : chamador.userId;
+    const ownerId: string | null = chamador.interno ? body?.owner_id ?? null : chamador.userId;
     if (!ownerId) return json({ error: "Não autenticado" }, 401);
 
-    // A credencial é da EMPRESA, não da plataforma: cada cliente tem a conta
-    // ApplyFy dele. Um secret global usaria a chave de um para puxar as vendas
-    // de outro. O secret de ambiente fica como saída para instalação de conta
-    // única, mas o cadastro por empresa manda.
+    // A credencial é da EMPRESA: cada cliente tem a conta ApplyFy dele. O
+    // secret de ambiente fica como saída para instalação de conta única.
     const { data: cred } = await admin
       .from("metrics_platform_credentials")
       .select("public_key, secret_key")
@@ -58,123 +55,92 @@ Deno.serve(async (req) => {
     const publicKey = cred?.public_key || Deno.env.get("APPLYFY_PUBLIC_KEY");
     const secretKey = cred?.secret_key || Deno.env.get("APPLYFY_SECRET_KEY");
     if (!publicKey || !secretKey) {
-      return json(
-        { error: "Credenciais da ApplyFy não configuradas para esta conta." },
-        400,
-      );
+      return json({ error: "Credenciais da ApplyFy não configuradas para esta conta." }, 400);
     }
 
-    // O caminho da listagem fica em secret porque é a única coisa da API que
-    // ainda não está confirmada na documentação. Trocar uma string não deve
-    // exigir deploy de código.
-    const caminho = Deno.env.get("APPLYFY_TRANSACTIONS_PATH") || "/transactions";
-    const desde: string =
-      body?.desde || new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+    // Só o que está pendente aqui. Venda já aprovada ou estornada não precisa
+    // ser reconferida, e reconferir tudo viraria o polling desaconselhado.
+    const { data: pendentes, error: erroBusca } = await admin
+      .from("orders")
+      .select("id, external_order_id, status")
+      .eq("user_id", ownerId)
+      .eq("platform", "applyfy")
+      .eq("status", "pending")
+      .order("created_at", { ascending: false })
+      .limit(MAX_POR_RODADA);
 
-    const url = `${BASE}${caminho}?start_date=${desde}&per_page=200`;
-    const res = await fetch(url, {
-      headers: {
-        "x-public-key": publicKey,
-        "x-secret-key": secretKey,
-        Accept: "application/json",
-      },
-    });
+    if (erroBusca) return json({ error: erroBusca.message }, 500);
 
-    const texto = await res.text();
-    if (!res.ok) {
-      // O corpo da ApplyFy é o que diz se o problema é chave, caminho ou
-      // permissão. Devolver só o status obrigaria a abrir o log para saber.
-      return json(
+    const lista = pendentes || [];
+    let atualizadas = 0;
+    let inalteradas = 0;
+    let naoEncontradas = 0;
+    let naoReconhecidas = 0;
+
+    for (const venda of lista) {
+      // Guardamos o id com prefixo para não colidir com outra plataforma; a
+      // ApplyFy conhece só a parte depois dele.
+      const idApplyfy = String(venda.external_order_id).replace(/^applyfy-/, "");
+
+      const res = await fetch(
+        `${BASE}/gateway/transactions?id=${encodeURIComponent(idApplyfy)}`,
         {
-          error: `ApplyFy respondeu ${res.status}`,
-          url,
-          resposta: texto.slice(0, 400),
+          headers: {
+            "x-public-key": publicKey,
+            "x-secret-key": secretKey,
+            Accept: "application/json",
+          },
         },
-        502,
       );
-    }
 
-    let corpo: unknown = null;
-    try {
-      corpo = JSON.parse(texto);
-    } catch {
-      return json({ error: "Resposta não era JSON", resposta: texto.slice(0, 300) }, 502);
-    }
+      if (res.status === 404) {
+        naoEncontradas += 1;
+        continue;
+      }
+      if (!res.ok) {
+        // Parar na primeira falha real: insistir com credencial errada ou
+        // limite atingido só piora, e o motivo precisa chegar em quem clicou.
+        return json(
+          {
+            error: `ApplyFy respondeu ${res.status}`,
+            resposta: (await res.text()).slice(0, 300),
+            processadas: atualizadas + inalteradas,
+          },
+          502,
+        );
+      }
 
-    const transacoes = listaDeTransacoes(corpo);
-    let gravadas = 0;
-    let semTelefone = 0;
-    let ignoradas = 0;
-
-    for (const bruta of transacoes as any[]) {
-      const t = mapearTransacao(bruta) as any;
+      const t = mapearTransacao(await res.json().catch(() => null)) as any;
       if (!t) {
-        ignoradas += 1;
+        naoReconhecidas += 1;
         continue;
       }
 
-      // A venda precisa de um lead: é dele que sai o vendedor, e sem vendedor
-      // ela não entra em comissão nenhuma.
-      const telefone = normalizeTypedPhone(t.phone) as string;
-      if (!telefone) {
-        semTelefone += 1;
+      if (t.status === venda.status) {
+        inalteradas += 1;
         continue;
       }
 
-      let leadId: string | null = null;
-      const { data: existente } = await admin
-        .from("leads")
-        .select("id")
-        .eq("phone", telefone)
-        .eq("user_id", ownerId)
-        .limit(1)
-        .maybeSingle();
-
-      if (existente) {
-        leadId = existente.id;
-      } else {
-        const { data: novo } = await admin
-          .from("leads")
-          .insert({
-            name: t.name || `ApplyFy ${telefone}`,
-            phone: telefone,
-            email: t.email,
-            origin: "applyfy",
-            user_id: ownerId,
-          })
-          .select("id")
-          .maybeSingle();
-        leadId = novo?.id ?? null;
-      }
-
-      if (!leadId) continue;
-
-      // Upsert pelo id da ApplyFy: rodar a conciliação duas vezes não pode
-      // duplicar faturamento, e é justamente para rodar repetido que ela existe.
-      const { error } = await admin.from("orders").upsert(
-        {
-          lead_id: leadId,
-          user_id: ownerId,
-          external_order_id: `applyfy-${t.externalId}`,
-          amount: t.amount,
+      const { error } = await admin
+        .from("orders")
+        .update({
           status: t.status,
-          platform: "applyfy",
+          amount: t.amount,
           payment_method: t.method,
-          created_at: t.createdAt || new Date().toISOString(),
-          webhook_payload: bruta,
-        },
-        { onConflict: "external_order_id" },
-      );
-      if (!error) gravadas += 1;
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", venda.id);
+      if (!error) atualizadas += 1;
     }
 
     return json({
       ok: true,
-      recebidas: (transacoes as any[]).length,
-      gravadas,
-      ignoradas,
-      sem_telefone: semTelefone,
-      desde,
+      conferidas: lista.length,
+      atualizadas,
+      inalteradas,
+      nao_encontradas: naoEncontradas,
+      nao_reconhecidas: naoReconhecidas,
+      teto: MAX_POR_RODADA,
     });
   } catch (e) {
     console.error("applyfy-sync:", e);

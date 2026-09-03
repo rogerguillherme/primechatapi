@@ -1,75 +1,60 @@
 // Leitura de transação da ApplyFy.
 //
-// A resposta de checkout raramente tem um formato só: campos mudam de nome
-// entre versões e entre eventos. Este projeto já lida com isso no
-// hubla-webhook e no custom-webhook, tentando vários nomes para o mesmo dado.
-// Aqui é a mesma abordagem — e é o que permite a integração sobreviver a um
-// campo renomeado sem virar incidente.
+// A API tem UMA rota de consulta: busca por id, uma transação por vez. Não há
+// listagem, e a própria documentação pede para não fazer polling — o caminho
+// para receber venda é o webhook. Portanto isto aqui não serve para descobrir
+// vendas novas; serve para RECONFERIR as que já conhecemos e cujo status pode
+// ter mudado sem o webhook chegar.
 
-const primeiro = (...vs) => vs.find((v) => v !== undefined && v !== null && v !== "");
+/** Status da ApplyFy no vocabulário do app. */
+const STATUS = {
+  COMPLETED: "approved",
+  PENDING: "pending",
+  FAILED: "cancelled",
+  REFUNDED: "refunded",
+  CHARGED_BACK: "chargeback",
+};
 
-/** Valor em reais. Muitas plataformas mandam centavos; o nome do campo denuncia. */
-export function valorDaTransacao(t) {
-  const emCentavos = primeiro(t?.amount_cents, t?.amountInCents, t?.value_cents);
-  if (emCentavos != null) return Math.round(Number(emCentavos)) / 100;
-
-  const bruto = primeiro(t?.amount, t?.value, t?.total, t?.valor, t?.price);
-  const n = Number(String(bruto ?? "").toString().replace(",", "."));
-  return Number.isFinite(n) ? n : 0;
-}
+const METODO = {
+  PIX: "pix",
+  CREDIT_CARD: "cartao",
+  BOLETO: "boleto",
+  TED: "ted",
+  CRYPTO: "cripto",
+  CASH_ON_DELIVERY: "na_entrega",
+};
 
 /**
- * Status da ApplyFy no vocabulário do app.
+ * Normaliza a transação para o formato de `orders`.
  *
- * Desconhecido devolve null e a transação é IGNORADA, não gravada como
- * aprovada: inventar aprovação infla o faturamento e a comissão sai sobre
- * dinheiro que talvez não exista.
+ * Devolve null quando o status não é reconhecido. Status novo tratado como
+ * aprovado infla faturamento e comissão sai sobre dinheiro que talvez não
+ * exista — melhor ignorar e aparecer no contador de "não reconhecidas".
  */
-export function statusDaTransacao(t) {
-  const s = String(primeiro(t?.status, t?.situacao, t?.state) || "").toLowerCase();
-  if (["paid", "approved", "aprovado", "aprovada", "pago", "completed", "succeeded"].includes(s)) {
-    return "approved";
-  }
-  if (["refunded", "reembolsado", "reembolsada", "estornado", "chargeback"].includes(s)) {
-    return "refunded";
-  }
-  if (["pending", "pendente", "waiting", "aguardando", "processing"].includes(s)) return "pending";
-  if (["canceled", "cancelled", "cancelado", "cancelada", "expired", "refused", "recusado"].includes(s)) {
-    return "cancelled";
-  }
-  return null;
-}
-
-/** Normaliza uma transação para o formato que `orders` espera. */
 export function mapearTransacao(t) {
-  const id = primeiro(t?.id, t?.transaction_id, t?.transactionId, t?.code, t?.reference);
-  const status = statusDaTransacao(t);
-  if (!id || !status) return null;
+  const status = STATUS[String(t?.status || "").toUpperCase()];
+  if (!t?.id || !status) return null;
 
-  const cliente = t?.customer || t?.client || t?.buyer || {};
-  const criadoEm = primeiro(t?.created_at, t?.createdAt, t?.date, t?.paid_at, t?.data);
+  // `chargeAmount` é o que o CLIENTE pagou; `amount` é o que sobra para o
+  // produtor, já sem as taxas do checkout. Faturamento é o que o cliente
+  // pagou — usar o líquido aqui esconderia a taxa e, pior, a base de comissão
+  // seria descontada duas vezes: uma pela API e outra pela configuração.
+  const bruto = Number(t.chargeAmount ?? t.amount ?? 0);
+  const liquido = Number(t.amount ?? 0);
+
+  // Câmbio: para moeda diferente de BRL, o valor precisa ser multiplicado.
+  const cambio = Number(t.exchangeRate) || 1;
 
   return {
-    externalId: String(id),
+    externalId: String(t.id),
     status,
-    amount: valorDaTransacao(t),
-    method: String(primeiro(t?.payment_method, t?.paymentMethod, t?.method, t?.tipo) || "")
-      .toLowerCase() || null,
-    createdAt: criadoEm ? new Date(criadoEm).toISOString() : null,
-    phone: String(primeiro(cliente.phone, cliente.telefone, cliente.celular, t?.phone) || ""),
-    name: primeiro(cliente.name, cliente.full_name, cliente.nome, t?.name) || null,
-    email: primeiro(cliente.email, t?.email) || null,
+    amount: Math.round(bruto * cambio * 100) / 100,
+    // ponytail: a taxa real está disponível (bruto − líquido) e é melhor que a
+    // configurada. Guardar exige coluna em orders; enquanto não houver, a
+    // regra de taxa por plataforma cobre.
+    taxaReal: Math.round((bruto - liquido) * cambio * 100) / 100,
+    method: METODO[String(t.paymentMethod || "").toUpperCase()] || null,
+    createdAt: t.payedAt || t.createdAt || null,
+    recorrente: String(t.purchaseType || "ONCE").toUpperCase() === "RECURRING",
   };
-}
-
-/** A lista de transações pode vir na raiz ou embrulhada; aceita as duas. */
-export function listaDeTransacoes(resposta) {
-  if (Array.isArray(resposta)) return resposta;
-  return (
-    resposta?.data ||
-    resposta?.transactions ||
-    resposta?.items ||
-    resposta?.results ||
-    []
-  );
 }

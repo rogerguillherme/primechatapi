@@ -72,20 +72,18 @@ export default function MetrikConfiguracoes() {
 
   const sincronizar = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke("applyfy-sync", {
-        // A partir do início do período selecionado: conciliar o mês inteiro é
-        // o caso normal, e puxar sempre 30 dias fixos ignoraria o recorte que
-        // a pessoa acabou de escolher na tela.
-        body: { desde: format(inicio, "yyyy-MM-dd") },
-      });
+      // Sem período: a ApplyFy não tem listagem por data. A função reconfere
+      // as vendas que já estão aqui como pendentes, uma a uma.
+      const { data, error } = await supabase.functions.invoke("applyfy-sync", { body: {} });
       if (error) throw new Error(await functionErrorMessage(error, "Falha na sincronização"));
       if ((data as any)?.error) throw new Error((data as any).error);
       return data as any;
     },
     onSuccess: (d) => {
       toast.success(
-        `${d.gravadas} venda(s) conciliada(s) de ${d.recebidas} recebida(s).` +
-          (d.sem_telefone ? ` ${d.sem_telefone} sem telefone, fora da conta.` : ""),
+        d.conferidas === 0
+          ? "Nenhuma venda pendente para reconferir."
+          : `${d.atualizadas} de ${d.conferidas} venda(s) mudaram de status.`,
       );
       // Toda tela do Métrik lê das mesmas consultas; sem invalidar, os números
       // continuariam os de antes da conciliação.
@@ -308,11 +306,11 @@ export default function MetrikConfiguracoes() {
               ) : (
                 <RefreshCw size={14} />
               )}
-              Sincronizar vendas do período
+              Reconferir vendas pendentes
             </Button>
             <span className="text-[11px] text-muted-foreground">
-              Puxa as transações desde {format(inicio, "dd/MM/yyyy")} e concilia com o que já
-              existe. Rodar de novo não duplica.
+              Pergunta à ApplyFy o status das vendas que estão pendentes aqui. Quem traz venda
+              nova é o webhook — a API só consulta uma transação por vez.
             </span>
           </div>
         )}
