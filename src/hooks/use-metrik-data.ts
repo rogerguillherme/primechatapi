@@ -23,6 +23,7 @@ export interface Tier {
   name: string;
   min_value: number;
   commission_pct: number;
+  bonus_value: number;
   color: string;
 }
 

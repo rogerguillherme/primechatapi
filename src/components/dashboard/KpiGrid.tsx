@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTeamContext } from "@/hooks/use-team";
 import { Users, Reply } from "lucide-react";
 import { PremiumCard } from "@/components/premium/PremiumCard";
 import { cn } from "@/lib/utils";
@@ -22,12 +23,17 @@ const accentMap = {
 
 export function KpiGrid() {
   const { user } = useAuth();
+  // Um colaborador logado com o próprio user.id não é dono dos leads — eles
+  // ficam sob o user_id de quem criou a conta. Contar pelo id de quem está
+  // logado zera (ou erra) os números para todo mundo que não é o dono.
+  const { data: team } = useTeamContext();
+  const ownerId = team?.ownerId;
 
   const { data: stats } = useQuery({
-    queryKey: ["dashboard-kpis", user?.id],
+    queryKey: ["dashboard-kpis", ownerId],
     queryFn: async () => {
-      if (!user) return null;
-      const { data } = await supabase.rpc("get_advanced_dashboard_stats", { p_user_id: user.id });
+      if (!ownerId) return null;
+      const { data } = await supabase.rpc("get_advanced_dashboard_stats", { p_user_id: ownerId });
       const row = data?.[0] || null;
 
       const now = new Date();
@@ -35,7 +41,7 @@ export function KpiGrid() {
       const { count: leadsToday } = await supabase
         .from("leads")
         .select("id", { count: "exact", head: true })
-        .eq("user_id", user.id)
+        .eq("user_id", ownerId)
         .gte("created_at", startOfToday.toISOString());
 
       return {
@@ -43,7 +49,7 @@ export function KpiGrid() {
         responseRate: Number(row?.response_rate || 0),
       };
     },
-    enabled: !!user,
+    enabled: !!user && !!ownerId,
     refetchInterval: 60_000,
   });
 

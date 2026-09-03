@@ -38,7 +38,7 @@ import {
   KeyRound, ChevronDown, Webhook, LogOut, Plug, Tag, ChevronLeft, ChevronRight,
   Instagram, GitBranch, TrendingUp, Bot, Volume2, Sparkles, DollarSign,
   QrCode, RefreshCw, Loader2, Smartphone, Filter, Upload, UserMinus,
-  Home, KanbanSquare, Menu, X, Clock, Megaphone,
+  Home, KanbanSquare, Menu, X, Clock, Megaphone, Gauge,
   ShoppingBag, ShoppingCart, Boxes, CalendarClock, Undo2,
 } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
@@ -113,6 +113,7 @@ import { useLeadsPicker } from "@/hooks/use-leads-picker";
 
 import { TemplateStudio } from "@/components/templates/TemplateStudio";
 import { TeamManagement } from "@/components/team/TeamManagement";
+import { AgentMetrics } from "@/components/team/AgentMetrics";
 
 const isUnauthorizedFunctionError = (error: unknown) =>
   error instanceof Error && error.message.includes("401");
@@ -2444,6 +2445,10 @@ export default function WhatsAppApi() {
               <Users size={16} />
               {!navCollapsed && <span>Equipe</span>}
             </TabsTrigger>
+            <TabsTrigger value="agent-metrics" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+              <Gauge size={16} />
+              {!navCollapsed && <span>Atendentes</span>}
+            </TabsTrigger>
             {!navCollapsed && (
               <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 px-3 pt-3 pb-1 font-semibold">Automação</p>
             )}
@@ -3088,6 +3093,11 @@ export default function WhatsAppApi() {
         {/* ── Team Tab ── */}
         <TabsContent value="team" className="space-y-4 p-4 sm:p-6 max-w-5xl overflow-y-auto flex-1 m-0">
           <TeamManagement />
+        </TabsContent>
+
+        {/* ── Agent Metrics Tab ── */}
+        <TabsContent value="agent-metrics" className="space-y-4 p-4 sm:p-6 max-w-5xl overflow-y-auto flex-1 m-0">
+          <AgentMetrics />
         </TabsContent>
 
 

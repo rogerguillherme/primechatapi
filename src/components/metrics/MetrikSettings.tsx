@@ -143,7 +143,7 @@ export function MetrikSettings({ ownerId, tiers, inicio, fim, metaAtual, membros
       }
     },
     onSuccess: () => {
-      setNovo({ name: "", min_value: "", commission_pct: "" });
+      setNovo({ name: "", min_value: "", commission_pct: "", bonus_value: "" });
       recarregar();
     },
     onError: (e: Error) => toast.error(e.message),
