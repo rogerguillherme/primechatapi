@@ -78,6 +78,10 @@ describe("parseDateBR", () => {
   it("lê dd/MM/yyyy com e sem hora", () => {
     expect(parseDateBR("15/08/2026")).toBe("2026-08-15T00:00:00.000Z");
     expect(parseDateBR("15/08/2026 14:30")).toBe("2026-08-15T14:30:00.000Z");
+    // A ApplyFy exporta com traço entre data e hora. Sem aceitar isso, a hora
+    // era descartada e a venda ia para 00:00 UTC — que em Brasília é o dia
+    // anterior, jogando a venda para fora do mês no fechamento.
+    expect(parseDateBR("02/09/2026 - 22:38")).toBe("2026-09-02T22:38:00.000Z");
   });
 
   it("não troca dia por mês em data ambígua", () => {

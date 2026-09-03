@@ -166,7 +166,13 @@ export function parseDateBR(raw: unknown): string | null {
   const s = String(raw).trim();
   if (!s) return null;
 
-  const br = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  // O separador entre data e hora varia: espaço, "T", ou " - " como a ApplyFy
+  // exporta ("02/09/2026 - 22:38"). Sem aceitar o traço, a hora era descartada
+  // e a venda ia para 00:00 UTC — que em Brasília é o DIA ANTERIOR, jogando a
+  // venda para fora do mês no fechamento.
+  const br = s.match(
+    /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})(?:\s*(?:[T-]|\s)\s*(\d{1,2}):(\d{2})(?::(\d{2}))?)?/,
+  );
   if (br) {
     const [, d, m, y, hh = "0", mm = "0", ss = "0"] = br;
     const date = new Date(Date.UTC(+y, +m - 1, +d, +hh, +mm, +ss));

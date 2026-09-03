@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolverStatusVenda } from "../_shared/venda-status.mjs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -93,28 +94,6 @@ function extractLead(payload: any, fieldMapping: FieldMapping = {}): { phone: st
   const productName = pickFirst(mapped(fieldMapping, "product_name", p), product.name, offer.name, p.product_name, p.produto);
 
   return { phone, name, email, cpf, orderId, amount, productName };
-}
-
-/**
- * Status da venda a partir do tipo de evento do endpoint.
- *
- * Null = o evento não é uma venda (carrinho abandonado, por exemplo) e não
- * gera linha em `orders`. Registrar carrinho como venda inflaria o faturamento
- * com dinheiro que nunca entrou.
- */
-function statusDaVenda(eventType: string): string | null {
-  switch (eventType) {
-    case "compra_aprovada":
-    case "pix":
-    case "cartao":
-      return "approved";
-    case "reembolso":
-      return "refunded";
-    case "cancelamento":
-      return "cancelled";
-    default:
-      return null;
-  }
 }
 
 async function resolveOrCreateLead(
@@ -361,7 +340,10 @@ Deno.serve(async (req) => {
       // Uma função por plataforma seria treze cópias divergindo na primeira
       // correção; o que muda entre elas é o mapeamento de campo, que já é
       // configurável por endpoint.
-      const statusVenda = statusDaVenda(endpoint.event_type);
+      // O status sai do PAYLOAD, não do tipo do endpoint. Quem aponta todos os
+      // eventos da plataforma para a mesma URL — arranjo comum, porque é o mais
+      // simples de configurar lá — teria reembolso gravado como venda aprovada.
+      const statusVenda = resolverStatusVenda(payload, endpoint.event_type);
       if (leadId && statusVenda && info.orderId && Number(info.amount) > 0) {
         const { error: ordemErro } = await adminClient.from("orders").upsert(
           {
