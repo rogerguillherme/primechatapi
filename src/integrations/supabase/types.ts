@@ -2134,6 +2134,7 @@ export type Database = {
           external_order_id: string
           id: string
           lead_id: string
+          net_amount: number | null
           payment_method: string | null
           platform: string | null
           product_id: string | null
@@ -2148,6 +2149,7 @@ export type Database = {
           external_order_id: string
           id?: string
           lead_id: string
+          net_amount?: number | null
           payment_method?: string | null
           platform?: string | null
           product_id?: string | null
@@ -2162,6 +2164,7 @@ export type Database = {
           external_order_id?: string
           id?: string
           lead_id?: string
+          net_amount?: number | null
           payment_method?: string | null
           platform?: string | null
           product_id?: string | null
