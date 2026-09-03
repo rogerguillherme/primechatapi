@@ -307,7 +307,6 @@ function AppRoutes() {
         }
       />
       <Route
-      <Route
         path="/metrik/meta-ads"
         element={
           <ProtectedRoute>
