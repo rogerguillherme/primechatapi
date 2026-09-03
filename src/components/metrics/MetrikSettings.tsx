@@ -38,6 +38,7 @@ interface Tier {
   name: string;
   min_value: number;
   commission_pct: number;
+  bonus_value: number;
   color: string;
 }
 
@@ -68,7 +69,7 @@ export function MetrikSettings({ ownerId, tiers, inicio, fim, metaAtual, membros
   const [meta, setMeta] = useState(metaAtual != null ? String(metaAtual) : "");
   const [gasto, setGasto] = useState("");
   const [gastoDe, setGastoDe] = useState("__empresa__");
-  const [novo, setNovo] = useState({ name: "", min_value: "", commission_pct: "" });
+  const [novo, setNovo] = useState({ name: "", min_value: "", commission_pct: "", bonus_value: "" });
   const [taxa, setTaxa] = useState("");
   const [pctPadrao, setPctPadrao] = useState("");
 
@@ -124,6 +125,7 @@ export function MetrikSettings({ ownerId, tiers, inicio, fim, metaAtual, membros
             name: t.name,
             min_value: t.min_value,
             commission_pct: t.commission_pct,
+            bonus_value: t.bonus_value,
             color: t.color,
           })
           .eq("id", t.id);
@@ -134,6 +136,7 @@ export function MetrikSettings({ ownerId, tiers, inicio, fim, metaAtual, membros
           name: t.name,
           min_value: t.min_value,
           commission_pct: t.commission_pct,
+          bonus_value: t.bonus_value || 0,
           color: t.color || "#64748b",
         });
         if (error) throw error;
@@ -292,6 +295,15 @@ export function MetrikSettings({ ownerId, tiers, inicio, fim, metaAtual, membros
                 aria-label="Percentual de comissão"
                 title="% de comissão neste elo"
               />
+              <Input
+                defaultValue={t.bonus_value}
+                onBlur={(e) =>
+                  salvarElo.mutate({ ...t, bonus_value: Number(e.target.value) || 0 })
+                }
+                className="h-8 w-20 text-sm tabular-nums"
+                aria-label="Bônus fixo do elo"
+                title="Valor fixo somado à comissão ao alcançar este elo"
+              />
               <Button
                 variant="ghost"
                 size="icon"
@@ -323,6 +335,12 @@ export function MetrikSettings({ ownerId, tiers, inicio, fim, metaAtual, membros
               onChange={(e) => setNovo({ ...novo, commission_pct: e.target.value })}
               className="h-8 w-14 text-sm tabular-nums"
             />
+            <Input
+              placeholder="Bônus R$"
+              value={novo.bonus_value}
+              onChange={(e) => setNovo({ ...novo, bonus_value: e.target.value })}
+              className="h-8 w-20 text-sm tabular-nums"
+            />
             <Button
               size="icon"
               variant="outline"
@@ -333,6 +351,7 @@ export function MetrikSettings({ ownerId, tiers, inicio, fim, metaAtual, membros
                   name: novo.name.trim(),
                   min_value: Number(novo.min_value) || 0,
                   commission_pct: Number(novo.commission_pct) || 0,
+                  bonus_value: Number(novo.bonus_value) || 0,
                 })
               }
               aria-label="Adicionar elo"
@@ -341,8 +360,8 @@ export function MetrikSettings({ ownerId, tiers, inicio, fim, metaAtual, membros
             </Button>
           </div>
           <p className="text-[11px] text-muted-foreground">
-            Colunas: cor, nome, faturamento a partir do qual o elo vale, e % de comissão.
-            As mudanças salvam ao sair do campo.
+            Colunas: cor, nome, faturamento a partir do qual o elo vale, % de comissão, e
+            bônus fixo somado à comissão ao alcançar o elo. As mudanças salvam ao sair do campo.
           </p>
         </section>
 

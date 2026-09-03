@@ -13,7 +13,7 @@ import { Card, Kpi, TituloPagina, Vazio, moeda } from "@/components/metrics/ui";
 import { HistoricoCiclos } from "@/components/metrics/HistoricoCiclos";
 import { cn } from "@/lib/utils";
 import {
-  eloAtual, baseComissao, comissaoSobreBase, roi,
+  eloAtual, baseComissao, comissaoSobreBase, bonusElo, roi,
 } from "../../supabase/functions/_shared/metrics-engine.mjs";
 
 /**
@@ -40,13 +40,17 @@ export default function MetrikComissionados() {
           // reteve, e só então aplica o percentual. Comissionar sobre o bruto
           // pagaria o vendedor por dinheiro que a empresa não recebeu.
           const base = baseComissao(v.faturamento, v.reembolsos, config.taxaPct) as number;
+          const bonus = bonusElo(tiers, v.faturamento) as number;
           return {
             ...v,
             elo: eloAtual(tiers, v.faturamento) as any,
             base,
             taxa:
               Math.round((v.faturamento - v.reembolsos) * (config.taxaPct / 100) * 100) / 100,
-            comissao: comissaoSobreBase(base, tiers, v.faturamento, config.comissaoPct) as number,
+            bonus,
+            // O bônus é um valor fixo por ter alcançado o elo, somado ao
+            // percentual — não substitui a comissão calculada sobre a base.
+            comissao: (comissaoSobreBase(base, tiers, v.faturamento, config.comissaoPct) as number) + bonus,
             roi: roi(v.faturamento, v.investimento) as number | null,
           };
         })
@@ -180,6 +184,7 @@ export default function MetrikComissionados() {
                     {l.elo && (
                       <span className="ml-1 text-[10px] font-normal text-muted-foreground">
                         {Number(l.elo.commission_pct)}%
+                        {l.bonus > 0 && ` + ${moeda(l.bonus)} bônus`}
                       </span>
                     )}
                   </td>

@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import {
   eloAtual, proximoElo, progressoNoElo, comissao, progressoMeta, roas, roi,
-  baseComissao, comissaoSobreBase,
+  baseComissao, comissaoSobreBase, bonusElo,
 } from "./metrics-engine.mjs";
 
 const ELOS = [
@@ -102,5 +102,15 @@ assert.equal(comissaoSobreBase(720, [], 1000, 10), 72, "padrão quando não há 
 // Havendo elo, o percentual dele manda.
 assert.equal(comissaoSobreBase(720, ELOS, 10000, 10), 57.6, "8% de Prata sobre a base");
 assert.equal(comissaoSobreBase(0, ELOS, 10000, 10), 0, "base zero não comissiona");
+
+// ── bônus fixo do elo ──
+const COM_BONUS = [
+  { name: "Bronze", min_value: 0, commission_pct: 5, bonus_value: 0 },
+  { name: "Ouro", min_value: 30000, commission_pct: 10, bonus_value: 500 },
+];
+assert.equal(bonusElo(COM_BONUS, 30000), 500, "bônus do elo alcançado");
+assert.equal(bonusElo(COM_BONUS, 0), 0, "elo sem bônus configurado");
+assert.equal(bonusElo([], 50000), 0, "sem elo cadastrado, sem bônus");
+assert.equal(bonusElo(COM_BONUS, 29999), 0, "abaixo do corte, ainda no elo sem bônus");
 
 console.log("metrics-engine: all assertions passed");

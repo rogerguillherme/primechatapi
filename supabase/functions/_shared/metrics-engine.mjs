@@ -139,3 +139,14 @@ export function comissaoSobreBase(base, tiers, faturamento, pctPadrao = 0) {
   const pct = elo ? Number(elo.commission_pct) || 0 : Number(pctPadrao) || 0;
   return Math.round(b * pct) / 100;
 }
+
+/**
+ * Bônus fixo do elo alcançado, somado à comissão percentual.
+ *
+ * Sem elo alcançado não há bônus — ele é um prêmio por atingir o corte, não
+ * um valor padrão da empresa como o percentual.
+ */
+export function bonusElo(tiers, faturamento) {
+  const elo = eloAtual(tiers, Number(faturamento) || 0);
+  return elo ? Number(elo.bonus_value) || 0 : 0;
+}
