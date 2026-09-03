@@ -307,6 +307,46 @@ function AppRoutes() {
         }
       />
       <Route
+      <Route
+        path="/metrik/meta-ads"
+        element={
+          <ProtectedRoute>
+            <div className="metrik-shell min-h-screen flex flex-col">
+              <MetrikHeader />
+              <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto w-full">
+                <MetrikMetaAds />
+              </main>
+            </div>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/metrik/tracker"
+        element={
+          <ProtectedRoute>
+            <div className="metrik-shell min-h-screen flex flex-col">
+              <MetrikHeader />
+              <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto w-full">
+                <MetrikTracker />
+              </main>
+            </div>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/metrik/financeiro"
+        element={
+          <ProtectedRoute>
+            <div className="metrik-shell min-h-screen flex flex-col">
+              <MetrikHeader />
+              <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto w-full">
+                <MetrikFinanceiro />
+              </main>
+            </div>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/whatsapp/health"
         element={
           <ProtectedRoute>
