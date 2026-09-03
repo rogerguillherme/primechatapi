@@ -194,25 +194,42 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
   const verMais = useCallback(() => setJanelaDias((d) => d + PASSO_DIAS), []);
 
   // Fetch leads (already carries the denormalized last-message summary).
-  // 5000 leads por refetch travava a aba: o payload chegava a alguns MB e todo
-  // evento de realtime refazia a conta. 800 cobre a caixa de entrada real
-  // (a busca por telefone/nome continua feita no servidor quando preciso).
+  // Two parallel windows: (1) most recent message per lead and (2) most recent
+  // inbound reply per lead. This guarantees that a conversation with a
+  // reply from 4 days ago is still visible even when today's broadcast flood
+  // pushes it out of a single recency window.
   const { data: leads } = useQuery({
     queryKey: ["chat-leads", "cloud", user?.id, janelaDias],
     enabled: !!user,
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("leads")
-        .select(
-          "id, name, phone, email, photo_url, chat_status, ai_enabled, assigned_to, updated_at, last_outbound_at, last_message_content, last_message_at, last_message_direction, last_message_status, last_message_account_id, account_ids, manually_unread"
-        )
-        .gte("updated_at", desde)
-        .order("updated_at", { ascending: false, nullsFirst: false })
-        .limit(800);
-      if (error) throw error;
-      return (data || []) as any[];
+      const cols =
+        "id, name, phone, email, photo_url, chat_status, ai_enabled, assigned_to, updated_at, last_outbound_at, last_message_content, last_message_at, last_message_direction, last_message_status, last_message_account_id, account_ids, manually_unread";
+
+      const [recent, replies] = await Promise.all([
+        (supabase as any)
+          .from("leads")
+          .select(cols)
+          .gte("last_message_at", desde)
+          .order("last_message_at", { ascending: false, nullsFirst: false })
+          .limit(800),
+        (supabase as any)
+          .from("leads")
+          .select(cols)
+          .not("last_inbound_at", "is", null)
+          .gte("last_inbound_at", desde)
+          .order("last_inbound_at", { ascending: false })
+          .limit(800),
+      ]);
+
+      if (recent.error) throw recent.error;
+      if (replies.error) throw replies.error;
+
+      const byId = new Map<string, any>();
+      for (const lead of [...(recent.data || []), ...(replies.data || [])]) {
+        byId.set(lead.id, lead);
+      }
+      return Array.from(byId.values()) as any[];
     },
-    // O canal de realtime já invalida esta query; o polling só duplicava carga.
     staleTime: 30_000,
   });
 
