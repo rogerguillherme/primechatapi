@@ -1729,17 +1729,6 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                   )}
                 </p>
               </div>
-              {accounts.length > 1 && (
-                <select
-                  value={selectedAccountId || ""}
-                  onChange={(e) => setSelectedAccountId(e.target.value || null)}
-                  className="h-7 rounded-md border border-input bg-background px-2 text-xs"
-                >
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>{formatAccountName(a)}</option>
-                  ))}
-                </select>
-              )}
 
               {/* Dados do contato */}
               <button
