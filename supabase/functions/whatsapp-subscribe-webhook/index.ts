@@ -252,7 +252,7 @@ Deno.serve(async (req) => {
 
     let q = adminClient
       .from("whatsapp_accounts")
-      .select("id, name, business_account_id, access_token, phone_number_id, app_secret")
+      .select("id, name, business_account_id, access_token, phone_number_id, app_secret, app_id, user_id")
     if (!isAdmin) q = q.eq("user_id", user.id);
 
     if (account_id) {
@@ -300,6 +300,29 @@ Deno.serve(async (req) => {
       }
 
       try {
+        // Conta sem app gravado herda o app da conexão Meta usada pelo dono.
+        let accountAppId: string | null = (acc as any).app_id ?? null;
+        if (!accountAppId) {
+          const { data: conn } = await adminClient
+            .from("meta_connections")
+            .select("app_id")
+            .eq("user_id", (acc as any).user_id)
+            .eq("status", "connected")
+            .maybeSingle();
+          accountAppId = conn?.app_id ?? null;
+        }
+        const creds = resolveAppCredentials(accountAppId);
+        const appSubscription = await getAppSubscription(creds.appId, creds.appSecret);
+
+        // Garante que a conta guarde o app e o secret usados, para o webhook
+        // validar a assinatura das mensagens que chegarem.
+        if (creds.appId && (!(acc as any).app_id || !acc.app_secret)) {
+          await adminClient
+            .from("whatsapp_accounts")
+            .update({ app_id: creds.appId, app_secret: creds.appSecret })
+            .eq("id", acc.id);
+        }
+
         // 1) Subscribe app to WABA  → receive webhook events.
         // Always force the callback override; otherwise Meta may keep or restore
         // the app-level default URL and button replies never reach this webhook.
