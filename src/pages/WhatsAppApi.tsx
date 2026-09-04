@@ -2536,6 +2536,10 @@ export default function WhatsAppApi() {
               <Key size={16} />
               {!navCollapsed && <span>Configuração</span>}
             </TabsTrigger>
+            <TabsTrigger value="antiban" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+              <ShieldCheck size={16} />
+              {!navCollapsed && <span>Controle Anti-ban</span>}
+            </TabsTrigger>
           </TabsList>
           <div className="mt-auto border-t border-sidebar-border p-2 space-y-0.5">
             {isAdmin && !navCollapsed && (
