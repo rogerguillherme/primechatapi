@@ -6,12 +6,28 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-async function configureAppWebhookSubscription(supabaseUrl: string, verifyToken: string) {
-  const metaAppId = Deno.env.get("META_APP_ID");
-  const metaAppSecret = Deno.env.get("META_APP_SECRET");
+/**
+ * Resolve as credenciais do app Meta usado pela conta. Contas conectadas pelo
+ * app CRM precisam ser administradas por ele — o app Prime recebe (#200)
+ * Permissions error nessas WABAs.
+ */
+function resolveAppCredentials(accountAppId?: string | null) {
+  const crmAppId = Deno.env.get("CRM_APP_ID");
+  const crmAppSecret = Deno.env.get("CRM_APP_SECRET");
+  if (accountAppId && crmAppId && String(accountAppId) === String(crmAppId)) {
+    return { appId: crmAppId, appSecret: crmAppSecret ?? null };
+  }
+  return { appId: Deno.env.get("META_APP_ID") ?? null, appSecret: Deno.env.get("META_APP_SECRET") ?? null };
+}
 
+async function configureAppWebhookSubscription(
+  supabaseUrl: string,
+  verifyToken: string,
+  metaAppId: string | null,
+  metaAppSecret: string | null,
+) {
   if (!metaAppId || !metaAppSecret) {
-    return { ok: false, skipped: true, reason: "META_APP_ID/META_APP_SECRET ausente" };
+    return { ok: false, skipped: true, reason: "credenciais do app Meta ausentes" };
   }
 
   const params = new URLSearchParams();
@@ -216,10 +232,18 @@ Deno.serve(async (req) => {
     const verifyToken = tokenSetting?.value?.trim()
       || Deno.env.get("WHATSAPP_VERIFY_TOKEN")?.trim()
       || "prime_chat_verify_2026";
-    const appSubscription = await configureAppWebhookSubscription(supabaseUrl, verifyToken).catch((e: any) => ({
-      ok: false,
-      error: e?.message || String(e),
-    }));
+    // Cada app Meta precisa da própria inscrição de `messages`; guardamos o
+    // resultado por app para não repetir a chamada em cada conta.
+    const appSubCache = new Map<string, any>();
+    const getAppSubscription = async (appId: string | null, appSecret: string | null) => {
+      const key = appId || "none";
+      if (!appSubCache.has(key)) {
+        const res = await configureAppWebhookSubscription(supabaseUrl, verifyToken, appId, appSecret)
+          .catch((e: any) => ({ ok: false, error: e?.message || String(e) }));
+        appSubCache.set(key, res);
+      }
+      return appSubCache.get(key);
+    };
 
     const { data: isAdmin } = await adminClient.rpc("has_role", {
       _user_id: user.id,
@@ -228,7 +252,7 @@ Deno.serve(async (req) => {
 
     let q = adminClient
       .from("whatsapp_accounts")
-      .select("id, name, business_account_id, access_token, phone_number_id, app_secret")
+      .select("id, name, business_account_id, access_token, phone_number_id, app_secret, app_id, user_id")
     if (!isAdmin) q = q.eq("user_id", user.id);
 
     if (account_id) {
@@ -276,6 +300,29 @@ Deno.serve(async (req) => {
       }
 
       try {
+        // Conta sem app gravado herda o app da conexão Meta usada pelo dono.
+        let accountAppId: string | null = (acc as any).app_id ?? null;
+        if (!accountAppId) {
+          const { data: conn } = await adminClient
+            .from("meta_connections")
+            .select("app_id")
+            .eq("user_id", (acc as any).user_id)
+            .eq("status", "connected")
+            .maybeSingle();
+          accountAppId = conn?.app_id ?? null;
+        }
+        const creds = resolveAppCredentials(accountAppId);
+        const appSubscription = await getAppSubscription(creds.appId, creds.appSecret);
+
+        // Garante que a conta guarde o app e o secret usados, para o webhook
+        // validar a assinatura das mensagens que chegarem.
+        if (creds.appId && (!(acc as any).app_id || !acc.app_secret)) {
+          await adminClient
+            .from("whatsapp_accounts")
+            .update({ app_id: creds.appId, app_secret: creds.appSecret })
+            .eq("id", acc.id);
+        }
+
         // 1) Subscribe app to WABA  → receive webhook events.
         // Always force the callback override; otherwise Meta may keep or restore
         // the app-level default URL and button replies never reach this webhook.

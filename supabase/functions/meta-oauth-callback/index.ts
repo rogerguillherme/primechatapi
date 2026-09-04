@@ -14,8 +14,10 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const metaAppId = Deno.env.get("META_APP_ID")!;
-    const metaAppSecret = Deno.env.get("META_APP_SECRET")!;
+    const primeAppId = Deno.env.get("META_APP_ID")!;
+    const primeAppSecret = Deno.env.get("META_APP_SECRET")!;
+    const crmAppId = Deno.env.get("CRM_APP_ID");
+    const crmAppSecret = Deno.env.get("CRM_APP_SECRET");
 
     const authHeader = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
     if (!authHeader.toLowerCase().startsWith("bearer ")) {
@@ -36,13 +38,24 @@ Deno.serve(async (req) => {
     }
     const userId = user.id;
 
-    const { code, redirect_uri } = await req.json();
+    const { code, redirect_uri, app } = await req.json();
     if (!code || !redirect_uri) {
       return new Response(JSON.stringify({ error: "code and redirect_uri are required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // O código só pode ser trocado pelo MESMO app que abriu a autorização.
+    const useCrm = String(app || "").toLowerCase() === "crm";
+    if (useCrm && (!crmAppId || !crmAppSecret)) {
+      return new Response(JSON.stringify({ error: "Credenciais do app CRM não configuradas" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const metaAppId = useCrm ? crmAppId! : primeAppId;
+    const metaAppSecret = useCrm ? crmAppSecret! : primeAppSecret;
 
     // Exchange code for access_token
     const tokenUrl = `https://graph.facebook.com/v21.0/oauth/access_token?client_id=${metaAppId}&redirect_uri=${encodeURIComponent(redirect_uri)}&client_secret=${metaAppSecret}&code=${encodeURIComponent(code)}`;
@@ -73,6 +86,7 @@ Deno.serve(async (req) => {
         .update({
           meta_access_token: accessToken,
           status: "connected",
+          app_id: metaAppId,
         })
         .eq("id", existing.id);
     } else {
@@ -80,6 +94,7 @@ Deno.serve(async (req) => {
         user_id: userId,
         meta_access_token: accessToken,
         status: "connected",
+        app_id: metaAppId,
       });
     }
 

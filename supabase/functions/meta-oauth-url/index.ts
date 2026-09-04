@@ -14,7 +14,8 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const metaAppId = Deno.env.get("META_APP_ID")!;
+    const primeAppId = Deno.env.get("META_APP_ID")!;
+    const crmAppId = Deno.env.get("CRM_APP_ID");
 
     // Authenticate user
     const authHeader = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
@@ -53,8 +54,19 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Algumas WABAs (ex.: as do Estevão) só aceitam administração pelo app CRM.
+    // `app: "crm"` autoriza por aquele app; o padrão continua sendo o Prime.
+    const useCrm = String(body.app || "").toLowerCase() === "crm";
+    if (useCrm && !crmAppId) {
+      return new Response(JSON.stringify({ error: "CRM_APP_ID não configurado" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const appId = useCrm ? crmAppId! : primeAppId;
+
     const oauthUrl = new URL("https://www.facebook.com/v21.0/dialog/oauth");
-    oauthUrl.searchParams.set("client_id", metaAppId);
+    oauthUrl.searchParams.set("client_id", appId);
     oauthUrl.searchParams.set("redirect_uri", redirect_uri);
     // `business_management` é necessário para administrar a inscrição da WABA
     // em /subscribed_apps. Sem ele, o token enxerga os números e consegue
