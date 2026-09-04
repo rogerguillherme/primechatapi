@@ -1035,10 +1035,28 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
     [templates],
   );
 
+  /**
+   * Qualidade do número que vai enviar. Média já é reclamação acumulada;
+   * baixa é o degrau antes da Meta limitar ou banir — nesse caso pedimos um OK
+   * explícito, para ninguém continuar disparando sem ver.
+   */
+  const contaDoEnvio = contaDaConversa || selectedAccountId || defaultAccount?.id || null;
+  const qualidadeDoEnvio = qualityOf(contaDoEnvio);
+
+  const enviarAgora = (text: string) => sendMutation.mutate({ text });
+
   const handleSend = () => {
     const text = message.trim();
     if (!text) return;
-    sendMutation.mutate({ text });
+
+    if (confirmLow && qualidadeDoEnvio === "RED") {
+      setConfirmarEnvioBaixa(text);
+      return;
+    }
+    if (warnMedium && qualidadeDoEnvio === "YELLOW") {
+      toast.warning("Qualidade média neste número — evite volume alto e mensagens repetidas.");
+    }
+    enviarAgora(text);
   };
 
   /** Executa um atalho: dispara fluxo ou preenche mensagem rápida com variáveis resolvidas. */
