@@ -2297,6 +2297,9 @@ export type Database = {
       }
       profiles: {
         Row: {
+          antiban_confirm_low: boolean
+          antiban_show_quality: boolean
+          antiban_warn_medium: boolean
           avatar_url: string | null
           chat_ai_button: boolean
           created_at: string
@@ -2309,6 +2312,9 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          antiban_confirm_low?: boolean
+          antiban_show_quality?: boolean
+          antiban_warn_medium?: boolean
           avatar_url?: string | null
           chat_ai_button?: boolean
           created_at?: string
@@ -2321,6 +2327,9 @@ export type Database = {
           user_id: string
         }
         Update: {
+          antiban_confirm_low?: boolean
+          antiban_show_quality?: boolean
+          antiban_warn_medium?: boolean
           avatar_url?: string | null
           chat_ai_button?: boolean
           created_at?: string
