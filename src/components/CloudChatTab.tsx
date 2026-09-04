@@ -1317,7 +1317,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
               >
                 <option value="">Todos os números</option>
                 {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
+                  <option key={a.id} value={a.id}>{formatAccountName(a)}</option>
                 ))}
               </select>
             )}
@@ -1664,7 +1664,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                   className="h-7 rounded-md border border-input bg-background px-2 text-xs"
                 >
                   {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>{a.name}</option>
+                    <option key={a.id} value={a.id}>{formatAccountName(a)}</option>
                   ))}
                 </select>
               )}
