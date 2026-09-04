@@ -7,6 +7,10 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { ChatMediaBubble } from "@/components/ChatMediaBubble";
 import { AudioRecorder, audioFileFromBlob, validarAudio } from "@/components/AudioRecorder";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
