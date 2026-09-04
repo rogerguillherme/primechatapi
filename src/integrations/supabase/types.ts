@@ -1961,6 +1961,7 @@ export type Database = {
       }
       metrics_tiers: {
         Row: {
+          bonus_value: number
           color: string
           commission_pct: number
           created_at: string
@@ -1971,6 +1972,7 @@ export type Database = {
           position: number
         }
         Insert: {
+          bonus_value?: number
           color?: string
           commission_pct?: number
           created_at?: string
@@ -1981,6 +1983,7 @@ export type Database = {
           position?: number
         }
         Update: {
+          bonus_value?: number
           color?: string
           commission_pct?: number
           created_at?: string
@@ -2883,6 +2886,7 @@ export type Database = {
           access_token: string
           api_key: string | null
           app_id: string | null
+          app_secret: string | null
           blocked_at: string | null
           blocked_reason: string | null
           business_account_id: string | null
@@ -2907,6 +2911,7 @@ export type Database = {
           user_id: string | null
           webhook_last_check_at: string | null
           webhook_last_status: string | null
+          webhook_secret: string | null
           webhook_subscribed: boolean
           webhook_subscribed_at: string | null
         }
@@ -2914,6 +2919,7 @@ export type Database = {
           access_token: string
           api_key?: string | null
           app_id?: string | null
+          app_secret?: string | null
           blocked_at?: string | null
           blocked_reason?: string | null
           business_account_id?: string | null
@@ -2938,6 +2944,7 @@ export type Database = {
           user_id?: string | null
           webhook_last_check_at?: string | null
           webhook_last_status?: string | null
+          webhook_secret?: string | null
           webhook_subscribed?: boolean
           webhook_subscribed_at?: string | null
         }
@@ -2945,6 +2952,7 @@ export type Database = {
           access_token?: string
           api_key?: string | null
           app_id?: string | null
+          app_secret?: string | null
           blocked_at?: string | null
           blocked_reason?: string | null
           business_account_id?: string | null
@@ -2969,6 +2977,7 @@ export type Database = {
           user_id?: string | null
           webhook_last_check_at?: string | null
           webhook_last_status?: string | null
+          webhook_secret?: string | null
           webhook_subscribed?: boolean
           webhook_subscribed_at?: string | null
         }
@@ -3088,6 +3097,16 @@ export type Database = {
     }
     Functions: {
       distribute_lead: { Args: { p_lead_id: string }; Returns: string }
+      get_account_stats_today: {
+        Args: { p_owner_id: string }
+        Returns: {
+          account_id: string
+          display_phone_number: string
+          leads_today: number
+          name: string
+          provider: string
+        }[]
+      }
       get_advanced_dashboard_stats: {
         Args: { p_user_id: string }
         Returns: {
@@ -3120,6 +3139,16 @@ export type Database = {
           returning_buyers: number
           total_buyers: number
           total_orders: number
+        }[]
+      }
+      get_team_agent_stats: {
+        Args: { p_owner_id: string }
+        Returns: {
+          avg_response_time_minutes: number
+          leads_today: number
+          member_user_id: string
+          response_rate: number
+          total_leads: number
         }[]
       }
       has_role: {
