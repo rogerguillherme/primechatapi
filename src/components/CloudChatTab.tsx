@@ -40,7 +40,7 @@ import { useProfile } from "@/hooks/use-profile";
 
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { cn } from "@/lib/utils";
+import { cn, formatAccountName } from "@/lib/utils";
 
 /**
  * Último item que satisfaz o teste. A lista de mensagens vem do mais antigo
@@ -1317,7 +1317,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
               >
                 <option value="">Todos os números</option>
                 {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
+                  <option key={a.id} value={a.id}>{formatAccountName(a)}</option>
                 ))}
               </select>
             )}
@@ -1664,7 +1664,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                   className="h-7 rounded-md border border-input bg-background px-2 text-xs"
                 >
                   {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>{a.name}</option>
+                    <option key={a.id} value={a.id}>{formatAccountName(a)}</option>
                   ))}
                 </select>
               )}
