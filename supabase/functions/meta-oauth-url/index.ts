@@ -14,7 +14,8 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const metaAppId = Deno.env.get("META_APP_ID")!;
+    const primeAppId = Deno.env.get("META_APP_ID")!;
+    const crmAppId = Deno.env.get("CRM_APP_ID");
 
     // Authenticate user
     const authHeader = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
