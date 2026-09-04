@@ -270,62 +270,80 @@ Deno.serve(async (req) => {
     const isInternalForward = req.headers.get("authorization") === `Bearer ${serviceRoleKey}`;
     let signatureVerified = isInternalForward;
     if (!isInternalForward) {
-      // Suporta múltiplos apps Meta: META_APP_SECRET (principal) +
-      // META_APP_SECRETS (lista separada por vírgula) para contas migradas.
-      const candidates = [
-        Deno.env.get("META_APP_SECRET"),
-        ...(Deno.env.get("META_APP_SECRETS") || "").split(","),
-      ]
-        .map((s) => (s || "").trim())
-        .filter(Boolean);
+      // Precisa saber de qual conta é o evento ANTES de verificar a
+      // assinatura: conta com app isolado (app_secret próprio) só aceita o
+      // secret dela — chega antes de cair em qualquer fallback.
+      const pnId = (() => {
+        try {
+          const p = JSON.parse(rawBody);
+          return (p.entry || [])
+            .flatMap((e: any) => e?.changes || [])
+            .map((c: any) => c?.value?.metadata?.phone_number_id)
+            .find(Boolean) || null;
+        } catch {
+          return null;
+        }
+      })();
+
+      const sbGuard = createClient(Deno.env.get("SUPABASE_URL")!, serviceRoleKey);
+      const knownAcc = pnId
+        ? (
+            await sbGuard
+              .from("whatsapp_accounts")
+              .select("id, app_secret")
+              .eq("phone_number_id", pnId)
+              .maybeSingle()
+          ).data
+        : null;
 
       const signatureHeader = req.headers.get("x-hub-signature-256");
-      for (const secret of candidates) {
-        if (await verifyMetaSignature(rawBody, signatureHeader, secret)) {
-          signatureVerified = true;
-          break;
-        }
-      }
 
-      if (!signatureVerified) {
-        // Fallback controlado: a assinatura não confere com nenhum App Secret
-        // conhecido (app Meta trocado / secret desatualizado). Em vez de
-        // descartar o evento — o que interrompe os fluxos — só seguimos se o
-        // payload apontar para um phone_number_id realmente cadastrado.
-        const pnId = (() => {
-          try {
-            const p = JSON.parse(rawBody);
-            return (p.entry || [])
-              .flatMap((e: any) => e?.changes || [])
-              .map((c: any) => c?.value?.metadata?.phone_number_id)
-              .find(Boolean) || null;
-          } catch {
-            return null;
+      if (knownAcc?.app_secret) {
+        // App isolado: só o secret DESSA conta vale. Nada de lista global
+        // nem de fallback sem assinatura — é exatamente o que a isolação
+        // por conta existe pra fechar.
+        signatureVerified = await verifyMetaSignature(rawBody, signatureHeader, knownAcc.app_secret);
+        if (!signatureVerified) {
+          console.error("whatsapp-cloud-webhook: assinatura inválida pro app_secret da conta", knownAcc.id);
+          return new Response("Forbidden", { status: 403, headers: corsHeaders });
+        }
+      } else {
+        // Conta ainda sem app_secret próprio (app compartilhado / legado):
+        // tenta a lista global — META_APP_SECRET (principal) + META_APP_SECRETS
+        // (separada por vírgula, contas migradas).
+        const candidates = [
+          Deno.env.get("META_APP_SECRET"),
+          ...(Deno.env.get("META_APP_SECRETS") || "").split(","),
+        ]
+          .map((s) => (s || "").trim())
+          .filter(Boolean);
+
+        for (const secret of candidates) {
+          if (await verifyMetaSignature(rawBody, signatureHeader, secret)) {
+            signatureVerified = true;
+            break;
           }
-        })();
-
-        if (!pnId) {
-          console.error("whatsapp-cloud-webhook: assinatura inválida e sem phone_number_id — descartado");
-          return new Response("Forbidden", { status: 403, headers: corsHeaders });
         }
 
-        const sbGuard = createClient(Deno.env.get("SUPABASE_URL")!, serviceRoleKey);
-        const { data: knownAcc } = await sbGuard
-          .from("whatsapp_accounts")
-          .select("id")
-          .eq("phone_number_id", pnId)
-          .maybeSingle();
+        if (!signatureVerified) {
+          // Fallback controlado: a assinatura não confere com nenhum App Secret
+          // conhecido (app Meta trocado / secret desatualizado). Em vez de
+          // descartar o evento — o que interrompe os fluxos — só seguimos se o
+          // payload apontar para um phone_number_id realmente cadastrado.
+          if (!knownAcc) {
+            console.error(
+              "whatsapp-cloud-webhook: assinatura inválida e phone_number_id " +
+              (pnId ? "desconhecido: " + pnId : "ausente") + " — descartado",
+            );
+            return new Response("Forbidden", { status: 403, headers: corsHeaders });
+          }
 
-        if (!knownAcc) {
-          console.error("whatsapp-cloud-webhook: assinatura inválida e phone_number_id desconhecido:", pnId);
-          return new Response("Forbidden", { status: 403, headers: corsHeaders });
+          console.warn(
+            "whatsapp-cloud-webhook: assinatura não confere com nenhum App Secret configurado; " +
+            "aceitando por phone_number_id conhecido:", pnId,
+            "— cadastre o App Secret dessa conta pra fechar esse fallback.",
+          );
         }
-
-        console.warn(
-          "whatsapp-cloud-webhook: assinatura não confere com nenhum App Secret configurado; " +
-          "aceitando por phone_number_id conhecido:", pnId,
-          "— atualize META_APP_SECRET/META_APP_SECRETS com o secret do app Meta atual.",
-        );
       }
     }
 

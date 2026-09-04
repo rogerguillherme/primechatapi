@@ -1829,6 +1829,7 @@ export default function WhatsAppApi() {
   const [phoneNumberId, setPhoneNumberId] = useState("");
   const [accessToken, setAccessToken] = useState("");
   const [businessAccountId, setBusinessAccountId] = useState("");
+  const [appSecret, setAppSecret] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [isDefault, setIsDefault] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -1970,6 +1971,7 @@ export default function WhatsAppApi() {
     setPhoneNumberId("");
     setAccessToken("");
     setBusinessAccountId("");
+    setAppSecret("");
     setApiKey("");
     setIsDefault(false);
     setEditingAccount(null);
@@ -2001,6 +2003,7 @@ export default function WhatsAppApi() {
     setPhoneNumberId(account.phone_number_id);
     setAccessToken(account.access_token);
     setBusinessAccountId(account.business_account_id || "");
+    setAppSecret(account.app_secret || "");
     setApiKey(account.api_key || "");
     setIsDefault(account.is_default);
     setIsAddingAccount(true);
@@ -2058,6 +2061,7 @@ export default function WhatsAppApi() {
           : null,
         access_token: provider === "meta_cloud" ? accessToken.trim() : (apiKey.trim() || provider),
         api_key: isApiKeyProvider ? apiKey.trim() : null,
+        app_secret: provider === "meta_cloud" ? (appSecret.trim() || null) : null,
         is_default: isDefault || (accounts?.length === 0),
       };
 
@@ -2936,6 +2940,16 @@ export default function WhatsAppApi() {
                       <Label htmlFor="accessToken">Access Token (permanente)</Label>
                       <Input id="accessToken" type="password" placeholder="EAAxxxxxxx..." value={accessToken} onChange={(e) => setAccessToken(e.target.value)} />
                       <p className="text-xs text-muted-foreground">Use um token permanente do System User no Business Manager.</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="appSecret">App Secret (opcional)</Label>
+                      <Input id="appSecret" type="password" placeholder="Secret do app Meta desta conta" value={appSecret} onChange={(e) => setAppSecret(e.target.value)} />
+                      <p className="text-xs text-muted-foreground">
+                        Só preencha se esta conta usa um app Meta isolado (Configurações do app → Básico →
+                        Chave Secreta do App). Preenchido, o webhook passa a aceitar SÓ a assinatura desse
+                        app pra esta conta — mais seguro que cair no app padrão do sistema.
+                      </p>
                     </div>
                   </>
                 )}
