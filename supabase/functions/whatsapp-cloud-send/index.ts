@@ -964,6 +964,11 @@ Deno.serve(async (req) => {
         // ser OGG/Opus e o payload precisa declarar explicitamente `voice: true`.
         // O upload por `id` evita depender de um download posterior da URL.
         let audioPayload: Record<string, string> | null = null;
+        // Só OGG/Opus pode ir com `voice: true`. Um MP3 rotulado como nota de
+        // voz chega na conversa, mas o WhatsApp não consegue reproduzir nem
+        // baixar o arquivo (ele espera Opus dentro do container). Neste caso
+        // enviamos como áudio comum — toca e baixa normalmente.
+        let ehNotaDeVoz = false;
 
         if (isD360) {
           audioPayload = { link: media_url };
@@ -988,6 +993,7 @@ Deno.serve(async (req) => {
                 );
               }
               const { mime, fileExt } = formato;
+              ehNotaDeVoz = mime === "audio/ogg";
               // O CAMPO `type` leva o codec: é assim que a Meta reconhece o
               // arquivo como mensagem de voz.
               //
@@ -1035,7 +1041,7 @@ Deno.serve(async (req) => {
           messaging_product: "whatsapp",
           to: cleanPhone,
           type: "audio",
-          audio: { ...audioPayload, voice: true },
+          audio: ehNotaDeVoz ? { ...audioPayload, voice: true } : { ...audioPayload },
         };
 
 
