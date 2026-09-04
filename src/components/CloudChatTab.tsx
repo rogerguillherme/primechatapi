@@ -2499,6 +2499,36 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
         accountId={selectedAccountId || defaultAccount?.id || null}
       />
 
+      {/* Controle Anti-ban: confirmação antes de enviar por número com qualidade baixa */}
+      <AlertDialog
+        open={Boolean(confirmarEnvioBaixa)}
+        onOpenChange={(aberto) => { if (!aberto) setConfirmarEnvioBaixa(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Qualidade baixa neste número</AlertDialogTitle>
+            <AlertDialogDescription>
+              A Meta classificou este número como qualidade baixa. Continuar enviando aumenta o
+              risco de limitação ou bloqueio. Deseja enviar mesmo assim?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const texto = confirmarEnvioBaixa;
+                setConfirmarEnvioBaixa(null);
+                if (texto) enviarAgora(texto);
+              }}
+            >
+              OK, enviar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+
+
       <ContactInfoSheet
         leadId={selectedLeadId}
         open={contactOpen}
