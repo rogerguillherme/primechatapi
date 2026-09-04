@@ -2,6 +2,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { MessageCircle } from "lucide-react";
+import { formatAccountName } from "@/lib/utils";
 
 interface Account {
   id: string;
@@ -44,7 +45,7 @@ export function AccountSelector({ accounts, selectedIds, onToggle, mode = "singl
         >
           {accounts.map((a) => (
             <option key={a.id} value={a.id}>
-              {a.name} · {phoneLabel(a)} {a.is_default ? "(padrão)" : ""}
+              {formatAccountName(a)} {a.is_default ? "(padrão)" : ""}
             </option>
           ))}
         </select>
@@ -81,7 +82,7 @@ export function AccountSelector({ accounts, selectedIds, onToggle, mode = "singl
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="text-sm font-medium truncate">{a.name}</span>
+                <span className="text-sm font-medium truncate">{formatAccountName(a)}</span>
                 {a.is_default && <Badge variant="default" className="text-[10px] px-1.5 py-0">Padrão</Badge>}
               </div>
               <p className="text-xs text-muted-foreground tabular-nums truncate">{phoneLabel(a)}</p>
