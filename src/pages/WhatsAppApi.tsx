@@ -39,7 +39,7 @@ import {
   Instagram, GitBranch, TrendingUp, Bot, Volume2, Sparkles, DollarSign,
   QrCode, RefreshCw, Loader2, Smartphone, Filter, Upload, UserMinus,
   Home, KanbanSquare, Menu, X, Clock, Megaphone, Gauge,
-  ShoppingBag, ShoppingCart, Boxes, CalendarClock, Undo2,
+  ShoppingBag, ShoppingCart, Boxes, CalendarClock, Undo2, ShieldCheck,
 } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
