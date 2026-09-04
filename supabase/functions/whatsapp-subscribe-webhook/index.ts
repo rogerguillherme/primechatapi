@@ -232,10 +232,18 @@ Deno.serve(async (req) => {
     const verifyToken = tokenSetting?.value?.trim()
       || Deno.env.get("WHATSAPP_VERIFY_TOKEN")?.trim()
       || "prime_chat_verify_2026";
-    const appSubscription = await configureAppWebhookSubscription(supabaseUrl, verifyToken).catch((e: any) => ({
-      ok: false,
-      error: e?.message || String(e),
-    }));
+    // Cada app Meta precisa da própria inscrição de `messages`; guardamos o
+    // resultado por app para não repetir a chamada em cada conta.
+    const appSubCache = new Map<string, any>();
+    const getAppSubscription = async (appId: string | null, appSecret: string | null) => {
+      const key = appId || "none";
+      if (!appSubCache.has(key)) {
+        const res = await configureAppWebhookSubscription(supabaseUrl, verifyToken, appId, appSecret)
+          .catch((e: any) => ({ ok: false, error: e?.message || String(e) }));
+        appSubCache.set(key, res);
+      }
+      return appSubCache.get(key);
+    };
 
     const { data: isAdmin } = await adminClient.rpc("has_role", {
       _user_id: user.id,
