@@ -10,6 +10,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ChatMediaBubble } from "@/components/ChatMediaBubble";
 import { AudioRecorder, audioFileFromBlob, validarAudio } from "@/components/AudioRecorder";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
+import { useAccountStatsToday } from "@/hooks/use-account-stats-today";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
   DropdownMenuSeparator,
@@ -144,6 +145,10 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
   const mostrarBotaoIa = profile?.chat_ai_button !== false;
   const { accounts, defaultAccount } = useWhatsAppAccounts();
   const { templates } = useUserTemplates();
+  // Rótulo por conta sem access_token: useWhatsAppAccounts só enxerga o dono
+  // (RLS de whatsapp_accounts nunca ganhou acesso de equipe), então um
+  // colaborador via a lista vazia e o número da conversa não aparecia.
+  const { data: accountStats } = useAccountStatsToday();
 
   useEffect(() => {
     if (!selectedAccountId && defaultAccount) setSelectedAccountId(defaultAccount.id);
@@ -996,6 +1001,13 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
     return ((saida as any)?.account_id as string) ?? null;
   }, [messages]);
 
+  /** Nome/telefone do número que está de fato conversando com este lead. */
+  const contaDaConversaLabel = useMemo(() => {
+    if (!contaDaConversa) return null;
+    const conta = (accountStats || []).find((a) => a.account_id === contaDaConversa);
+    return conta ? conta.display_phone_number || conta.name : null;
+  }, [contaDaConversa, accountStats]);
+
   const janela24h = useMemo(() => {
     // `find` aqui pegava a entrada MAIS ANTIGA das 300 carregadas: numa conversa
     // longa a janela aparecia fechada mesmo com o contato tendo escrito agora.
@@ -1638,7 +1650,12 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
               </Avatar>
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm truncate">{selectedLead.name}</p>
-                <p className="text-[11px] text-muted-foreground">{selectedLead.phone}</p>
+                <p className="text-[11px] text-muted-foreground truncate">
+                  {selectedLead.phone}
+                  {contaDaConversaLabel && (
+                    <span title="Número que está atendendo este lead"> · {contaDaConversaLabel}</span>
+                  )}
+                </p>
               </div>
               {accounts.length > 1 && (
                 <select

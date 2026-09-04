@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTeamContext } from "@/hooks/use-team";
+import { useAccountStatsToday } from "@/hooks/use-account-stats-today";
 import { Users, Reply } from "lucide-react";
 import { PremiumCard } from "@/components/premium/PremiumCard";
 import { cn } from "@/lib/utils";
@@ -53,6 +54,11 @@ export function KpiGrid() {
     refetchInterval: 60_000,
   });
 
+  // Separação de "Novos contatos hoje" por número — só faz sentido mostrar
+  // quando a conta tem mais de um WhatsApp conectado.
+  const { data: accountStats } = useAccountStatsToday();
+  const porNumero = (accountStats || []).filter((a) => a.leads_today > 0);
+
   const kpis: Kpi[] = [
     {
       label: "Novos contatos hoje",
@@ -88,6 +94,16 @@ export function KpiGrid() {
           </p>
           {k.hint && (
             <p className="text-[11px] text-muted-foreground mt-2 leading-tight">{k.hint}</p>
+          )}
+          {k.label === "Novos contatos hoje" && porNumero.length > 1 && (
+            <div className="mt-2.5 pt-2.5 border-t border-border/60 space-y-1">
+              {porNumero.map((a) => (
+                <div key={a.account_id} className="flex items-center justify-between gap-2 text-[11px]">
+                  <span className="text-muted-foreground truncate">{a.display_phone_number || a.name}</span>
+                  <span className="font-medium tabular-nums shrink-0">{a.leads_today}</span>
+                </div>
+              ))}
+            </div>
           )}
         </PremiumCard>
       ))}
