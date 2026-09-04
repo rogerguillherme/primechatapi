@@ -1535,6 +1535,12 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
             const leadTags = getLeadLabels(lead.id);
             const isUnread = unreadIds.has(lead.id);
             const isDone = lead.chat_status === "finalizado";
+            // De qual conta/BM veio a conversa: prioriza a conta da última
+            // mensagem, com o primeiro vínculo do lead como reserva.
+            const leadAccount =
+              accountById.get(lead.last_message_account_id || "") ||
+              accountById.get((lead.account_ids || [])[0] || "");
+
             return (
               <div
                 key={lead.id}
