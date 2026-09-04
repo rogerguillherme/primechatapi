@@ -6,12 +6,28 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-async function configureAppWebhookSubscription(supabaseUrl: string, verifyToken: string) {
-  const metaAppId = Deno.env.get("META_APP_ID");
-  const metaAppSecret = Deno.env.get("META_APP_SECRET");
+/**
+ * Resolve as credenciais do app Meta usado pela conta. Contas conectadas pelo
+ * app CRM precisam ser administradas por ele — o app Prime recebe (#200)
+ * Permissions error nessas WABAs.
+ */
+function resolveAppCredentials(accountAppId?: string | null) {
+  const crmAppId = Deno.env.get("CRM_APP_ID");
+  const crmAppSecret = Deno.env.get("CRM_APP_SECRET");
+  if (accountAppId && crmAppId && String(accountAppId) === String(crmAppId)) {
+    return { appId: crmAppId, appSecret: crmAppSecret ?? null };
+  }
+  return { appId: Deno.env.get("META_APP_ID") ?? null, appSecret: Deno.env.get("META_APP_SECRET") ?? null };
+}
 
+async function configureAppWebhookSubscription(
+  supabaseUrl: string,
+  verifyToken: string,
+  metaAppId: string | null,
+  metaAppSecret: string | null,
+) {
   if (!metaAppId || !metaAppSecret) {
-    return { ok: false, skipped: true, reason: "META_APP_ID/META_APP_SECRET ausente" };
+    return { ok: false, skipped: true, reason: "credenciais do app Meta ausentes" };
   }
 
   const params = new URLSearchParams();
