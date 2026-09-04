@@ -330,11 +330,18 @@ export default function MetaConnect() {
                   </Button>
                 </>
               ) : (
-                <Button onClick={handleConnect} className="gap-2">
-                  <Plug className="h-4 w-4" />
-                  Conectar com Meta
-                  <ExternalLink className="h-3 w-3" />
-                </Button>
+                <>
+                  <Button onClick={() => handleConnect("prime")} className="gap-2">
+                    <Plug className="h-4 w-4" />
+                    Conectar com Meta
+                    <ExternalLink className="h-3 w-3" />
+                  </Button>
+                  <Button variant="outline" onClick={() => handleConnect("crm")} className="gap-2">
+                    <Plug className="h-4 w-4" />
+                    Conectar pelo app CRM
+                    <ExternalLink className="h-3 w-3" />
+                  </Button>
+                </>
               )}
             </div>
           </div>
