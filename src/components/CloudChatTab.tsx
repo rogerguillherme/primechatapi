@@ -1130,10 +1130,15 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
           if (!leadLbls.has(lid)) return false;
         }
       }
-      // Dedupe by phone (leads list is ordered by recency upstream)
-      const key = (l.phone || "").replace(/\D/g, "") || l.id;
+      // Dedupe por telefone DENTRO da mesma conta (lista já vem por recência).
+      // Antes o telefone era chave única global: como o mesmo número pode
+      // existir em BMs diferentes, a conversa da segunda conta simplesmente
+      // desaparecia da lista.
+      const conta = l.last_message_account_id || (l.account_ids || [])[0] || "sem-conta";
+      const key = `${conta}:${(l.phone || "").replace(/\D/g, "") || l.id}`;
       if (seen.has(key)) return false;
       seen.add(key);
+
       return true;
     });
   }, [leads, search, activeTab, filterAccountId, filterAgentIds, leadAccountMap, filterLabelIds, leadLabelsMap, failedLeadIds]);
