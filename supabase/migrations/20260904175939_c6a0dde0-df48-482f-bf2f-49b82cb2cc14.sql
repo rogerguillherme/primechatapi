@@ -1,0 +1,1 @@
+ALTER TABLE public.meta_connections ADD COLUMN IF NOT EXISTS app_id text;

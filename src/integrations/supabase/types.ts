@@ -1772,6 +1772,7 @@ export type Database = {
       }
       meta_connections: {
         Row: {
+          app_id: string | null
           created_at: string
           id: string
           meta_access_token: string
@@ -1783,6 +1784,7 @@ export type Database = {
           waba_id: string | null
         }
         Insert: {
+          app_id?: string | null
           created_at?: string
           id?: string
           meta_access_token: string
@@ -1794,6 +1796,7 @@ export type Database = {
           waba_id?: string | null
         }
         Update: {
+          app_id?: string | null
           created_at?: string
           id?: string
           meta_access_token?: string
