@@ -867,7 +867,12 @@ Deno.serve(async (req) => {
             last_inbound_at: activityAt,
             updated_at: activityAt,
             user_id: resolvedUserId,
+            // Já nasce vinculado ao número que recebeu a mensagem, para a
+            // próxima mensagem cair nesta conversa e não criar outra.
+            last_message_account_id: resolvedAccountId,
+            account_ids: resolvedAccountId ? [resolvedAccountId] : [],
           })
+
           .select("id, name, phone")
           .single();
         if (createError) throw createError;
