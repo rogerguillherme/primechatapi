@@ -1577,6 +1577,18 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                       )}
                     </div>
                   </div>
+                  {leadAccount && (
+                    <div className="mt-0.5">
+                      <span
+                        className="inline-flex items-center gap-1 px-1.5 py-0 rounded-full text-[9px] border border-primary/30 bg-primary/10 text-primary max-w-full"
+                        title={`Conversa recebida na conta ${formatAccountName(leadAccount)}`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
+                        <span className="truncate">{formatAccountName(leadAccount)}</span>
+                      </span>
+                    </div>
+                  )}
+
                   <div className="flex items-center gap-1 mt-0.5">
                     {latest?.direction === "outbound" && <CheckCheck size={12} className="text-sky-400 shrink-0" />}
                     <p className="text-xs text-muted-foreground truncate">
