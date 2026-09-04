@@ -1183,6 +1183,14 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
   }, [search, activeTab, filterAccountId, filterAgentIds, filterLabelIds]);
   const visibleLeads = useMemo(() => sortedLeads.slice(0, visibleCount), [sortedLeads, visibleCount]);
 
+  // Mapa id -> conta, para mostrar de qual BM/número veio a conversa.
+  const accountById = useMemo(() => {
+    const map = new Map<string, any>();
+    for (const a of accounts || []) map.set(a.id, a);
+    return map;
+  }, [accounts]);
+
+
 
   const groupedMessages = useMemo(() => {
     if (!messages) return [];
