@@ -7,6 +7,10 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { ChatMediaBubble } from "@/components/ChatMediaBubble";
 import { AudioRecorder, audioFileFromBlob, validarAudio } from "@/components/AudioRecorder";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
@@ -37,6 +41,9 @@ import { useTeamContext, useTeamMembers } from "@/hooks/use-team";
 import { useToggleLeadLabel } from "@/hooks/use-chat-labels";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProfile } from "@/hooks/use-profile";
+import {
+  useAccountQuality, QUALITY_LABEL, QUALITY_TEXT, QUALITY_DOT,
+} from "@/hooks/use-account-quality";
 
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -144,6 +151,9 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
   /** Configuração da conta: exibir ou não o botão do agente IA no cabeçalho. */
   const mostrarBotaoIa = profile?.chat_ai_button !== false;
   const { accounts, defaultAccount } = useWhatsAppAccounts();
+  /** Controle Anti-ban: qualidade dos números e avisos antes de enviar. */
+  const { qualityOf, showQuality, warnMedium, confirmLow } = useAccountQuality();
+  const [confirmarEnvioBaixa, setConfirmarEnvioBaixa] = useState<string | null>(null);
   const { templates } = useUserTemplates();
   // Rótulo por conta sem access_token: useWhatsAppAccounts só enxerga o dono
   // (RLS de whatsapp_accounts nunca ganhou acesso de equipe), então um
@@ -1035,10 +1045,28 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
     [templates],
   );
 
+  /**
+   * Qualidade do número que vai enviar. Média já é reclamação acumulada;
+   * baixa é o degrau antes da Meta limitar ou banir — nesse caso pedimos um OK
+   * explícito, para ninguém continuar disparando sem ver.
+   */
+  const contaDoEnvio = contaDaConversa || selectedAccountId || defaultAccount?.id || null;
+  const qualidadeDoEnvio = qualityOf(contaDoEnvio);
+
+  const enviarAgora = (text: string) => sendMutation.mutate({ text });
+
   const handleSend = () => {
     const text = message.trim();
     if (!text) return;
-    sendMutation.mutate({ text });
+
+    if (confirmLow && qualidadeDoEnvio === "RED") {
+      setConfirmarEnvioBaixa(text);
+      return;
+    }
+    if (warnMedium && qualidadeDoEnvio === "YELLOW") {
+      toast.warning("Qualidade média neste número — evite volume alto e mensagens repetidas.");
+    }
+    enviarAgora(text);
   };
 
   /** Executa um atalho: dispara fluxo ou preenche mensagem rápida com variáveis resolvidas. */
@@ -1689,6 +1717,15 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                   {selectedLead.phone}
                   {contaDaConversaLabel && (
                     <span title="Número que está atendendo este lead"> · {contaDaConversaLabel}</span>
+                  )}
+                  {showQuality && (
+                    <span
+                      className={cn("ml-1.5 inline-flex items-center gap-1", QUALITY_TEXT[qualidadeDoEnvio])}
+                      title={`Qualidade do número na Meta: ${QUALITY_LABEL[qualidadeDoEnvio]}`}
+                    >
+                      <span className={cn("w-1.5 h-1.5 rounded-full", QUALITY_DOT[qualidadeDoEnvio])} />
+                      Qualidade {QUALITY_LABEL[qualidadeDoEnvio]}
+                    </span>
                   )}
                 </p>
               </div>
@@ -2465,6 +2502,36 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
         onClose={() => setForwardMsg(null)}
         accountId={selectedAccountId || defaultAccount?.id || null}
       />
+
+      {/* Controle Anti-ban: confirmação antes de enviar por número com qualidade baixa */}
+      <AlertDialog
+        open={Boolean(confirmarEnvioBaixa)}
+        onOpenChange={(aberto) => { if (!aberto) setConfirmarEnvioBaixa(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Qualidade baixa neste número</AlertDialogTitle>
+            <AlertDialogDescription>
+              A Meta classificou este número como qualidade baixa. Continuar enviando aumenta o
+              risco de limitação ou bloqueio. Deseja enviar mesmo assim?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const texto = confirmarEnvioBaixa;
+                setConfirmarEnvioBaixa(null);
+                if (texto) enviarAgora(texto);
+              }}
+            >
+              OK, enviar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+
 
       <ContactInfoSheet
         leadId={selectedLeadId}

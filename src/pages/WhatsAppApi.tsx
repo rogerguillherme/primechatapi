@@ -39,7 +39,7 @@ import {
   Instagram, GitBranch, TrendingUp, Bot, Volume2, Sparkles, DollarSign,
   QrCode, RefreshCw, Loader2, Smartphone, Filter, Upload, UserMinus,
   Home, KanbanSquare, Menu, X, Clock, Megaphone, Gauge,
-  ShoppingBag, ShoppingCart, Boxes, CalendarClock, Undo2,
+  ShoppingBag, ShoppingCart, Boxes, CalendarClock, Undo2, ShieldCheck,
 } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
@@ -102,6 +102,7 @@ import { AccountSelector } from "@/components/AccountSelector";
 import { DashboardHome } from "@/pages/DashboardHome";
 import { HomeViewSetting } from "@/components/settings/HomeViewSetting";
 import { ChatAiButtonSetting } from "@/components/settings/ChatAiButtonSetting";
+import { AntiBanSettings } from "@/components/settings/AntiBanSettings";
 import { LeadDistributionSettings } from "@/components/settings/LeadDistributionSettings";
 import { ShareLinksSettings } from "@/components/settings/ShareLinksSettings";
 import { StageAutomationsSettings } from "@/components/settings/StageAutomationsSettings";
@@ -2535,6 +2536,10 @@ export default function WhatsAppApi() {
               <Key size={16} />
               {!navCollapsed && <span>Configuração</span>}
             </TabsTrigger>
+            <TabsTrigger value="antiban" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+              <ShieldCheck size={16} />
+              {!navCollapsed && <span>Controle Anti-ban</span>}
+            </TabsTrigger>
           </TabsList>
           <div className="mt-auto border-t border-sidebar-border p-2 space-y-0.5">
             {isAdmin && !navCollapsed && (
@@ -2578,6 +2583,11 @@ export default function WhatsAppApi() {
 
         {/* Main content */}
         <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-x-hidden">
+          {/* Controle Anti-ban: qualidade dos números e avisos de risco */}
+          <TabsContent value="antiban" className="space-y-4 p-4 sm:p-6 m-0 flex-1 overflow-y-auto">
+            <AntiBanSettings />
+          </TabsContent>
+
           {/* Non-chat tabs get padding */}
           <TabsContent value="config" className="space-y-4 p-4 sm:p-6 m-0 flex-1 overflow-y-auto">
 
