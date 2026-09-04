@@ -88,7 +88,15 @@ function extractLead(payload: any, fieldMapping: FieldMapping = {}): { phone: st
 
   const email = pickFirst(mapped(fieldMapping, "email", p), client.email, user.email, customer.email, buyer.email, invoice?.customer?.email, p.email);
   const cpf = pickFirst(mapped(fieldMapping, "cpf", p), client.document, user.document, customer.document, buyer.document, p.cpf, p.documento);
-  const orderId = pickFirst(mapped(fieldMapping, "order_id", p), tx.id, p.order_id, data.order_id, invoice?.id, p.id, p.pedido);
+  // O id do PEDIDO vem antes do id da transação. A ApplyFy manda os dois, e a
+  // sincronização por API grava o do pedido — usar o da transação aqui criaria
+  // uma venda paralela para a mesma compra, dobrando o faturamento, e o
+  // reembolso nunca encontraria a venda original para atualizar.
+  const orderId = pickFirst(
+    mapped(fieldMapping, "order_id", p),
+    (p as any).orderId, data.orderId, p.order_id, data.order_id,
+    tx.id, invoice?.id, p.id, p.pedido,
+  );
   // Faturamento é o que o CLIENTE pagou. A ApplyFy chama isso de
   // `chargeAmount` e usa `amount` para o que sobra depois da taxa — ler
   // `amount` como valor da venda gravaria o líquido como faturamento e
