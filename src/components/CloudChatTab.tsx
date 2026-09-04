@@ -41,6 +41,8 @@ import { useTeamContext, useTeamMembers } from "@/hooks/use-team";
 import { useToggleLeadLabel } from "@/hooks/use-chat-labels";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProfile } from "@/hooks/use-profile";
+import { useNotificationPrefs } from "@/hooks/use-notification-prefs";
+import { useNotificationSound } from "@/hooks/use-notification-sound";
 import {
   useAccountQuality, QUALITY_LABEL, QUALITY_TEXT, QUALITY_DOT,
 } from "@/hooks/use-account-quality";
@@ -148,6 +150,8 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { profile } = useProfile();
+  const { prefs: notifPrefs } = useNotificationPrefs();
+  const tocarSom = useNotificationSound(notifPrefs.sound);
   /** Configuração da conta: exibir ou não o botão do agente IA no cabeçalho. */
   const mostrarBotaoIa = profile?.chat_ai_button !== false;
   const { accounts, defaultAccount } = useWhatsAppAccounts();
@@ -417,16 +421,32 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
       }, 3000);
     };
 
+    // Som de aviso: RLS já limita os eventos ao que a pessoa pode ver, então
+    // qualquer mensagem recebida aqui é uma conversa dela. Limitamos a 1 som
+    // a cada 2s para não virar metralhadora em rajada de mensagens.
+    let ultimoSom = 0;
+    const aoInserirMensagem = (payload: any) => {
+      scheduleRefresh();
+      const msg = payload?.new as { direction?: string } | undefined;
+      if (msg?.direction !== "inbound") return;
+      const agora = Date.now();
+      if (agora - ultimoSom < 2000) return;
+      ultimoSom = agora;
+      tocarSom();
+    };
+
     const channel = supabase
       .channel("cloud-chat-global-rt")
-      .on("postgres_changes", { event: "*", schema: "public", table: "chat_messages" }, scheduleRefresh)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, aoInserirMensagem)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_messages" }, scheduleRefresh)
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "chat_messages" }, scheduleRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, scheduleRefresh)
       .subscribe();
     return () => {
       if (timer) clearTimeout(timer);
       supabase.removeChannel(channel);
     };
-  }, [queryClient]);
+  }, [queryClient, tocarSom]);
 
   // Realtime – dedicated channel per selected lead, with optimistic cache merge
   // so new messages render IMMEDIATELY without waiting for a refetch or polling.
