@@ -38,13 +38,24 @@ Deno.serve(async (req) => {
     }
     const userId = user.id;
 
-    const { code, redirect_uri } = await req.json();
+    const { code, redirect_uri, app } = await req.json();
     if (!code || !redirect_uri) {
       return new Response(JSON.stringify({ error: "code and redirect_uri are required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // O código só pode ser trocado pelo MESMO app que abriu a autorização.
+    const useCrm = String(app || "").toLowerCase() === "crm";
+    if (useCrm && (!crmAppId || !crmAppSecret)) {
+      return new Response(JSON.stringify({ error: "Credenciais do app CRM não configuradas" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const metaAppId = useCrm ? crmAppId! : primeAppId;
+    const metaAppSecret = useCrm ? crmAppSecret! : primeAppSecret;
 
     // Exchange code for access_token
     const tokenUrl = `https://graph.facebook.com/v21.0/oauth/access_token?client_id=${metaAppId}&redirect_uri=${encodeURIComponent(redirect_uri)}&client_secret=${metaAppSecret}&code=${encodeURIComponent(code)}`;
