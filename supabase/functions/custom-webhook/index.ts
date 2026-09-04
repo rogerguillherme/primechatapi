@@ -383,7 +383,10 @@ Deno.serve(async (req) => {
       if (statusVenda && info.orderId && Number(info.amount) > 0) {
         const { error: ordemErro } = await adminClient.from("orders").upsert(
           {
-            lead_id: leadId,
+            // Sem contato não sobrescrevemos o vínculo que a venda já tenha:
+            // o upsert atualiza a linha existente, e mandar null apagaria a
+            // ligação com a conversa.
+            ...(leadId ? { lead_id: leadId } : {}),
             user_id: endpoint.user_id,
             external_order_id: String(info.orderId),
             amount: Number(info.amount),
