@@ -376,7 +376,11 @@ Deno.serve(async (req) => {
       // eventos da plataforma para a mesma URL — arranjo comum, porque é o mais
       // simples de configurar lá — teria reembolso gravado como venda aprovada.
       const statusVenda = resolverStatusVenda(payload, endpoint.event_type);
-      if (leadId && statusVenda && info.orderId && Number(info.amount) > 0) {
+      // A venda NÃO depende de haver contato. Payload sem telefone (a ApplyFy
+      // manda "+55" em compra por cartão, por exemplo) não gera lead, e antes
+      // isso descartava a venda inteira: o Métrik ficava parado enquanto os
+      // webhooks chegavam normalmente.
+      if (statusVenda && info.orderId && Number(info.amount) > 0) {
         const { error: ordemErro } = await adminClient.from("orders").upsert(
           {
             lead_id: leadId,
