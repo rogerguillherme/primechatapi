@@ -2583,6 +2583,11 @@ export default function WhatsAppApi() {
 
         {/* Main content */}
         <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-x-hidden">
+          {/* Controle Anti-ban: qualidade dos números e avisos de risco */}
+          <TabsContent value="antiban" className="space-y-4 p-4 sm:p-6 m-0 flex-1 overflow-y-auto">
+            <AntiBanSettings />
+          </TabsContent>
+
           {/* Non-chat tabs get padding */}
           <TabsContent value="config" className="space-y-4 p-4 sm:p-6 m-0 flex-1 overflow-y-auto">
 
