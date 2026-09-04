@@ -37,6 +37,9 @@ import { useTeamContext, useTeamMembers } from "@/hooks/use-team";
 import { useToggleLeadLabel } from "@/hooks/use-chat-labels";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProfile } from "@/hooks/use-profile";
+import {
+  useAccountQuality, QUALITY_LABEL, QUALITY_TEXT, QUALITY_DOT,
+} from "@/hooks/use-account-quality";
 
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
