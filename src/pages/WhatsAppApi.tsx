@@ -102,6 +102,7 @@ import { AccountSelector } from "@/components/AccountSelector";
 import { DashboardHome } from "@/pages/DashboardHome";
 import { HomeViewSetting } from "@/components/settings/HomeViewSetting";
 import { ChatAiButtonSetting } from "@/components/settings/ChatAiButtonSetting";
+import { AntiBanSettings } from "@/components/settings/AntiBanSettings";
 import { LeadDistributionSettings } from "@/components/settings/LeadDistributionSettings";
 import { ShareLinksSettings } from "@/components/settings/ShareLinksSettings";
 import { StageAutomationsSettings } from "@/components/settings/StageAutomationsSettings";
