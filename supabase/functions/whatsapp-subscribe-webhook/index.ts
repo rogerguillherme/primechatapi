@@ -249,16 +249,28 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // 2) Update DB flag
+        // 2) Update DB flag.
+        // Distingue os dois cenários que antes eram gravados como o MESMO
+        // "success": (a) override_callback_uri realmente gravado na WABA e
+        // (b) só a inscrição no app, porque o token da conta não tem permissão
+        // de escrita (tokens do Embedded Signup expirados / sem
+        // whatsapp_business_management). No caso (b) a Meta pode nunca entregar
+        // evento nenhum, e mostrar "success" escondia a causa — agora vira um
+        // aviso explícito pedindo reconectar a conta.
+        const somenteAppLevel = wabaSubscription.via_app_level_callback === true;
+        const statusTexto = somenteAppLevel
+          ? "atenção: inscrito só no nível do app — token sem permissão para gravar o webhook desta conta; reconecte a conta na Meta"
+          : appSubscription.ok
+            ? "success (app messages + override_callback_uri)"
+            : `success override; app messages warning: ${appSubscription.error || appSubscription.reason || "unknown"}`;
+
         const { error: updateErr } = await adminClient
           .from("whatsapp_accounts")
-          .update({ 
+          .update({
             webhook_subscribed: true,
             webhook_subscribed_at: new Date().toISOString(),
             webhook_last_check_at: new Date().toISOString(),
-            webhook_last_status: appSubscription.ok
-              ? "success (app messages + override_callback_uri)"
-              : `success override; app messages warning: ${appSubscription.error || appSubscription.reason || "unknown"}`
+            webhook_last_status: statusTexto,
           })
           .eq("id", acc.id);
 
@@ -267,11 +279,14 @@ Deno.serve(async (req) => {
           name: acc.name,
           ok: !updateErr,
           subscribed: wabaSubscription.subscribed,
+          override_gravado: !somenteAppLevel,
+          precisa_reconectar: somenteAppLevel,
           app_subscription: appSubscription,
           used_fields_param: wabaSubscription.used_fields_param,
           db_updated: !updateErr,
           update_error: updateErr?.message,
         });
+
       } catch (e: any) {
         // ... (existing error handling)
         results.push({
