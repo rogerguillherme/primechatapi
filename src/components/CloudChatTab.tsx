@@ -150,6 +150,8 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { profile } = useProfile();
+  const { prefs: notifPrefs } = useNotificationPrefs();
+  const tocarSom = useNotificationSound(notifPrefs.sound);
   /** Configuração da conta: exibir ou não o botão do agente IA no cabeçalho. */
   const mostrarBotaoIa = profile?.chat_ai_button !== false;
   const { accounts, defaultAccount } = useWhatsAppAccounts();
