@@ -86,6 +86,7 @@ Deno.serve(async (req) => {
         .update({
           meta_access_token: accessToken,
           status: "connected",
+          app_id: metaAppId,
         })
         .eq("id", existing.id);
     } else {
@@ -93,6 +94,7 @@ Deno.serve(async (req) => {
         user_id: userId,
         meta_access_token: accessToken,
         status: "connected",
+        app_id: metaAppId,
       });
     }
 
