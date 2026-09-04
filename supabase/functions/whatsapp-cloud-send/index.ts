@@ -13,6 +13,17 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+function resolveAppCredentials(accountAppId?: string | null) {
+  const crmAppId = Deno.env.get("CRM_APP_ID");
+  if (accountAppId && crmAppId && String(accountAppId) === String(crmAppId)) {
+    return { appId: crmAppId, appSecret: Deno.env.get("CRM_APP_SECRET") ?? null };
+  }
+  return {
+    appId: Deno.env.get("META_APP_ID") ?? null,
+    appSecret: Deno.env.get("META_APP_SECRET") ?? null,
+  };
+}
+
 // ============================================================
 // UNIQUENESS HELPERS — anti-spam / anti-duplicate detection
 // Each outgoing message gets a unique invisible signature so
@@ -52,6 +63,8 @@ type AccountCredentials = {
   webhookLastCheckAt?: string | null;
   blockedAt?: string | null;
   blockedReason?: string | null;
+  appId?: string | null;
+  appSecret?: string | null;
 };
 
 type WebhookEnsureResult = {
@@ -85,7 +98,7 @@ async function getAccountCredentials(
   // blocked_at e blocked_reason precisam vir na consulta: toCreds os lê, e sem
   // pedi-los eles chegavam sempre nulos — a proteção de conta travada existia
   // no código e nunca disparava, deixando o app martelar uma WABA bloqueada.
-  const baseSelect = "id, user_id, is_default, phone_number_id, access_token, business_account_id, provider, api_key, webhook_subscribed, webhook_last_check_at, blocked_at, blocked_reason";
+  const baseSelect = "id, user_id, is_default, phone_number_id, access_token, business_account_id, provider, api_key, webhook_subscribed, webhook_last_check_at, blocked_at, blocked_reason, app_id, app_secret";
 
   const toCreds = (data: any): AccountCredentials => ({
     accountId: data.id,
@@ -98,6 +111,8 @@ async function getAccountCredentials(
     webhookLastCheckAt: data.webhook_last_check_at as string | null,
     blockedAt: (data.blocked_at as string | null) ?? null,
     blockedReason: (data.blocked_reason as string | null) ?? null,
+    appId: data.app_id as string | null,
+    appSecret: data.app_secret as string | null,
   });
 
   if (accountId) {
@@ -160,7 +175,12 @@ async function getAccountCredentials(
 }
 
 
-async function ensureWebhookSubscription(accessToken: string, businessAccountId?: string | null): Promise<WebhookEnsureResult> {
+async function ensureWebhookSubscription(
+  accessToken: string,
+  businessAccountId?: string | null,
+  accountAppId?: string | null,
+  accountAppSecret?: string | null,
+): Promise<WebhookEnsureResult> {
   if (!businessAccountId || !accessToken) return { ok: false, skipped: true, error: "missing credentials" };
 
   try {
@@ -178,8 +198,9 @@ async function ensureWebhookSubscription(accessToken: string, businessAccountId?
     const verifyToken = tokenSetting?.value?.trim()
       || Deno.env.get("WHATSAPP_VERIFY_TOKEN")?.trim()
       || "prime_chat_verify_2026";
-    const metaAppId = Deno.env.get("META_APP_ID");
-    const metaAppSecret = Deno.env.get("META_APP_SECRET");
+    const resolvedApp = resolveAppCredentials(accountAppId);
+    const metaAppId = resolvedApp.appId;
+    const metaAppSecret = accountAppSecret || resolvedApp.appSecret;
 
     // Ensure the Meta app itself is subscribed to WABA `messages` events. If this
     // app-level field is missing, WABA override succeeds but button replies never
@@ -413,6 +434,8 @@ Deno.serve(async (req) => {
       webhookLastCheckAt,
       blockedAt,
       blockedReason,
+      appId,
+      appSecret,
     } = await getAccountCredentials(supabase, account_id, ownerUserId);
 
     // Conta travada pela Meta: insistir não passa, e cada tentativa vira mais
@@ -456,10 +479,17 @@ Deno.serve(async (req) => {
         apiKey: D360_API_KEY,
         webhookSubscribed,
         webhookLastCheckAt,
+        appId,
+        appSecret,
       };
 
       if (shouldRefreshWebhookSubscription(accountSnapshot)) {
-        const subscriptionResult = await ensureWebhookSubscription(ACCESS_TOKEN || "", businessAccountId);
+        const subscriptionResult = await ensureWebhookSubscription(
+          ACCESS_TOKEN || "",
+          businessAccountId,
+          appId,
+          appSecret,
+        );
         if (resolvedAccountId) {
           await supabase
             .from("whatsapp_accounts")
