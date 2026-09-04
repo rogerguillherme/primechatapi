@@ -14,8 +14,10 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const metaAppId = Deno.env.get("META_APP_ID")!;
-    const metaAppSecret = Deno.env.get("META_APP_SECRET")!;
+    const primeAppId = Deno.env.get("META_APP_ID")!;
+    const primeAppSecret = Deno.env.get("META_APP_SECRET")!;
+    const crmAppId = Deno.env.get("CRM_APP_ID");
+    const crmAppSecret = Deno.env.get("CRM_APP_SECRET");
 
     const authHeader = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
     if (!authHeader.toLowerCase().startsWith("bearer ")) {
