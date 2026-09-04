@@ -88,7 +88,15 @@ function extractLead(payload: any, fieldMapping: FieldMapping = {}): { phone: st
 
   const email = pickFirst(mapped(fieldMapping, "email", p), client.email, user.email, customer.email, buyer.email, invoice?.customer?.email, p.email);
   const cpf = pickFirst(mapped(fieldMapping, "cpf", p), client.document, user.document, customer.document, buyer.document, p.cpf, p.documento);
-  const orderId = pickFirst(mapped(fieldMapping, "order_id", p), tx.id, p.order_id, data.order_id, invoice?.id, p.id, p.pedido);
+  // O id do PEDIDO vem antes do id da transação. A ApplyFy manda os dois, e a
+  // sincronização por API grava o do pedido — usar o da transação aqui criaria
+  // uma venda paralela para a mesma compra, dobrando o faturamento, e o
+  // reembolso nunca encontraria a venda original para atualizar.
+  const orderId = pickFirst(
+    mapped(fieldMapping, "order_id", p),
+    (p as any).orderId, data.orderId, p.order_id, data.order_id,
+    tx.id, invoice?.id, p.id, p.pedido,
+  );
   // Faturamento é o que o CLIENTE pagou. A ApplyFy chama isso de
   // `chargeAmount` e usa `amount` para o que sobra depois da taxa — ler
   // `amount` como valor da venda gravaria o líquido como faturamento e
@@ -97,11 +105,22 @@ function extractLead(payload: any, fieldMapping: FieldMapping = {}): { phone: st
     (p as any).chargeAmount, (p as any).charge_amount, data.chargeAmount,
     tx.chargeAmount, (p as any).gross_amount, (p as any).valor_bruto,
   );
-  const amountCents = Number(tx.amount ?? offer.amount ?? 0);
+  // Centavos ou reais: a ApplyFy manda `transaction.amount` em REAIS (com
+  // `currency`/`paymentMethod` ao lado), enquanto plataformas de checkout
+  // antigas mandam a oferta em centavos. Dividir tudo por 100 gravava uma
+  // venda de R$150 como R$1,50 — o Métrik parecia parado porque o faturamento
+  // do dia virava troco.
+  const txEmReais = tx.currency != null || tx.paymentMethod != null || tx.payment_method != null;
+  const valorTx = Number(tx.amount ?? 0);
+  const valorOferta = Number(offer.amount ?? 0);
   const amount =
     mappedAmount ??
     parseAmount(brutoDireto) ??
-    (amountCents > 0 ? amountCents / 100 : parseAmount(p.amount ?? p.valor ?? p.total));
+    (valorTx > 0
+      ? (txEmReais ? valorTx : valorTx / 100)
+      : valorOferta > 0
+        ? valorOferta / 100
+        : parseAmount(p.amount ?? p.valor ?? p.total));
   const productName = pickFirst(mapped(fieldMapping, "product_name", p), product.name, offer.name, p.product_name, p.produto);
 
   // O que sobrou para o produtor, quando a plataforma informa. Com isso a taxa
@@ -110,6 +129,9 @@ function extractLead(payload: any, fieldMapping: FieldMapping = {}): { phone: st
     (p as any).net_amount, (p as any).netAmount, (p as any).net,
     (p as any).valor_liquido, (p as any).liquido,
     data.net_amount, (p as any).producer_amount,
+    // ApplyFy: o que o produtor recebe vem em `commissionAmount`. Sem isto a
+    // taxa da plataforma ficava invisível no financeiro.
+    tx.commissionAmount, tx.commission_amount,
     // `amount` só vale como líquido quando existe um bruto SEPARADO para
     // comparar. Sem isso ele É o valor da venda, e tratá-lo como líquido
     // zeraria a taxa contra ele mesmo.
@@ -368,10 +390,17 @@ Deno.serve(async (req) => {
       // eventos da plataforma para a mesma URL — arranjo comum, porque é o mais
       // simples de configurar lá — teria reembolso gravado como venda aprovada.
       const statusVenda = resolverStatusVenda(payload, endpoint.event_type);
-      if (leadId && statusVenda && info.orderId && Number(info.amount) > 0) {
+      // A venda NÃO depende de haver contato. Payload sem telefone (a ApplyFy
+      // manda "+55" em compra por cartão, por exemplo) não gera lead, e antes
+      // isso descartava a venda inteira: o Métrik ficava parado enquanto os
+      // webhooks chegavam normalmente.
+      if (statusVenda && info.orderId && Number(info.amount) > 0) {
         const { error: ordemErro } = await adminClient.from("orders").upsert(
           {
-            lead_id: leadId,
+            // Sem contato não sobrescrevemos o vínculo que a venda já tenha:
+            // o upsert atualiza a linha existente, e mandar null apagaria a
+            // ligação com a conversa.
+            ...(leadId ? { lead_id: leadId } : {}),
             user_id: endpoint.user_id,
             external_order_id: String(info.orderId),
             amount: Number(info.amount),

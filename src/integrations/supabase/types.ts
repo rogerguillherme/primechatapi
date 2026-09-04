@@ -2139,7 +2139,7 @@ export type Database = {
           created_at: string
           external_order_id: string
           id: string
-          lead_id: string
+          lead_id: string | null
           net_amount: number | null
           payment_method: string | null
           platform: string | null
@@ -2154,7 +2154,7 @@ export type Database = {
           created_at?: string
           external_order_id: string
           id?: string
-          lead_id: string
+          lead_id?: string | null
           net_amount?: number | null
           payment_method?: string | null
           platform?: string | null
@@ -2169,7 +2169,7 @@ export type Database = {
           created_at?: string
           external_order_id?: string
           id?: string
-          lead_id?: string
+          lead_id?: string | null
           net_amount?: number | null
           payment_method?: string | null
           platform?: string | null
@@ -3161,6 +3161,17 @@ export type Database = {
           member_user_id: string
           response_rate: number
           total_leads: number
+        }[]
+      }
+      get_team_today_stats: {
+        Args: { p_owner_id: string }
+        Returns: {
+          leads_today: number
+          member_user_id: string
+          messages_sent_today: number
+          replies_today: number
+          revenue_today: number
+          sales_today: number
         }[]
       }
       has_role: {
