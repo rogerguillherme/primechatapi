@@ -831,15 +831,31 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const { data: lead0 } = await supabase
+      // Um contato por NÚMERO DA EMPRESA: se a mesma pessoa escreve para duas
+      // BMs diferentes, cada número mantém sua própria conversa. Antes o
+      // primeiro lead era reaproveitado e as duas conversas se misturavam num
+      // histórico só, escondendo uma delas da lista do chat.
+      const { data: candidatos } = await supabase
         .from("leads")
-        .select("id, name, phone")
+        .select("id, name, phone, account_ids, last_message_account_id, created_at")
         .or(phoneFilter)
         .eq("user_id", resolvedUserId)
-        .limit(1)
-        .maybeSingle();
-      let lead = lead0;
+        .order("created_at", { ascending: true })
+        .limit(20);
+
+      const daConta = (candidatos || []).find((l: any) =>
+        resolvedAccountId &&
+        ((Array.isArray(l.account_ids) && l.account_ids.includes(resolvedAccountId)) ||
+          l.last_message_account_id === resolvedAccountId)
+      );
+      // Lead que ainda não conversou por nenhuma conta pode adotar esta.
+      const semConta = (candidatos || []).find(
+        (l: any) => (!l.account_ids || l.account_ids.length === 0) && !l.last_message_account_id,
+      );
+
+      let lead: any = daConta || semConta || null;
       const isNewLead = !lead;
+
 
       if (!lead) {
         const { data: newLead, error: createError } = await supabase
