@@ -2069,6 +2069,7 @@ export default function WhatsAppApi() {
         payload.user_id = user?.id;
       }
 
+      let savedAccountId: string | undefined = editingAccount?.id;
       if (editingAccount) {
         const { error } = await supabase
           .from("whatsapp_accounts")
@@ -2077,19 +2078,24 @@ export default function WhatsAppApi() {
         if (error) throw error;
         toast.success("Conta atualizada!");
       } else {
-        const { error } = await supabase
+        const { data: inserted, error } = await supabase
           .from("whatsapp_accounts")
-          .insert(payload);
+          .insert(payload)
+          .select("id")
+          .single();
         if (error) throw error;
+        savedAccountId = inserted?.id;
         toast.success("Conta adicionada!");
       }
       queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
 
-      // Auto-subscribe webhook (delivered/read/failed updates)
+      // Auto-subscribe webhook (delivered/read/failed updates). Manda o
+      // account_id: sem ele o backend reprocessava TODAS as contas do
+      // usuário de uma vez, inclusive as de outro app Meta isolado.
       if (payload.business_account_id) {
         try {
           const { data: subData } = await supabase.functions.invoke("whatsapp-subscribe-webhook", {
-            body: {},
+            body: { account_id: savedAccountId },
           });
           const failed = (subData?.results || []).filter((r: any) => !r.ok);
           if (failed.length > 0) {

@@ -179,9 +179,30 @@ Deno.serve(async (req) => {
 
     let q = adminClient
       .from("whatsapp_accounts")
-      .select("id, name, business_account_id, access_token, phone_number_id")
+      .select("id, name, business_account_id, access_token, phone_number_id, app_secret")
     if (!isAdmin) q = q.eq("user_id", user.id);
-    if (account_id) q = q.eq("id", account_id);
+
+    if (account_id) {
+      // Restringe ao MESMO app da conta que disparou a chamada — nunca ao
+      // dono inteiro. Sem isso, salvar uma conta reprocessava webhook de
+      // toda conta do usuário de uma vez, inclusive as de app Meta isolado
+      // que não têm nada a ver com o que acabou de mudar. app_secret é o
+      // identificador do app: mesmo valor (ou ambos nulos, o app
+      // compartilhado padrão) é "mesmo app"; nunca cruza um isolado com outro.
+      const { data: trigger } = await adminClient
+        .from("whatsapp_accounts")
+        .select("user_id, app_secret")
+        .eq("id", account_id)
+        .maybeSingle();
+      if (!trigger) {
+        return new Response(JSON.stringify({ error: "Conta não encontrada" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      q = q.eq("user_id", trigger.user_id);
+      q = trigger.app_secret ? q.eq("app_secret", trigger.app_secret) : q.is("app_secret", null);
+    }
 
     const { data: accounts, error: accErr } = await q;
     if (accErr) throw new Error(accErr.message);
