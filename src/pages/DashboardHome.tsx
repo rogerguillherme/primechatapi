@@ -9,6 +9,7 @@ import { RecentOrders } from "@/components/dashboard/RecentOrders";
 import { BroadcastMetricsPanel } from "@/components/dashboard/BroadcastMetricsPanel";
 import { SpendByAccountPanel } from "@/components/dashboard/SpendByAccountPanel";
 import { LiveSendingProgress } from "@/components/dashboard/LiveSendingProgress";
+import { TeamTodayPanel } from "@/components/dashboard/TeamTodayPanel";
 
 interface DashboardHomeProps {
   /** Called when user clicks an action that should switch the parent tab. */
