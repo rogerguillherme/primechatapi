@@ -98,7 +98,7 @@ export default function MetaConnect() {
       (async () => {
         try {
           const { data, error } = await supabase.functions.invoke("meta-oauth-callback", {
-            body: { code, redirect_uri: REDIRECT_URI },
+            body: { code, redirect_uri: REDIRECT_URI, app: localStorage.getItem("meta_oauth_app") || "prime" },
           });
           if (error) {
             const errorPayload =
@@ -121,10 +121,13 @@ export default function MetaConnect() {
     }
   }, [isExchanging, queryClient, searchParams, session, setSearchParams]);
 
-  const handleConnect = async () => {
+  const handleConnect = async (app: "prime" | "crm" = "prime") => {
     try {
+      // O mesmo app precisa autorizar e trocar o código, por isso a escolha
+      // fica guardada até o retorno da Meta.
+      localStorage.setItem("meta_oauth_app", app);
       const { data, error } = await supabase.functions.invoke("meta-oauth-url", {
-        body: { redirect_uri: REDIRECT_URI },
+        body: { redirect_uri: REDIRECT_URI, app },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -177,6 +180,7 @@ export default function MetaConnect() {
         display_phone_number: phone.display_phone_number || null,
         business_account_id: waba.id,
         access_token: activeConnection.meta_access_token,
+        app_id: (activeConnection as any).app_id ?? null,
         is_default: !existingAccounts || existingAccounts.length === 0,
       }).select("id").single();
 
