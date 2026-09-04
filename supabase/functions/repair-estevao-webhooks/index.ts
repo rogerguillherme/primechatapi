@@ -8,6 +8,8 @@ const ACCOUNT_IDS = [
 Deno.serve(async () => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const metaAppId = Deno.env.get("META_APP_ID");
+  const metaAppSecret = Deno.env.get("META_APP_SECRET");
   if (!supabaseUrl || !serviceRoleKey) {
     return Response.json({ error: "Configuração interna indisponível" }, { status: 500 });
   }
@@ -25,6 +27,25 @@ Deno.serve(async () => {
     if (!account.business_account_id || !account.access_token) {
       results.push({ account_id: account.id, name: account.name, ok: false, error: "Credenciais ausentes" });
       continue;
+    }
+
+    let tokenInfo: Record<string, unknown> | null = null;
+    if (metaAppId && metaAppSecret) {
+      const debugUrl = new URL("https://graph.facebook.com/v21.0/debug_token");
+      debugUrl.searchParams.set("input_token", account.access_token);
+      debugUrl.searchParams.set("access_token", `${metaAppId}|${metaAppSecret}`);
+      const debugResponse = await fetch(debugUrl);
+      const debugBody = await debugResponse.json().catch(() => ({}));
+      const data = debugBody?.data;
+      tokenInfo = data ? {
+        app_id: data.app_id,
+        application: data.application,
+        is_valid: data.is_valid,
+        scopes: data.scopes,
+        granular_scopes: data.granular_scopes,
+        expires_at: data.expires_at,
+        data_access_expires_at: data.data_access_expires_at,
+      } : { error: debugBody?.error?.message || `HTTP ${debugResponse.status}` };
     }
 
     const params = new URLSearchParams({ subscribed_fields: "messages" });
@@ -59,6 +80,7 @@ Deno.serve(async () => {
       success: body?.success ?? false,
       error: body?.error?.message,
       error_code: body?.error?.code,
+      token_info: tokenInfo,
     });
   }
 
