@@ -40,7 +40,7 @@ import { useProfile } from "@/hooks/use-profile";
 
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { cn } from "@/lib/utils";
+import { cn, formatAccountName } from "@/lib/utils";
 
 /**
  * Último item que satisfaz o teste. A lista de mensagens vem do mais antigo
