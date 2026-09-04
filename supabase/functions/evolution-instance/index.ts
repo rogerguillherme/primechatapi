@@ -241,6 +241,12 @@ Deno.serve(async (req) => {
       }
 
       // 2) Salva account no DB
+      // Segredo próprio da conta: antes toda instância Evolution de todo
+      // cliente autenticava com o mesmo EVOLUTION_WEBHOOK_SECRET global — quem
+      // conhecesse esse segredo podia forjar evento pra QUALQUER account_id.
+      // Gerando um por conta, só quem registrou o webhook desta instância
+      // específica consegue autenticar como ela.
+      const webhookSecret = crypto.randomUUID();
       const { data: account, error: insErr } = await admin
         .from("whatsapp_accounts")
         .insert({
@@ -252,6 +258,7 @@ Deno.serve(async (req) => {
           access_token: apiKeyClean,
           api_key: apiKeyClean,
           is_default,
+          webhook_secret: webhookSecret,
         })
         .select()
         .single();
@@ -261,19 +268,9 @@ Deno.serve(async (req) => {
       }
 
       // 3) Configura webhook automático apontando para esta plataforma
-      //
-      // O segredo tem que ir na URL. O evolution-webhook roda com verify_jwt=false
-      // e exige EVOLUTION_WEBHOOK_SECRET — registrar a URL sem ele faz o servidor
-      // Evolution receber 403 em toda mensagem, calado, e nada chega no chat.
-      const evoSecret = Deno.env.get("EVOLUTION_WEBHOOK_SECRET") || "";
-      if (!evoSecret) {
-        console.error(
-          "EVOLUTION_WEBHOOK_SECRET ausente: o webhook será registrado sem segredo e o Evolution levará 403 em toda mensagem recebida.",
-        );
-      }
       const webhookUrl =
         `${supabaseUrl}/functions/v1/evolution-webhook?account_id=${account.id}` +
-        (evoSecret ? `&secret=${encodeURIComponent(evoSecret)}` : "");
+        `&secret=${encodeURIComponent(webhookSecret)}`;
       await evoFetch(
         { serverUrl: cleanServer, apiKey: apiKeyClean, instance: cleanInstance, accountId: account.id },
         `/webhook/set/${cleanInstance}`,
@@ -459,43 +456,46 @@ Deno.serve(async (req) => {
         !Number.isFinite(ultimoReparo) || Date.now() - ultimoReparo > JANELA_REPARO_MS;
 
       if (state === "open" && account.webhook_subscribed !== true && podeTentarReparo) {
-        const evoSecret = Deno.env.get("EVOLUTION_WEBHOOK_SECRET") || "";
-        if (evoSecret) {
-          const fixUrl =
-            `${supabaseUrl}/functions/v1/evolution-webhook?account_id=${account.id}` +
-            `&secret=${encodeURIComponent(evoSecret)}`;
+        // Aproveita o reparo pra também migrar conta antiga (criada antes do
+        // segredo por conta existir) pro segredo próprio dela, em vez de
+        // religar de novo no EVOLUTION_WEBHOOK_SECRET global — senão toda
+        // conta legada ficava presa no segredo compartilhado pra sempre.
+        const accountSecret = account.webhook_secret || crypto.randomUUID();
+        const fixUrl =
+          `${supabaseUrl}/functions/v1/evolution-webhook?account_id=${account.id}` +
+          `&secret=${encodeURIComponent(accountSecret)}`;
 
-          // Pergunta antes de escrever. Ler o webhook atual não mexe em nada;
-          // reescrevê-lo mexe. Se já estiver certo, não há o que consertar —
-          // só marcar a conta e parar de olhar.
-          const atual = await evoFetch(creds, `/webhook/find/${creds.instance}`, { method: "GET" })
-            .catch(() => ({ ok: false, body: null }) as any);
-          const urlAtual = String(atual?.body?.url || atual?.body?.webhook?.url || "");
-          const jaEstaCerto =
-            atual.ok && urlAtual.includes(`secret=${encodeURIComponent(evoSecret)}`);
+        // Pergunta antes de escrever. Ler o webhook atual não mexe em nada;
+        // reescrevê-lo mexe. Se já estiver certo, não há o que consertar —
+        // só marcar a conta e parar de olhar.
+        const atual = await evoFetch(creds, `/webhook/find/${creds.instance}`, { method: "GET" })
+          .catch(() => ({ ok: false, body: null }) as any);
+        const urlAtual = String(atual?.body?.url || atual?.body?.webhook?.url || "");
+        const jaEstaCerto =
+          atual.ok && urlAtual.includes(`secret=${encodeURIComponent(accountSecret)}`);
 
-          const setRes = jaEstaCerto
-            ? ({ ok: true } as any)
-            : await evoFetch(creds, `/webhook/set/${creds.instance}`, {
-            method: "POST",
-            body: JSON.stringify({
-              url: fixUrl,
-              enabled: true,
-              webhook_by_events: false,
-              events: ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "CONNECTION_UPDATE", "QRCODE_UPDATED"],
-            }),
-          }).catch(() => ({ ok: false }) as any);
-          // Carimba mesmo falhando: é o carimbo que segura a repetição.
-          await admin
-            .from("whatsapp_accounts")
-            .update({
-              webhook_subscribed: setRes.ok ? true : account.webhook_subscribed ?? false,
-              webhook_last_check_at: new Date().toISOString(),
-            })
-            .eq("id", account.id);
-          if (!setRes.ok) {
-            console.error("evolution-instance: falha ao reapontar webhook", account.id);
-          }
+        const setRes = jaEstaCerto
+          ? ({ ok: true } as any)
+          : await evoFetch(creds, `/webhook/set/${creds.instance}`, {
+          method: "POST",
+          body: JSON.stringify({
+            url: fixUrl,
+            enabled: true,
+            webhook_by_events: false,
+            events: ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "CONNECTION_UPDATE", "QRCODE_UPDATED"],
+          }),
+        }).catch(() => ({ ok: false }) as any);
+        // Carimba mesmo falhando: é o carimbo que segura a repetição.
+        await admin
+          .from("whatsapp_accounts")
+          .update({
+            webhook_subscribed: setRes.ok ? true : account.webhook_subscribed ?? false,
+            webhook_last_check_at: new Date().toISOString(),
+            ...(setRes.ok && !account.webhook_secret ? { webhook_secret: accountSecret } : {}),
+          })
+          .eq("id", account.id);
+        if (!setRes.ok) {
+          console.error("evolution-instance: falha ao reapontar webhook", account.id);
         }
       }
 

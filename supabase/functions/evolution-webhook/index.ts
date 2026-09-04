@@ -3,7 +3,7 @@
 // Subscribe events: messages.upsert, messages.update, connection.update
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { checkWebhookSecret } from "../_shared/webhook-secret.ts";
+import { checkWebhookSecret, checkWebhookSecretValue } from "../_shared/webhook-secret.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -312,13 +312,9 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Aceita chamadas do próprio servidor Evolution (segredo na URL/header) ou
-    // o repasse interno feito por whatsapp-cloud-webhook (service role key).
+    // Repasse interno feito por whatsapp-cloud-webhook (service role key) não
+    // precisa de segredo — já veio autenticado.
     const isInternalForward = req.headers.get("authorization") === `Bearer ${supabaseKey}`;
-    if (!isInternalForward && !checkWebhookSecret(req, "EVOLUTION_WEBHOOK_SECRET")) {
-      console.error("evolution-webhook: segredo ausente ou inválido");
-      return new Response("Forbidden", { status: 403, headers: corsHeaders });
-    }
 
     const url = new URL(req.url);
     // Some Evolution servers append the event name to the URL path/query, dirtying account_id (e.g. "uuid/messages-upsert").
@@ -333,12 +329,14 @@ Deno.serve(async (req) => {
     const event: string = payload.event || "";
     const instance: string = payload.instance || payload.instanceName || "";
 
-    // Resolve account by id, then fall back to instance slug
+    // Resolve account by id, then fall back to instance slug. Precisa vir
+    // ANTES da checagem de segredo agora: cada conta pode ter o próprio
+    // segredo, então validar sem saber de quem é a chamada não dava.
     let account: any = null;
     if (accountIdParam) {
       const { data } = await supabase
         .from("whatsapp_accounts")
-        .select("id, user_id, phone_number_id")
+        .select("id, user_id, phone_number_id, webhook_secret")
         .eq("provider", "evolution")
         .eq("id", accountIdParam)
         .maybeSingle();
@@ -347,11 +345,28 @@ Deno.serve(async (req) => {
     if (!account && instance) {
       const { data } = await supabase
         .from("whatsapp_accounts")
-        .select("id, user_id, phone_number_id")
+        .select("id, user_id, phone_number_id, webhook_secret")
         .eq("provider", "evolution")
         .eq("phone_number_id", instance)
         .maybeSingle();
       account = data;
+    }
+
+    // Conta com segredo próprio (criada ou reparada depois desse fix): só ELE
+    // autentica — o segredo global não vale mais pra essa conta, senão quem
+    // conhecesse o global continuaria conseguindo forjar evento pra ela.
+    // Conta sem segredo próprio ainda (legado): cai no segredo global, que é
+    // o único que ela já teve — trocar isso exigiria reregistrar o webhook em
+    // cada servidor Evolution de cada cliente.
+    const secretOk =
+      isInternalForward ||
+      (account?.webhook_secret
+        ? checkWebhookSecretValue(req, account.webhook_secret)
+        : checkWebhookSecret(req, "EVOLUTION_WEBHOOK_SECRET"));
+
+    if (!secretOk) {
+      console.error("evolution-webhook: segredo ausente ou inválido", { accountId: account?.id || null });
+      return new Response("Forbidden", { status: 403, headers: corsHeaders });
     }
 
     if (!account) {

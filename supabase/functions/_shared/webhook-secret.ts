@@ -2,9 +2,8 @@
 // (Hubla, Z-API, Evolution, 360dialog) — sem isso, qualquer um na internet
 // pode forjar um POST pra essas rotas (elas rodam com verify_jwt=false).
 // O segredo pode vir como sufixo da URL (.../nome-da-funcao/<secret>) ou
-// no header x-webhook-secret. Falha fechado se a env var não existir.
-export function checkWebhookSecret(req: Request, envVarName: string): boolean {
-  const expected = Deno.env.get(envVarName);
+// no header x-webhook-secret. Falha fechado se o valor esperado não existir.
+function matchesSecret(req: Request, expected: string | null | undefined): boolean {
   if (!expected) return false;
 
   const url = new URL(req.url);
@@ -13,4 +12,13 @@ export function checkWebhookSecret(req: Request, envVarName: string): boolean {
   const queryToken = url.searchParams.get("secret");
 
   return pathToken === expected || headerToken === expected || queryToken === expected;
+}
+
+export function checkWebhookSecret(req: Request, envVarName: string): boolean {
+  return matchesSecret(req, Deno.env.get(envVarName));
+}
+
+/** Mesma checagem, mas com o segredo já resolvido (ex.: por conta, vindo do banco). */
+export function checkWebhookSecretValue(req: Request, expected: string | null | undefined): boolean {
+  return matchesSecret(req, expected);
 }
