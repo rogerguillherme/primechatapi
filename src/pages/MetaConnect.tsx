@@ -89,16 +89,23 @@ export default function MetaConnect() {
   // Handle OAuth callback
   useEffect(() => {
     const code = searchParams.get("code");
+    const oauthState = searchParams.get("state");
     if (code && !isExchanging && session) {
       setIsExchanging(true);
       const nextSearchParams = new URLSearchParams(searchParams);
       nextSearchParams.delete("code");
+      nextSearchParams.delete("state");
       setSearchParams(nextSearchParams, { replace: true });
 
       (async () => {
         try {
           const { data, error } = await supabase.functions.invoke("meta-oauth-callback", {
-            body: { code, redirect_uri: REDIRECT_URI, app: localStorage.getItem("meta_oauth_app") || "prime" },
+            body: {
+              code,
+              redirect_uri: REDIRECT_URI,
+              state: oauthState,
+              app: localStorage.getItem("meta_oauth_app") || "prime",
+            },
           });
           if (error) {
             const errorPayload =
@@ -111,6 +118,7 @@ export default function MetaConnect() {
           toast.success("Conta Meta conectada! Agora selecione uma BM e número abaixo.");
           queryClient.invalidateQueries({ queryKey: ["meta-connections"] });
           queryClient.invalidateQueries({ queryKey: ["meta-wabas"] });
+          localStorage.removeItem("meta_oauth_app");
         } catch (err: any) {
           console.error("OAuth callback error:", err);
           toast.error(err.message || "Erro ao conectar WhatsApp");

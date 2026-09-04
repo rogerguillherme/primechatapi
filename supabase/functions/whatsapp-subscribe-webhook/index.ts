@@ -58,6 +58,7 @@ async function configureAppWebhookSubscription(
 }
 
 async function subscribeWabaToApp(
+  metaAppId: string | null,
   businessAccountId: string,
   accessToken: string,
   supabaseUrl: string,
@@ -162,7 +163,7 @@ async function subscribeWabaToApp(
   // Se até o POST sem override for recusado, confirma se o app ao menos está
   // listado para devolver um diagnóstico preciso, sem declarar que o callback
   // individual foi gravado.
-  const appId = Deno.env.get("META_APP_ID");
+  const appId = metaAppId;
   const checkRes = await fetch(subUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
   const checkText = await checkRes.text();
   let checkData: any;
@@ -327,6 +328,7 @@ Deno.serve(async (req) => {
         // Always force the callback override; otherwise Meta may keep or restore
         // the app-level default URL and button replies never reach this webhook.
         const wabaSubscription = await subscribeWabaToApp(
+          creds.appId,
           acc.business_account_id,
           acc.access_token,
           supabaseUrl,

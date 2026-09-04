@@ -6,6 +6,21 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+/**
+ * Resolve as credenciais do app Meta usado pela conexão.
+ */
+function resolveAppCredentials(appId?: string | null) {
+  const crmAppId = Deno.env.get("CRM_APP_ID");
+  const crmAppSecret = Deno.env.get("CRM_APP_SECRET");
+  if (appId && crmAppId && String(appId) === String(crmAppId)) {
+    return { appId: crmAppId, appSecret: crmAppSecret ?? null };
+  }
+  return {
+    appId: Deno.env.get("META_APP_ID") ?? null,
+    appSecret: Deno.env.get("META_APP_SECRET") ?? null
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -14,8 +29,6 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const metaAppId = Deno.env.get("META_APP_ID")!;
-    const metaAppSecret = Deno.env.get("META_APP_SECRET")!;
 
     // Authenticate user
     const authHeader = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
@@ -54,10 +67,15 @@ Deno.serve(async (req) => {
     }
 
     const accessToken = connection.meta_access_token;
+    const creds = resolveAppCredentials(connection.app_id);
 
-    // Get all WABAs via debug_token
+    if (!creds.appId || !creds.appSecret) {
+      throw new Error("Credenciais do app Meta não configuradas");
+    }
+
+    // Get all WABAs via debug_token - use the correct app credentials for this token
     const debugRes = await fetch(
-      `https://graph.facebook.com/v19.0/debug_token?input_token=${accessToken}&access_token=${metaAppId}|${metaAppSecret}`
+      `https://graph.facebook.com/v21.0/debug_token?input_token=${accessToken}&access_token=${creds.appId}|${creds.appSecret}`
     );
     const debugData = await debugRes.json();
 
@@ -69,7 +87,7 @@ Deno.serve(async (req) => {
 
     // Also try via businesses
     const bizRes = await fetch(
-      `https://graph.facebook.com/v19.0/me/businesses?access_token=${accessToken}`
+      `https://graph.facebook.com/v21.0/me/businesses?access_token=${accessToken}`
     );
     const bizData = await bizRes.json();
 
@@ -77,7 +95,7 @@ Deno.serve(async (req) => {
     if (bizData?.data?.length > 0) {
       for (const biz of bizData.data) {
         const owned = await fetch(
-          `https://graph.facebook.com/v19.0/${biz.id}/owned_whatsapp_business_accounts?access_token=${accessToken}`
+          `https://graph.facebook.com/v21.0/${biz.id}/owned_whatsapp_business_accounts?access_token=${accessToken}`
         );
         const ownedData = await owned.json();
         if (ownedData?.data) {
@@ -98,13 +116,13 @@ Deno.serve(async (req) => {
     for (const wabaId of allWabaIds) {
       // Get WABA details
       const wabaRes = await fetch(
-        `https://graph.facebook.com/v19.0/${wabaId}?fields=id,name,currency,timezone_id,message_template_namespace,account_review_status,on_behalf_of_business_info,primary_funding_id&access_token=${accessToken}`
+        `https://graph.facebook.com/v21.0/${wabaId}?fields=id,name,currency,timezone_id,message_template_namespace,account_review_status,on_behalf_of_business_info,primary_funding_id&access_token=${accessToken}`
       );
       const wabaInfo = await wabaRes.json();
 
       // Get phone numbers with maximum fields
       const phonesRes = await fetch(
-        `https://graph.facebook.com/v19.0/${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name,code_verification_status,quality_rating,platform_type,throughput,status,name_status,new_name_status,last_onboarded_time,messaging_limit_tier,is_official_business_account,is_pin_enabled,certificate,new_certificate&access_token=${accessToken}`
+        `https://graph.facebook.com/v21.0/${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name,code_verification_status,quality_rating,platform_type,throughput,status,name_status,new_name_status,last_onboarded_time,messaging_limit_tier,is_official_business_account,is_pin_enabled,certificate,new_certificate&access_token=${accessToken}`
       );
       const phonesData = await phonesRes.json();
 
