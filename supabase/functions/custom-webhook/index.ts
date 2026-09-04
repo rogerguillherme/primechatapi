@@ -129,6 +129,9 @@ function extractLead(payload: any, fieldMapping: FieldMapping = {}): { phone: st
     (p as any).net_amount, (p as any).netAmount, (p as any).net,
     (p as any).valor_liquido, (p as any).liquido,
     data.net_amount, (p as any).producer_amount,
+    // ApplyFy: o que o produtor recebe vem em `commissionAmount`. Sem isto a
+    // taxa da plataforma ficava invisível no financeiro.
+    tx.commissionAmount, tx.commission_amount,
     // `amount` só vale como líquido quando existe um bruto SEPARADO para
     // comparar. Sem isso ele É o valor da venda, e tratá-lo como líquido
     // zeraria a taxa contra ele mesmo.
