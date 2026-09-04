@@ -1150,7 +1150,11 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
     for (const l of leads) {
       const tab = failedLeadIds?.has(l.id) ? "erro" : l.chat_status;
       if (!tab) continue;
-      const key = (l.phone || "").replace(/\D/g, "") || l.id;
+      // Mesma regra da lista: telefone repetido em BMs diferentes conta uma vez
+      // por conta, senão o total da aba fica menor do que o que aparece.
+      const conta = l.last_message_account_id || (l.account_ids || [])[0] || "sem-conta";
+      const key = `${conta}:${(l.phone || "").replace(/\D/g, "") || l.id}`;
+
       if (!seenByTab[tab]) seenByTab[tab] = new Set();
       if (seenByTab[tab].has(key)) continue;
       seenByTab[tab].add(key);
