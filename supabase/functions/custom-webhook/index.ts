@@ -105,11 +105,22 @@ function extractLead(payload: any, fieldMapping: FieldMapping = {}): { phone: st
     (p as any).chargeAmount, (p as any).charge_amount, data.chargeAmount,
     tx.chargeAmount, (p as any).gross_amount, (p as any).valor_bruto,
   );
-  const amountCents = Number(tx.amount ?? offer.amount ?? 0);
+  // Centavos ou reais: a ApplyFy manda `transaction.amount` em REAIS (com
+  // `currency`/`paymentMethod` ao lado), enquanto plataformas de checkout
+  // antigas mandam a oferta em centavos. Dividir tudo por 100 gravava uma
+  // venda de R$150 como R$1,50 — o Métrik parecia parado porque o faturamento
+  // do dia virava troco.
+  const txEmReais = tx.currency != null || tx.paymentMethod != null || tx.payment_method != null;
+  const valorTx = Number(tx.amount ?? 0);
+  const valorOferta = Number(offer.amount ?? 0);
   const amount =
     mappedAmount ??
     parseAmount(brutoDireto) ??
-    (amountCents > 0 ? amountCents / 100 : parseAmount(p.amount ?? p.valor ?? p.total));
+    (valorTx > 0
+      ? (txEmReais ? valorTx : valorTx / 100)
+      : valorOferta > 0
+        ? valorOferta / 100
+        : parseAmount(p.amount ?? p.valor ?? p.total));
   const productName = pickFirst(mapped(fieldMapping, "product_name", p), product.name, offer.name, p.product_name, p.produto);
 
   // O que sobrou para o produtor, quando a plataforma informa. Com isso a taxa
