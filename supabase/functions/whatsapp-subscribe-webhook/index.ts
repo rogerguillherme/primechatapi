@@ -93,11 +93,59 @@ async function subscribeWabaToApp(
     return { ok: true, subscribed: subData?.success ?? true, used_fields_param: false, details: subData };
   }
 
-  // Tokens do Embedded Signup (escopo whatsapp_business_management, sem ser
-  // dono/dev do app) recebem "(#200) Permissions error" ao tentar gravar
-  // override_callback_uri. Nesse caso a WABA normalmente JÁ está inscrita no
-  // nosso app e os eventos chegam pelo callback configurado no nível do app —
-  // então confirmamos via GET antes de reportar falha.
+  // Tokens do Embedded Signup podem ter permissão para assinar a WABA no app,
+  // mas não para gravar um callback exclusivo via override_callback_uri.
+  // Tenta então a assinatura canônica, sem override, para que a WABA use o
+  // callback global do MESMO app. Apenas consultar subscribed_apps não basta:
+  // a conta pode aparecer na lista com uma assinatura antiga/incompleta e não
+  // entregar eventos de messages.
+  const appLevelParams = new URLSearchParams();
+  appLevelParams.set("subscribed_fields", "messages");
+
+  const appLevelRes = await fetch(subUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: appLevelParams.toString(),
+  });
+  const appLevelText = await appLevelRes.text();
+  let appLevelData: any;
+  try { appLevelData = JSON.parse(appLevelText); } catch { appLevelData = { raw: appLevelText }; }
+
+  if (appLevelRes.ok && !appLevelData?.error) {
+    return {
+      ok: true,
+      subscribed: appLevelData?.success ?? true,
+      used_fields_param: true,
+      via_app_level_callback: true,
+      details: appLevelData,
+    };
+  }
+
+  // Algumas versões da Graph API aceitam somente o POST vazio nessa rota.
+  const bareRes = await fetch(subUrl, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const bareText = await bareRes.text();
+  let bareData: any;
+  try { bareData = JSON.parse(bareText); } catch { bareData = { raw: bareText }; }
+
+  if (bareRes.ok && !bareData?.error) {
+    return {
+      ok: true,
+      subscribed: bareData?.success ?? true,
+      used_fields_param: false,
+      via_app_level_callback: true,
+      details: bareData,
+    };
+  }
+
+  // Se até o POST sem override for recusado, confirma se o app ao menos está
+  // listado para devolver um diagnóstico preciso, sem declarar que o callback
+  // individual foi gravado.
   const appId = Deno.env.get("META_APP_ID");
   const checkRes = await fetch(subUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
   const checkText = await checkRes.text();
@@ -122,8 +170,9 @@ async function subscribeWabaToApp(
     ok: false,
     subscribed: false,
     used_fields_param: false,
-    error: subData?.error?.message || (!subRes.ok ? `HTTP ${subRes.status}` : undefined),
-    details: subData,
+    error: bareData?.error?.message || appLevelData?.error?.message || subData?.error?.message
+      || (!bareRes.ok ? `HTTP ${bareRes.status}` : undefined),
+    details: bareData?.error ? bareData : appLevelData?.error ? appLevelData : subData,
   };
 }
 
