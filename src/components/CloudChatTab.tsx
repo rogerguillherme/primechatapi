@@ -144,6 +144,9 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
   /** Configuração da conta: exibir ou não o botão do agente IA no cabeçalho. */
   const mostrarBotaoIa = profile?.chat_ai_button !== false;
   const { accounts, defaultAccount } = useWhatsAppAccounts();
+  /** Controle Anti-ban: qualidade dos números e avisos antes de enviar. */
+  const { qualityOf, showQuality, warnMedium, confirmLow } = useAccountQuality();
+  const [confirmarEnvioBaixa, setConfirmarEnvioBaixa] = useState<string | null>(null);
   const { templates } = useUserTemplates();
   // Rótulo por conta sem access_token: useWhatsAppAccounts só enxerga o dono
   // (RLS de whatsapp_accounts nunca ganhou acesso de equipe), então um
