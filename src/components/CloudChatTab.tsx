@@ -1130,10 +1130,15 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
           if (!leadLbls.has(lid)) return false;
         }
       }
-      // Dedupe by phone (leads list is ordered by recency upstream)
-      const key = (l.phone || "").replace(/\D/g, "") || l.id;
+      // Dedupe por telefone DENTRO da mesma conta (lista já vem por recência).
+      // Antes o telefone era chave única global: como o mesmo número pode
+      // existir em BMs diferentes, a conversa da segunda conta simplesmente
+      // desaparecia da lista.
+      const conta = l.last_message_account_id || (l.account_ids || [])[0] || "sem-conta";
+      const key = `${conta}:${(l.phone || "").replace(/\D/g, "") || l.id}`;
       if (seen.has(key)) return false;
       seen.add(key);
+
       return true;
     });
   }, [leads, search, activeTab, filterAccountId, filterAgentIds, leadAccountMap, filterLabelIds, leadLabelsMap, failedLeadIds]);
@@ -1145,7 +1150,11 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
     for (const l of leads) {
       const tab = failedLeadIds?.has(l.id) ? "erro" : l.chat_status;
       if (!tab) continue;
-      const key = (l.phone || "").replace(/\D/g, "") || l.id;
+      // Mesma regra da lista: telefone repetido em BMs diferentes conta uma vez
+      // por conta, senão o total da aba fica menor do que o que aparece.
+      const conta = l.last_message_account_id || (l.account_ids || [])[0] || "sem-conta";
+      const key = `${conta}:${(l.phone || "").replace(/\D/g, "") || l.id}`;
+
       if (!seenByTab[tab]) seenByTab[tab] = new Set();
       if (seenByTab[tab].has(key)) continue;
       seenByTab[tab].add(key);
@@ -1173,6 +1182,14 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
     setVisibleCount(PAGE);
   }, [search, activeTab, filterAccountId, filterAgentIds, filterLabelIds]);
   const visibleLeads = useMemo(() => sortedLeads.slice(0, visibleCount), [sortedLeads, visibleCount]);
+
+  // Mapa id -> conta, para mostrar de qual BM/número veio a conversa.
+  const accountById = useMemo(() => {
+    const map = new Map<string, any>();
+    for (const a of accounts || []) map.set(a.id, a);
+    return map;
+  }, [accounts]);
+
 
 
   const groupedMessages = useMemo(() => {
@@ -1518,6 +1535,12 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
             const leadTags = getLeadLabels(lead.id);
             const isUnread = unreadIds.has(lead.id);
             const isDone = lead.chat_status === "finalizado";
+            // De qual conta/BM veio a conversa: prioriza a conta da última
+            // mensagem, com o primeiro vínculo do lead como reserva.
+            const leadAccount =
+              accountById.get(lead.last_message_account_id || "") ||
+              accountById.get((lead.account_ids || [])[0] || "");
+
             return (
               <div
                 key={lead.id}
@@ -1554,6 +1577,18 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                       )}
                     </div>
                   </div>
+                  {leadAccount && (
+                    <div className="mt-0.5">
+                      <span
+                        className="inline-flex items-center gap-1 px-1.5 py-0 rounded-full text-[9px] border border-primary/30 bg-primary/10 text-primary max-w-full"
+                        title={`Conversa recebida na conta ${formatAccountName(leadAccount)}`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
+                        <span className="truncate">{formatAccountName(leadAccount)}</span>
+                      </span>
+                    </div>
+                  )}
+
                   <div className="flex items-center gap-1 mt-0.5">
                     {latest?.direction === "outbound" && <CheckCheck size={12} className="text-sky-400 shrink-0" />}
                     <p className="text-xs text-muted-foreground truncate">
