@@ -53,10 +53,17 @@ Deno.serve(async (req) => {
       });
     }
 
-    const oauthUrl = new URL("https://www.facebook.com/v19.0/dialog/oauth");
+    const oauthUrl = new URL("https://www.facebook.com/v21.0/dialog/oauth");
     oauthUrl.searchParams.set("client_id", metaAppId);
     oauthUrl.searchParams.set("redirect_uri", redirect_uri);
-    oauthUrl.searchParams.set("scope", "whatsapp_business_management,whatsapp_business_messaging");
+    // `business_management` é necessário para administrar a inscrição da WABA
+    // em /subscribed_apps. Sem ele, o token enxerga os números e consegue
+    // enviar mensagens, mas a Meta responde (#200) Permissions error ao tentar
+    // ativar o webhook — exatamente o cenário em que só o envio funciona.
+    oauthUrl.searchParams.set(
+      "scope",
+      "business_management,whatsapp_business_management,whatsapp_business_messaging",
+    );
     oauthUrl.searchParams.set("response_type", "code");
 
     return new Response(
