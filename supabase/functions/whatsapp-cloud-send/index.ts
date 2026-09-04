@@ -993,6 +993,7 @@ Deno.serve(async (req) => {
                 );
               }
               const { mime, fileExt } = formato;
+              ehNotaDeVoz = mime === "audio/ogg";
               // O CAMPO `type` leva o codec: é assim que a Meta reconhece o
               // arquivo como mensagem de voz.
               //
@@ -1040,7 +1041,7 @@ Deno.serve(async (req) => {
           messaging_product: "whatsapp",
           to: cleanPhone,
           type: "audio",
-          audio: { ...audioPayload, voice: true },
+          audio: ehNotaDeVoz ? { ...audioPayload, voice: true } : { ...audioPayload },
         };
 
 
