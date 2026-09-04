@@ -68,6 +68,21 @@ Deno.serve(async () => {
     );
     let body = await response.json().catch(() => ({}));
     let usedWorkingAccountToken = false;
+    let usedBareSubscription = false;
+
+    // Algumas contas rejeitam subscribed_fields mesmo tendo o escopo correto,
+    // mas aceitam o POST canônico vazio e herdam `messages` do app Prime.
+    if (!response.ok || body?.error) {
+      response = await fetch(
+        `https://graph.facebook.com/v21.0/${account.business_account_id}/subscribed_apps`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${account.access_token}` },
+        },
+      );
+      body = await response.json().catch(() => ({}));
+      usedBareSubscription = true;
+    }
 
     // A conta 3399 já entrega eventos neste mesmo endpoint. Se o token recém
     // salvo não puder administrar subscribed_apps apesar de listar a WABA no
@@ -108,6 +123,7 @@ Deno.serve(async () => {
       error: body?.error?.message,
       error_code: body?.error?.code,
       token_info: tokenInfo,
+      used_bare_subscription: usedBareSubscription,
       used_working_account_token: usedWorkingAccountToken,
     });
   }
