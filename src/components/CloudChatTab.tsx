@@ -1714,6 +1714,15 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                   {contaDaConversaLabel && (
                     <span title="Número que está atendendo este lead"> · {contaDaConversaLabel}</span>
                   )}
+                  {showQuality && (
+                    <span
+                      className={cn("ml-1.5 inline-flex items-center gap-1", QUALITY_TEXT[qualidadeDoEnvio])}
+                      title={`Qualidade do número na Meta: ${QUALITY_LABEL[qualidadeDoEnvio]}`}
+                    >
+                      <span className={cn("w-1.5 h-1.5 rounded-full", QUALITY_DOT[qualidadeDoEnvio])} />
+                      Qualidade {QUALITY_LABEL[qualidadeDoEnvio]}
+                    </span>
+                  )}
                 </p>
               </div>
               {accounts.length > 1 && (
