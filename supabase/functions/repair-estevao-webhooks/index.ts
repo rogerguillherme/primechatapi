@@ -22,6 +22,12 @@ Deno.serve(async () => {
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
 
+  const { data: workingAccount } = await admin
+    .from("whatsapp_accounts")
+    .select("access_token")
+    .eq("id", "e388e9c4-a058-4a5b-9490-8835d54a3871")
+    .maybeSingle();
+
   const results = [];
   for (const account of accounts || []) {
     if (!account.business_account_id || !account.access_token) {
@@ -49,7 +55,7 @@ Deno.serve(async () => {
     }
 
     const params = new URLSearchParams({ subscribed_fields: "messages" });
-    const response = await fetch(
+    let response = await fetch(
       `https://graph.facebook.com/v21.0/${account.business_account_id}/subscribed_apps`,
       {
         method: "POST",
@@ -60,7 +66,28 @@ Deno.serve(async () => {
         body: params.toString(),
       },
     );
-    const body = await response.json().catch(() => ({}));
+    let body = await response.json().catch(() => ({}));
+    let usedWorkingAccountToken = false;
+
+    // A conta 3399 já entrega eventos neste mesmo endpoint. Se o token recém
+    // salvo não puder administrar subscribed_apps apesar de listar a WABA no
+    // escopo granular, tenta o token funcional do mesmo tenant/app de webhook.
+    if ((!response.ok || body?.error) && workingAccount?.access_token) {
+      response = await fetch(
+        `https://graph.facebook.com/v21.0/${account.business_account_id}/subscribed_apps`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${workingAccount.access_token}`,
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: params.toString(),
+        },
+      );
+      body = await response.json().catch(() => ({}));
+      usedWorkingAccountToken = true;
+    }
+
     const ok = response.ok && !body?.error;
 
     await admin.from("whatsapp_accounts").update({
@@ -81,6 +108,7 @@ Deno.serve(async () => {
       error: body?.error?.message,
       error_code: body?.error?.code,
       token_info: tokenInfo,
+      used_working_account_token: usedWorkingAccountToken,
     });
   }
 
