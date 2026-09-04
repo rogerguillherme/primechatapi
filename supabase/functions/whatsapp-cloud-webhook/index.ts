@@ -5,6 +5,7 @@ import { interpolate } from "../_shared/interpolate.mjs";
 // `phoneVariants` já é nome de variável local mais abaixo; o apelido evita a colisão.
 import { normalizeWaId, phoneVariants as variantesDeTelefone } from "../_shared/phone.mjs";
 import { bloqueioDeConta } from "../_shared/meta-block.mjs";
+import { groupChangesByPhoneNumber } from "../_shared/meta-webhook-groups.mjs";
 import {
   decodeWhatsAppText,
   resolveMetritoCreds,
@@ -357,29 +358,20 @@ Deno.serve(async (req) => {
       .map((change: any) => change?.value)
       .filter(Boolean);
 
-    const value = changeValues.length <= 1
-      ? changeValues[0]
-      : {
-          ...changeValues[0],
-          metadata:
-            changeValues.find((item: any) => item?.messages?.length && item?.metadata)?.metadata ||
-            changeValues.find((item: any) => item?.metadata)?.metadata ||
-            null,
-          contacts: changeValues.flatMap((item: any) => item?.contacts || []),
-          messages: changeValues.flatMap((item: any) => item?.messages || []),
-          statuses: changeValues.flatMap((item: any) => item?.statuses || []),
-        };
+    // A Meta manda pro APP, não pra BM: se duas contas de clientes diferentes
+    // estão conectadas no mesmo app e disparam evento perto uma da outra, um
+    // único POST pode trazer `entry[]` com o phone_number_id das duas juntas.
+    // Fundir tudo num "value" só (como isto fazia antes) pegava o metadata de
+    // UM número e processava as mensagens de todos como se fossem dele —
+    // misturava lead e conversa de conta pra conta. Ver
+    // _shared/meta-webhook-groups.mjs e seu teste.
+    const gruposValue = groupChangesByPhoneNumber(changeValues);
 
-    if (!value) {
-      return new Response(
-        JSON.stringify({ ok: true, skipped: "no value" }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    if (changeValues.length > 1) {
+    for (const value of gruposValue) {
+    if (gruposValue.length > 1) {
       console.log("Merged webhook changes:", JSON.stringify({
-        changeCount: changeValues.length,
+        phoneNumberId: value.metadata?.phone_number_id || null,
+        groupCount: gruposValue.length,
         messageCount: value.messages?.length || 0,
         statusCount: value.statuses?.length || 0,
       }));
@@ -649,10 +641,7 @@ Deno.serve(async (req) => {
 
     const messages = value.messages;
     if (!messages || messages.length === 0) {
-      return new Response(
-        JSON.stringify({ ok: true, type: hasStatuses ? "status_update" : "no_messages" }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      continue;
     }
 
 
@@ -1510,6 +1499,7 @@ Deno.serve(async (req) => {
         }
       }
     }
+    } // fecha o loop por grupo de phone_number_id
     return new Response(
       JSON.stringify({ ok: true }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
