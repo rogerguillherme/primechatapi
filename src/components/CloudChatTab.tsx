@@ -1374,13 +1374,14 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
             />
           </div>
           <div className="flex items-center gap-2">
-            {accounts.length > 1 && (
+            {accounts.length > 0 && (
               <select
                 value={filterAccountId || ""}
                 onChange={(e) => setFilterAccountId(e.target.value || null)}
                 className="flex-1 rounded-md border border-input bg-background px-2 py-1 text-xs"
+                aria-label="Filtrar por conta"
               >
-                <option value="">Todos os números</option>
+                <option value="">Todas as contas</option>
                 {accounts.map((a) => (
                   <option key={a.id} value={a.id}>{formatAccountName(a)}</option>
                 ))}

@@ -1,8 +1,9 @@
 import { Handle, Position, useReactFlow } from "@xyflow/react";
-import { Zap, ShoppingCart, CreditCard, QrCode, PackageCheck, RotateCcw, XCircle, Users } from "lucide-react";
+import { Zap, ShoppingCart, CreditCard, QrCode, PackageCheck, RotateCcw, XCircle, Users, MessageSquare } from "lucide-react";
 
 const TRIGGER_OPTIONS = [
   { value: "", label: "Selecione o gatilho...", icon: Zap },
+  { value: "mensagem_recebida", label: "Lead enviou mensagem (entrada)", icon: MessageSquare },
   { value: "carrinho_abandonado", label: "Carrinho Abandonado", icon: ShoppingCart },
   { value: "pix", label: "Pix", icon: QrCode },
   { value: "cartao", label: "Cartão", icon: CreditCard },
