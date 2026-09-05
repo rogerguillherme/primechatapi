@@ -1,8 +1,9 @@
 import { lazy, Suspense, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { DollarSign, Clock, RotateCcw, Search } from "lucide-react";
+import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useMetrikData } from "@/hooks/use-metrik-data";
@@ -16,6 +17,9 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { Upload } from "lucide-react";
 
 // A importação já existe pronta no Prime Chat: lê a planilha, mapeia colunas,
@@ -39,6 +43,7 @@ export default function MetrikVendas() {
 
   const { inicio, fim } = useMetrikPeriodo();
   const { membros, ownerId, podeConfigurar } = useMetrikData(inicio, fim);
+  const qc = useQueryClient();
 
   const [busca, setBusca] = useState("");
   const [status, setStatus] = useState<string>("todos");
@@ -48,7 +53,7 @@ export default function MetrikVendas() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("orders")
-        .select("id, amount, status, created_at, payment_method, leads(name, email, assigned_to)")
+        .select("id, lead_id, amount, status, created_at, payment_method, leads(name, email, assigned_to)")
         .gte("created_at", inicio.toISOString())
         .lte("created_at", fim.toISOString())
         .order("created_at", { ascending: false })
@@ -56,6 +61,22 @@ export default function MetrikVendas() {
       if (error) throw error;
       return data || [];
     },
+  });
+
+  const atribuir = useMutation({
+    mutationFn: async ({ leadId, membroId }: { leadId: string; membroId: string }) => {
+      const { error } = await (supabase as any)
+        .from("leads")
+        .update({ assigned_to: membroId })
+        .eq("id", leadId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["metrik-vendas"] });
+      qc.invalidateQueries({ queryKey: ["metrik-orders"] });
+      qc.invalidateQueries({ queryKey: ["metrik-historico"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const nomePor = useMemo(() => {
@@ -210,7 +231,25 @@ export default function MetrikVendas() {
                       <p className="text-xs text-muted-foreground">{v.leads?.email || ""}</p>
                     </td>
                     <td className="px-4 py-3">
-                      {vendedor || <span className="text-amber-500 text-xs">não atribuída</span>}
+                      {podeConfigurar && v.lead_id ? (
+                        <Select
+                          value={v.leads?.assigned_to || ""}
+                          onValueChange={(membroId) => atribuir.mutate({ leadId: v.lead_id, membroId })}
+                        >
+                          <SelectTrigger className="h-8 w-[160px] text-xs">
+                            <SelectValue placeholder="Atribuir…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {membros.map((m) => (
+                              <SelectItem key={m.member_user_id} value={m.member_user_id}>
+                                {m.display_name || m.email || "Vendedor"}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        vendedor || <span className="text-amber-500 text-xs">não atribuída</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 font-semibold tabular-nums">{moeda(Number(v.amount) || 0)}</td>
                     <td className="px-4 py-3">

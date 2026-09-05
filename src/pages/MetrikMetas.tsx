@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useMetrikData } from "@/hooks/use-metrik-data";
+import { useTeamContext } from "@/hooks/use-team";
 import { useMetrikPeriodo } from "@/hooks/use-metrik-periodo";
 import { SeletorPeriodo } from "@/components/metrics/SeletorPeriodo";
 import { useFavicon } from "@/hooks/use-favicon";
@@ -29,7 +30,9 @@ export default function MetrikMetas() {
 
   const { inicio, fim } = useMetrikPeriodo();
 
-  const { ownerId, podeConfigurar, vendedores, totais, tiers, meta } = useMetrikData(inicio, fim);
+  const { ownerId, vendedores, totais, tiers, meta } = useMetrikData(inicio, fim);
+  const { data: team } = useTeamContext();
+  const souOwner = !team || team.accessLevel === "owner";
   const [coletiva, setColetiva] = useState("");
 
   const { data: individuais = [] } = useQuery({
@@ -116,7 +119,7 @@ export default function MetrikMetas() {
           <span className="text-muted-foreground">{meta ? moeda(meta) : "sem meta"}</span>
         </div>
 
-        {podeConfigurar && (
+        {souOwner && (
           <div className="mt-4 flex gap-2">
             <Input
               value={coletiva}
@@ -193,7 +196,7 @@ export default function MetrikMetas() {
                   )}
                 </div>
 
-                {podeConfigurar && (
+                {souOwner && (
                   <div className="mt-3 flex gap-2">
                     <Input
                       defaultValue={alvo || ""}
