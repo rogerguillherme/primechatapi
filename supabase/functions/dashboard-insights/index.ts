@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
 
     const adminClient = createClient(SUPABASE_URL, SERVICE_KEY);
     const token = authHeader.replace("Bearer ", "");
@@ -112,7 +112,7 @@ Deno.serve(async (req) => {
     };
 
     // If no AI key, return rule-based insights
-    if (!LOVABLE_API_KEY) {
+    if (!GEMINI_API_KEY) {
       return new Response(
         JSON.stringify({ insights: ruleBasedInsights(stats), stats }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -133,14 +133,14 @@ Deno.serve(async (req) => {
 
 Gere 3 insights priorizando oportunidades de vendas e ações urgentes.`;
 
-    const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiResp = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${GEMINI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },

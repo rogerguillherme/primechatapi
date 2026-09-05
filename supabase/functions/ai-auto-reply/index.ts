@@ -22,11 +22,11 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    if (!LOVABLE_API_KEY) {
-      console.error("LOVABLE_API_KEY not configured");
+    if (!GEMINI_API_KEY) {
+      console.error("GEMINI_API_KEY not configured");
       return new Response(JSON.stringify({ error: "AI not configured" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -225,7 +225,7 @@ Deno.serve(async (req) => {
 
     // Build system prompt — prefer per-lead agent if available
     let systemPrompt: string;
-    let modelToUse = "google/gemini-3-flash-preview";
+    let modelToUse = "gemini-2.5-flash";
 
     if (agent) {
       modelToUse = agent.ai_model || modelToUse;
@@ -294,10 +294,10 @@ ${customInstructions ? `\n📝 INSTRUÇÕES ADICIONAIS:\n${customInstructions}` 
     }
 
     // Call Lovable AI Gateway
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiResponse = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${GEMINI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

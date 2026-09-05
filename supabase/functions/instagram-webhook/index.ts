@@ -654,9 +654,9 @@ async function trackInteraction(adminClient: any, agent: any) {
 }
 
 async function generateAgentReply(agent: any, userText: string, username: string, channel: "comment" | "dm"): Promise<string | null> {
-  const apiKey = Deno.env.get("LOVABLE_API_KEY");
+  const apiKey = Deno.env.get("GEMINI_API_KEY");
   if (!apiKey) {
-    console.error("LOVABLE_API_KEY missing");
+    console.error("GEMINI_API_KEY missing");
     return null;
   }
 
@@ -674,10 +674,10 @@ async function generateAgentReply(agent: any, userText: string, username: string
 
   const system = `${persona}\n\nRegras obrigatórias:\n${rules}\n\n${channelHint}${faqText}\n\nNUNCA mencione que é uma IA. Use o nome ${username} se fizer sentido.`;
 
-  const model = agent.ai_model || "google/gemini-2.5-flash";
+  const model = agent.ai_model || "gemini-2.5-flash";
 
   try {
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const res = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${apiKey}`,

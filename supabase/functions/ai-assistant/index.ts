@@ -12,7 +12,7 @@ const corsHeaders = {
 };
 
 const ADMIN_EMAIL = "admin@primechat.com";
-const AI_MODEL = "google/gemini-3.6-flash";
+const AI_MODEL = "gemini-2.5-flash";
 
 interface Msg { role: "system" | "user" | "assistant" | "tool"; content: string; tool_calls?: any[]; tool_call_id?: string; name?: string }
 
@@ -154,8 +154,8 @@ Deno.serve(async (req) => {
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) return json({ error: "AI indisponível (LOVABLE_API_KEY ausente)" }, 500);
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) return json({ error: "AI indisponível (GEMINI_API_KEY ausente)" }, 500);
 
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
     const token = authHeader.replace("Bearer ", "");
@@ -194,10 +194,10 @@ Regras:
 
     // Tool loop (max 6 rounds)
     for (let round = 0; round < 6; round++) {
-      const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const aiResp = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          Authorization: `Bearer ${GEMINI_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ model: AI_MODEL, messages: convo, tools, tool_choice: "auto" }),

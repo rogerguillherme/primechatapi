@@ -133,7 +133,7 @@ SAÍDA: responda SOMENTE com o array JSON válido (sem markdown, sem comentário
 Cada item do array: { "type": "<tipo>", "data": { ... } }.
 IDs de botão: strings hexadecimais curtas e únicas (ex.: "a1b2c3").`;
 
-const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
+const GATEWAY_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 
 const mimeToMediaType = (mimeType: string): "image" | "video" | "audio" | "document" => {
   const base = getBaseMimeType(mimeType);
@@ -735,8 +735,8 @@ serve(async (req) => {
       return json({ steps: dataCrazyFlow.steps, name: dataCrazyFlow.name, description: dataCrazyFlow.description });
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) return json({ error: "LOVABLE_API_KEY não configurada." }, 500);
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) return json({ error: "GEMINI_API_KEY não configurada." }, 500);
 
     // Monta o conteúdo multimodal da mensagem do usuário.
     const content: Record<string, unknown>[] = [];
@@ -780,7 +780,7 @@ serve(async (req) => {
           att.dataUrl,
           att.name || "audio",
           mime,
-          LOVABLE_API_KEY,
+          GEMINI_API_KEY,
         );
         if (!transcription.ok) {
           const status = transcription.status === 429 || transcription.status === 402 || transcription.status === 403
@@ -798,14 +798,14 @@ serve(async (req) => {
     }
 
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
       method: "POST",
       headers: {
-        "Lovable-API-Key": LOVABLE_API_KEY,
+        "Authorization": `Bearer `,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3.7-flash",
+        model: "gemini-2.5-flash",
         temperature: 0,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },

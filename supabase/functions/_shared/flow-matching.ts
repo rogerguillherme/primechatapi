@@ -95,7 +95,7 @@ export function matchesStep(step: any, replyCandidates: string[]): boolean {
  * Retorna false em qualquer falha (nunca deixa o fluxo travado por erro de IA).
  */
 export async function aiMatchesStep(step: any, replyText: string): Promise<boolean> {
-  const apiKey = Deno.env.get("LOVABLE_API_KEY");
+  const apiKey = Deno.env.get("GEMINI_API_KEY");
   if (!apiKey || !replyText?.trim()) return false;
 
   const keywords = expandKeywords(step?.trigger_value);
@@ -112,15 +112,15 @@ export async function aiMatchesStep(step: any, replyText: string): Promise<boole
     .join("\n");
 
   try {
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const res = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Lovable-API-Key": apiKey,
+        "Authorization": `Bearer `,
         "X-Lovable-AIG-SDK": "fetch",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" },
       }),
