@@ -2860,6 +2860,44 @@ export default function WhatsAppApi() {
                               </Button>
                             )}
 
+                            {account.provider === "meta_cloud" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-xs h-8 gap-1"
+                                onClick={async () => {
+                                  const pin = window.prompt(
+                                    "PIN de 6 dígitos para ativar o número na Meta (use o mesmo definido no painel da Meta):",
+                                    "123456",
+                                  );
+                                  if (!pin) return;
+                                  if (!/^\d{6}$/.test(pin.trim())) {
+                                    toast.error("O PIN deve ter 6 dígitos numéricos.");
+                                    return;
+                                  }
+                                  const t = toast.loading("Ativando número na Meta...");
+                                  try {
+                                    const { data, error } = await supabase.functions.invoke(
+                                      "whatsapp-register-phone",
+                                      { body: { phone_number_id: account.phone_number_id, pin: pin.trim() } },
+                                    );
+                                    if (error) throw error;
+                                    if (data?.error) throw new Error(data.error);
+                                    toast.success("Número ativado na Meta!", { id: t });
+                                    await supabase.functions.invoke("whatsapp-refresh-status", {
+                                      body: { account_id: account.id },
+                                    });
+                                    queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
+                                  } catch (e: any) {
+                                    toast.error(e.message || "Falha ao ativar número", { id: t });
+                                  }
+                                }}
+                              >
+                                <ShieldCheck size={14} /> Ativar na Meta
+                              </Button>
+                            )}
+
+
 
 
                             <Button variant="outline" size="sm" onClick={() => startEditing(account)} className="text-xs h-8 gap-1">
