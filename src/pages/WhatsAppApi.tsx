@@ -2822,6 +2822,46 @@ export default function WhatsAppApi() {
                               </Button>
                             )}
 
+                            {account.provider === "meta_cloud" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-xs h-8 gap-1"
+                                onClick={async () => {
+                                  const t = toast.loading("Consultando status na Meta...");
+                                  try {
+                                    const { data, error } = await supabase.functions.invoke(
+                                      "whatsapp-refresh-status",
+                                      { body: { account_id: account.id } },
+                                    );
+                                    if (error) throw error;
+                                    if (data?.error) throw new Error(data.error);
+                                    const r = data?.results?.[0];
+                                    if (!r?.ok) {
+                                      toast.error(`Falha: ${r?.error || "erro desconhecido"}`, { id: t });
+                                      return;
+                                    }
+                                    queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
+                                    const partes = [
+                                      r.registered ? "Número registrado na Meta" : `Registro pendente (${r.status || "sem status"})`,
+                                      r.display_phone_number ? `Número: ${r.display_phone_number}` : null,
+                                      r.code_verification_status ? `Verificação: ${r.code_verification_status}` : null,
+                                      r.quality_rating ? `Qualidade: ${r.quality_rating}` : null,
+                                      `Webhook: ${r.webhook_status}`,
+                                    ].filter(Boolean).join(" · ");
+                                    if (r.registered) toast.success(partes, { id: t, duration: 8000 });
+                                    else toast.warning(partes, { id: t, duration: 10000 });
+                                  } catch (e: any) {
+                                    toast.error(e.message || "Erro ao atualizar status", { id: t });
+                                  }
+                                }}
+                              >
+                                <RefreshCw size={14} /> Atualizar status
+                              </Button>
+                            )}
+
+
+
                             <Button variant="outline" size="sm" onClick={() => startEditing(account)} className="text-xs h-8 gap-1">
                               <Pencil size={14} /> Configurações
                             </Button>
