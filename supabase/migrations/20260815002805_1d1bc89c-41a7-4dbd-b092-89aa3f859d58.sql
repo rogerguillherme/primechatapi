@@ -193,32 +193,8 @@ CREATE TRIGGER trg_distribute_lead_on_create
 REVOKE EXECUTE ON FUNCTION public.distribute_lead(uuid) FROM anon;
 GRANT EXECUTE ON FUNCTION public.distribute_lead(uuid) TO authenticated, service_role;
 
--- 6. Seed pipeline stages + settings ONLY for estevaosz0602@gmail.com
-DO $$
-DECLARE
-  v_owner uuid := '44c78035-7cdb-4e8e-8e22-beaba931b549';
-  v_wait uuid; v_serv uuid;
-BEGIN
-  SELECT id INTO v_wait FROM public.pipeline_stages WHERE owner_id = v_owner AND name = 'Lead em Espera';
-  IF v_wait IS NULL THEN
-    INSERT INTO public.pipeline_stages (owner_id, name, color, position)
-      VALUES (v_owner, 'Lead em Espera', '#DC2626', 0) RETURNING id INTO v_wait;
-  END IF;
-
-  SELECT id INTO v_serv FROM public.pipeline_stages WHERE owner_id = v_owner AND name = 'Lead em Atendimento';
-  IF v_serv IS NULL THEN
-    INSERT INTO public.pipeline_stages (owner_id, name, color, position)
-      VALUES (v_owner, 'Lead em Atendimento', '#10B981', 1) RETURNING id INTO v_serv;
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM public.pipeline_stages WHERE owner_id = v_owner AND name = 'Se tornou aluno!') THEN
-    INSERT INTO public.pipeline_stages (owner_id, name, color, position)
-      VALUES (v_owner, 'Se tornou aluno!', '#84CC16', 2);
-  END IF;
-
-  INSERT INTO public.lead_distribution_settings (owner_id, enabled, trigger_mode, waiting_stage_id, in_service_stage_id)
-    VALUES (v_owner, true, 'first_inbound', v_wait, v_serv)
-    ON CONFLICT (owner_id) DO UPDATE
-      SET waiting_stage_id = EXCLUDED.waiting_stage_id,
-          in_service_stage_id = EXCLUDED.in_service_stage_id;
-END $$;
+-- Seed de dados removido durante a migração Lovable -> Supabase próprio:
+-- populava pipeline_stages + lead_distribution_settings para um usuário específico
+-- (owner_id 44c78035-7cdb-4e8e-8e22-beaba931b549). Será recriado a partir da origem
+-- separadamente. Conteúdo original preservado no histórico do Git.
+-- Ver HANDOFF-migracao-primechat.md.
