@@ -146,13 +146,14 @@ async function resolveOrCreateLead(
   admin: any,
   userId: string,
   info: ReturnType<typeof extractLead>,
+  metadata?: Record<string, unknown> | null,
 ): Promise<string | null> {
   if (!info.phone) return null;
 
   // Try existing lead by phone within this tenant
   const { data: existing } = await admin
     .from("leads")
-    .select("id")
+    .select("id, metadata")
     .eq("user_id", userId)
     .eq("phone", info.phone)
     .maybeSingle();
@@ -163,6 +164,11 @@ async function resolveOrCreateLead(
     if (info.name) patch.name = info.name;
     if (info.email) patch.email = info.email;
     if (info.cpf) patch.cpf = info.cpf;
+    // metadata é merge, não overwrite: outro webhook (ou o próprio funil)
+    // pode já ter gravado outras chaves ali, e um update literal apagaria.
+    if (metadata && typeof metadata === "object") {
+      patch.metadata = { ...(existing.metadata as Record<string, unknown> || {}), ...metadata };
+    }
     if (Object.keys(patch).length > 0) {
       await admin.from("leads").update(patch).eq("id", existing.id);
     }
@@ -179,6 +185,7 @@ async function resolveOrCreateLead(
       cpf: info.cpf,
       origin: "custom_webhook",
       chat_status: "novos_pedidos",
+      ...(metadata && typeof metadata === "object" ? { metadata } : {}),
     })
     .select("id")
     .maybeSingle();
@@ -374,10 +381,15 @@ Deno.serve(async (req) => {
       ? (endpoint as any).field_mapping as FieldMapping
       : {};
     const info = extractLead(payload, endpointMapping);
+    // Payload livre para integrações genéricas (ex.: um quiz/diagnóstico
+    // externo) guardar dados extras no lead sem precisar de campos fixos.
+    const incomingMetadata = (payload as any)?.metadata && typeof (payload as any).metadata === "object"
+      ? (payload as any).metadata as Record<string, unknown>
+      : null;
     let leadId: string | null = null;
     let flowsStarted = 0;
     try {
-      leadId = await resolveOrCreateLead(adminClient, endpoint.user_id, info);
+      leadId = await resolveOrCreateLead(adminClient, endpoint.user_id, info, incomingMetadata);
 
       // A venda entra em `orders`. Antes só a Hubla criava venda, então tudo
       // que chegava por este webhook virava lead e sumia do faturamento — o
@@ -441,6 +453,7 @@ Deno.serve(async (req) => {
             source: "custom_webhook",
             // Lock outbound delivery to the WhatsApp account bound to this webhook
             account_id: (endpoint as any).account_id || undefined,
+            metadata: incomingMetadata || undefined,
           },
         );
       } else {

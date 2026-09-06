@@ -110,7 +110,7 @@ Deno.serve(async (req) => {
     // Get lead info (including bound agent)
     const { data: lead } = await supabase
       .from("leads")
-      .select("id, name, phone, user_id, ai_agent_id")
+      .select("id, name, phone, user_id, ai_agent_id, metadata")
       .eq("id", lead_id)
       .single();
 
@@ -181,6 +181,16 @@ Deno.serve(async (req) => {
       .filter(Boolean)
       .join("\n")
       .toLowerCase();
+
+    // Dados extras gravados no lead por integrações externas (ex.: um
+    // webhook de quiz/diagnóstico). Genérico de propósito: cada tenant usa
+    // chaves diferentes, então só listamos o que existir em vez de assumir
+    // um formato fixo.
+    const leadMetadata = (lead.metadata && typeof lead.metadata === "object" ? lead.metadata : {}) as Record<string, unknown>;
+    const leadContextText = Object.entries(leadMetadata)
+      .filter(([, v]) => v != null && String(v).trim() !== "")
+      .map(([k, v]) => `- ${k}: ${v}`)
+      .join("\n");
 
     const shouldIgnoreHistoryMessage = (content: string) => {
       const lower = (content || "").toLowerCase();
@@ -261,7 +271,7 @@ ${feedbackText ? `🎓 TREINAMENTO POR FEEDBACK (siga rigorosamente o estilo dos
 
 🧠 CONTEXTO:
 - Nome do cliente: ${lead.name || "não informado"}
-
+${leadContextText ? `- Dados adicionais do lead:\n${leadContextText}\n` : ""}
 🚫 NUNCA:
 - Diga que é IA / bot / sistema / assistente virtual
 - Use ** (asterisco duplo)
@@ -288,6 +298,7 @@ Produtos/Serviços: ${products}
 
 🧠 CONTEXTO:
 - Nome do cliente: ${lead.name || "não informado"}
+${leadContextText ? `- Dados adicionais do lead:\n${leadContextText}\n` : ""}
 ${customInstructions ? `\n📝 INSTRUÇÕES ADICIONAIS:\n${customInstructions}` : ""}
 
 🚫 NUNCA: dizer que é IA, usar **, inventar informações.`;

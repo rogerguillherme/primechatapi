@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import {
   Webhook, Copy, CheckCircle2, Loader2, Send, Trash2, Eye, EyeOff,
   ShoppingCart, CreditCard, QrCode, PackageCheck, RotateCcw, XCircle, Clock,
+  UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -31,6 +32,7 @@ const EVENT_TYPES = [
   { value: "compra_aprovada", label: "Compra Aprovada", icon: PackageCheck, color: "text-green-500" },
   { value: "reembolso", label: "Reembolso", icon: RotateCcw, color: "text-orange-500" },
   { value: "cancelamento", label: "Cancelamento", icon: XCircle, color: "text-red-500" },
+  { value: "lead_capturado", label: "Lead Capturado (genérico)", icon: UserPlus, color: "text-violet-500" },
 ] as const;
 
 function getWebhookUrl(token: string) {
