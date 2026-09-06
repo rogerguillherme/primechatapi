@@ -444,6 +444,11 @@ Deno.serve(async (req) => {
           endpoint.event_type,
           leadId,
           {
+            // Achatado (não aninhado sob "metadata"): flow-processor lê as
+            // chaves de flow_executions.metadata direto pra virar variável
+            // de template ({estagio}, {sintoma_maior}, ...). Um objeto
+            // aninhado aqui ficaria invisível pro {variavel} das mensagens.
+            ...(incomingMetadata || {}),
             order_id: info.orderId,
             amount: info.amount,
             product_name: info.productName,
@@ -453,7 +458,6 @@ Deno.serve(async (req) => {
             source: "custom_webhook",
             // Lock outbound delivery to the WhatsApp account bound to this webhook
             account_id: (endpoint as any).account_id || undefined,
-            metadata: incomingMetadata || undefined,
           },
         );
       } else {
