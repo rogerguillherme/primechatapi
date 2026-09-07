@@ -1,5 +1,5 @@
 import { Handle, Position, useReactFlow } from "@xyflow/react";
-import { Zap, ShoppingCart, CreditCard, QrCode, PackageCheck, RotateCcw, XCircle, Users, MessageSquare } from "lucide-react";
+import { Zap, ShoppingCart, CreditCard, QrCode, PackageCheck, RotateCcw, XCircle, Users, MessageSquare, UserPlus } from "lucide-react";
 
 const TRIGGER_OPTIONS = [
   { value: "", label: "Selecione o gatilho...", icon: Zap },
@@ -11,6 +11,7 @@ const TRIGGER_OPTIONS = [
   { value: "reembolso", label: "Reembolso", icon: RotateCcw },
   { value: "cancelamento", label: "Cancelamento", icon: XCircle },
   { value: "group_join", label: "Lead entrou no grupo (WhatsApp)", icon: Users },
+  { value: "lead_capturado", label: "Lead Capturado (genérico)", icon: UserPlus },
 ];
 
 export function TriggerNode({ id, data }: { id: string; data: Record<string, unknown> }) {
