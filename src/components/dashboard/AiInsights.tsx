@@ -14,8 +14,18 @@ export function AiInsights({ onActionClick }: AiInsightsProps) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["dashboard-insights", user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke("dashboard-insights");
-      if (error) throw error;
+      const invoke = async () => supabase.functions.invoke("dashboard-insights");
+
+      let { data, error } = await invoke();
+
+      // 401 costuma ser só token expirado: renova a sessão e tenta de novo.
+      if (error) {
+        const { data: refreshed } = await supabase.auth.refreshSession();
+        if (!refreshed?.session) throw error;
+        ({ data, error } = await invoke());
+        if (error) throw error;
+      }
+
       return data as { insights: Insight[]; stats?: any; fallback?: string };
     },
     enabled: !!user,
