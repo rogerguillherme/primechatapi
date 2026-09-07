@@ -970,14 +970,24 @@ function VideoUploadField({
   const isVideoAttached = mediaUrl && mediaType === "video";
 
   const handleFile = async (file: File) => {
-    if (!file.type.startsWith("video/")) {
-      toast.error("Selecione um arquivo de vídeo.");
+    const ext = (file.name.split(".").pop() || "").toLowerCase();
+    // O WhatsApp só aceita MP4 e 3GP. MOV (iPhone) e WEBM (Chrome) sobem
+    // normalmente para o storage, mas a Meta recusa no envio — e a recusa só
+    // aparecia quando o fluxo já estava rodando para o lead.
+    const VIDEO_OK = ["mp4", "3gp", "3gpp"];
+    const mimeOk = ["video/mp4", "video/3gpp"].includes((file.type || "").split(";")[0].trim().toLowerCase());
+    if (!VIDEO_OK.includes(ext) && !mimeOk) {
+      toast.error(
+        `O WhatsApp não aceita vídeo em ${ext ? "." + ext : "esse formato"}. ` +
+          "Converta para MP4 (vídeo de iPhone costuma vir em MOV) e envie de novo.",
+      );
       return;
     }
     if (file.size > 16 * 1024 * 1024) {
       toast.error("Vídeo muito grande (máximo 16MB pelo WhatsApp).");
       return;
     }
+
     setUploading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
