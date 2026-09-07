@@ -970,14 +970,24 @@ function VideoUploadField({
   const isVideoAttached = mediaUrl && mediaType === "video";
 
   const handleFile = async (file: File) => {
-    if (!file.type.startsWith("video/")) {
-      toast.error("Selecione um arquivo de vídeo.");
+    const ext = (file.name.split(".").pop() || "").toLowerCase();
+    // O WhatsApp só aceita MP4 e 3GP. MOV (iPhone) e WEBM (Chrome) sobem
+    // normalmente para o storage, mas a Meta recusa no envio — e a recusa só
+    // aparecia quando o fluxo já estava rodando para o lead.
+    const VIDEO_OK = ["mp4", "3gp", "3gpp"];
+    const mimeOk = ["video/mp4", "video/3gpp"].includes((file.type || "").split(";")[0].trim().toLowerCase());
+    if (!VIDEO_OK.includes(ext) && !mimeOk) {
+      toast.error(
+        `O WhatsApp não aceita vídeo em ${ext ? "." + ext : "esse formato"}. ` +
+          "Converta para MP4 (vídeo de iPhone costuma vir em MOV) e envie de novo.",
+      );
       return;
     }
     if (file.size > 16 * 1024 * 1024) {
       toast.error("Vídeo muito grande (máximo 16MB pelo WhatsApp).");
       return;
     }
+
     setUploading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -1099,15 +1109,24 @@ function AudioUploadField({
 
   const handleFile = async (file: File) => {
     const ext = (file.name.split(".").pop() || "mp3").toLowerCase();
-    const pareceAudio = file.type.startsWith("audio/") || ["ogg", "opus", "mp3", "m4a", "aac", "amr"].includes(ext);
-    if (!pareceAudio) {
-      toast.error("Selecione um arquivo de áudio.");
+    // A Meta aceita apenas estes containers. WAV era o caso silencioso: passava
+    // por "começa com audio/", subia para o storage, e o envio só falhava
+    // depois — travando o fluxo no passo do áudio, sem aviso para quem montou.
+    const AUDIO_OK = ["ogg", "opus", "oga", "mp3", "m4a", "mp4", "aac", "amr"];
+    const AUDIO_MIME_OK = ["audio/ogg", "audio/mpeg", "audio/mp4", "audio/aac", "audio/amr"];
+    const baseMime = (file.type || "").split(";")[0].trim().toLowerCase();
+    if (!AUDIO_OK.includes(ext) && !AUDIO_MIME_OK.includes(baseMime)) {
+      toast.error(
+        `O WhatsApp não aceita áudio em ${ext ? "." + ext : "esse formato"}. ` +
+          "Aceitos: OGG/Opus, MP3, M4A, AAC e AMR. Converta o arquivo (ou grave pelo microfone aqui) e envie de novo.",
+      );
       return;
     }
     if (file.size > 16 * 1024 * 1024) {
       toast.error("Áudio muito grande (máximo 16MB pelo WhatsApp).");
       return;
     }
+
     // Pega aqui o mesmo problema que antes só aparecia quando a automação
     // tentava enviar de verdade: extensão .ogg/.opus sem o conteúdo real.
     const problema = await validarAudio(file);
