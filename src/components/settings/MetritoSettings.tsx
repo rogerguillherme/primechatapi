@@ -187,6 +187,9 @@ export function MetritoSettings() {
   return (
     <CollapsibleSettingsCard
       cardClassName="glass-card"
+      // Único card na aba Metrito (não é mais um entre vários em
+      // Configurações) — nasce aberto pra não parecer vazio à primeira vista.
+      defaultOpen
       icon={<BarChart3 size={18} className="text-primary" />}
       title="Metrito"
       description="Liga esta conta ao seu projeto do Metrito: a origem de cada conversa é identificada, e leads e vendas são enviados para atribuição de anúncio."
