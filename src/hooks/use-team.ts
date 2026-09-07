@@ -77,21 +77,31 @@ export interface TeamMemberRow {
 }
 
 async function teamFetch(action: string, method: string, body?: unknown) {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error("Sessão expirada. Faça login novamente.");
-
   const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-  const res = await fetch(
-    `https://${projectId}.supabase.co/functions/v1/team-members?action=${action}`,
-    {
+  const url = `https://${projectId}.supabase.co/functions/v1/team-members?action=${action}`;
+
+  const call = async (token: string) =>
+    fetch(url, {
       method,
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
+        Authorization: `Bearer ${token}`,
       },
       ...(body ? { body: JSON.stringify(body) } : {}),
-    },
-  );
+    });
+
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("Sessão expirada. Faça login novamente.");
+
+  let res = await call(session.access_token);
+
+  // O token guardado pode já ter expirado (ou a sessão ter sido revogada num
+  // outro dispositivo). Renova uma vez antes de desistir.
+  if (res.status === 401) {
+    const { data: refreshed } = await supabase.auth.refreshSession();
+    if (!refreshed?.session) throw new Error("Sessão expirada. Faça login novamente.");
+    res = await call(refreshed.session.access_token);
+  }
 
   const text = await res.text();
   let payload: any = {};
