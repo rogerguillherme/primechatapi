@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { X, Plus, Trash2, Upload, Image as ImageIcon, Loader2, FileText, Video as VideoIcon, Mic } from "lucide-react";
 import { useAiAgents } from "@/hooks/use-ai-agents";
 import { useChatLabels } from "@/hooks/use-chat-labels";
-import { AudioRecorder } from "@/components/AudioRecorder";
+import { AudioRecorder, validarAudio } from "@/components/AudioRecorder";
 import { useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -1098,7 +1098,9 @@ function AudioUploadField({
   };
 
   const handleFile = async (file: File) => {
-    if (!file.type.startsWith("audio/")) {
+    const ext = (file.name.split(".").pop() || "mp3").toLowerCase();
+    const pareceAudio = file.type.startsWith("audio/") || ["ogg", "opus", "mp3", "m4a", "aac", "amr"].includes(ext);
+    if (!pareceAudio) {
       toast.error("Selecione um arquivo de áudio.");
       return;
     }
@@ -1106,7 +1108,13 @@ function AudioUploadField({
       toast.error("Áudio muito grande (máximo 16MB pelo WhatsApp).");
       return;
     }
-    const ext = file.name.split(".").pop() || "mp3";
+    // Pega aqui o mesmo problema que antes só aparecia quando a automação
+    // tentava enviar de verdade: extensão .ogg/.opus sem o conteúdo real.
+    const problema = await validarAudio(file);
+    if (problema) {
+      toast.error(problema);
+      return;
+    }
     await uploadBlob(file, ext, file.type || "audio/mpeg");
   };
 
