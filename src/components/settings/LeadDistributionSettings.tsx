@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTeamMembers } from "@/hooks/use-team";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapsibleSettingsCard } from "@/components/settings/CollapsibleSettingsCard";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
@@ -155,19 +155,15 @@ export function LeadDistributionSettings() {
   const currentTrigger: DistributionTrigger = settings?.trigger_mode || "first_inbound";
 
   return (
-    <Card className="glass-card">
-      <CardHeader>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Shuffle size={18} />
-              Distribuição inteligente de leads
-            </CardTitle>
-            <CardDescription>
-              Divide automaticamente os leads entre os colaboradores conforme o percentual definido e
-              move o lead para “Lead em Atendimento”.
-            </CardDescription>
-          </div>
+    <CollapsibleSettingsCard
+      cardClassName="glass-card"
+      icon={<Shuffle size={18} />}
+      title="Distribuição inteligente de leads"
+      description={
+        <>Divide automaticamente os leads entre os colaboradores conforme o percentual definido e
+        move o lead para “Lead em Atendimento”.</>
+      }
+      headerAction={
           <div className="flex items-center gap-2 flex-shrink-0">
             <Label htmlFor="dist-enabled" className="text-xs text-muted-foreground">
               {settings?.enabled ? "Ativa" : "Inativa"}
@@ -178,10 +174,9 @@ export function LeadDistributionSettings() {
               onCheckedChange={(v) => saveSettings.mutate({ enabled: v })}
             />
           </div>
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-6">
+      }
+      contentClassName="space-y-6"
+    >
         <div className="space-y-2">
           <Label>Quando distribuir</Label>
           <div className="grid gap-2 grid-cols-1 md:grid-cols-3">
@@ -301,7 +296,6 @@ export function LeadDistributionSettings() {
             </Button>
           </div>
         </div>
-      </CardContent>
-    </Card>
+    </CollapsibleSettingsCard>
   );
 }

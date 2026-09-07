@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapsibleSettingsCard } from "@/components/settings/CollapsibleSettingsCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -102,26 +102,18 @@ export function MetritoSettings() {
   );
 
   return (
-    <Card className="glass-card">
-      <CardHeader>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <BarChart3 size={18} className="text-primary" />
-              Metrito
-            </CardTitle>
-            <CardDescription>
-              Liga esta conta ao seu projeto do Metrito: a origem de cada conversa é
-              identificada, e leads e vendas são enviados para atribuição de anúncio.
-            </CardDescription>
-          </div>
+    <CollapsibleSettingsCard
+      cardClassName="glass-card"
+      icon={<BarChart3 size={18} className="text-primary" />}
+      title="Metrito"
+      description="Liga esta conta ao seu projeto do Metrito: a origem de cada conversa é identificada, e leads e vendas são enviados para atribuição de anúncio."
+      headerAction={
           <Badge variant={configured ? "default" : "outline"} className="shrink-0">
             {configured ? "Conta própria" : "Usando o padrão"}
           </Badge>
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-5">
+      }
+      contentClassName="space-y-5"
+    >
         {isLoading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
             <Loader2 size={15} className="animate-spin" /> Carregando...
@@ -163,7 +155,6 @@ export function MetritoSettings() {
             </Button>
           </>
         )}
-      </CardContent>
-    </Card>
+    </CollapsibleSettingsCard>
   );
 }

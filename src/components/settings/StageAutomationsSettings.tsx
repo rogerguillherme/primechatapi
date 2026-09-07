@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapsibleSettingsCard } from "@/components/settings/CollapsibleSettingsCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -134,25 +134,18 @@ export function StageAutomationsSettings() {
     id ? (stages || []).find((s) => s.id === id)?.name || "—" : "Qualquer etapa";
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Workflow size={20} />
-              Fluxos automáticos de etapa (Kanban)
-            </CardTitle>
-            <CardDescription>
-              Mova o lead de coluna automaticamente quando algo acontecer na conversa.
-            </CardDescription>
-          </div>
+    <CollapsibleSettingsCard
+      icon={<Workflow size={20} />}
+      title="Fluxos automáticos de etapa (Kanban)"
+      description="Mova o lead de coluna automaticamente quando algo acontecer na conversa."
+      headerAction={
           <Button size="sm" variant={creating ? "secondary" : "default"} onClick={() => setCreating((v) => !v)}>
             <Plus size={16} className="mr-1" />
             {creating ? "Cancelar" : "Nova regra"}
           </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
+      }
+      contentClassName="space-y-4"
+    >
         {(!stages || stages.length === 0) && (
           <p className="text-sm text-muted-foreground">
             Crie as colunas do Kanban primeiro para poder configurar as regras.
@@ -277,7 +270,6 @@ export function StageAutomationsSettings() {
             ))}
           </div>
         )}
-      </CardContent>
-    </Card>
+    </CollapsibleSettingsCard>
   );
 }

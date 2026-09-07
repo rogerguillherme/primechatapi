@@ -1,4 +1,4 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapsibleSettingsCard } from "@/components/settings/CollapsibleSettingsCard";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
@@ -40,18 +40,13 @@ export function NotificationSettings() {
   };
 
   return (
-    <Card className="glass-card">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <Bell size={18} className="text-primary" /> Notificações
-        </CardTitle>
-        <CardDescription>
-          O que faz o sino tocar para você. Cada pessoa tem a sua configuração —
-          o que você desliga aqui não afeta o resto da equipe.
-        </CardDescription>
-      </CardHeader>
-
-      <CardContent className="space-y-1">
+    <CollapsibleSettingsCard
+      cardClassName="glass-card"
+      icon={<Bell size={18} className="text-primary" />}
+      title="Notificações"
+      description="O que faz o sino tocar para você. Cada pessoa tem a sua configuração — o que você desliga aqui não afeta o resto da equipe."
+      contentClassName="space-y-1"
+    >
         {ITENS.map((item) => (
           <div key={item.key} className="flex items-start justify-between gap-4 py-3 border-b border-border last:border-0">
             <div className="min-w-0">
@@ -92,7 +87,6 @@ export function NotificationSettings() {
           Mensagens seguidas da mesma conversa viram um aviso só, até você abrir. Sem
           isso, uma conversa movimentada enterraria todas as outras no sino.
         </p>
-      </CardContent>
-    </Card>
+    </CollapsibleSettingsCard>
   );
 }

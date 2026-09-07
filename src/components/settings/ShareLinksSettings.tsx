@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 import { useProfile } from "@/hooks/use-profile";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapsibleSettingsCard } from "@/components/settings/CollapsibleSettingsCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -307,23 +307,17 @@ export function ShareLinksSettings() {
   };
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-start justify-between gap-4">
-        <div>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Link2 className="h-4 w-4" /> Links de compartilhamento do número
-          </CardTitle>
-          <CardDescription>
-            Gere um link wa.me com frase pré-preenchida. Quando o lead enviar essa frase, ele recebe
-            automaticamente a etiqueta e entra na coluna escolhida do Kanban.
-          </CardDescription>
-        </div>
-        <Button onClick={openNew} className="gap-2 shrink-0">
-          <Plus size={15} /> Novo link
-        </Button>
-      </CardHeader>
-
-      <CardContent className="space-y-3">
+    <CollapsibleSettingsCard
+      icon={<Link2 className="h-4 w-4" />}
+      title="Links de compartilhamento do número"
+      description="Gere um link wa.me com frase pré-preenchida. Quando o lead enviar essa frase, ele recebe automaticamente a etiqueta e entra na coluna escolhida do Kanban."
+      headerAction={
+          <Button onClick={openNew} className="gap-2 shrink-0">
+            <Plus size={15} /> Novo link
+          </Button>
+      }
+      contentClassName="space-y-3"
+    >
         {isAdmin && clientUsers.length > 0 && (
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-lg border bg-muted/30 p-3">
             <Label className="text-xs shrink-0">Gerenciar links de</Label>
@@ -433,7 +427,6 @@ export function ShareLinksSettings() {
             );
           })
         )}
-      </CardContent>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg">
@@ -589,6 +582,6 @@ export function ShareLinksSettings() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </CollapsibleSettingsCard>
   );
 }

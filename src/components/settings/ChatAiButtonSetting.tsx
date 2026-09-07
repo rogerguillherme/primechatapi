@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProfile } from "@/hooks/use-profile";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapsibleSettingsCard } from "@/components/settings/CollapsibleSettingsCard";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Bot } from "lucide-react";
@@ -38,17 +38,12 @@ export function ChatAiButtonSetting() {
   });
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Bot size={18} />
-          Botão do agente IA no chat
-        </CardTitle>
-        <CardDescription>
-          Controla se o botão "IA ON/OFF" aparece no canto do cabeçalho da conversa.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex items-center justify-between gap-4">
+    <CollapsibleSettingsCard
+      icon={<Bot size={18} />}
+      title="Botão do agente IA no chat"
+      description={'Controla se o botão "IA ON/OFF" aparece no canto do cabeçalho da conversa.'}
+      contentClassName="flex items-center justify-between gap-4"
+    >
         <p className="text-sm text-muted-foreground">
           {enabled
             ? "O botão está visível para ativar/desativar a IA em cada conversa."
@@ -60,7 +55,6 @@ export function ChatAiButtonSetting() {
           onCheckedChange={(v) => save.mutate(v)}
           aria-label="Exibir botão do agente IA no chat"
         />
-      </CardContent>
-    </Card>
+    </CollapsibleSettingsCard>
   );
 }

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTeamContext } from "@/hooks/use-team";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapsibleSettingsCard } from "@/components/settings/CollapsibleSettingsCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -175,23 +175,17 @@ export function ChatLabelsSettings() {
   };
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-start justify-between gap-4">
-        <div>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Tag className="h-4 w-4" /> Etiquetas do chat
-          </CardTitle>
-          <CardDescription>
-            Organize os atendimentos por etiqueta. Se a etiqueta tiver uma coluna associada, aplicá-la
-            move o lead para essa coluna do Kanban — retirar a etiqueta não traz o lead de volta.
-          </CardDescription>
-        </div>
-        <Button onClick={openNew} className="gap-2 shrink-0">
-          <Plus size={15} /> Nova etiqueta
-        </Button>
-      </CardHeader>
-
-      <CardContent className="space-y-2">
+    <CollapsibleSettingsCard
+      icon={<Tag className="h-4 w-4" />}
+      title="Etiquetas do chat"
+      description="Organize os atendimentos por etiqueta. Se a etiqueta tiver uma coluna associada, aplicá-la move o lead para essa coluna do Kanban — retirar a etiqueta não traz o lead de volta."
+      headerAction={
+          <Button onClick={openNew} className="gap-2 shrink-0">
+            <Plus size={15} /> Nova etiqueta
+          </Button>
+      }
+      contentClassName="space-y-2"
+    >
         {isLoading ? (
           <div className="flex justify-center py-8">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -236,7 +230,6 @@ export function ChatLabelsSettings() {
             );
           })
         )}
-      </CardContent>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md">
@@ -299,6 +292,6 @@ export function ChatLabelsSettings() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </CollapsibleSettingsCard>
   );
 }

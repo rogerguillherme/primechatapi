@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProfile } from "@/hooks/use-profile";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapsibleSettingsCard } from "@/components/settings/CollapsibleSettingsCard";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Home, Send, HeartHandshake, Loader2 } from "lucide-react";
@@ -59,15 +59,12 @@ export function HomeViewSetting() {
   });
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Home size={18} />
-          Tela inicial
-        </CardTitle>
-        <CardDescription>Escolha quais informações aparecem na aba Início.</CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-3 sm:grid-cols-2">
+    <CollapsibleSettingsCard
+      icon={<Home size={18} />}
+      title="Tela inicial"
+      description="Escolha quais informações aparecem na aba Início."
+      contentClassName="grid gap-3 sm:grid-cols-2"
+    >
         {OPTIONS.map((opt) => {
           const active = current === opt.value;
           return (
@@ -93,7 +90,6 @@ export function HomeViewSetting() {
             </button>
           );
         })}
-      </CardContent>
-    </Card>
+    </CollapsibleSettingsCard>
   );
 }

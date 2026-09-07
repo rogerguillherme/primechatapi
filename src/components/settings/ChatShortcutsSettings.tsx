@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTeamContext } from "@/hooks/use-team";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapsibleSettingsCard } from "@/components/settings/CollapsibleSettingsCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -175,28 +175,23 @@ export function ChatShortcutsSettings() {
     flows?.find((f: any) => f.id === id)?.name || "Fluxo removido";
 
   return (
-    <Card className="glass-card">
-      <CardHeader>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Zap size={18} className="text-primary" />
-              Atalhos do chat
-            </CardTitle>
-            <CardDescription>
-              Digite <code className="px-1 rounded bg-muted">/</code> no chat para listar os atalhos.
-              Um atalho pode enviar uma mensagem rápida ou ativar um fluxo já criado.
-            </CardDescription>
-          </div>
-          {!creating && (
+    <CollapsibleSettingsCard
+      cardClassName="glass-card"
+      icon={<Zap size={18} className="text-primary" />}
+      title="Atalhos do chat"
+      description={
+        <>Digite <code className="px-1 rounded bg-muted">/</code> no chat para listar os atalhos.
+        Um atalho pode enviar uma mensagem rápida ou ativar um fluxo já criado.</>
+      }
+      headerAction={
+          !creating && (
             <Button size="sm" onClick={() => setCreating(true)} className="gap-1.5 flex-shrink-0">
               <Plus size={15} /> Novo atalho
             </Button>
-          )}
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-5">
+          )
+      }
+      contentClassName="space-y-5"
+    >
         {creating && (
           <div className="rounded-lg border border-border p-4 space-y-4 bg-card/50">
             <div className="grid gap-4 md:grid-cols-2">
@@ -342,7 +337,6 @@ export function ChatShortcutsSettings() {
             ))}
           </div>
         )}
-      </CardContent>
-    </Card>
+    </CollapsibleSettingsCard>
   );
 }
