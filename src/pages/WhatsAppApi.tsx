@@ -108,7 +108,6 @@ import { ShareLinksSettings } from "@/components/settings/ShareLinksSettings";
 import { StageAutomationsSettings } from "@/components/settings/StageAutomationsSettings";
 import { ChatLabelsSettings } from "@/components/settings/ChatLabelsSettings";
 import { ChatShortcutsSettings } from "@/components/settings/ChatShortcutsSettings";
-import { MetritoSettings } from "@/components/settings/MetritoSettings";
 import { NotificationSettings } from "@/components/settings/NotificationSettings";
 import { useLeadsPicker } from "@/hooks/use-leads-picker";
 
@@ -2615,8 +2614,8 @@ export default function WhatsAppApi() {
           {/* Notificações: o que faz o sino tocar, por usuário */}
           <NotificationSettings />
 
-          {/* Credenciais do Metrito desta conta (vazio = usa o padrão global) */}
-          <MetritoSettings />
+          {/* Credenciais do Metrito/CAPI: centralizadas na aba "Metrito" (MetritoTab),
+              junto com as métricas que elas alimentam — não fica duplicado aqui. */}
 
 
 

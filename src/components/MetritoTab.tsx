@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Megaphone, DollarSign, Users, Target, AlertCircle } from "lucide-react";
 import { format, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { MetritoSettings } from "@/components/settings/MetritoSettings";
 
 type PeriodFilter = "7d" | "14d" | "30d";
 
@@ -127,6 +128,10 @@ export function MetritoTab() {
           </Select>
         </div>
       </div>
+
+      {/* Configuração centralizada aqui — a mesma tela onde se vê a métrica é
+          onde se cadastra a credencial que a alimenta. */}
+      <MetritoSettings />
 
       {notConfigured && (
         <Card className="border-warning/40 bg-warning/5">
