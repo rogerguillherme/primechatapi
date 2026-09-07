@@ -48,6 +48,8 @@ export function NodeEditPanel({ node, templates, onUpdate, onClose, variationEna
       </div>
 
       <div className="p-4 space-y-4">
+        <MediaFormatHint />
+
         {type === "message" && (
           <>
             <div className="space-y-2">
