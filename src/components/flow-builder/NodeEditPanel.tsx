@@ -48,6 +48,8 @@ export function NodeEditPanel({ node, templates, onUpdate, onClose, variationEna
       </div>
 
       <div className="p-4 space-y-4">
+        <MediaFormatHint />
+
         {type === "message" && (
           <>
             <div className="space-y-2">
@@ -701,6 +703,27 @@ function MessageVariationsField({
       >
         <Plus size={12} /> Adicionar variação
       </Button>
+    </div>
+  );
+}
+
+/** Aviso visual com os formatos e tamanhos aceitos pelo WhatsApp Cloud API. */
+function MediaFormatHint() {
+  return (
+    <div className="rounded-md border border-amber-500/20 bg-amber-500/10 p-3 space-y-2">
+      <p className="text-xs font-medium text-amber-400 flex items-center gap-1.5">
+        <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" />
+        Padrão de mídia do WhatsApp
+      </p>
+      <ul className="text-[11px] text-muted-foreground space-y-1">
+        <li><span className="text-foreground font-medium">Imagem:</span> JPG ou PNG, até 5 MB.</li>
+        <li><span className="text-foreground font-medium">Vídeo:</span> MP4 ou 3GP, até 16 MB. Vídeo de iPhone (MOV) precisa ser convertido.</li>
+        <li><span className="text-foreground font-medium">Áudio:</span> MP3, OGG/Opus, M4A, AAC ou AMR, até 16 MB.</li>
+        <li><span className="text-foreground font-medium">Documento:</span> qualquer arquivo, até 100 MB (PDFs nesta tela: até 20 MB).</li>
+      </ul>
+      <p className="text-[10px] text-muted-foreground">
+        Arquivos fora deste padrão são recusados antes do envio, evitando erros na conta.
+      </p>
     </div>
   );
 }
