@@ -110,17 +110,38 @@ export function NodeEditPanel({ node, templates, onUpdate, onClose, variationEna
               />
             )}
             {!data.template_id && (
+              <PdfTemplateField
+                mediaUrl={(data.media_url as string) || null}
+                mediaType={(data.media_type as string) || null}
+                fileName={(data.file_name as string) || null}
+                onChange={(enabled) =>
+                  onUpdate(
+                    enabled
+                      ? { media_url: "pdf:generated-at-send", media_type: "pdf_template" }
+                      : { media_url: null, media_type: null },
+                  )
+                }
+                onFileNameChange={(name) => onUpdate({ file_name: name })}
+              />
+            )}
+            {!data.template_id && (
               <div className="space-y-2">
                 <Label className="text-xs">
-                  {data.media_url && data.media_type !== "document" ? "Legenda (opcional)" : "Mensagem"}
+                  {data.media_type === "pdf_template"
+                    ? "Conteúdo do PDF"
+                    : data.media_url && data.media_type !== "document"
+                      ? "Legenda (opcional)"
+                      : "Mensagem"}
                 </Label>
                 <textarea
                   value={(data.custom_message as string) || ""}
                   onChange={(e) => onUpdate({ custom_message: e.target.value })}
                   placeholder={
-                    data.media_url && data.media_type !== "document"
-                      ? "Texto que aparecerá abaixo da mídia..."
-                      : "Digite a mensagem... (use {nome} para personalizar)"
+                    data.media_type === "pdf_template"
+                      ? "1ª linha vira o título do PDF, o resto vira o corpo. Use {estagio}, {prioridades}, etc."
+                      : data.media_url && data.media_type !== "document"
+                        ? "Texto que aparecerá abaixo da mídia..."
+                        : "Digite a mensagem... (use {nome} para personalizar)"
                   }
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm min-h-[80px] resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   rows={3}
@@ -969,6 +990,88 @@ function DocumentUploadField({
       {!isDocAttached && (
         <p className="text-[11px] text-muted-foreground">
           Envie um PDF (até 20MB) que será anexado junto à mensagem.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * PDF gerado na hora do envio a partir do texto da mensagem (com variáveis
+ * tipo {estagio}, {prioridades} já substituídas pelo valor do lead) — sem
+ * upload de arquivo, porque o conteúdo muda por lead. Ver
+ * `_shared/pdf-render.mjs` no flow-processor.
+ */
+function PdfTemplateField({
+  mediaUrl,
+  mediaType,
+  fileName: fileNameProp,
+  onChange,
+  onFileNameChange,
+}: {
+  mediaUrl: string | null;
+  mediaType?: string | null;
+  fileName?: string | null;
+  onChange: (enabled: boolean) => void;
+  onFileNameChange?: (name: string | null) => void;
+}) {
+  // Outra mídia já anexada: esconde este campo (mesma regra dos outros).
+  if (mediaUrl && mediaType && mediaType !== "pdf_template") return null;
+
+  const isPdfMode = mediaType === "pdf_template";
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs flex items-center gap-1.5">
+        <FileText size={12} /> PDF gerado do texto (opcional)
+      </Label>
+      {isPdfMode ? (
+        <>
+          <div className="relative rounded-md border border-border bg-muted/30 p-3 flex items-center gap-2">
+            <FileText size={16} className="text-emerald-600 shrink-0" />
+            <span className="text-xs text-foreground flex-1">
+              Ativado — o texto da mensagem abaixo vira o conteúdo do PDF
+            </span>
+            <Button
+              variant="destructive"
+              size="icon"
+              className="h-6 w-6 shrink-0"
+              onClick={() => {
+                onFileNameChange?.(null);
+                onChange(false);
+              }}
+            >
+              <Trash2 size={12} />
+            </Button>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-[11px] text-muted-foreground">
+              Nome exibido no WhatsApp
+            </Label>
+            <Input
+              value={fileNameProp || ""}
+              onChange={(e) => onFileNameChange?.(e.target.value)}
+              placeholder="Ex: Seu Mapa do Lipedema"
+              className="h-8 text-sm"
+              maxLength={100}
+            />
+          </div>
+        </>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => onChange(true)}
+          className="w-full gap-2 text-xs h-9 border-dashed"
+        >
+          <FileText size={12} /> Gerar PDF a partir do texto
+        </Button>
+      )}
+      {!isPdfMode && (
+        <p className="text-[11px] text-muted-foreground">
+          Sem upload — usa o texto da mensagem como conteúdo do PDF, gerado na hora do
+          envio pra cada lead (suporta as mesmas variáveis {"{"}nome{"}"}, {"{"}estagio{"}"} etc.).
         </p>
       )}
     </div>

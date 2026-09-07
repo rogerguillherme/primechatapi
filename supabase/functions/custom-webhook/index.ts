@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolverStatusVenda } from "../_shared/venda-status.mjs";
+import { phoneVariants } from "../_shared/phone.mjs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -142,6 +143,18 @@ function extractLead(payload: any, fieldMapping: FieldMapping = {}): { phone: st
   return { phone, name, email, cpf, orderId, amount, productName, liquido };
 }
 
+// Restrito de propósito à conta admin@primechat.com (pedido explícito) —
+// mesmo padrão de comparação hardcoded já usado em outros 9 arquivos deste
+// repo, não um flag/role novo no banco.
+async function isAdminAccount(admin: any, userId: string): Promise<boolean> {
+  try {
+    const { data } = await admin.auth.admin.getUserById(userId);
+    return data?.user?.email === "admin@primechat.com";
+  } catch {
+    return false;
+  }
+}
+
 async function resolveOrCreateLead(
   admin: any,
   userId: string,
@@ -150,13 +163,34 @@ async function resolveOrCreateLead(
 ): Promise<string | null> {
   if (!info.phone) return null;
 
-  // Try existing lead by phone within this tenant
-  const { data: existing } = await admin
-    .from("leads")
-    .select("id, metadata")
-    .eq("user_id", userId)
-    .eq("phone", info.phone)
-    .maybeSingle();
+  // Match por telefone dentro deste tenant. Só para admin@primechat.com:
+  // também casa pelas variantes do nono dígito (mesmo padrão de
+  // whatsapp-cloud-webhook/_shared/phone.mjs), porque o telefone que chega
+  // por um webhook genérico externo pode não bater byte a byte com o que já
+  // está salvo no lead que já conversou por WhatsApp — sem isso, o webhook
+  // cria um lead novo e desconectado da conversa em andamento. Demais contas
+  // seguem com o match exato de sempre, sem mudança de comportamento.
+  const useVariants = await isAdminAccount(admin, userId);
+  let existing: { id: string; metadata: unknown } | null = null;
+  if (useVariants) {
+    const phoneFilter = phoneVariants(info.phone).map((p) => `phone.eq.${p}`).join(",");
+    const { data } = await admin
+      .from("leads")
+      .select("id, metadata")
+      .eq("user_id", userId)
+      .or(phoneFilter)
+      .order("created_at", { ascending: true })
+      .limit(1);
+    existing = data?.[0] ?? null;
+  } else {
+    const { data } = await admin
+      .from("leads")
+      .select("id, metadata")
+      .eq("user_id", userId)
+      .eq("phone", info.phone)
+      .maybeSingle();
+    existing = data;
+  }
 
   if (existing?.id) {
     // Update name/email/cpf if missing

@@ -14,6 +14,7 @@ interface MessageNodeData {
 export function MessageNode({ id, data }: { id: string; data: MessageNodeData }) {
   const hasImage = data.media_url && data.media_type === "image";
   const hasDocument = data.media_url && data.media_type === "document";
+  const hasPdfTemplate = data.media_type === "pdf_template";
   const hasVideo = data.media_url && data.media_type === "video";
   const hasAudio = data.media_url && data.media_type === "audio";
   return (
@@ -24,7 +25,7 @@ export function MessageNode({ id, data }: { id: string; data: MessageNodeData })
         </div>
         <span className="text-xs font-semibold text-foreground flex-1">Enviar Mensagem</span>
         {hasImage && <ImageIcon size={11} className="text-emerald-600" />}
-        {hasDocument && <FileText size={11} className="text-emerald-600" />}
+        {(hasDocument || hasPdfTemplate) && <FileText size={11} className="text-emerald-600" />}
         {hasVideo && <VideoIcon size={11} className="text-emerald-600" />}
         {hasAudio && <Mic size={11} className="text-emerald-600" />}
         <button
@@ -59,6 +60,14 @@ export function MessageNode({ id, data }: { id: string; data: MessageNodeData })
           <FileText size={14} className="text-emerald-600" />
           <span className="text-[11px] text-muted-foreground truncate">
             PDF anexado
+          </span>
+        </div>
+      )}
+      {hasPdfTemplate && (
+        <div className="bg-muted/40 border-b border-border px-3 py-2 flex items-center gap-2">
+          <FileText size={14} className="text-emerald-600" />
+          <span className="text-[11px] text-muted-foreground truncate">
+            PDF gerado do texto abaixo
           </span>
         </div>
       )}

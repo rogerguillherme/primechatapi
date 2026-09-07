@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { applyStepLabels } from "../_shared/flow-matching.ts";
 import { interpolate } from "../_shared/interpolate.mjs";
 import { decideNoResponse } from "../_shared/no-response.mjs";
+import { renderTextToPdf } from "../_shared/pdf-render.mjs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -588,8 +589,38 @@ async function sendStepMessage(
     expectedLogContent = body.message;
   }
 
-  // Attach media if present (works as image-only or image + caption)
-  if (step.step_type === "message" && step.media_url) {
+  // PDF gerado do texto: o conteúdo já interpolado (com {estagio},
+  // {prioridades} etc. já substituídos) vira o PDF em vez de mensagem de
+  // texto — sem Chromium, com pdf-lib puro (ver _shared/pdf-render.mjs).
+  // Limpa body.message depois: senão o WhatsApp recebia o mesmo texto duas
+  // vezes, uma como mensagem e outra dentro do PDF.
+  if (step.step_type === "message" && step.media_type === "pdf_template" && body.message) {
+    try {
+      const pdfBytes = await renderTextToPdf(body.message);
+      const path = `flow-pdf/${lead.id}-${Date.now()}.pdf`;
+      const { error: pdfUpErr } = await supabase.storage
+        .from("chat-media")
+        .upload(path, pdfBytes, { contentType: "application/pdf", upsert: false });
+      if (pdfUpErr) throw pdfUpErr;
+      const { data: pdfSigned } = await supabase.storage
+        .from("chat-media")
+        .createSignedUrl(path, 60 * 60 * 24 * 365);
+      if (!pdfSigned?.signedUrl) throw new Error("Falha ao gerar URL assinada do PDF");
+      body.media_url = pdfSigned.signedUrl;
+      body.media_type = "document";
+      body.file_name = step.file_name || "documento";
+      expectedLogContent = `📄 ${step.file_name || "Documento"} (PDF gerado)`;
+      delete body.message;
+    } catch (e) {
+      // Sem PDF gerado: cai pro texto normal (já está em body.message) em vez
+      // de perder a mensagem inteira — melhor o lead receber o texto puro.
+      console.error("Falha ao gerar PDF do passo", step.id, ":", (e as Error)?.message || e);
+    }
+  }
+
+  // Attach media if present (works as image-only or image + caption) — não
+  // roda pro pdf_template: o bloco acima já resolveu media_url/media_type.
+  if (step.step_type === "message" && step.media_url && step.media_type !== "pdf_template") {
     body.media_url = step.media_url;
     body.media_type = step.media_type || "image";
     if (step.file_name) body.file_name = step.file_name;
