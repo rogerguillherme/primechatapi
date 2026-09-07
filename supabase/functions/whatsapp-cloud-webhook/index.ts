@@ -12,6 +12,7 @@ import {
   sendMetritoEvent,
   runBestEffort,
 } from "../_shared/metrito.ts";
+import { sendCapiEvent, sha256 } from "../_shared/capi.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -968,6 +969,37 @@ Deno.serve(async (req) => {
             utm: attribution,
           }, creds);
         });
+      }
+
+      // ── CAPI NATIVO: ctwa_clid (Click-to-WhatsApp) ──
+      // A Meta entrega `referral.ctwa_clid` só na 1ª mensagem de uma conversa
+      // que veio de um anúncio — hoje esse campo é descartado. Roda em
+      // paralelo à Metrito acima (fase 1: só isso, sem coletor de site).
+      if (isNewLead && lead && resolvedUserId) {
+        const ctwaClid: string | null = msg.referral?.ctwa_clid || null;
+        if (ctwaClid) {
+          const capiLeadId = lead.id;
+          const capiOwnerId = resolvedUserId;
+          runBestEffort(async () => {
+            const phoneHash = await sha256(cleanPhone);
+            await supabase.from("lead_attribution").upsert({
+              lead_id: capiLeadId,
+              owner_id: capiOwnerId,
+              ctwa_clid: ctwaClid,
+              phone_hash: phoneHash,
+            }, { onConflict: "lead_id" });
+
+            await sendCapiEvent(supabase, {
+              ownerId: capiOwnerId,
+              leadId: capiLeadId,
+              eventName: "Lead",
+              // Idempotência pelo id da mensagem, mesmo esquema da Metrito acima.
+              eventId: "wa-lead-" + messageId,
+              phoneHash,
+              ctwaClid,
+            });
+          });
+        }
       }
 
       // ── SHARE LINK ATTRIBUTION ──

@@ -11,6 +11,7 @@ import {
   runBestEffort,
   type MetritoUtm,
 } from "../_shared/metrito.ts";
+import { sendCapiEvent, sha256 } from "../_shared/capi.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -177,6 +178,52 @@ function reportToMetrito(
   });
 }
 
+// ── CAPI NATIVO (fase 1) ──
+// Roda em paralelo ao reportToMetrito acima, sem substituí-lo. Só manda
+// Purchase quando aprovado — mesmo gatilho que a Metrito já usa (linha
+// `if (extracted.status === "approved")` acima): reportar reembolso/
+// cancelamento como Purchase não tem um padrão bom no Meta CAPI.
+function reportToCapi(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  extracted: ReturnType<typeof extractPayload>,
+  leadId: string | null,
+) {
+  if (extracted.status !== "approved") return;
+  runBestEffort(async () => {
+    let ownerId: string | null = null;
+    let ctwaClid: string | null = null;
+    let phoneHash: string | null = null;
+
+    if (leadId) {
+      const [{ data: lead }, { data: attribution }] = await Promise.all([
+        supabase.from("leads").select("user_id").eq("id", leadId).maybeSingle(),
+        supabase.from("lead_attribution").select("ctwa_clid, phone_hash").eq("lead_id", leadId).maybeSingle(),
+      ]);
+      ownerId = lead?.user_id ?? null;
+      ctwaClid = attribution?.ctwa_clid ?? null;
+      phoneHash = attribution?.phone_hash ?? null;
+    }
+
+    // Sem lead_attribution (lead orgânico, ou anterior a esta feature): ainda
+    // reporta a compra, só que sem ctwa_clid — menos enriquecido, mas válido.
+    if (!phoneHash && extracted.buyerPhone) {
+      phoneHash = await sha256(extracted.buyerPhone);
+    }
+
+    await sendCapiEvent(supabase, {
+      ownerId,
+      leadId,
+      eventName: "Purchase",
+      eventId: "hubla-purchase-" + extracted.externalOrderId,
+      phoneHash,
+      ctwaClid,
+      value: extracted.amount,
+      currency: "BRL",
+    });
+  });
+}
+
 async function resolveOrCreateLead(
   supabase: any,
   phone: string,
@@ -329,6 +376,7 @@ Deno.serve(async (req) => {
         // Metrito casa pelo transaction.id, e os UTMs já foram enviados no
         // evento original, então não vale uma query a mais aqui.
         reportToMetrito(supabase, extracted, null);
+        reportToCapi(supabase, extracted, null);
       }
       await logWebhook(supabase, externalOrderId, status, 200, "Duplicate webhook ignored, status updated", payload);
       return new Response(
@@ -431,6 +479,7 @@ Deno.serve(async (req) => {
     }
 
     reportToMetrito(supabase, extracted, leadId);
+    reportToCapi(supabase, extracted, leadId);
 
     // ── AUTO-TRACK: Register purchase campaign event ──
     if (status === "approved" && leadId) {
