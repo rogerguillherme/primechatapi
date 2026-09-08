@@ -1757,7 +1757,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
               <button
                 onClick={() => { setContactTab("info"); setContactOpen(true); }}
                 title="Ver dados do contato"
-                className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                className="p-2 shrink-0 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
               >
                 <Info size={18} />
               </button>
@@ -1766,7 +1766,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
               <button
                 onClick={() => { setContactTab("edit"); setContactOpen(true); }}
                 title="Editar contato"
-                className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                className="p-2 shrink-0 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
               >
                 <Pencil size={18} />
               </button>
@@ -1826,7 +1826,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                           : "Iniciar um fluxo nesta conversa"
                     }
                     className={cn(
-                      "p-2 rounded-full hover:bg-accent transition-colors",
+                      "p-2 shrink-0 rounded-full hover:bg-accent transition-colors",
                       isPaused
                         ? "text-amber-500"
                         : runningExecution
@@ -1961,7 +1961,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                   disabled={pauseFlow.isPending || resumeFlow.isPending}
                   title={isPaused ? "Retomar fluxo" : "Pausar fluxo"}
                   className={cn(
-                    "p-2 rounded-full hover:bg-accent transition-colors disabled:opacity-50",
+                    "p-2 shrink-0 rounded-full hover:bg-accent transition-colors disabled:opacity-50",
                     isPaused ? "text-emerald-500" : "text-amber-500",
                   )}
                 >
@@ -1976,7 +1976,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                 <DropdownMenuTrigger asChild>
                   <button
                     title="Mover para outra etapa do Kanban"
-                    className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                    className="p-2 shrink-0 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <Columns3 size={18} />
                   </button>
@@ -2004,7 +2004,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                   <button
                     title="Etiquetas desta conversa"
                     className={cn(
-                      "p-2 rounded-full hover:bg-accent transition-colors",
+                      "p-2 shrink-0 rounded-full hover:bg-accent transition-colors",
                       leadLabelIds.size > 0 ? "text-primary" : "text-muted-foreground hover:text-foreground",
                     )}
                   >
@@ -2071,7 +2071,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                     }
                     disabled={finalizeLead.isPending}
                     className={cn(
-                      "p-2 rounded-full hover:bg-accent transition-colors",
+                      "p-2 shrink-0 rounded-full hover:bg-accent transition-colors",
                       conversaFinalizada
                         ? "text-emerald-500"
                         : "text-muted-foreground hover:text-foreground",
@@ -2087,7 +2087,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                 <DropdownMenuTrigger asChild>
                   <button
                     title="Transferir para outro atendente"
-                    className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                    className="p-2 shrink-0 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <UserPlus size={18} />
                   </button>
