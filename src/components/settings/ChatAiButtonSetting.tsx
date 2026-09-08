@@ -32,6 +32,8 @@ export function ChatAiButtonSetting() {
     },
     onSuccess: (value) => {
       queryClient.invalidateQueries({ queryKey: ["profile", user?.id] });
+      // O chat lê a configuração da conta por RPC (vale para a equipe também).
+      queryClient.invalidateQueries({ queryKey: ["chat-ai-button"] });
       toast.success(value ? "Botão do agente IA visível no chat" : "Botão do agente IA oculto no chat");
     },
     onError: (e: Error) => toast.error(e.message),
