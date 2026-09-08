@@ -41,6 +41,7 @@ import { useTeamContext, useTeamMembers } from "@/hooks/use-team";
 import { useToggleLeadLabel } from "@/hooks/use-chat-labels";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProfile } from "@/hooks/use-profile";
+import { useChatAiButtonEnabled } from "@/hooks/use-chat-ai-button";
 import { useNotificationPrefs } from "@/hooks/use-notification-prefs";
 import { useNotificationSound } from "@/hooks/use-notification-sound";
 import {
