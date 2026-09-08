@@ -3255,6 +3255,7 @@ export type Database = {
           total_products: number
         }[]
       }
+      get_owner_chat_ai_button: { Args: never; Returns: boolean }
       get_sales_summary: {
         Args: { p_from?: string; p_to?: string }
         Returns: {

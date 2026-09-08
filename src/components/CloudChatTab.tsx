@@ -41,6 +41,7 @@ import { useTeamContext, useTeamMembers } from "@/hooks/use-team";
 import { useToggleLeadLabel } from "@/hooks/use-chat-labels";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProfile } from "@/hooks/use-profile";
+import { useChatAiButtonEnabled } from "@/hooks/use-chat-ai-button";
 import { useNotificationPrefs } from "@/hooks/use-notification-prefs";
 import { useNotificationSound } from "@/hooks/use-notification-sound";
 import {
@@ -152,8 +153,8 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
   const { profile } = useProfile();
   const { prefs: notifPrefs } = useNotificationPrefs();
   const tocarSom = useNotificationSound(notifPrefs.sound);
-  /** Configuração da conta: exibir ou não o botão do agente IA no cabeçalho. */
-  const mostrarBotaoIa = profile?.chat_ai_button !== false;
+  /** Configuração da conta (do dono) — vale também para os vendedores. */
+  const mostrarBotaoIa = useChatAiButtonEnabled();
   const { accounts, defaultAccount } = useWhatsAppAccounts();
   /** Controle Anti-ban: qualidade dos números e avisos antes de enviar. */
   const { qualityOf, showQuality, warnMedium, confirmLow } = useAccountQuality();
@@ -1721,18 +1722,19 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
       <div className={cn("flex-1 flex flex-col min-w-0", !selectedLeadId ? "hidden lg:flex" : "flex")}>
         {selectedLead ? (
           <>
-            {/* Header */}
-            <div className="h-14 px-4 flex items-center gap-3 border-b border-border bg-card">
-              <button onClick={() => setSelectedLeadId(null)} className="lg:hidden p-1 text-muted-foreground hover:text-foreground">
+            {/* Header — no celular os botões de ação rolam na horizontal em
+                vez de espremer/esconder o nome do contato. */}
+            <div className="h-14 px-2 sm:px-4 flex items-center gap-2 sm:gap-3 border-b border-border bg-card overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <button onClick={() => setSelectedLeadId(null)} className="lg:hidden p-1 shrink-0 text-muted-foreground hover:text-foreground">
                 <ArrowLeft size={18} />
               </button>
-              <Avatar className="w-9 h-9">
+              <Avatar className="w-9 h-9 shrink-0">
                 {selectedLead.photo_url && <AvatarImage src={selectedLead.photo_url} />}
                 <AvatarFallback className={cn(getAvatarColor(selectedLead.name), "text-white text-xs")}>
                   {getInitials(selectedLead.name)}
                 </AvatarFallback>
               </Avatar>
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-[7.5rem]">
                 <p className="font-medium text-sm truncate">{selectedLead.name}</p>
                 <p className="text-[11px] text-muted-foreground truncate">
                   {selectedLead.phone}
@@ -1755,7 +1757,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
               <button
                 onClick={() => { setContactTab("info"); setContactOpen(true); }}
                 title="Ver dados do contato"
-                className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                className="p-2 shrink-0 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
               >
                 <Info size={18} />
               </button>
@@ -1764,7 +1766,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
               <button
                 onClick={() => { setContactTab("edit"); setContactOpen(true); }}
                 title="Editar contato"
-                className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                className="p-2 shrink-0 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
               >
                 <Pencil size={18} />
               </button>
@@ -1824,7 +1826,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                           : "Iniciar um fluxo nesta conversa"
                     }
                     className={cn(
-                      "p-2 rounded-full hover:bg-accent transition-colors",
+                      "p-2 shrink-0 rounded-full hover:bg-accent transition-colors",
                       isPaused
                         ? "text-amber-500"
                         : runningExecution
@@ -1959,7 +1961,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                   disabled={pauseFlow.isPending || resumeFlow.isPending}
                   title={isPaused ? "Retomar fluxo" : "Pausar fluxo"}
                   className={cn(
-                    "p-2 rounded-full hover:bg-accent transition-colors disabled:opacity-50",
+                    "p-2 shrink-0 rounded-full hover:bg-accent transition-colors disabled:opacity-50",
                     isPaused ? "text-emerald-500" : "text-amber-500",
                   )}
                 >
@@ -1974,7 +1976,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                 <DropdownMenuTrigger asChild>
                   <button
                     title="Mover para outra etapa do Kanban"
-                    className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                    className="p-2 shrink-0 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <Columns3 size={18} />
                   </button>
@@ -2002,7 +2004,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                   <button
                     title="Etiquetas desta conversa"
                     className={cn(
-                      "p-2 rounded-full hover:bg-accent transition-colors",
+                      "p-2 shrink-0 rounded-full hover:bg-accent transition-colors",
                       leadLabelIds.size > 0 ? "text-primary" : "text-muted-foreground hover:text-foreground",
                     )}
                   >
@@ -2069,7 +2071,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                     }
                     disabled={finalizeLead.isPending}
                     className={cn(
-                      "p-2 rounded-full hover:bg-accent transition-colors",
+                      "p-2 shrink-0 rounded-full hover:bg-accent transition-colors",
                       conversaFinalizada
                         ? "text-emerald-500"
                         : "text-muted-foreground hover:text-foreground",
@@ -2085,7 +2087,7 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                 <DropdownMenuTrigger asChild>
                   <button
                     title="Transferir para outro atendente"
-                    className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                    className="p-2 shrink-0 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <UserPlus size={18} />
                   </button>
