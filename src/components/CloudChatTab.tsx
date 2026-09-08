@@ -1722,18 +1722,19 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
       <div className={cn("flex-1 flex flex-col min-w-0", !selectedLeadId ? "hidden lg:flex" : "flex")}>
         {selectedLead ? (
           <>
-            {/* Header */}
-            <div className="h-14 px-4 flex items-center gap-3 border-b border-border bg-card">
-              <button onClick={() => setSelectedLeadId(null)} className="lg:hidden p-1 text-muted-foreground hover:text-foreground">
+            {/* Header — no celular os botões de ação rolam na horizontal em
+                vez de espremer/esconder o nome do contato. */}
+            <div className="h-14 px-2 sm:px-4 flex items-center gap-2 sm:gap-3 border-b border-border bg-card overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <button onClick={() => setSelectedLeadId(null)} className="lg:hidden p-1 shrink-0 text-muted-foreground hover:text-foreground">
                 <ArrowLeft size={18} />
               </button>
-              <Avatar className="w-9 h-9">
+              <Avatar className="w-9 h-9 shrink-0">
                 {selectedLead.photo_url && <AvatarImage src={selectedLead.photo_url} />}
                 <AvatarFallback className={cn(getAvatarColor(selectedLead.name), "text-white text-xs")}>
                   {getInitials(selectedLead.name)}
                 </AvatarFallback>
               </Avatar>
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-[7.5rem]">
                 <p className="font-medium text-sm truncate">{selectedLead.name}</p>
                 <p className="text-[11px] text-muted-foreground truncate">
                   {selectedLead.phone}
