@@ -153,8 +153,8 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
   const { profile } = useProfile();
   const { prefs: notifPrefs } = useNotificationPrefs();
   const tocarSom = useNotificationSound(notifPrefs.sound);
-  /** Configuração da conta: exibir ou não o botão do agente IA no cabeçalho. */
-  const mostrarBotaoIa = profile?.chat_ai_button !== false;
+  /** Configuração da conta (do dono) — vale também para os vendedores. */
+  const mostrarBotaoIa = useChatAiButtonEnabled();
   const { accounts, defaultAccount } = useWhatsAppAccounts();
   /** Controle Anti-ban: qualidade dos números e avisos antes de enviar. */
   const { qualityOf, showQuality, warnMedium, confirmLow } = useAccountQuality();
