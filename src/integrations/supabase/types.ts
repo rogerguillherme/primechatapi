@@ -172,6 +172,56 @@ export type Database = {
         }
         Relationships: []
       }
+      attribution_events: {
+        Row: {
+          action_source: string
+          capi_response: Json | null
+          created_at: string
+          currency: string | null
+          event_id: string
+          event_name: string
+          id: string
+          lead_id: string | null
+          owner_id: string | null
+          sent_to_capi: boolean
+          value: number | null
+        }
+        Insert: {
+          action_source?: string
+          capi_response?: Json | null
+          created_at?: string
+          currency?: string | null
+          event_id: string
+          event_name: string
+          id?: string
+          lead_id?: string | null
+          owner_id?: string | null
+          sent_to_capi?: boolean
+          value?: number | null
+        }
+        Update: {
+          action_source?: string
+          capi_response?: Json | null
+          created_at?: string
+          currency?: string | null
+          event_id?: string
+          event_name?: string
+          id?: string
+          lead_id?: string | null
+          owner_id?: string | null
+          sent_to_capi?: boolean
+          value?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attribution_events_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_logs: {
         Row: {
           action: string
@@ -448,6 +498,36 @@ export type Database = {
           unsubscribe_rate?: number
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      capi_settings: {
+        Row: {
+          access_token: string | null
+          created_at: string
+          id: string
+          owner_id: string
+          pixel_id: string | null
+          test_event_code: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_token?: string | null
+          created_at?: string
+          id?: string
+          owner_id: string
+          pixel_id?: string | null
+          test_event_code?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string | null
+          created_at?: string
+          id?: string
+          owner_id?: string
+          pixel_id?: string | null
+          test_event_code?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -1378,6 +1458,38 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
+      }
+      lead_attribution: {
+        Row: {
+          created_at: string
+          ctwa_clid: string | null
+          lead_id: string
+          owner_id: string
+          phone_hash: string
+        }
+        Insert: {
+          created_at?: string
+          ctwa_clid?: string | null
+          lead_id: string
+          owner_id: string
+          phone_hash: string
+        }
+        Update: {
+          created_at?: string
+          ctwa_clid?: string | null
+          lead_id?: string
+          owner_id?: string
+          phone_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_attribution_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: true
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       lead_blacklist: {
         Row: {
