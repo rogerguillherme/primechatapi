@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useProfile } from "@/hooks/use-profile";
+import { useChatAiButtonEnabled } from "@/hooks/use-chat-ai-button";
 import { cn } from "@/lib/utils";
 
 interface Msg { role: "user" | "assistant"; content: string }
@@ -18,6 +19,7 @@ const SUGGESTIONS = [
 
 export function AiAssistantChat() {
   const { isSuperAdmin } = useProfile();
+  const mostrarBotaoIa = useChatAiButtonEnabled();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -32,6 +34,10 @@ export function AiAssistantChat() {
   useEffect(() => {
     if (open) setTimeout(() => inputRef.current?.focus(), 100);
   }, [open, messages.length]);
+
+  useEffect(() => {
+    if (!mostrarBotaoIa) setOpen(false);
+  }, [mostrarBotaoIa]);
 
   async function send(text?: string) {
     const content = (text ?? input).trim();
@@ -53,6 +59,8 @@ export function AiAssistantChat() {
       setLoading(false);
     }
   }
+
+  if (!mostrarBotaoIa) return null;
 
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">

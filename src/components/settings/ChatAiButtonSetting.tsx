@@ -31,6 +31,7 @@ export function ChatAiButtonSetting() {
       return value;
     },
     onSuccess: (value) => {
+      queryClient.setQueryData(["chat-ai-button", user?.id], value);
       queryClient.invalidateQueries({ queryKey: ["profile", user?.id] });
       // O chat lê a configuração da conta por RPC (vale para a equipe também).
       queryClient.invalidateQueries({ queryKey: ["chat-ai-button"] });
