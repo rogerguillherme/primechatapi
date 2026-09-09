@@ -19,6 +19,7 @@ import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
 import { ContactInfoSheet } from "@/components/chat/ContactInfoSheet";
 import { startFlowForLead } from "@/lib/startFlowForLead";
 import { interpolateForLead } from "@/lib/interpolate";
+import { useChatAiButtonEnabled } from "@/hooks/use-chat-ai-button";
 
 interface LeadChatDrawerProps {
   lead: { id: string; name: string; phone: string } | null;
@@ -44,6 +45,7 @@ function formatDateSeparator(date: Date) {
 }
 
 export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps) {
+  const mostrarBotaoIa = useChatAiButtonEnabled();
   const [message, setMessage] = useState("");
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [contactOpen, setContactOpen] = useState(false);
@@ -399,7 +401,7 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {aiMode === "selected" && (
+              {mostrarBotaoIa && aiMode === "selected" && (
                 <button
                   type="button"
                   onClick={() => toggleAiMutation.mutate(!leadAi)}
@@ -416,7 +418,7 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
                   IA {leadAi ? "ON" : "OFF"}
                 </button>
               )}
-              {aiMode === "all" && (
+              {mostrarBotaoIa && aiMode === "all" && (
                 <span
                   title="Agente IA respondendo todas as conversas"
                   className="h-8 px-2 rounded-md inline-flex items-center gap-1.5 text-xs font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
