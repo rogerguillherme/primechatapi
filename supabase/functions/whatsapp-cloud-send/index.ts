@@ -94,6 +94,8 @@ async function getAccountCredentials(
   supabase: any,
   accountId?: string,
   ownerUserId?: string | null,
+  leadAccountId?: string | null,
+
 ): Promise<AccountCredentials> {
   // blocked_at e blocked_reason precisam vir na consulta: toCreds os lê, e sem
   // pedi-los eles chegavam sempre nulos — a proteção de conta travada existia
@@ -124,11 +126,24 @@ async function getAccountCredentials(
     if (data) return toCreds(data);
   }
 
+
+  // Sem conta explícita, a conversa manda: o número que já falava com este
+  // lead. Antes o envio caía direto na conta padrão do tenant — então uma
+  // resposta de um contato da BM A saía pela BM B, e as duas conversas se
+  // misturavam no mesmo histórico.
+  if (!accountId && leadAccountId) {
+    let q = supabase.from("whatsapp_accounts").select(baseSelect).eq("id", leadAccountId);
+    if (ownerUserId) q = q.eq("user_id", ownerUserId);
+    const { data } = await q.maybeSingle();
+    if (data) return toCreds(data);
+  }
+
   // Fallback dentro do tenant. ANTES este trecho não filtrava por user_id: com
   // account_id nulo qualquer envio caía na conta default/mais antiga do banco
   // — que podia ser de outro usuário e de outro provedor (ex.: Evolution),
   // devolvendo "Internal Server Error" para contas que são Cloud API.
   if (ownerUserId) {
+
     const { data: owned } = await supabase
       .from("whatsapp_accounts")
       .select(baseSelect)
@@ -407,14 +422,20 @@ Deno.serve(async (req) => {
     // O dono do lead define o tenant: sem isso o fallback de conta podia pegar
     // a conta de outro usuário (outro provedor) e o envio falhava.
     let ownerUserId: string | null = null;
+    let leadAccountId: string | null = null;
     if (lead_id) {
       const { data: ownerLead } = await supabase
         .from("leads")
-        .select("user_id")
+        .select("user_id, last_message_account_id, account_ids")
         .eq("id", lead_id)
         .maybeSingle();
       ownerUserId = ownerLead?.user_id ?? null;
+      leadAccountId =
+        (ownerLead?.last_message_account_id as string | null) ??
+        (Array.isArray(ownerLead?.account_ids) ? (ownerLead?.account_ids[0] as string) : null) ??
+        null;
     }
+
 
     // Sem lead conhecido, o dono é quem está chamando. Antes disso o código
     // caía numa "conta padrão global" — a mais antiga do banco inteiro, que
@@ -436,7 +457,7 @@ Deno.serve(async (req) => {
       blockedReason,
       appId,
       appSecret,
-    } = await getAccountCredentials(supabase, account_id, ownerUserId);
+    } = await getAccountCredentials(supabase, account_id, ownerUserId, leadAccountId);
 
     // Conta travada pela Meta: insistir não passa, e cada tentativa vira mais
     // uma entrega falhada — o número que ela usa para decidir banir.
