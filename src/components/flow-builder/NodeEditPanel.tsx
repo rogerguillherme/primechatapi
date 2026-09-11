@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { X, Plus, Trash2, Upload, Image as ImageIcon, Loader2, FileText, Video as VideoIcon, Mic } from "lucide-react";
+import { X, Plus, Trash2, Copy, Upload, Image as ImageIcon, Loader2, FileText, Video as VideoIcon, Mic } from "lucide-react";
 import { useAiAgents } from "@/hooks/use-ai-agents";
 import { useChatLabels } from "@/hooks/use-chat-labels";
 import { AudioRecorder } from "@/components/AudioRecorder";
@@ -683,14 +683,30 @@ function MessageVariationsField({
             rows={2}
             className="flex-1 rounded-md border border-input bg-background px-2 py-1.5 text-xs min-h-[50px] resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-destructive shrink-0"
-            onClick={() => onChange(variations.filter((_, i) => i !== idx))}
-          >
-            <Trash2 size={12} />
-          </Button>
+          <div className="flex flex-col gap-1 shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+              title="Duplicar variação"
+              onClick={() => {
+                const next = [...variations];
+                next.splice(idx + 1, 0, v);
+                onChange(next);
+              }}
+            >
+              <Copy size={12} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-destructive"
+              title="Remover variação"
+              onClick={() => onChange(variations.filter((_, i) => i !== idx))}
+            >
+              <Trash2 size={12} />
+            </Button>
+          </div>
         </div>
       ))}
       <Button

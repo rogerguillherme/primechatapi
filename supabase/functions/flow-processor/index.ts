@@ -584,7 +584,13 @@ async function sendStepMessage(
       expectedLogContent = template.content;
     }
   } else if (step.custom_message) {
-    body.message = interpolate(step.custom_message, vars);
+    const variants = Array.isArray(step.message_variations) ? step.message_variations.filter((v: any) => typeof v === "string" && v.trim()) : [];
+    const pool = [step.custom_message, ...variants];
+    const chosen = pool[Math.floor(Math.random() * pool.length)];
+    if (variants.length > 0) {
+      console.log("Message rotation:", step.id, "chose variant", pool.indexOf(chosen), "from pool of", pool.length);
+    }
+    body.message = interpolate(chosen, vars);
     expectedLogContent = body.message;
   }
 
