@@ -457,7 +457,7 @@ Deno.serve(async (req) => {
       blockedReason,
       appId,
       appSecret,
-    } = await getAccountCredentials(supabase, account_id, ownerUserId);
+    } = await getAccountCredentials(supabase, account_id, ownerUserId, leadAccountId);
 
     // Conta travada pela Meta: insistir não passa, e cada tentativa vira mais
     // uma entrega falhada — o número que ela usa para decidir banir.
