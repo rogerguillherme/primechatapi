@@ -12,6 +12,7 @@ import { useFavicon } from "@/hooks/use-favicon";
 import { Input } from "@/components/ui/input";
 import { Card, Kpi, TituloPagina, Vazio, moeda } from "@/components/metrics/ui";
 import { NovaVendaDialog } from "@/components/metrics/NovaVendaDialog";
+import { EditarVendaDialog } from "@/components/metrics/EditarVendaDialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
@@ -197,6 +198,7 @@ export default function MetrikVendas() {
                 <th className="px-4 py-3 font-medium">Valor</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Data</th>
+                {podeConfigurar && <th className="px-4 py-3 font-medium"></th>}
               </tr>
             </thead>
             <tbody>
@@ -221,6 +223,11 @@ export default function MetrikVendas() {
                     <td className="px-4 py-3 text-muted-foreground tabular-nums">
                       {format(new Date(v.created_at), "dd/MM HH:mm")}
                     </td>
+                    {podeConfigurar && (
+                      <td className="px-4 py-3">
+                        <EditarVendaDialog venda={{ id: v.id, amount: v.amount, status: v.status, created_at: v.created_at }} />
+                      </td>
+                    )}
                   </tr>
                 );
               })}
