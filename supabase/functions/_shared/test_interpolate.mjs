@@ -1,7 +1,7 @@
 // Self-check da substituição de variáveis das mensagens de fluxo.
 // Run: node supabase/functions/_shared/test_interpolate.mjs
 import assert from "node:assert/strict";
-import { interpolate, variableCandidates } from "./interpolate.mjs";
+import { interpolate, variableCandidates, mergeScalarVars } from "./interpolate.mjs";
 
 const vars = {
   nome: "Ana",
@@ -66,5 +66,26 @@ assert.equal(
   "ESPECIFICO",
   "chave exata tem prioridade",
 );
+
+// ── mergeScalarVars: mescla metadata sem sobrescrever ──
+// buildVars monta as chaves nomeadas, depois mescla flow_executions.metadata,
+// depois leads.metadata com prioridade MENOR.
+{
+  const vars = { nome: "Ana", telefone: "5511999998888" };
+  mergeScalarVars(vars, { padrao: "o inchaço", order_id: 123, nome: "IGNORADO", obj: { x: 1 }, nulo: null });
+  assert.equal(vars.padrao, "o inchaço", "chave nova entra");
+  assert.equal(vars.order_id, "123", "numero vira string");
+  assert.equal(vars.nome, "Ana", "chave existente NAO e sobrescrita");
+  assert.equal(vars.obj, undefined, "objeto aninhado e ignorado");
+  assert.equal(vars.nulo, undefined, "null e ignorado");
+
+  // leads.metadata entra depois e nao vence flow_executions.metadata
+  mergeScalarVars(vars, { padrao: "a dor", link_mapa: "https://zerolipedema.com.br/mapas/ABC234.pdf" });
+  assert.equal(vars.padrao, "o inchaço", "leads.metadata nao sobrescreve o que ja veio");
+  assert.equal(vars.link_mapa, "https://zerolipedema.com.br/mapas/ABC234.pdf", "chave so de leads.metadata entra");
+
+  mergeScalarVars(vars, null); // nao quebra com source nulo
+  mergeScalarVars(vars, undefined);
+}
 
 console.log("interpolate: all assertions passed");

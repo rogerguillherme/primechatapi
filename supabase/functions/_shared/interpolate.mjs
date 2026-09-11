@@ -43,6 +43,22 @@ export function variableCandidates(raw) {
 }
 
 /**
+ * Copia as chaves ESCALARES de `source` para `target` sem sobrescrever o que já
+ * existe. Usado pelo `buildVars` dos dois motores de fluxo (flow-processor e
+ * whatsapp-cloud-webhook) para mesclar `flow_executions.metadata` e, depois e
+ * com prioridade MENOR, `leads.metadata` — onde integrações externas gravam
+ * variáveis do lead (ex.: o quiz do zerolipedema grava `padrao` e `link_mapa`).
+ */
+export function mergeScalarVars(target, source) {
+  for (const [k, v] of Object.entries(source || {})) {
+    if (target[k] === undefined && v != null && typeof v !== "object") {
+      target[k] = String(v);
+    }
+  }
+  return target;
+}
+
+/**
  * Troca {variavel} pelo valor. Variável desconhecida fica intacta — melhor o
  * operador ver `{sobrenome}` na conversa do que uma lacuna silenciosa.
  */

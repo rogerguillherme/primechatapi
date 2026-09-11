@@ -6,6 +6,9 @@ verify_jwt = false
 [functions.hubla-webhook]
 verify_jwt = false
 
+[functions.kiwify-webhook]
+verify_jwt = false
+
 [functions.zapi-webhook]
 verify_jwt = false
 

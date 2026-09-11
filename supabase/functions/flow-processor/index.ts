@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { applyStepLabels } from "../_shared/flow-matching.ts";
-import { interpolate } from "../_shared/interpolate.mjs";
+import { interpolate, mergeScalarVars } from "../_shared/interpolate.mjs";
 import { decideNoResponse } from "../_shared/no-response.mjs";
 import { renderTextToPdf } from "../_shared/pdf-render.mjs";
 
@@ -62,12 +62,12 @@ function buildVars(lead: any, metadata: any): Record<string, string> {
     price: amount != null ? formatCurrency(amount) : "",
   };
 
-  // Plus any raw metadata key (lower priority - doesn't override above)
-  for (const [k, v] of Object.entries(md)) {
-    if (vars[k] === undefined && v != null && typeof v !== "object") {
-      vars[k] = String(v);
-    }
-  }
+  // Chaves cruas de flow_executions.metadata (não sobrescrevem as nomeadas
+  // acima); depois leads.metadata com prioridade ainda menor — é onde
+  // integrações externas gravam variáveis do lead (ex.: quiz zerolipedema
+  // grava `padrao` e `link_mapa`).
+  mergeScalarVars(vars, md);
+  mergeScalarVars(vars, lead?.metadata);
   return vars;
 }
 

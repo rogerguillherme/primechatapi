@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolverStatusVenda } from "../_shared/venda-status.mjs";
 import { phoneVariants } from "../_shared/phone.mjs";
+import { pararNutricao } from "../_shared/stop-nurture.mjs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -467,6 +468,24 @@ Deno.serve(async (req) => {
           { onConflict: "external_order_id" },
         );
         if (ordemErro) console.error("custom-webhook: falha ao gravar venda", ordemErro);
+      }
+
+      // Compra aprovada: para a sequência de nutrição do lead — só quando ele
+      // veio do funil zerolipedema (quem inicia a nutrição é a mensagem do
+      // quiz no WhatsApp, não a compra; a compra só encerra o que já estava
+      // rodando). pararNutricao cancela QUALQUER execução em andamento do
+      // lead sem escopar por flow_id, então aplicar isso a toda venda dessa
+      // rota compartilhada — de qualquer plataforma/conta — quebraria
+      // sequência de pós-venda de outros funis no mesmo CRM. `padrao`/
+      // `link_mapa` só existem em leads.metadata para quem passou pelo
+      // binding do token do quiz.
+      if (statusVenda === "approved" && leadId) {
+        const { data: leadRow } = await adminClient
+          .from("leads").select("metadata").eq("id", leadId).maybeSingle();
+        const isLipedema = Boolean(leadRow?.metadata?.padrao || leadRow?.metadata?.link_mapa);
+        if (isLipedema) {
+          await pararNutricao(adminClient, leadId, "comprou");
+        }
       }
 
       if (leadId) {

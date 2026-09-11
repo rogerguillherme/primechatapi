@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { matchesStep, aiMatchesStep, applyStepLabels } from "../_shared/flow-matching.ts";
 import { applyStageAutomations } from "../_shared/stage-automations.ts";
-import { interpolate } from "../_shared/interpolate.mjs";
+import { interpolate, mergeScalarVars } from "../_shared/interpolate.mjs";
 // `phoneVariants` já é nome de variável local mais abaixo; o apelido evita a colisão.
 import { normalizeWaId, phoneVariants as variantesDeTelefone } from "../_shared/phone.mjs";
 import { bloqueioDeConta } from "../_shared/meta-block.mjs";
@@ -68,9 +68,11 @@ function buildVars(lead: any, metadata: any): Record<string, string> {
     amount: amount != null ? formatCurrency(amount) : "",
     price: amount != null ? formatCurrency(amount) : "",
   };
-  for (const [k, v] of Object.entries(md)) {
-    if (vars[k] === undefined && v != null && typeof v !== "object") vars[k] = String(v);
-  }
+  // Chaves cruas de flow_executions.metadata e, com prioridade menor,
+  // leads.metadata (variáveis gravadas por integração externa, ex.: quiz
+  // zerolipedema: `padrao`, `link_mapa`).
+  mergeScalarVars(vars, md);
+  mergeScalarVars(vars, lead?.metadata);
   return vars;
 }
 
@@ -1266,6 +1268,69 @@ Deno.serve(async (req) => {
         continue;
       }
 
+      // ── BINDING DO TOKEN DO QUIZ (funil zerolipedema) ──
+      // A lead chega pelo quiz do site: o backend do quiz devolve um link wa.me
+      // com "... #TOKEN" (Roger também aceita "(TOKEN)" como alternativa, sem
+      // tratamento especial de URL). Quando essa mensagem entra, avisamos o
+      // backend do quiz (única forma dele casar token<->telefone, já que o
+      // telefone não é capturado no formulário). Ele grava as variáveis em
+      // leads.metadata — as do quiz quando o token casa, ou um "mapa universal"
+      // genérico quando não casa (o quiz backend NUNCA deixa a lead sem
+      // resposta por falta de token); o gatilho "mensagem_recebida" abaixo
+      // inicia a nutrição e o buildVars lê essas variáveis nos dois casos.
+      //
+      // Esta função atende TODAS as contas de WhatsApp do CRM, não só a do
+      // funil zerolipedema. Antes, uma mensagem de OUTRO tenant que por azar
+      // batesse no formato #XXXXXX/(XXXXXX) (ex.: "Pedido #A1B2C3") virava um
+      // no-op inofensivo. Agora que o quiz backend SEMPRE grava alguma coisa
+      // em leads.metadata (mapa universal de fallback quando o token não
+      // casa — pedido do Roger), o mesmo falso-positivo gravaria conteúdo
+      // genérico no lead ERRADO, de outro cliente. Por isso o relay agora
+      // também exige que a mensagem tenha chegado pela conta configurada em
+      // app_settings.quiz_relay_account_id — sem essa config, não dispara
+      // (fail-closed) em vez de vazar pra qualquer conta.
+      if (text && lead && /#[A-Z0-9]{6}|\([A-Z0-9]{6}\)/.test(text.toUpperCase())) {
+        const upper = text.toUpperCase();
+        const tokenQuiz = ((upper.match(/#([A-Z0-9]{6})/) || upper.match(/\(([A-Z0-9]{6})\)/)) || [])[1];
+        try {
+          const { data: cfgRows } = await supabase
+            .from("app_settings").select("key, value")
+            .in("key", ["quiz_relay_url", "quiz_relay_account_id"]);
+          const cfg = new Map((cfgRows || []).map((r: any) => [r.key, (r.value || "").trim()]));
+          const relayAccountId = cfg.get("quiz_relay_account_id") || "";
+          const relayUrl = cfg.get("quiz_relay_url") || Deno.env.get("QUIZ_RELAY_URL") || "";
+          const relaySecret = Deno.env.get("QUIZ_WEBHOOK_SECRET") || "";
+          if (relayAccountId && relayAccountId !== resolvedAccountId) {
+            // Token-shaped, mas em outra conta — não é o funil zerolipedema.
+          } else if (!relayAccountId) {
+            console.warn("[quiz-relay] app_settings.quiz_relay_account_id não configurado; relay desativado (fail-closed).");
+          } else if (relayUrl && relaySecret) {
+            const r = await fetch(relayUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "x-quiz-secret": relaySecret },
+              body: JSON.stringify({
+                lead_id: lead.id,
+                phone: cleanPhone,
+                token: tokenQuiz,
+                text,
+                // Nome do perfil do WhatsApp, se a Meta mandou um (não o
+                // placeholder "WhatsApp <telefone>"). O quiz backend usa isso
+                // pra corrigir leads.name quando ainda não tem nome real.
+                name: contact?.profile?.name || null,
+              }),
+              signal: AbortSignal.timeout(3000),
+            });
+            console.log(`[quiz-relay] token=${tokenQuiz} lead=${lead.id} status=${r.status}`);
+          } else {
+            console.warn("[quiz-relay] quiz_relay_url ou QUIZ_WEBHOOK_SECRET não configurado; ignorando.");
+          }
+        } catch (e) {
+          // Backend do quiz fora/lento: a mensagem já está salva e o job de
+          // reconciliação do quiz detecta o token sem binding.
+          console.error(`[quiz-relay] falha (token ${tokenQuiz}):`, (e as Error)?.message || e);
+        }
+      }
+
       // ── AI AUTO-REPLY: Trigger AI response if enabled ──
       // Only for text messages (not button replies which are handled by flows)
       if (!buttonPayload && text) {
@@ -1740,6 +1805,16 @@ async function processFlowStep(step: any, execution: any, lead: any, supabase: a
   if (step.step_type === "message" || step.step_type === "cta_url" || step.step_type === "interactive_buttons") {
     const body: any = { phone: lead.phone || lead.name, lead_id: lead.id };
     if (accountId) body.account_id = accountId;
+
+    // Os objetos `lead` que chegam aqui pelo inbound trazem só id/name/phone e
+    // podem ter sido lidos ANTES de uma integração externa escrever em
+    // leads.metadata (ex.: binding do token do quiz). Relê fresco para o
+    // buildVars enxergar `padrao`/`link_mapa`.
+    if (lead?.id && lead.metadata === undefined) {
+      const { data: fresh } = await supabase
+        .from("leads").select("metadata").eq("id", lead.id).maybeSingle();
+      lead.metadata = fresh?.metadata ?? null;
+    }
 
     const vars = buildVars(lead, execution.metadata);
     const firstName = vars.nome;
