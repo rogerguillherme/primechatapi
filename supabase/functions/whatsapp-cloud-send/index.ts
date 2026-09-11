@@ -94,6 +94,8 @@ async function getAccountCredentials(
   supabase: any,
   accountId?: string,
   ownerUserId?: string | null,
+  leadAccountId?: string | null,
+
 ): Promise<AccountCredentials> {
   // blocked_at e blocked_reason precisam vir na consulta: toCreds os lê, e sem
   // pedi-los eles chegavam sempre nulos — a proteção de conta travada existia
@@ -124,11 +126,24 @@ async function getAccountCredentials(
     if (data) return toCreds(data);
   }
 
+
+  // Sem conta explícita, a conversa manda: o número que já falava com este
+  // lead. Antes o envio caía direto na conta padrão do tenant — então uma
+  // resposta de um contato da BM A saía pela BM B, e as duas conversas se
+  // misturavam no mesmo histórico.
+  if (!accountId && leadAccountId) {
+    let q = supabase.from("whatsapp_accounts").select(baseSelect).eq("id", leadAccountId);
+    if (ownerUserId) q = q.eq("user_id", ownerUserId);
+    const { data } = await q.maybeSingle();
+    if (data) return toCreds(data);
+  }
+
   // Fallback dentro do tenant. ANTES este trecho não filtrava por user_id: com
   // account_id nulo qualquer envio caía na conta default/mais antiga do banco
   // — que podia ser de outro usuário e de outro provedor (ex.: Evolution),
   // devolvendo "Internal Server Error" para contas que são Cloud API.
   if (ownerUserId) {
+
     const { data: owned } = await supabase
       .from("whatsapp_accounts")
       .select(baseSelect)
