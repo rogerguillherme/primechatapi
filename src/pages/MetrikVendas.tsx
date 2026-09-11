@@ -126,7 +126,7 @@ export default function MetrikVendas() {
                   </Suspense>
                 </DialogContent>
               </Dialog>
-              <NovaVendaDialog ownerId={ownerId} />
+              <NovaVendaDialog ownerId={ownerId} membros={membros} />
             </div>
           ) : undefined
         }
