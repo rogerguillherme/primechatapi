@@ -422,14 +422,20 @@ Deno.serve(async (req) => {
     // O dono do lead define o tenant: sem isso o fallback de conta podia pegar
     // a conta de outro usuário (outro provedor) e o envio falhava.
     let ownerUserId: string | null = null;
+    let leadAccountId: string | null = null;
     if (lead_id) {
       const { data: ownerLead } = await supabase
         .from("leads")
-        .select("user_id")
+        .select("user_id, last_message_account_id, account_ids")
         .eq("id", lead_id)
         .maybeSingle();
       ownerUserId = ownerLead?.user_id ?? null;
+      leadAccountId =
+        (ownerLead?.last_message_account_id as string | null) ??
+        (Array.isArray(ownerLead?.account_ids) ? (ownerLead?.account_ids[0] as string) : null) ??
+        null;
     }
+
 
     // Sem lead conhecido, o dono é quem está chamando. Antes disso o código
     // caía numa "conta padrão global" — a mais antiga do banco inteiro, que
