@@ -838,19 +838,34 @@ Deno.serve(async (req) => {
       // histórico só, escondendo uma delas da lista do chat.
       const { data: candidatos } = await supabase
         .from("leads")
-        .select("id, name, phone, account_ids, last_message_account_id, created_at")
+        .select(
+          "id, name, phone, account_ids, last_message_account_id, created_at, last_outbound_at, last_message_at",
+        )
         .or(phoneFilter)
         .eq("user_id", resolvedUserId)
         .order("created_at", { ascending: true })
         .limit(20);
 
-      const daConta = (candidatos || []).find((l: any) =>
+      // Quando o mesmo telefone existe em vários leads da mesma conta (import
+      // repetido cria uma cópia), a resposta tinha de cair na conversa que
+      // ACABOU de receber o disparo — antes ela grudava no lead mais antigo e o
+      // clique do botão parecia não ter chegado. Ordena pela atividade mais
+      // recente (último envio / última mensagem / criação).
+      const atividade = (l: any) =>
+        Math.max(
+          l.last_outbound_at ? Date.parse(l.last_outbound_at) : 0,
+          l.last_message_at ? Date.parse(l.last_message_at) : 0,
+          l.created_at ? Date.parse(l.created_at) : 0,
+        );
+      const porAtividade = [...(candidatos || [])].sort((a: any, b: any) => atividade(b) - atividade(a));
+
+      const daConta = porAtividade.find((l: any) =>
         resolvedAccountId &&
         ((Array.isArray(l.account_ids) && l.account_ids.includes(resolvedAccountId)) ||
           l.last_message_account_id === resolvedAccountId)
       );
       // Lead que ainda não conversou por nenhuma conta pode adotar esta.
-      const semConta = (candidatos || []).find(
+      const semConta = porAtividade.find(
         (l: any) => (!l.account_ids || l.account_ids.length === 0) && !l.last_message_account_id,
       );
 
