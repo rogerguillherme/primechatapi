@@ -874,10 +874,46 @@ Deno.serve(async (req) => {
       }
 
       if (templateRecord.meta_status && templateRecord.meta_status !== "APPROVED" && templateRecord.meta_status !== "unknown") {
-        return new Response(
-          JSON.stringify({ error: `Template "${template_name}" ainda não está aprovado (${templateRecord.meta_status}). Aguarde a aprovação para enviar.` }),
-          { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
+        // O status salvo aqui é uma foto do momento da criação: quando a Meta
+        // aprova depois, ninguém reescreve a linha, e o disparo continuava
+        // sendo recusado por um "PENDING" que já não existia mais. Antes de
+        // barrar, confirmamos o status atual na Graph API (e atualizamos o
+        // banco, para as próximas mensagens não pagarem essa consulta).
+        let statusAtual = templateRecord.meta_status as string;
+        if (!isD360 && businessAccountId && ACCESS_TOKEN) {
+          try {
+            const res = await fetch(
+              `https://graph.facebook.com/v21.0/${businessAccountId}/message_templates?name=${encodeURIComponent(template_name)}&limit=20&fields=name,language,status`,
+              { headers: { Authorization: `Bearer ${ACCESS_TOKEN}` } },
+            );
+            const js = await res.json().catch(() => ({}));
+            const lang = String(template_language || templateRecord.template_language || "pt_BR").toLowerCase();
+            const achado = (js?.data || []).find((t: any) =>
+              String(t.name).toLowerCase() === String(template_name).toLowerCase() &&
+              String(t.language).toLowerCase() === lang
+            ) || (js?.data || []).find((t: any) =>
+              String(t.name).toLowerCase() === String(template_name).toLowerCase()
+            );
+            if (achado?.status) {
+              statusAtual = String(achado.status).toUpperCase();
+              if (statusAtual !== templateRecord.meta_status) {
+                await supabase
+                  .from("chat_templates")
+                  .update({ meta_status: statusAtual })
+                  .eq("id", templateRecord.id);
+              }
+            }
+          } catch (e) {
+            console.error("Falha ao reconferir status do template na Meta:", e);
+          }
+        }
+
+        if (statusAtual !== "APPROVED") {
+          return new Response(
+            JSON.stringify({ error: `Template "${template_name}" ainda não está aprovado (${statusAtual}). Aguarde a aprovação para enviar.` }),
+            { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
       }
 
       // Pre-fetch lead for placeholder resolution (used in two places below)
