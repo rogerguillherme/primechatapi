@@ -129,6 +129,28 @@ Deno.serve(async (req) => {
       // Check which numbers are already registered in our system
       const phoneNumbers = phonesData?.data || [];
       const phoneNumberIds = phoneNumbers.map((p: any) => p.id);
+
+      // OAuth renews the connection token, but numbers already registered used
+      // to keep their previous token forever. Keep each matching number in this
+      // tenant aligned with the token/app that actually listed the WABA.
+      if (phoneNumberIds.length > 0) {
+        const { error: syncError } = await adminClient
+          .from("whatsapp_accounts")
+          .update({
+            access_token: accessToken,
+            app_id: creds.appId,
+            token_app_id: creds.appId,
+            token_validity: "valid",
+            token_checked_at: new Date().toISOString(),
+          })
+          .eq("user_id", user.id)
+          .eq("business_account_id", wabaId)
+          .in("phone_number_id", phoneNumberIds);
+
+        if (syncError) {
+          console.error("Failed to sync OAuth token to registered numbers:", syncError.message);
+        }
+      }
       
       const { data: existingAccounts } = await adminClient
         .from("whatsapp_accounts")
