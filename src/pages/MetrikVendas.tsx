@@ -44,6 +44,24 @@ export default function MetrikVendas() {
   const [busca, setBusca] = useState("");
   const [status, setStatus] = useState<string>("todos");
 
+  // Independente do período selecionado: venda pendente parada é o sintoma
+  // clássico de webhook que falhou em silêncio, e some da vista se ninguém
+  // olhar fora do período atual. Só ApplyFy tem reconferência automática por
+  // API — nas outras 12 plataformas isso precisa aparecer pra alguém notar.
+  const { data: pendentesAntigas = 0 } = useQuery({
+    queryKey: ["metrik-pendentes-antigas"],
+    queryFn: async () => {
+      const limite = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+      const { count, error } = await (supabase as any)
+        .from("orders")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "pending")
+        .lt("created_at", limite);
+      if (error) throw error;
+      return count || 0;
+    },
+  });
+
   const { data: vendas = [], isLoading } = useQuery({
     queryKey: ["metrik-vendas", inicio.toISOString()],
     queryFn: async () => {
@@ -154,6 +172,19 @@ export default function MetrikVendas() {
               Elas contam no faturamento, mas não entram na comissão de ninguém. O vendedor
               sai do atendente responsável pelo lead no CRM — atribua lá e elas aparecem no
               ranking.
+            </span>
+          </p>
+        </Card>
+      )}
+
+      {pendentesAntigas > 0 && (
+        <Card className="border-amber-500/40">
+          <p className="text-sm">
+            <b className="text-amber-500">{pendentesAntigas} venda(s) pendente(s) há mais de 48h.</b>{" "}
+            <span className="text-muted-foreground">
+              Pagamento que não confirma sozinho pode ter travado no meio do caminho —
+              confira na plataforma e corrija o status aqui (editar venda) se já foi pago.
+              Pode estar fora do período selecionado acima.
             </span>
           </p>
         </Card>

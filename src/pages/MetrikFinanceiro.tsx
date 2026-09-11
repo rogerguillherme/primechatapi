@@ -8,6 +8,7 @@ import { useMetrikPeriodo } from "@/hooks/use-metrik-periodo";
 import { SeletorPeriodo } from "@/components/metrics/SeletorPeriodo";
 import { useFavicon } from "@/hooks/use-favicon";
 import { Card, Kpi, Barra, TituloPagina, Vazio, moeda } from "@/components/metrics/ui";
+import { baseConfigurada } from "../../supabase/functions/_shared/metrics-fees.mjs";
 
 /**
  * Financeiro: o caminho do dinheiro do bruto até o lucro.
@@ -84,11 +85,13 @@ export default function MetrikFinanceiro() {
   ];
   const escala = Math.max(1, totais.faturamento);
 
-  const baseComissao =
-    (config.descontarTaxas || config.descontarReembolsos || config.descontarAds
-      ? totais.liquido - (config.descontarAds ? totais.investimento : 0)
-      : totais.faturamento) || 0;
-  const comissao = Math.max(0, baseComissao) * ((config.comissaoPct || 0) / 100);
+  // Cada interruptor conta por si — desligar só "Reembolsos" não pode deixar
+  // de descontar taxa também, como acontecia caindo direto em totais.liquido.
+  const baseComissao = baseConfigurada(
+    { faturamento: totais.faturamento, reembolsos: totais.reembolsos, taxas: totais.taxa, ads: totais.investimento },
+    { descontarTaxas: config.descontarTaxas, descontarReembolsos: config.descontarReembolsos, descontarAds: config.descontarAds },
+  ) as number;
+  const comissao = baseComissao * ((config.comissaoPct || 0) / 100);
 
   return (
     <div className="space-y-6">
@@ -150,18 +153,13 @@ export default function MetrikFinanceiro() {
       <Card>
         <h2 className="font-semibold">Comissão do período</h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          {config.comissaoPct}% sobre{" "}
-          {config.descontarTaxas || config.descontarReembolsos || config.descontarAds
-            ? "a receita líquida"
-            : "o faturamento bruto"}
-          {config.descontarAds ? ", já sem o investimento em anúncio" : ""}
+          {config.comissaoPct}% sobre a base definida em Configurações
         </p>
         <p className="mt-3 text-3xl font-bold tabular-nums tracking-tight text-primary">
           {moeda(comissao)}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Base de cálculo {moeda(Math.max(0, baseComissao))} · o rateio por vendedor fica em
-          Comissionados
+          Base de cálculo {moeda(baseComissao)} · o rateio por vendedor fica em Comissionados
         </p>
       </Card>
 
