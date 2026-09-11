@@ -7,6 +7,10 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { ChatMediaBubble } from "@/components/ChatMediaBubble";
 import { AudioRecorder, audioFileFromBlob, validarAudio } from "@/components/AudioRecorder";
 import { useWhatsAppAccounts } from "@/hooks/use-whatsapp-accounts";
@@ -37,10 +41,15 @@ import { useTeamContext, useTeamMembers } from "@/hooks/use-team";
 import { useToggleLeadLabel } from "@/hooks/use-chat-labels";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProfile } from "@/hooks/use-profile";
+import { useNotificationPrefs } from "@/hooks/use-notification-prefs";
+import { useNotificationSound } from "@/hooks/use-notification-sound";
+import {
+  useAccountQuality, QUALITY_LABEL, QUALITY_TEXT, QUALITY_DOT,
+} from "@/hooks/use-account-quality";
 
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { cn } from "@/lib/utils";
+import { cn, formatAccountName } from "@/lib/utils";
 
 /**
  * Último item que satisfaz o teste. A lista de mensagens vem do mais antigo
@@ -141,9 +150,14 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { profile } = useProfile();
+  const { prefs: notifPrefs } = useNotificationPrefs();
+  const tocarSom = useNotificationSound(notifPrefs.sound);
   /** Configuração da conta: exibir ou não o botão do agente IA no cabeçalho. */
   const mostrarBotaoIa = profile?.chat_ai_button !== false;
   const { accounts, defaultAccount } = useWhatsAppAccounts();
+  /** Controle Anti-ban: qualidade dos números e avisos antes de enviar. */
+  const { qualityOf, showQuality, warnMedium, confirmLow } = useAccountQuality();
+  const [confirmarEnvioBaixa, setConfirmarEnvioBaixa] = useState<string | null>(null);
   const { templates } = useUserTemplates();
   // Rótulo por conta sem access_token: useWhatsAppAccounts só enxerga o dono
   // (RLS de whatsapp_accounts nunca ganhou acesso de equipe), então um
@@ -407,16 +421,32 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
       }, 3000);
     };
 
+    // Som de aviso: RLS já limita os eventos ao que a pessoa pode ver, então
+    // qualquer mensagem recebida aqui é uma conversa dela. Limitamos a 1 som
+    // a cada 2s para não virar metralhadora em rajada de mensagens.
+    let ultimoSom = 0;
+    const aoInserirMensagem = (payload: any) => {
+      scheduleRefresh();
+      const msg = payload?.new as { direction?: string } | undefined;
+      if (msg?.direction !== "inbound") return;
+      const agora = Date.now();
+      if (agora - ultimoSom < 2000) return;
+      ultimoSom = agora;
+      tocarSom();
+    };
+
     const channel = supabase
       .channel("cloud-chat-global-rt")
-      .on("postgres_changes", { event: "*", schema: "public", table: "chat_messages" }, scheduleRefresh)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, aoInserirMensagem)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_messages" }, scheduleRefresh)
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "chat_messages" }, scheduleRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, scheduleRefresh)
       .subscribe();
     return () => {
       if (timer) clearTimeout(timer);
       supabase.removeChannel(channel);
     };
-  }, [queryClient]);
+  }, [queryClient, tocarSom]);
 
   // Realtime – dedicated channel per selected lead, with optimistic cache merge
   // so new messages render IMMEDIATELY without waiting for a refetch or polling.
@@ -1035,10 +1065,28 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
     [templates],
   );
 
+  /**
+   * Qualidade do número que vai enviar. Média já é reclamação acumulada;
+   * baixa é o degrau antes da Meta limitar ou banir — nesse caso pedimos um OK
+   * explícito, para ninguém continuar disparando sem ver.
+   */
+  const contaDoEnvio = contaDaConversa || selectedAccountId || defaultAccount?.id || null;
+  const qualidadeDoEnvio = qualityOf(contaDoEnvio);
+
+  const enviarAgora = (text: string) => sendMutation.mutate({ text });
+
   const handleSend = () => {
     const text = message.trim();
     if (!text) return;
-    sendMutation.mutate({ text });
+
+    if (confirmLow && qualidadeDoEnvio === "RED") {
+      setConfirmarEnvioBaixa(text);
+      return;
+    }
+    if (warnMedium && qualidadeDoEnvio === "YELLOW") {
+      toast.warning("Qualidade média neste número — evite volume alto e mensagens repetidas.");
+    }
+    enviarAgora(text);
   };
 
   /** Executa um atalho: dispara fluxo ou preenche mensagem rápida com variáveis resolvidas. */
@@ -1130,10 +1178,15 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
           if (!leadLbls.has(lid)) return false;
         }
       }
-      // Dedupe by phone (leads list is ordered by recency upstream)
-      const key = (l.phone || "").replace(/\D/g, "") || l.id;
+      // Dedupe por telefone DENTRO da mesma conta (lista já vem por recência).
+      // Antes o telefone era chave única global: como o mesmo número pode
+      // existir em BMs diferentes, a conversa da segunda conta simplesmente
+      // desaparecia da lista.
+      const conta = l.last_message_account_id || (l.account_ids || [])[0] || "sem-conta";
+      const key = `${conta}:${(l.phone || "").replace(/\D/g, "") || l.id}`;
       if (seen.has(key)) return false;
       seen.add(key);
+
       return true;
     });
   }, [leads, search, activeTab, filterAccountId, filterAgentIds, leadAccountMap, filterLabelIds, leadLabelsMap, failedLeadIds]);
@@ -1145,7 +1198,11 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
     for (const l of leads) {
       const tab = failedLeadIds?.has(l.id) ? "erro" : l.chat_status;
       if (!tab) continue;
-      const key = (l.phone || "").replace(/\D/g, "") || l.id;
+      // Mesma regra da lista: telefone repetido em BMs diferentes conta uma vez
+      // por conta, senão o total da aba fica menor do que o que aparece.
+      const conta = l.last_message_account_id || (l.account_ids || [])[0] || "sem-conta";
+      const key = `${conta}:${(l.phone || "").replace(/\D/g, "") || l.id}`;
+
       if (!seenByTab[tab]) seenByTab[tab] = new Set();
       if (seenByTab[tab].has(key)) continue;
       seenByTab[tab].add(key);
@@ -1173,6 +1230,14 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
     setVisibleCount(PAGE);
   }, [search, activeTab, filterAccountId, filterAgentIds, filterLabelIds]);
   const visibleLeads = useMemo(() => sortedLeads.slice(0, visibleCount), [sortedLeads, visibleCount]);
+
+  // Mapa id -> conta, para mostrar de qual BM/número veio a conversa.
+  const accountById = useMemo(() => {
+    const map = new Map<string, any>();
+    for (const a of accounts || []) map.set(a.id, a);
+    return map;
+  }, [accounts]);
+
 
 
   const groupedMessages = useMemo(() => {
@@ -1309,15 +1374,16 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
             />
           </div>
           <div className="flex items-center gap-2">
-            {accounts.length > 1 && (
+            {accounts.length > 0 && (
               <select
                 value={filterAccountId || ""}
                 onChange={(e) => setFilterAccountId(e.target.value || null)}
                 className="flex-1 rounded-md border border-input bg-background px-2 py-1 text-xs"
+                aria-label="Filtrar por conta"
               >
-                <option value="">Todos os números</option>
+                <option value="">Todas as contas</option>
                 {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
+                  <option key={a.id} value={a.id}>{formatAccountName(a)}</option>
                 ))}
               </select>
             )}
@@ -1518,6 +1584,12 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
             const leadTags = getLeadLabels(lead.id);
             const isUnread = unreadIds.has(lead.id);
             const isDone = lead.chat_status === "finalizado";
+            // De qual conta/BM veio a conversa: prioriza a conta da última
+            // mensagem, com o primeiro vínculo do lead como reserva.
+            const leadAccount =
+              accountById.get(lead.last_message_account_id || "") ||
+              accountById.get((lead.account_ids || [])[0] || "");
+
             return (
               <div
                 key={lead.id}
@@ -1554,6 +1626,18 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                       )}
                     </div>
                   </div>
+                  {leadAccount && (
+                    <div className="mt-0.5">
+                      <span
+                        className="inline-flex items-center gap-1 px-1.5 py-0 rounded-full text-[9px] border border-primary/30 bg-primary/10 text-primary max-w-full"
+                        title={`Conversa recebida na conta ${formatAccountName(leadAccount)}`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
+                        <span className="truncate">{formatAccountName(leadAccount)}</span>
+                      </span>
+                    </div>
+                  )}
+
                   <div className="flex items-center gap-1 mt-0.5">
                     {latest?.direction === "outbound" && <CheckCheck size={12} className="text-sky-400 shrink-0" />}
                     <p className="text-xs text-muted-foreground truncate">
@@ -1655,19 +1739,17 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                   {contaDaConversaLabel && (
                     <span title="Número que está atendendo este lead"> · {contaDaConversaLabel}</span>
                   )}
+                  {showQuality && (
+                    <span
+                      className={cn("ml-1.5 inline-flex items-center gap-1", QUALITY_TEXT[qualidadeDoEnvio])}
+                      title={`Qualidade do número na Meta: ${QUALITY_LABEL[qualidadeDoEnvio]}`}
+                    >
+                      <span className={cn("w-1.5 h-1.5 rounded-full", QUALITY_DOT[qualidadeDoEnvio])} />
+                      Qualidade {QUALITY_LABEL[qualidadeDoEnvio]}
+                    </span>
+                  )}
                 </p>
               </div>
-              {accounts.length > 1 && (
-                <select
-                  value={selectedAccountId || ""}
-                  onChange={(e) => setSelectedAccountId(e.target.value || null)}
-                  className="h-7 rounded-md border border-input bg-background px-2 text-xs"
-                >
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>{a.name}</option>
-                  ))}
-                </select>
-              )}
 
               {/* Dados do contato */}
               <button
@@ -2430,6 +2512,36 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
         onClose={() => setForwardMsg(null)}
         accountId={selectedAccountId || defaultAccount?.id || null}
       />
+
+      {/* Controle Anti-ban: confirmação antes de enviar por número com qualidade baixa */}
+      <AlertDialog
+        open={Boolean(confirmarEnvioBaixa)}
+        onOpenChange={(aberto) => { if (!aberto) setConfirmarEnvioBaixa(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Qualidade baixa neste número</AlertDialogTitle>
+            <AlertDialogDescription>
+              A Meta classificou este número como qualidade baixa. Continuar enviando aumenta o
+              risco de limitação ou bloqueio. Deseja enviar mesmo assim?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const texto = confirmarEnvioBaixa;
+                setConfirmarEnvioBaixa(null);
+                if (texto) enviarAgora(texto);
+              }}
+            >
+              OK, enviar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+
 
       <ContactInfoSheet
         leadId={selectedLeadId}

@@ -6,12 +6,28 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-async function configureAppWebhookSubscription(supabaseUrl: string, verifyToken: string) {
-  const metaAppId = Deno.env.get("META_APP_ID");
-  const metaAppSecret = Deno.env.get("META_APP_SECRET");
+/**
+ * Resolve as credenciais do app Meta usado pela conta. Contas conectadas pelo
+ * app CRM precisam ser administradas por ele — o app Prime recebe (#200)
+ * Permissions error nessas WABAs.
+ */
+function resolveAppCredentials(accountAppId?: string | null) {
+  const crmAppId = Deno.env.get("CRM_APP_ID");
+  const crmAppSecret = Deno.env.get("CRM_APP_SECRET");
+  if (accountAppId && crmAppId && String(accountAppId) === String(crmAppId)) {
+    return { appId: crmAppId, appSecret: crmAppSecret ?? null };
+  }
+  return { appId: Deno.env.get("META_APP_ID") ?? null, appSecret: Deno.env.get("META_APP_SECRET") ?? null };
+}
 
+async function configureAppWebhookSubscription(
+  supabaseUrl: string,
+  verifyToken: string,
+  metaAppId: string | null,
+  metaAppSecret: string | null,
+) {
   if (!metaAppId || !metaAppSecret) {
-    return { ok: false, skipped: true, reason: "META_APP_ID/META_APP_SECRET ausente" };
+    return { ok: false, skipped: true, reason: "credenciais do app Meta ausentes" };
   }
 
   const params = new URLSearchParams();
@@ -42,6 +58,7 @@ async function configureAppWebhookSubscription(supabaseUrl: string, verifyToken:
 }
 
 async function subscribeWabaToApp(
+  metaAppId: string | null,
   businessAccountId: string,
   accessToken: string,
   supabaseUrl: string,
@@ -93,12 +110,60 @@ async function subscribeWabaToApp(
     return { ok: true, subscribed: subData?.success ?? true, used_fields_param: false, details: subData };
   }
 
-  // Tokens do Embedded Signup (escopo whatsapp_business_management, sem ser
-  // dono/dev do app) recebem "(#200) Permissions error" ao tentar gravar
-  // override_callback_uri. Nesse caso a WABA normalmente JÁ está inscrita no
-  // nosso app e os eventos chegam pelo callback configurado no nível do app —
-  // então confirmamos via GET antes de reportar falha.
-  const appId = Deno.env.get("META_APP_ID");
+  // Tokens do Embedded Signup podem ter permissão para assinar a WABA no app,
+  // mas não para gravar um callback exclusivo via override_callback_uri.
+  // Tenta então a assinatura canônica, sem override, para que a WABA use o
+  // callback global do MESMO app. Apenas consultar subscribed_apps não basta:
+  // a conta pode aparecer na lista com uma assinatura antiga/incompleta e não
+  // entregar eventos de messages.
+  const appLevelParams = new URLSearchParams();
+  appLevelParams.set("subscribed_fields", "messages");
+
+  const appLevelRes = await fetch(subUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: appLevelParams.toString(),
+  });
+  const appLevelText = await appLevelRes.text();
+  let appLevelData: any;
+  try { appLevelData = JSON.parse(appLevelText); } catch { appLevelData = { raw: appLevelText }; }
+
+  if (appLevelRes.ok && !appLevelData?.error) {
+    return {
+      ok: true,
+      subscribed: appLevelData?.success ?? true,
+      used_fields_param: true,
+      via_app_level_callback: true,
+      details: appLevelData,
+    };
+  }
+
+  // Algumas versões da Graph API aceitam somente o POST vazio nessa rota.
+  const bareRes = await fetch(subUrl, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const bareText = await bareRes.text();
+  let bareData: any;
+  try { bareData = JSON.parse(bareText); } catch { bareData = { raw: bareText }; }
+
+  if (bareRes.ok && !bareData?.error) {
+    return {
+      ok: true,
+      subscribed: bareData?.success ?? true,
+      used_fields_param: false,
+      via_app_level_callback: true,
+      details: bareData,
+    };
+  }
+
+  // Se até o POST sem override for recusado, confirma se o app ao menos está
+  // listado para devolver um diagnóstico preciso, sem declarar que o callback
+  // individual foi gravado.
+  const appId = metaAppId;
   const checkRes = await fetch(subUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
   const checkText = await checkRes.text();
   let checkData: any;
@@ -122,8 +187,9 @@ async function subscribeWabaToApp(
     ok: false,
     subscribed: false,
     used_fields_param: false,
-    error: subData?.error?.message || (!subRes.ok ? `HTTP ${subRes.status}` : undefined),
-    details: subData,
+    error: bareData?.error?.message || appLevelData?.error?.message || subData?.error?.message
+      || (!bareRes.ok ? `HTTP ${bareRes.status}` : undefined),
+    details: bareData?.error ? bareData : appLevelData?.error ? appLevelData : subData,
   };
 }
 
@@ -167,10 +233,18 @@ Deno.serve(async (req) => {
     const verifyToken = tokenSetting?.value?.trim()
       || Deno.env.get("WHATSAPP_VERIFY_TOKEN")?.trim()
       || "prime_chat_verify_2026";
-    const appSubscription = await configureAppWebhookSubscription(supabaseUrl, verifyToken).catch((e: any) => ({
-      ok: false,
-      error: e?.message || String(e),
-    }));
+    // Cada app Meta precisa da própria inscrição de `messages`; guardamos o
+    // resultado por app para não repetir a chamada em cada conta.
+    const appSubCache = new Map<string, any>();
+    const getAppSubscription = async (appId: string | null, appSecret: string | null) => {
+      const key = appId || "none";
+      if (!appSubCache.has(key)) {
+        const res = await configureAppWebhookSubscription(supabaseUrl, verifyToken, appId, appSecret)
+          .catch((e: any) => ({ ok: false, error: e?.message || String(e) }));
+        appSubCache.set(key, res);
+      }
+      return appSubCache.get(key);
+    };
 
     const { data: isAdmin } = await adminClient.rpc("has_role", {
       _user_id: user.id,
@@ -179,7 +253,7 @@ Deno.serve(async (req) => {
 
     let q = adminClient
       .from("whatsapp_accounts")
-      .select("id, name, business_account_id, access_token, phone_number_id, app_secret")
+      .select("id, name, business_account_id, access_token, phone_number_id, app_secret, app_id, user_id")
     if (!isAdmin) q = q.eq("user_id", user.id);
 
     if (account_id) {
@@ -227,10 +301,34 @@ Deno.serve(async (req) => {
       }
 
       try {
+        // Conta sem app gravado herda o app da conexão Meta usada pelo dono.
+        let accountAppId: string | null = (acc as any).app_id ?? null;
+        if (!accountAppId) {
+          const { data: conn } = await adminClient
+            .from("meta_connections")
+            .select("app_id")
+            .eq("user_id", (acc as any).user_id)
+            .eq("status", "connected")
+            .maybeSingle();
+          accountAppId = conn?.app_id ?? null;
+        }
+        const creds = resolveAppCredentials(accountAppId);
+        const appSubscription = await getAppSubscription(creds.appId, creds.appSecret);
+
+        // Garante que a conta guarde o app e o secret usados, para o webhook
+        // validar a assinatura das mensagens que chegarem.
+        if (creds.appId && (!(acc as any).app_id || !acc.app_secret)) {
+          await adminClient
+            .from("whatsapp_accounts")
+            .update({ app_id: creds.appId, app_secret: creds.appSecret })
+            .eq("id", acc.id);
+        }
+
         // 1) Subscribe app to WABA  → receive webhook events.
         // Always force the callback override; otherwise Meta may keep or restore
         // the app-level default URL and button replies never reach this webhook.
         const wabaSubscription = await subscribeWabaToApp(
+          creds.appId,
           acc.business_account_id,
           acc.access_token,
           supabaseUrl,
@@ -249,16 +347,28 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // 2) Update DB flag
+        // 2) Update DB flag.
+        // Distingue os dois cenários que antes eram gravados como o MESMO
+        // "success": (a) override_callback_uri realmente gravado na WABA e
+        // (b) só a inscrição no app, porque o token da conta não tem permissão
+        // de escrita (tokens do Embedded Signup expirados / sem
+        // whatsapp_business_management). No caso (b) a Meta pode nunca entregar
+        // evento nenhum, e mostrar "success" escondia a causa — agora vira um
+        // aviso explícito pedindo reconectar a conta.
+        const somenteAppLevel = wabaSubscription.via_app_level_callback === true;
+        const statusTexto = somenteAppLevel
+          ? "atenção: inscrito só no nível do app — token sem permissão para gravar o webhook desta conta; reconecte a conta na Meta"
+          : appSubscription.ok
+            ? "success (app messages + override_callback_uri)"
+            : `success override; app messages warning: ${appSubscription.error || appSubscription.reason || "unknown"}`;
+
         const { error: updateErr } = await adminClient
           .from("whatsapp_accounts")
-          .update({ 
+          .update({
             webhook_subscribed: true,
             webhook_subscribed_at: new Date().toISOString(),
             webhook_last_check_at: new Date().toISOString(),
-            webhook_last_status: appSubscription.ok
-              ? "success (app messages + override_callback_uri)"
-              : `success override; app messages warning: ${appSubscription.error || appSubscription.reason || "unknown"}`
+            webhook_last_status: statusTexto,
           })
           .eq("id", acc.id);
 
@@ -267,11 +377,14 @@ Deno.serve(async (req) => {
           name: acc.name,
           ok: !updateErr,
           subscribed: wabaSubscription.subscribed,
+          override_gravado: !somenteAppLevel,
+          precisa_reconectar: somenteAppLevel,
           app_subscription: appSubscription,
           used_fields_param: wabaSubscription.used_fields_param,
           db_updated: !updateErr,
           update_error: updateErr?.message,
         });
+
       } catch (e: any) {
         // ... (existing error handling)
         results.push({

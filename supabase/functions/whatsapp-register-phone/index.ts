@@ -75,20 +75,23 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Prioritize OAuth token from active connection, fallback to account token
+    // Prioriza o token da própria conta (é o app ao qual o número está vinculado);
+    // só usa a conexão OAuth ativa como fallback.
     let accessToken = account.access_token;
-    const { data: metaConn } = await adminClient
-      .from("meta_connections")
-      .select("meta_access_token")
-      .eq("user_id", user.id)
-      .eq("status", "connected")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (metaConn?.meta_access_token) {
-      accessToken = metaConn.meta_access_token;
+    if (!accessToken) {
+      const { data: metaConn } = await adminClient
+        .from("meta_connections")
+        .select("meta_access_token")
+        .eq("user_id", user.id)
+        .eq("status", "connected")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (metaConn?.meta_access_token) {
+        accessToken = metaConn.meta_access_token;
+      }
     }
+
 
     if (!accessToken) {
       return new Response(JSON.stringify({ error: "Token de acesso não encontrado" }), {

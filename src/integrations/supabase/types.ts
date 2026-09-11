@@ -1772,6 +1772,7 @@ export type Database = {
       }
       meta_connections: {
         Row: {
+          app_id: string | null
           created_at: string
           id: string
           meta_access_token: string
@@ -1783,6 +1784,7 @@ export type Database = {
           waba_id: string | null
         }
         Insert: {
+          app_id?: string | null
           created_at?: string
           id?: string
           meta_access_token: string
@@ -1794,6 +1796,7 @@ export type Database = {
           waba_id?: string | null
         }
         Update: {
+          app_id?: string | null
           created_at?: string
           id?: string
           meta_access_token?: string
@@ -2136,7 +2139,7 @@ export type Database = {
           created_at: string
           external_order_id: string
           id: string
-          lead_id: string
+          lead_id: string | null
           net_amount: number | null
           payment_method: string | null
           platform: string | null
@@ -2151,7 +2154,7 @@ export type Database = {
           created_at?: string
           external_order_id: string
           id?: string
-          lead_id: string
+          lead_id?: string | null
           net_amount?: number | null
           payment_method?: string | null
           platform?: string | null
@@ -2166,7 +2169,7 @@ export type Database = {
           created_at?: string
           external_order_id?: string
           id?: string
-          lead_id?: string
+          lead_id?: string | null
           net_amount?: number | null
           payment_method?: string | null
           platform?: string | null
@@ -2294,6 +2297,9 @@ export type Database = {
       }
       profiles: {
         Row: {
+          antiban_confirm_low: boolean
+          antiban_show_quality: boolean
+          antiban_warn_medium: boolean
           avatar_url: string | null
           chat_ai_button: boolean
           created_at: string
@@ -2306,6 +2312,9 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          antiban_confirm_low?: boolean
+          antiban_show_quality?: boolean
+          antiban_warn_medium?: boolean
           avatar_url?: string | null
           chat_ai_button?: boolean
           created_at?: string
@@ -2318,6 +2327,9 @@ export type Database = {
           user_id: string
         }
         Update: {
+          antiban_confirm_low?: boolean
+          antiban_show_quality?: boolean
+          antiban_warn_medium?: boolean
           avatar_url?: string | null
           chat_ai_button?: boolean
           created_at?: string
@@ -3149,6 +3161,17 @@ export type Database = {
           member_user_id: string
           response_rate: number
           total_leads: number
+        }[]
+      }
+      get_team_today_stats: {
+        Args: { p_owner_id: string }
+        Returns: {
+          leads_today: number
+          member_user_id: string
+          messages_sent_today: number
+          replies_today: number
+          revenue_today: number
+          sales_today: number
         }[]
       }
       has_role: {

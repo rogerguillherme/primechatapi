@@ -11,7 +11,7 @@ import {
 import { Send, FileText, Smile, Check, CheckCheck, Paperclip, AlertCircle, Bot, User, Columns3, Zap, Workflow } from "lucide-react";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { cn } from "@/lib/utils";
+import { cn, formatAccountName } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { ChatMediaBubble } from "@/components/ChatMediaBubble";
 import { AudioRecorder, audioFileFromBlob, validarAudio } from "@/components/AudioRecorder";
@@ -432,7 +432,7 @@ export function LeadChatDrawer({ lead, open, onOpenChange }: LeadChatDrawerProps
                 >
                   {accounts.map((a) => (
                     <option key={a.id} value={a.id} className="text-foreground bg-background">
-                      {a.name} {a.is_default ? "(padrão)" : ""}
+                      {formatAccountName(a)} {a.is_default ? "(padrão)" : ""}
                     </option>
                   ))}
                 </select>

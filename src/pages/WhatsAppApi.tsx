@@ -39,7 +39,7 @@ import {
   Instagram, GitBranch, TrendingUp, Bot, Volume2, Sparkles, DollarSign,
   QrCode, RefreshCw, Loader2, Smartphone, Filter, Upload, UserMinus,
   Home, KanbanSquare, Menu, X, Clock, Megaphone, Gauge,
-  ShoppingBag, ShoppingCart, Boxes, CalendarClock, Undo2,
+  ShoppingBag, ShoppingCart, Boxes, CalendarClock, Undo2, ShieldCheck,
 } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
@@ -102,6 +102,7 @@ import { AccountSelector } from "@/components/AccountSelector";
 import { DashboardHome } from "@/pages/DashboardHome";
 import { HomeViewSetting } from "@/components/settings/HomeViewSetting";
 import { ChatAiButtonSetting } from "@/components/settings/ChatAiButtonSetting";
+import { AntiBanSettings } from "@/components/settings/AntiBanSettings";
 import { LeadDistributionSettings } from "@/components/settings/LeadDistributionSettings";
 import { ShareLinksSettings } from "@/components/settings/ShareLinksSettings";
 import { StageAutomationsSettings } from "@/components/settings/StageAutomationsSettings";
@@ -2535,6 +2536,10 @@ export default function WhatsAppApi() {
               <Key size={16} />
               {!navCollapsed && <span>Configuração</span>}
             </TabsTrigger>
+            <TabsTrigger value="antiban" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+              <ShieldCheck size={16} />
+              {!navCollapsed && <span>Controle Anti-ban</span>}
+            </TabsTrigger>
           </TabsList>
           <div className="mt-auto border-t border-sidebar-border p-2 space-y-0.5">
             {isAdmin && !navCollapsed && (
@@ -2578,6 +2583,11 @@ export default function WhatsAppApi() {
 
         {/* Main content */}
         <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-x-hidden">
+          {/* Controle Anti-ban: qualidade dos números e avisos de risco */}
+          <TabsContent value="antiban" className="space-y-4 p-4 sm:p-6 m-0 flex-1 overflow-y-auto">
+            <AntiBanSettings />
+          </TabsContent>
+
           {/* Non-chat tabs get padding */}
           <TabsContent value="config" className="space-y-4 p-4 sm:p-6 m-0 flex-1 overflow-y-auto">
 
@@ -2811,6 +2821,84 @@ export default function WhatsAppApi() {
                                 <Plug size={14} /> Re-inscrever Webhook
                               </Button>
                             )}
+
+                            {account.provider === "meta_cloud" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-xs h-8 gap-1"
+                                onClick={async () => {
+                                  const t = toast.loading("Consultando status na Meta...");
+                                  try {
+                                    const { data, error } = await supabase.functions.invoke(
+                                      "whatsapp-refresh-status",
+                                      { body: { account_id: account.id } },
+                                    );
+                                    if (error) throw error;
+                                    if (data?.error) throw new Error(data.error);
+                                    const r = data?.results?.[0];
+                                    if (!r?.ok) {
+                                      toast.error(`Falha: ${r?.error || "erro desconhecido"}`, { id: t });
+                                      return;
+                                    }
+                                    queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
+                                    const partes = [
+                                      r.registered ? "Número registrado na Meta" : `Registro pendente (${r.status || "sem status"})`,
+                                      r.display_phone_number ? `Número: ${r.display_phone_number}` : null,
+                                      r.code_verification_status ? `Verificação: ${r.code_verification_status}` : null,
+                                      r.quality_rating ? `Qualidade: ${r.quality_rating}` : null,
+                                      `Webhook: ${r.webhook_status}`,
+                                    ].filter(Boolean).join(" · ");
+                                    if (r.registered) toast.success(partes, { id: t, duration: 8000 });
+                                    else toast.warning(partes, { id: t, duration: 10000 });
+                                  } catch (e: any) {
+                                    toast.error(e.message || "Erro ao atualizar status", { id: t });
+                                  }
+                                }}
+                              >
+                                <RefreshCw size={14} /> Atualizar status
+                              </Button>
+                            )}
+
+                            {account.provider === "meta_cloud" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-xs h-8 gap-1"
+                                onClick={async () => {
+                                  const pin = window.prompt(
+                                    "PIN de 6 dígitos para ativar o número na Meta (use o mesmo definido no painel da Meta):",
+                                    "123456",
+                                  );
+                                  if (!pin) return;
+                                  if (!/^\d{6}$/.test(pin.trim())) {
+                                    toast.error("O PIN deve ter 6 dígitos numéricos.");
+                                    return;
+                                  }
+                                  const t = toast.loading("Ativando número na Meta...");
+                                  try {
+                                    const { data, error } = await supabase.functions.invoke(
+                                      "whatsapp-register-phone",
+                                      { body: { phone_number_id: account.phone_number_id, pin: pin.trim() } },
+                                    );
+                                    if (error) throw error;
+                                    if (data?.error) throw new Error(data.error);
+                                    toast.success("Número ativado na Meta!", { id: t });
+                                    await supabase.functions.invoke("whatsapp-refresh-status", {
+                                      body: { account_id: account.id },
+                                    });
+                                    queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
+                                  } catch (e: any) {
+                                    toast.error(e.message || "Falha ao ativar número", { id: t });
+                                  }
+                                }}
+                              >
+                                <ShieldCheck size={14} /> Ativar na Meta
+                              </Button>
+                            )}
+
+
+
 
                             <Button variant="outline" size="sm" onClick={() => startEditing(account)} className="text-xs h-8 gap-1">
                               <Pencil size={14} /> Configurações

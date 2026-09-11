@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { format, isToday, isYesterday, isSameDay, addDays, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { cn } from "@/lib/utils";
+import { cn, formatAccountName } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useSearchParams } from "react-router-dom";
 import { ChatMediaBubble } from "@/components/ChatMediaBubble";
@@ -774,7 +774,7 @@ export default function Chat() {
               <option value="">Todos os números</option>
               {accounts.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.name} {a.is_default ? "(padrão)" : ""}
+                  {formatAccountName(a)} {a.is_default ? "(padrão)" : ""}
                 </option>
               ))}
             </select>
@@ -923,7 +923,7 @@ export default function Chat() {
                 >
                   {accounts.map((a) => (
                     <option key={a.id} value={a.id} className="text-foreground bg-background">
-                      {a.name} {a.is_default ? "(padrão)" : ""}
+                      {formatAccountName(a)} {a.is_default ? "(padrão)" : ""}
                     </option>
                   ))}
                 </select>

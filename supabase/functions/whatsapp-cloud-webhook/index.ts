@@ -831,15 +831,31 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const { data: lead0 } = await supabase
+      // Um contato por NÚMERO DA EMPRESA: se a mesma pessoa escreve para duas
+      // BMs diferentes, cada número mantém sua própria conversa. Antes o
+      // primeiro lead era reaproveitado e as duas conversas se misturavam num
+      // histórico só, escondendo uma delas da lista do chat.
+      const { data: candidatos } = await supabase
         .from("leads")
-        .select("id, name, phone")
+        .select("id, name, phone, account_ids, last_message_account_id, created_at")
         .or(phoneFilter)
         .eq("user_id", resolvedUserId)
-        .limit(1)
-        .maybeSingle();
-      let lead = lead0;
+        .order("created_at", { ascending: true })
+        .limit(20);
+
+      const daConta = (candidatos || []).find((l: any) =>
+        resolvedAccountId &&
+        ((Array.isArray(l.account_ids) && l.account_ids.includes(resolvedAccountId)) ||
+          l.last_message_account_id === resolvedAccountId)
+      );
+      // Lead que ainda não conversou por nenhuma conta pode adotar esta.
+      const semConta = (candidatos || []).find(
+        (l: any) => (!l.account_ids || l.account_ids.length === 0) && !l.last_message_account_id,
+      );
+
+      let lead: any = daConta || semConta || null;
       const isNewLead = !lead;
+
 
       if (!lead) {
         const { data: newLead, error: createError } = await supabase
@@ -851,7 +867,12 @@ Deno.serve(async (req) => {
             last_inbound_at: activityAt,
             updated_at: activityAt,
             user_id: resolvedUserId,
+            // Já nasce vinculado ao número que recebeu a mensagem, para a
+            // próxima mensagem cair nesta conversa e não criar outra.
+            last_message_account_id: resolvedAccountId,
+            account_ids: resolvedAccountId ? [resolvedAccountId] : [],
           })
+
           .select("id, name, phone")
           .single();
         if (createError) throw createError;
@@ -1508,6 +1529,55 @@ Deno.serve(async (req) => {
 
             if (!execErr && newExec) {
               await processFlowStep(matchedTriggerStep, newExec, lead, supabase, resolvedAccountId);
+            }
+          } else {
+            // Gatilho "mensagem de entrada": qualquer mensagem recebida do lead
+            // inicia o fluxo, desde que ele nunca tenha rodado para esse lead.
+            const { data: inboundFlows } = await supabase
+              .from("flows")
+              .select("id")
+              .eq("user_id", resolvedUserId)
+              .eq("active", true)
+              .eq("trigger_type", "mensagem_recebida")
+              .order("created_at", { ascending: true })
+              .limit(1);
+
+            const inboundFlow = inboundFlows?.[0];
+            if (inboundFlow) {
+              const { count: alreadyRan } = await supabase
+                .from("flow_executions")
+                .select("id", { count: "exact", head: true })
+                .eq("flow_id", inboundFlow.id)
+                .eq("lead_id", lead.id);
+
+              if (!alreadyRan) {
+                const { data: firstSteps } = await supabase
+                  .from("flow_steps")
+                  .select("*")
+                  .eq("flow_id", inboundFlow.id)
+                  .is("parent_step_id", null)
+                  .order("step_order")
+                  .limit(1);
+
+                const firstStep = firstSteps?.[0];
+                if (firstStep) {
+                  const { data: newExec, error: startErr } = await supabase
+                    .from("flow_executions")
+                    .insert({
+                      flow_id: inboundFlow.id,
+                      lead_id: lead.id,
+                      status: "running",
+                      current_step_id: firstStep.id,
+                      metadata: { account_id: resolvedAccountId, trigger: "mensagem_recebida" },
+                    })
+                    .select()
+                    .single();
+
+                  if (!startErr && newExec) {
+                    await processFlowStep(firstStep, newExec, lead, supabase, resolvedAccountId);
+                  }
+                }
+              }
             }
           }
         }

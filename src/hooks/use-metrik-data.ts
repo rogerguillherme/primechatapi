@@ -165,7 +165,11 @@ export function useMetrikData(inicio: Date, fim: Date) {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("orders")
-        .select("amount, net_amount, status, created_at, platform, payment_method, leads!inner(assigned_to)")
+        // Join SOLTO com o contato: `leads!inner` derrubava do faturamento toda
+        // venda sem contato vinculado — e é justamente o caso da compra cujo
+        // aviso da plataforma vem sem telefone. O faturamento do dia ficava
+        // parado mesmo com venda registrada.
+        .select("amount, net_amount, status, created_at, platform, payment_method, leads(assigned_to)")
         .in("status", ["approved", "refunded", "chargeback"])
         .gte("created_at", inicio.toISOString())
         .lte("created_at", fim.toISOString())
