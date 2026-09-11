@@ -8,7 +8,7 @@ import {
 
 import { supabase } from "@/integrations/supabase/client";
 import { Card, Vazio, moeda, compacto } from "@/components/metrics/ui";
-import { baseComissao } from "../../../supabase/functions/_shared/metrics-engine.mjs";
+import { baseConfigurada, taxaEfetiva } from "../../../supabase/functions/_shared/metrics-fees.mjs";
 
 /**
  * Histórico de ciclos fechados.
@@ -27,11 +27,16 @@ const MESES = 12;
 
 interface Props {
   ownerId: string | null;
-  taxaPct: number;
+  regrasTaxa: any[];
   comissaoPct: number;
+  descontarTaxas: boolean;
+  descontarReembolsos: boolean;
+  descontarAds: boolean;
 }
 
-export function HistoricoCiclos({ ownerId, taxaPct, comissaoPct }: Props) {
+export function HistoricoCiclos({
+  ownerId, regrasTaxa, comissaoPct, descontarTaxas, descontarReembolsos, descontarAds,
+}: Props) {
   const desde = useMemo(() => startOfMonth(subMonths(new Date(), MESES - 1)), []);
 
   const { data: vendas = [], isLoading } = useQuery({
@@ -40,7 +45,7 @@ export function HistoricoCiclos({ ownerId, taxaPct, comissaoPct }: Props) {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("orders")
-        .select("amount, status, created_at")
+        .select("amount, net_amount, status, created_at, platform, payment_method")
         .in("status", ["approved", "refunded", "chargeback"])
         .gte("created_at", desde.toISOString())
         .limit(20000);
@@ -66,7 +71,7 @@ export function HistoricoCiclos({ ownerId, taxaPct, comissaoPct }: Props) {
   const ciclos = useMemo(() => {
     const m = new Map<
       string,
-      { chave: string; mes: string; faturamento: number; reembolsos: number; investimento: number; vendas: number }
+      { chave: string; mes: string; faturamento: number; reembolsos: number; taxa: number; investimento: number; vendas: number }
     >();
 
     // Todos os meses da janela existem, mesmo os sem venda: mês faltando na
@@ -79,6 +84,7 @@ export function HistoricoCiclos({ ownerId, taxaPct, comissaoPct }: Props) {
         mes: format(d, "MMM/yy", { locale: ptBR }),
         faturamento: 0,
         reembolsos: 0,
+        taxa: 0,
         investimento: 0,
         vendas: 0,
       });
@@ -92,6 +98,9 @@ export function HistoricoCiclos({ ownerId, taxaPct, comissaoPct }: Props) {
       if (o.status === "approved") {
         linha.faturamento += valor;
         linha.vendas += 1;
+        // Mesmo cálculo venda a venda do Dashboard — líquido real informado
+        // pela plataforma quando existe, senão a regra por plataforma/meio.
+        linha.taxa += taxaEfetiva(valor, o.net_amount, regrasTaxa, o.platform, o.payment_method) as number;
       } else {
         linha.reembolsos += valor;
       }
@@ -104,18 +113,19 @@ export function HistoricoCiclos({ ownerId, taxaPct, comissaoPct }: Props) {
     }
 
     return [...m.values()].map((c) => {
-      const base = baseComissao(c.faturamento, c.reembolsos, taxaPct) as number;
-      const taxa = Math.round((c.faturamento - c.reembolsos) * (taxaPct / 100) * 100) / 100;
+      const base = baseConfigurada(
+        { faturamento: c.faturamento, reembolsos: c.reembolsos, taxas: c.taxa, ads: c.investimento },
+        { descontarTaxas, descontarReembolsos, descontarAds },
+      ) as number;
       const comissao = Math.round(base * comissaoPct) / 100;
       return {
         ...c,
-        taxa: taxa > 0 ? taxa : 0,
         base,
         comissao,
-        liquido: c.faturamento - c.reembolsos - (taxa > 0 ? taxa : 0) - c.investimento - comissao,
+        liquido: c.faturamento - c.reembolsos - c.taxa - c.investimento - comissao,
       };
     });
-  }, [vendas, gastos, taxaPct, comissaoPct]);
+  }, [vendas, gastos, regrasTaxa, comissaoPct, descontarTaxas, descontarReembolsos, descontarAds]);
 
   const comMovimento = ciclos.filter((c) => c.faturamento > 0 || c.reembolsos > 0);
 

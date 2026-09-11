@@ -15,7 +15,6 @@ import {
 import { useMetrikData } from "@/hooks/use-metrik-data";
 import { useMetrikPeriodo } from "@/hooks/use-metrik-periodo";
 import { SeletorPeriodo } from "@/components/metrics/SeletorPeriodo";
-import { MetrikSettings } from "@/components/metrics/MetrikSettings";
 import { useFavicon } from "@/hooks/use-favicon";
 import { cn } from "@/lib/utils";
 import { roas, roi } from "../../supabase/functions/_shared/metrics-engine.mjs";
@@ -58,36 +57,19 @@ export default function Metrik() {
 
   const { inicio, fim } = useMetrikPeriodo();
 
-  const { ownerId, podeConfigurar, membros, tiers, meta, totais, porDia, carregando, erro, config } =
-    useMetrikData(inicio, fim);
+  const { tiers, totais, porDia, carregando, erro } = useMetrikData(inicio, fim);
 
   const r = roi(totais.faturamento, totais.investimento) as number | null;
   const ro = roas(totais.faturamento, totais.investimento) as number | null;
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end gap-3">
-        <div>
-          <h1 className="text-3xl font-display font-bold tracking-tight">Dashboard</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {format(inicio, "dd 'de' MMMM", { locale: ptBR })} a{" "}
-            {format(fim, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-          </p>
-        </div>
-        {ownerId && podeConfigurar && (
-          <div className="ml-auto">
-            <MetrikSettings
-              ownerId={ownerId}
-              tiers={tiers}
-              inicio={inicio}
-              fim={fim}
-              metaAtual={meta}
-              membros={membros}
-              taxaAtual={config.taxaPct}
-              pctAtual={config.comissaoPct}
-            />
-          </div>
-        )}
+      <div>
+        <h1 className="text-3xl font-display font-bold tracking-tight">Dashboard</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {format(inicio, "dd 'de' MMMM", { locale: ptBR })} a{" "}
+          {format(fim, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+        </p>
       </div>
 
       <SeletorPeriodo />

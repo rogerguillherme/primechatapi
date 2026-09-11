@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Percent, RotateCcw, Megaphone, Plus, Trash2, Target, KeyRound, Check, RefreshCw, Loader2,
+  Sparkles, Award, Flag, TrendingUp,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -9,13 +10,37 @@ import { supabase } from "@/integrations/supabase/client";
 import { functionErrorMessage } from "@/lib/functionError";
 import { useMetrikData } from "@/hooks/use-metrik-data";
 import { useMetrikPeriodo } from "@/hooks/use-metrik-periodo";
+import { SeletorPeriodo } from "@/components/metrics/SeletorPeriodo";
 import { format } from "date-fns";
 import { useFavicon } from "@/hooks/use-favicon";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { Card, TituloPagina, Vazio, moeda } from "@/components/metrics/ui";
 import { baseConfigurada } from "../../supabase/functions/_shared/metrics-fees.mjs";
 import { cn } from "@/lib/utils";
+
+interface Tier {
+  id: string;
+  name: string;
+  min_value: number;
+  commission_pct: number;
+  bonus_value: number;
+  color: string;
+}
+
+/** Ponto de partida do plano: quatro faixas com comissão crescente. */
+const ELOS_PADRAO = [
+  { name: "Bronze", min_value: 0, commission_pct: 5, color: "#a16207" },
+  { name: "Prata", min_value: 10000, commission_pct: 8, color: "#64748b" },
+  { name: "Ouro", min_value: 30000, commission_pct: 10, color: "#ca8a04" },
+  { name: "Diamante", min_value: 100000, commission_pct: 12, color: "#0891b2" },
+];
+
+const dia = (d: Date) => format(d, "yyyy-MM-dd");
 
 /**
  * Configurações que mudam os números.
@@ -39,10 +64,15 @@ export default function MetrikConfiguracoes() {
   useFavicon("/metrik-favicon.svg");
   const qc = useQueryClient();
   const { inicio, fim } = useMetrikPeriodo();
-  const { ownerId, config, regrasTaxa, podeConfigurar } = useMetrikData(inicio, fim);
+  const { ownerId, config, regrasTaxa, podeConfigurar, tiers, membros, meta } = useMetrikData(inicio, fim);
 
   const [nova, setNova] = useState({ platform: "", payment_method: "", percent: "", fixed: "" });
   const [chaves, setChaves] = useState({ publica: "", secreta: "" });
+  const [pctPadrao, setPctPadrao] = useState("");
+  const [novoElo, setNovoElo] = useState({ name: "", min_value: "", commission_pct: "", bonus_value: "" });
+  const [metaValor, setMetaValor] = useState(meta != null ? String(meta) : "");
+  const [gasto, setGasto] = useState("");
+  const [gastoDe, setGastoDe] = useState("__empresa__");
 
   const salvarCredencial = useMutation({
     mutationFn: async () => {
@@ -104,6 +134,148 @@ export default function MetrikConfiguracoes() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["metrics-settings"] }),
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const salvarComissaoPadrao = useMutation({
+    mutationFn: async () => {
+      const p = Number(pctPadrao.replace(",", "."));
+      if (!Number.isFinite(p) || p < 0 || p > 100) throw new Error("Percentual deve ficar entre 0 e 100");
+      const { error } = await (supabase as any)
+        .from("metrics_settings")
+        .upsert({ owner_id: ownerId, commission_pct: p, updated_at: new Date().toISOString() }, { onConflict: "owner_id" });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Comissão padrão salva.");
+      qc.invalidateQueries({ queryKey: ["metrics-settings"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const recarregarElos = () => qc.invalidateQueries({ queryKey: ["metrics-tiers"] });
+
+  const criarElosPadrao = useMutation({
+    mutationFn: async () => {
+      const { error } = await (supabase as any).from("metrics_tiers").insert(
+        ELOS_PADRAO.map((e, i) => ({ ...e, owner_id: ownerId, position: i })),
+      );
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Elos padrão criados. Ajuste os valores como preferir.");
+      recarregarElos();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const salvarElo = useMutation({
+    mutationFn: async (t: Partial<Tier> & { id?: string }) => {
+      if (t.id) {
+        const { error } = await (supabase as any)
+          .from("metrics_tiers")
+          .update({
+            name: t.name,
+            min_value: t.min_value,
+            commission_pct: t.commission_pct,
+            bonus_value: t.bonus_value,
+            color: t.color,
+          })
+          .eq("id", t.id);
+        if (error) throw error;
+      } else {
+        const { error } = await (supabase as any).from("metrics_tiers").insert({
+          owner_id: ownerId,
+          name: t.name,
+          min_value: t.min_value,
+          commission_pct: t.commission_pct,
+          bonus_value: t.bonus_value || 0,
+          color: t.color || "#64748b",
+        });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      setNovoElo({ name: "", min_value: "", commission_pct: "", bonus_value: "" });
+      recarregarElos();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const removerElo = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any).from("metrics_tiers").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: recarregarElos,
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const salvarMeta = useMutation({
+    mutationFn: async () => {
+      const valor = Number(metaValor.replace(",", "."));
+      if (!Number.isFinite(valor) || valor < 0) throw new Error("Informe um valor válido");
+      // Uma meta coletiva por período: apagar antes evita duas metas
+      // concorrentes para o mesmo mês, que fariam a barra mudar conforme a
+      // ordem em que o banco devolvesse as linhas.
+      await (supabase as any)
+        .from("metrics_goals")
+        .delete()
+        .eq("owner_id", ownerId)
+        .eq("scope", "coletiva")
+        .eq("period_start", dia(inicio));
+      const { error } = await (supabase as any).from("metrics_goals").insert({
+        owner_id: ownerId,
+        scope: "coletiva",
+        period_start: dia(inicio),
+        period_end: dia(fim),
+        target_value: valor,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Meta do período salva.");
+      qc.invalidateQueries({ queryKey: ["metrics-goal"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const salvarGasto = useMutation({
+    mutationFn: async () => {
+      const valor = Number(gasto.replace(",", "."));
+      if (!Number.isFinite(valor) || valor < 0) throw new Error("Informe um valor válido");
+      const membro = gastoDe === "__empresa__" ? null : gastoDe;
+      // Substitui o lançamento do mesmo alvo no mesmo período em vez de somar
+      // um segundo: dois valores para o mesmo mês fariam o ROAS depender de
+      // quantas vezes alguém clicou em Lançar.
+      let anterior = (supabase as any)
+        .from("metrics_ad_spend")
+        .delete()
+        .eq("owner_id", ownerId)
+        .eq("period_start", dia(inicio));
+      anterior = membro
+        ? anterior.eq("member_user_id", membro)
+        : anterior.is("member_user_id", null);
+      await anterior;
+      const { error } = await (supabase as any).from("metrics_ad_spend").insert({
+        owner_id: ownerId,
+        member_user_id: membro,
+        period_start: dia(inicio),
+        period_end: dia(fim),
+        amount: valor,
+        source: "manual",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setGasto("");
+      toast.success("Investimento lançado.");
+      qc.invalidateQueries({ queryKey: ["metrics-ad-spend"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  useEffect(() => {
+    setMetaValor(meta != null ? String(meta) : "");
+  }, [meta]);
 
   const salvarTaxa = useMutation({
     mutationFn: async () => {
@@ -176,13 +348,150 @@ export default function MetrikConfiguracoes() {
 
   return (
     <div className="space-y-6">
-      <TituloPagina titulo="Configurações" sub="Taxas, base de cálculo e elos" />
+      <TituloPagina titulo="Configurações" sub="Elos, meta, investimento, taxas e base de cálculo" />
 
       {!podeConfigurar && (
         <Card className="border-amber-500/40">
           <p className="text-sm text-amber-500">Só dono e gerente alteram estas configurações.</p>
         </Card>
       )}
+
+      <SeletorPeriodo />
+
+      {/* ── Elos ── */}
+      <Card>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Award size={15} className="text-primary" />
+            <h2 className="font-semibold">Elos e comissão</h2>
+          </div>
+          {podeConfigurar && tiers.length === 0 && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => criarElosPadrao.mutate()}
+              disabled={criarElosPadrao.isPending}
+              className="gap-1.5 text-xs"
+            >
+              {criarElosPadrao.isPending ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <Sparkles size={13} />
+              )}
+              Criar elos padrão
+            </Button>
+          )}
+        </div>
+
+        <div className="mt-3 space-y-2">
+          {tiers.map((t) => (
+            <div key={t.id} className="flex items-center gap-2">
+              <input
+                type="color"
+                value={t.color}
+                disabled={!podeConfigurar}
+                onChange={(e) => salvarElo.mutate({ ...t, color: e.target.value })}
+                className="h-8 w-8 shrink-0 cursor-pointer rounded border border-border bg-transparent p-0.5"
+                aria-label={`Cor do elo ${t.name}`}
+              />
+              <Input
+                defaultValue={t.name}
+                disabled={!podeConfigurar}
+                onBlur={(e) =>
+                  e.target.value !== t.name && salvarElo.mutate({ ...t, name: e.target.value })
+                }
+                className="h-8 flex-1 text-sm"
+                aria-label="Nome do elo"
+              />
+              <Input
+                defaultValue={t.min_value}
+                disabled={!podeConfigurar}
+                onBlur={(e) => salvarElo.mutate({ ...t, min_value: Number(e.target.value) || 0 })}
+                className="h-8 w-24 text-sm tabular-nums"
+                aria-label="Faturamento mínimo"
+                title="Faturamento a partir do qual o vendedor entra neste elo"
+              />
+              <Input
+                defaultValue={t.commission_pct}
+                disabled={!podeConfigurar}
+                onBlur={(e) => salvarElo.mutate({ ...t, commission_pct: Number(e.target.value) || 0 })}
+                className="h-8 w-14 text-sm tabular-nums"
+                aria-label="Percentual de comissão"
+                title="% de comissão neste elo"
+              />
+              <Input
+                defaultValue={t.bonus_value}
+                disabled={!podeConfigurar}
+                onBlur={(e) => salvarElo.mutate({ ...t, bonus_value: Number(e.target.value) || 0 })}
+                className="h-8 w-20 text-sm tabular-nums"
+                aria-label="Bônus fixo do elo"
+                title="Valor fixo somado à comissão ao alcançar este elo"
+              />
+              {podeConfigurar && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => removerElo.mutate(t.id)}
+                  className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                  aria-label={`Remover elo ${t.name}`}
+                >
+                  <Trash2 size={14} />
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {podeConfigurar && (
+          <div className="mt-2.5 flex items-center gap-2 border-t border-border pt-2.5">
+            <Input
+              placeholder="Novo elo"
+              value={novoElo.name}
+              onChange={(e) => setNovoElo({ ...novoElo, name: e.target.value })}
+              className="h-8 flex-1 text-sm"
+            />
+            <Input
+              placeholder="A partir de"
+              value={novoElo.min_value}
+              onChange={(e) => setNovoElo({ ...novoElo, min_value: e.target.value })}
+              className="h-8 w-24 text-sm tabular-nums"
+            />
+            <Input
+              placeholder="%"
+              value={novoElo.commission_pct}
+              onChange={(e) => setNovoElo({ ...novoElo, commission_pct: e.target.value })}
+              className="h-8 w-14 text-sm tabular-nums"
+            />
+            <Input
+              placeholder="Bônus R$"
+              value={novoElo.bonus_value}
+              onChange={(e) => setNovoElo({ ...novoElo, bonus_value: e.target.value })}
+              className="h-8 w-20 text-sm tabular-nums"
+            />
+            <Button
+              size="icon"
+              variant="outline"
+              className="h-8 w-8 shrink-0"
+              disabled={!novoElo.name.trim() || salvarElo.isPending}
+              onClick={() =>
+                salvarElo.mutate({
+                  name: novoElo.name.trim(),
+                  min_value: Number(novoElo.min_value) || 0,
+                  commission_pct: Number(novoElo.commission_pct) || 0,
+                  bonus_value: Number(novoElo.bonus_value) || 0,
+                })
+              }
+              aria-label="Adicionar elo"
+            >
+              <Plus size={14} />
+            </Button>
+          </div>
+        )}
+        <p className="mt-3 text-[11px] text-muted-foreground">
+          Colunas: cor, nome, faturamento a partir do qual o elo vale, % de comissão, e bônus
+          fixo somado à comissão ao alcançar o elo. As mudanças salvam ao sair do campo.
+        </p>
+      </Card>
 
       {/* ── Base de cálculo ── */}
       <div className="grid gap-4 lg:grid-cols-2">
@@ -226,6 +535,29 @@ export default function MetrikConfiguracoes() {
             Anúncio vem desligado de propósito: o vendedor não escolhe quanto se gasta em
             tráfego, e descontar isso da comissão dele transfere um risco que não é dele.
           </p>
+
+          {podeConfigurar && (
+            <div className="mt-4 flex items-end gap-2 border-t border-border pt-3">
+              <div className="space-y-1">
+                <Label htmlFor="pct" className="text-xs">Comissão padrão (%)</Label>
+                <p className="text-[11px] text-muted-foreground">Vale para quem ainda não alcançou elo.</p>
+                <Input
+                  id="pct"
+                  value={pctPadrao}
+                  onChange={(e) => setPctPadrao(e.target.value)}
+                  placeholder={String(config.comissaoPct ?? 10)}
+                  className="h-9 w-28 tabular-nums"
+                />
+              </div>
+              <Button
+                size="sm"
+                onClick={() => salvarComissaoPadrao.mutate()}
+                disabled={salvarComissaoPadrao.isPending}
+              >
+                Salvar
+              </Button>
+            </div>
+          )}
         </Card>
 
         {/* ── Simulador ── */}
@@ -272,6 +604,72 @@ export default function MetrikConfiguracoes() {
             Comissão de {config.comissaoPct}% sobre essa base:{" "}
             <b className="text-foreground">{moeda(Math.round(baseSimulada * config.comissaoPct) / 100)}</b>
           </p>
+        </Card>
+      </div>
+
+      {/* ── Meta e investimento do período ── */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <div className="flex items-center gap-2">
+            <Flag size={15} className="text-primary" />
+            <h2 className="font-semibold">Meta coletiva do período</h2>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {format(inicio, "dd/MM")} a {format(fim, "dd/MM")} — mude o período acima para
+            definir a meta de outro mês.
+          </p>
+          {podeConfigurar ? (
+            <div className="mt-3 flex gap-2">
+              <Input
+                value={metaValor}
+                onChange={(e) => setMetaValor(e.target.value)}
+                placeholder="Ex: 150000"
+                className="h-9 tabular-nums"
+              />
+              <Button onClick={() => salvarMeta.mutate()} disabled={salvarMeta.isPending}>
+                Salvar
+              </Button>
+            </div>
+          ) : (
+            <p className="mt-3 text-sm">{meta != null ? moeda(meta) : "Nenhuma meta definida"}</p>
+          )}
+        </Card>
+
+        <Card>
+          <div className="flex items-center gap-2">
+            <TrendingUp size={15} className="text-primary" />
+            <h2 className="font-semibold">Investimento em anúncio do período</h2>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Só o gasto atribuído a um vendedor entra no ROAS dele. O da empresa fica no total,
+            sem ser rateado.
+          </p>
+          {podeConfigurar && (
+            <div className="mt-3 flex gap-2">
+              <Select value={gastoDe} onValueChange={setGastoDe}>
+                <SelectTrigger className="h-9 w-[42%]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__empresa__">Empresa (sem vendedor)</SelectItem>
+                  {membros.map((m) => (
+                    <SelectItem key={m.member_user_id} value={m.member_user_id}>
+                      {m.display_name || m.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                value={gasto}
+                onChange={(e) => setGasto(e.target.value)}
+                placeholder="Ex: 4500"
+                className="h-9 flex-1 tabular-nums"
+              />
+              <Button onClick={() => salvarGasto.mutate()} disabled={salvarGasto.isPending}>
+                Lançar
+              </Button>
+            </div>
+          )}
         </Card>
       </div>
 

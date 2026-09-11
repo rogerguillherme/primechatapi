@@ -13,8 +13,9 @@ import { Card, Kpi, TituloPagina, Vazio, moeda } from "@/components/metrics/ui";
 import { HistoricoCiclos } from "@/components/metrics/HistoricoCiclos";
 import { cn } from "@/lib/utils";
 import {
-  eloAtual, baseComissao, comissaoSobreBase, bonusElo, roi,
+  eloAtual, comissaoSobreBase, bonusElo, roi,
 } from "../../supabase/functions/_shared/metrics-engine.mjs";
+import { baseConfigurada } from "../../supabase/functions/_shared/metrics-fees.mjs";
 
 /**
  * Comissionados: o fechamento do ciclo.
@@ -28,7 +29,7 @@ export default function MetrikComissionados() {
   useFavicon("/metrik-favicon.svg");
 
   const { inicio, fim } = useMetrikPeriodo();
-  const { vendedores, totais, tiers, config, ownerId } = useMetrikData(inicio, fim);
+  const { vendedores, totais, tiers, config, ownerId, regrasTaxa } = useMetrikData(inicio, fim);
   const [aba, setAba] = useState<"atual" | "historico">("atual");
 
   const linhas = useMemo(
@@ -37,16 +38,19 @@ export default function MetrikComissionados() {
         .filter((v) => v.userId)
         .map((v) => {
           // A conta, em ordem: tira o que voltou, tira a taxa que a plataforma
-          // reteve, e só então aplica o percentual. Comissionar sobre o bruto
-          // pagaria o vendedor por dinheiro que a empresa não recebeu.
-          const base = baseComissao(v.faturamento, v.reembolsos, config.taxaPct) as number;
+          // reteve de fato (mesmo cálculo venda a venda do Dashboard, não um
+          // percentual único), e só desconta anúncio se o interruptor mandar —
+          // o mesmo trio configurado em Configurações, e não mais um só deles.
+          const base = baseConfigurada(
+            { faturamento: v.faturamento, reembolsos: v.reembolsos, taxas: v.taxas, ads: v.investimento },
+            { descontarTaxas: config.descontarTaxas, descontarReembolsos: config.descontarReembolsos, descontarAds: config.descontarAds },
+          ) as number;
           const bonus = bonusElo(tiers, v.faturamento) as number;
           return {
             ...v,
             elo: eloAtual(tiers, v.faturamento) as any,
             base,
-            taxa:
-              Math.round((v.faturamento - v.reembolsos) * (config.taxaPct / 100) * 100) / 100,
+            taxa: v.taxas,
             bonus,
             // O bônus é um valor fixo por ter alcançado o elo, somado ao
             // percentual — não substitui a comissão calculada sobre a base.
@@ -59,8 +63,10 @@ export default function MetrikComissionados() {
   );
 
   const comissaoTotal = linhas.reduce((s, l) => s + l.comissao, 0);
-  const taxaTotal = linhas.reduce((s, l) => s + (l.taxa > 0 ? l.taxa : 0), 0);
-  const lucroBruto = totais.faturamento - totais.reembolsos - taxaTotal - totais.investimento;
+  // Taxa da empresa inteira, incluindo venda sem vendedor atribuído — ela
+  // também reduziu o que entrou de verdade, mesmo sem entrar em comissão de
+  // ninguém. Somar só as linhas da tabela subestimaria a taxa real do período.
+  const lucroBruto = totais.faturamento - totais.reembolsos - totais.taxa - totais.investimento;
   const lucroLiquido = lucroBruto - comissaoTotal;
 
   return (
@@ -96,8 +102,11 @@ export default function MetrikComissionados() {
       {aba === "historico" ? (
         <HistoricoCiclos
           ownerId={ownerId}
-          taxaPct={config.taxaPct}
+          regrasTaxa={regrasTaxa}
           comissaoPct={config.comissaoPct}
+          descontarTaxas={config.descontarTaxas}
+          descontarReembolsos={config.descontarReembolsos}
+          descontarAds={config.descontarAds}
         />
       ) : (
       <>
@@ -108,8 +117,8 @@ export default function MetrikComissionados() {
         <Kpi rotulo="Custo de anúncios" valor={moeda(totais.investimento)} icone={Megaphone} />
         <Kpi
           rotulo="Taxa da plataforma"
-          valor={moeda(taxaTotal)}
-          nota={config.taxaPct > 0 ? `${config.taxaPct}% sobre o líquido` : "não configurada"}
+          valor={moeda(totais.taxa)}
+          nota="mesmo cálculo do Dashboard, venda a venda"
           icone={Percent}
         />
         <Kpi
@@ -134,9 +143,9 @@ export default function MetrikComissionados() {
         <div className="border-b border-border px-5 py-4">
           <h2 className="font-semibold">Detalhamento por vendedor</h2>
           <p className="text-xs text-muted-foreground">
-            Base = faturamento − reembolsos − taxa da plataforma. A comissão é o percentual
-            do elo alcançado sobre essa base; sem elo, vale o percentual padrão
-            ({config.comissaoPct}%).
+            Base segue os interruptores de Configurações (taxa, reembolso, anúncio). A
+            comissão é o percentual do elo alcançado sobre essa base; sem elo, vale o
+            percentual padrão ({config.comissaoPct}%).
           </p>
         </div>
 
