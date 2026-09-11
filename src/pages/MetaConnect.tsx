@@ -129,7 +129,7 @@ export default function MetaConnect() {
     }
   }, [isExchanging, queryClient, searchParams, session, setSearchParams]);
 
-  const handleConnect = async (app: "prime" | "crm" = "prime") => {
+  const handleConnect = async (app: "prime" | "crm" = "crm") => {
     try {
       // O mesmo app precisa autorizar e trocar o código, por isso a escolha
       // fica guardada até o retorno da Meta.
@@ -333,20 +333,23 @@ export default function MetaConnect() {
                   <Badge className="bg-green-500/10 text-green-600 border-green-500/20">
                     <CheckCircle2 className="h-3 w-3 mr-1" /> Conectado
                   </Badge>
+                  <Button variant="outline" size="sm" onClick={() => handleConnect("crm")} className="gap-2">
+                    <RefreshCw className="h-4 w-4" /> Reconectar pelo CRM
+                  </Button>
                   <Button variant="destructive" size="sm" onClick={() => handleDisconnect(activeConnection.id)}>
                     <Unplug className="h-4 w-4 mr-1" /> Desconectar
                   </Button>
                 </>
               ) : (
                 <>
-                  <Button onClick={() => handleConnect("prime")} className="gap-2">
-                    <Plug className="h-4 w-4" />
-                    Conectar com Meta
-                    <ExternalLink className="h-3 w-3" />
-                  </Button>
-                  <Button variant="outline" onClick={() => handleConnect("crm")} className="gap-2">
+                  <Button onClick={() => handleConnect("crm")} className="gap-2">
                     <Plug className="h-4 w-4" />
                     Conectar pelo app CRM
+                    <ExternalLink className="h-3 w-3" />
+                  </Button>
+                  <Button variant="outline" onClick={() => handleConnect("prime")} className="gap-2">
+                    <Plug className="h-4 w-4" />
+                    Conectar pelo app Prime
                     <ExternalLink className="h-3 w-3" />
                   </Button>
                 </>
