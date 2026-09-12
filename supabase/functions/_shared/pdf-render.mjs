@@ -62,6 +62,7 @@ export function sanitizeForWinAnsi(text) {
     .replace(/[\u201C\u201D]/g, '"')
     .replace(/[\u2013\u2014]/g, "-")
     .replace(/\u2026/g, "...")
+    .replace(/[\u2022\u25CF\u25AA\u00B7]/g, "-")
     .replace(/[^\x09\x0A\x20-\x7E\u00A0-\u00FF\u20AC]/g, "?");
 }
 
