@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { applyStepLabels } from "../_shared/flow-matching.ts";
 import { interpolate, mergeScalarVars } from "../_shared/interpolate.mjs";
 import { decideNoResponse } from "../_shared/no-response.mjs";
-import { renderTextToPdf } from "../_shared/pdf-render.mjs";
+import { renderTextToPdf, htmlToPlainText } from "../_shared/pdf-render.mjs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
