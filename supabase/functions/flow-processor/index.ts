@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { applyStepLabels } from "../_shared/flow-matching.ts";
 import { interpolate, mergeScalarVars } from "../_shared/interpolate.mjs";
 import { decideNoResponse } from "../_shared/no-response.mjs";
-import { renderTextToPdf } from "../_shared/pdf-render.mjs";
+import { renderTextToPdf, htmlToPlainText } from "../_shared/pdf-render.mjs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -618,9 +618,13 @@ async function sendStepMessage(
       expectedLogContent = `📄 ${step.file_name || "Documento"} (PDF gerado)`;
       delete body.message;
     } catch (e) {
-      // Sem PDF gerado: cai pro texto normal (já está em body.message) em vez
-      // de perder a mensagem inteira — melhor o lead receber o texto puro.
+      // Sem PDF gerado: cai pro texto normal em vez de perder a mensagem
+      // inteira. O texto precisa ser legível e caber no limite da Meta
+      // (4096 caracteres) — antes o HTML cru de 38k travava o fluxo aqui,
+      // com 5 tentativas recusadas e nada depois deste passo.
       console.error("Falha ao gerar PDF do passo", step.id, ":", (e as Error)?.message || e);
+      const plano = htmlToPlainText(body.message as string);
+      body.message = plano.length > 4000 ? `${plano.slice(0, 3990)}…` : plano;
     }
   }
 

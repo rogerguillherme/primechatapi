@@ -13,6 +13,59 @@ const PAGE_HEIGHT = 841.89;
 const MARGIN = 56;
 const BAR_COLOR = rgb(0.18, 0.42, 0.68); // azul discreto, neutro o bastante pra qualquer marca
 
+/**
+ * O editor de PDF do fluxo permite colar um documento HTML inteiro. Sem esta
+ * conversão o PDF sairia com o código-fonte (`<!DOCTYPE html> ... <style>`) e,
+ * pior, o `drawText` estourava em qualquer caractere fora do WinAnsi (emoji),
+ * caindo no fallback de texto — foi assim que o "mapa do lipedema" virou uma
+ * mensagem de 38 mil caracteres que a Meta recusou (limite de 4096).
+ */
+export function htmlToPlainText(input) {
+  let s = String(input || "");
+  if (!/<[a-z!/][\s\S]*>/i.test(s)) return s;
+
+  s = s
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<(script|style|head)[\s\S]*?<\/\1>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|section|article|li|h[1-6]|tr|table|header|footer)>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "• ")
+    .replace(/<[^>]+>/g, "");
+
+  const entidades = {
+    nbsp: " ", amp: "&", lt: "<", gt: ">", quot: '"', apos: "'",
+    hellip: "…", mdash: "—", ndash: "–", rsquo: "’", lsquo: "‘",
+    ldquo: "“", rdquo: "”", eacute: "é", aacute: "á", ccedil: "ç",
+  };
+  s = s
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
+    .replace(/&([a-z]+);/gi, (m, name) => entidades[name.toLowerCase()] ?? m);
+
+  return s
+    .split("\n")
+    .map((l) => l.replace(/[ \t]+/g, " ").trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/**
+ * Remove o que as fontes padrão do PDF (WinAnsi) não conseguem escrever.
+ * Emoji vira nada; qualquer outro caractere fora da tabela vira "?" — melhor
+ * um caractere trocado do que o PDF inteiro falhar.
+ */
+export function sanitizeForWinAnsi(text) {
+  return String(text || "")
+    .replace(/\p{Extended_Pictographic}|[\u{1F000}-\u{1FAFF}\u{FE00}-\u{FE0F}\u{200D}]/gu, "")
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014]/g, "-")
+    .replace(/\u2026/g, "...")
+    .replace(/[\u2022\u25CF\u25AA\u00B7]/g, "-")
+    .replace(/[^\x09\x0A\x20-\x7E\u00A0-\u00FF\u20AC]/g, "?");
+}
+
 /** Quebra uma linha longa em várias que cabem em `maxWidth`, sem cortar palavra. */
 function wrapLine(line, font, size, maxWidth) {
   const words = line.split(/\s+/).filter(Boolean);
@@ -38,7 +91,8 @@ function wrapLine(line, font, size, maxWidth) {
  * entre eles). Quebra página automaticamente quando o conteúdo não cabe.
  */
 export async function renderTextToPdf(rawText) {
-  const lines = (rawText || "").replace(/\r\n/g, "\n").split("\n");
+  const plain = sanitizeForWinAnsi(htmlToPlainText(rawText));
+  const lines = plain.replace(/\r\n/g, "\n").split("\n");
   const firstContentIdx = lines.findIndex((l) => l.trim());
   const title = firstContentIdx >= 0 ? lines[firstContentIdx].trim() : "";
   const bodyLines = firstContentIdx >= 0 ? lines.slice(firstContentIdx + 1) : [];
