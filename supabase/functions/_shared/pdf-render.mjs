@@ -90,7 +90,8 @@ function wrapLine(line, font, size, maxWidth) {
  * entre eles). Quebra página automaticamente quando o conteúdo não cabe.
  */
 export async function renderTextToPdf(rawText) {
-  const lines = (rawText || "").replace(/\r\n/g, "\n").split("\n");
+  const plain = sanitizeForWinAnsi(htmlToPlainText(rawText));
+  const lines = plain.replace(/\r\n/g, "\n").split("\n");
   const firstContentIdx = lines.findIndex((l) => l.trim());
   const title = firstContentIdx >= 0 ? lines[firstContentIdx].trim() : "";
   const bodyLines = firstContentIdx >= 0 ? lines.slice(firstContentIdx + 1) : [];
