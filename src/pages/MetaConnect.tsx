@@ -2,12 +2,14 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTeamContext } from "@/hooks/use-team";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { MessageCircle, Phone, Send, Plug, Unplug, Loader2, CheckCircle2, ExternalLink, Plus, RefreshCw, Building2, Shield, Zap, Globe, ChevronDown, ChevronUp } from "lucide-react";
+import { MessageCircle, Phone, Send, Plug, Unplug, Loader2, CheckCircle2, ExternalLink, Plus, RefreshCw, Building2, Shield, Zap, Globe, ChevronDown, ChevronUp, KeyRound, Check } from "lucide-react";
 import { toast } from "sonner";
 
 const REDIRECT_URI = "https://primechatapi.lovable.app/auth/meta/callback";
@@ -48,6 +50,48 @@ export default function MetaConnect() {
   const [expandedWaba, setExpandedWaba] = useState<string | null>(null);
   const [registeringPhoneId, setRegisteringPhoneId] = useState<string | null>(null);
   const [registrationPin, setRegistrationPin] = useState("123456");
+  const [metaAppId, setMetaAppId] = useState("");
+  const [metaAppSecret, setMetaAppSecret] = useState("");
+  const [savingMetaApp, setSavingMetaApp] = useState(false);
+
+  const { data: team } = useTeamContext();
+  const podeConfigurarApp = !team || team.accessLevel === "owner" || team.accessLevel === "manager";
+
+  const { data: appProprio, isLoading: isLoadingAppProprio } = useQuery({
+    queryKey: ["meta-app-proprio"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("meta_apps")
+        .select("app_id, configured_at")
+        .maybeSingle();
+      if (error) throw error;
+      return data as { app_id: string; configured_at: string } | null;
+    },
+    enabled: !!session,
+  });
+
+  const handleSalvarMetaApp = async () => {
+    if (!metaAppId.trim() || !metaAppSecret.trim()) {
+      toast.error("Informe o App ID e o App Secret");
+      return;
+    }
+    setSavingMetaApp(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("meta-app-credentials", {
+        body: { app_id: metaAppId.trim(), app_secret: metaAppSecret.trim() },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success("App Meta salvo. Já pode conectar por ele.");
+      setMetaAppId("");
+      setMetaAppSecret("");
+      queryClient.invalidateQueries({ queryKey: ["meta-app-proprio"] });
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao salvar o app Meta");
+    } finally {
+      setSavingMetaApp(false);
+    }
+  };
 
   const { data: connections, isLoading } = useQuery({
     queryKey: ["meta-connections"],
@@ -294,6 +338,65 @@ export default function MetaConnect() {
         </p>
       </div>
 
+      {/* ── App Meta da conta ──
+          O Prime tem só dois apps Meta fixos ("Prime" e "CRM"), e nenhum dos
+          dois tem Advanced Access aprovado pra WABA de qualquer cliente — só
+          as que o Roger cadastrou manualmente como tester em cada um. Com o
+          app da própria conta, é o dono acessando a própria WABA: não
+          depende de revisão nenhuma da Meta. */}
+      {podeConfigurarApp && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-primary" />
+              <h2 className="font-semibold">App Meta da conta</h2>
+              {appProprio && (
+                <span className="ml-auto flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                  <Check className="h-3 w-3" /> Configurado
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Cadastre o App ID e o App Secret do seu próprio app em developers.facebook.com,
+              com os produtos WhatsApp Business e Login do Facebook ativados. A conexão passa a
+              usar esse app — funciona sem depender de revisão da Meta, porque é o app do dono
+              acessando a própria WABA. O App Secret é gravado e{" "}
+              <b>nunca é devolvido pra tela</b> — nem pra você. Pra trocar, cole os dois de novo.
+            </p>
+
+            {!isLoadingAppProprio && (
+              <div className="mt-3 flex flex-wrap items-end gap-2">
+                <div className="space-y-1">
+                  <Label htmlFor="meta-app-id" className="text-xs">App ID</Label>
+                  <Input
+                    id="meta-app-id"
+                    value={metaAppId}
+                    onChange={(e) => setMetaAppId(e.target.value)}
+                    placeholder={appProprio ? appProprio.app_id : "Ex: 1234567890123456"}
+                    className="h-9 w-56 font-mono text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="meta-app-secret" className="text-xs">App Secret</Label>
+                  <Input
+                    id="meta-app-secret"
+                    type="password"
+                    value={metaAppSecret}
+                    onChange={(e) => setMetaAppSecret(e.target.value)}
+                    placeholder="••••••••••••••••"
+                    className="h-9 w-56 font-mono text-xs"
+                  />
+                </div>
+                <Button size="sm" onClick={handleSalvarMetaApp} disabled={savingMetaApp}>
+                  {savingMetaApp && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
+                  Salvar
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* ── OAuth Connection Card ── */}
       <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-transparent">
         <CardContent className="pt-6">
@@ -317,13 +420,25 @@ export default function MetaConnect() {
                   <Badge className="bg-green-500/10 text-green-600 border-green-500/20">
                     <CheckCircle2 className="h-3 w-3 mr-1" /> Conectado
                   </Badge>
-                  <Button variant="outline" size="sm" onClick={() => handleConnect("crm")} className="gap-2">
-                    <RefreshCw className="h-4 w-4" /> Reconectar pelo CRM
-                  </Button>
+                  {appProprio ? (
+                    <Button variant="outline" size="sm" onClick={() => handleConnect()} className="gap-2">
+                      <RefreshCw className="h-4 w-4" /> Reconectar
+                    </Button>
+                  ) : (
+                    <Button variant="outline" size="sm" onClick={() => handleConnect("crm")} className="gap-2">
+                      <RefreshCw className="h-4 w-4" /> Reconectar pelo CRM
+                    </Button>
+                  )}
                   <Button variant="destructive" size="sm" onClick={() => handleDisconnect(activeConnection.id)}>
                     <Unplug className="h-4 w-4 mr-1" /> Desconectar
                   </Button>
                 </>
+              ) : appProprio ? (
+                <Button onClick={() => handleConnect()} className="gap-2">
+                  <Plug className="h-4 w-4" />
+                  Conectar via Meta
+                  <ExternalLink className="h-3 w-3" />
+                </Button>
               ) : (
                 <>
                   <Button onClick={() => handleConnect("crm")} className="gap-2">

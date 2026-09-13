@@ -20,7 +20,8 @@ async function verifyOAuthState(
   userId: string,
   primeSecret: string,
   crmSecret?: string,
-): Promise<"prime" | "crm" | null> {
+  customSecret?: string,
+): Promise<"prime" | "crm" | "custom" | null> {
   if (typeof state !== "string") return null;
   const [payload, encodedSignature] = state.split(".");
   if (!payload || !encodedSignature) return null;
@@ -31,10 +32,12 @@ async function verifyOAuthState(
   } catch {
     return null;
   }
-  if (parsed.user_id !== userId || (parsed.app !== "prime" && parsed.app !== "crm")) return null;
+  if (parsed.user_id !== userId || (parsed.app !== "prime" && parsed.app !== "crm" && parsed.app !== "custom")) {
+    return null;
+  }
   if (typeof parsed.issued_at !== "number" || Date.now() - parsed.issued_at > 15 * 60 * 1000) return null;
 
-  const secret = parsed.app === "crm" ? crmSecret : primeSecret;
+  const secret = parsed.app === "custom" ? customSecret : parsed.app === "crm" ? crmSecret : primeSecret;
   if (!secret) return null;
   const key = await crypto.subtle.importKey(
     "raw",
@@ -92,8 +95,27 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Mesma resolução de dono do meta-oauth-url — precisa bater exatamente
+    // pra achar a mesma credencial usada pra assinar o state.
+    const { data: vinculo } = await adminClient
+      .from("team_members")
+      .select("owner_id")
+      .eq("member_user_id", userId)
+      .order("created_at")
+      .limit(1)
+      .maybeSingle();
+    const ownerId = vinculo?.owner_id ?? userId;
+
+    const { data: appProprio } = await adminClient
+      .from("meta_apps")
+      .select("app_id, app_secret")
+      .eq("owner_id", ownerId)
+      .maybeSingle();
+
     // O código só pode ser trocado pelo MESMO app que abriu a autorização.
-    const stateApp = await verifyOAuthState(state, userId, primeAppSecret, crmAppSecret ?? undefined);
+    const stateApp = await verifyOAuthState(
+      state, userId, primeAppSecret, crmAppSecret ?? undefined, appProprio?.app_secret,
+    );
     // `state` sobrevive ao retorno em outro domínio. O parâmetro `app` fica
     // apenas como compatibilidade para autorizações Prime iniciadas antes desta versão.
     if (state && !stateApp) {
@@ -102,16 +124,30 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    const selectedApp = stateApp ?? (String(app || "prime").toLowerCase() === "crm" ? "crm" : "prime");
-    const useCrm = selectedApp === "crm";
-    if (useCrm && (!crmAppId || !crmAppSecret)) {
-      return new Response(JSON.stringify({ error: "Credenciais do app CRM não configuradas" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const selectedApp = stateApp ?? (appProprio ? "custom" : String(app || "prime").toLowerCase() === "crm" ? "crm" : "prime");
+
+    let metaAppId: string;
+    let metaAppSecret: string;
+    if (selectedApp === "custom") {
+      if (!appProprio) {
+        return new Response(JSON.stringify({ error: "App Meta da conta não encontrado. Cadastre-o novamente." }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      metaAppId = appProprio.app_id;
+      metaAppSecret = appProprio.app_secret;
+    } else {
+      const useCrm = selectedApp === "crm";
+      if (useCrm && (!crmAppId || !crmAppSecret)) {
+        return new Response(JSON.stringify({ error: "Credenciais do app CRM não configuradas" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      metaAppId = useCrm ? crmAppId! : primeAppId;
+      metaAppSecret = useCrm ? crmAppSecret! : primeAppSecret;
     }
-    const metaAppId = useCrm ? crmAppId! : primeAppId;
-    const metaAppSecret = useCrm ? crmAppSecret! : primeAppSecret;
 
     // Exchange code for access_token
     const tokenUrl = `https://graph.facebook.com/v21.0/oauth/access_token?client_id=${metaAppId}&redirect_uri=${encodeURIComponent(redirect_uri)}&client_secret=${metaAppSecret}&code=${encodeURIComponent(code)}`;

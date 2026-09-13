@@ -15,7 +15,7 @@ function toBase64Url(value: Uint8Array | string): string {
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
-async function createOAuthState(userId: string, app: "prime" | "crm", secret: string): Promise<string> {
+async function createOAuthState(userId: string, app: "prime" | "crm" | "custom", secret: string): Promise<string> {
   const payload = toBase64Url(JSON.stringify({ user_id: userId, app, issued_at: Date.now() }));
   const key = await crypto.subtle.importKey(
     "raw",
@@ -78,31 +78,63 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Algumas WABAs (ex.: as do Estevão) só aceitam administração pelo app CRM.
-    // `app: "crm"` autoriza por aquele app; o padrão continua sendo o Prime.
-    const requestedApp = String(body.app || "prime").toLowerCase();
-    if (requestedApp !== "prime" && requestedApp !== "crm") {
-      return new Response(JSON.stringify({ error: "App Meta inválido" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    // App Meta da própria conta tem prioridade: é o app do dono acessando a
+    // própria WABA, não depende de Advanced Access nenhum. Resolve o dono do
+    // mesmo jeito que metrik-credentials/meta-app-credentials (o próprio
+    // usuário, ou o dono de quem ele é membro), pra achar a credencial certa
+    // mesmo quando quem clica em "Conectar" é um gerente.
+    const { data: vinculo } = await adminClient
+      .from("team_members")
+      .select("owner_id")
+      .eq("member_user_id", user.id)
+      .order("created_at")
+      .limit(1)
+      .maybeSingle();
+    const ownerId = vinculo?.owner_id ?? user.id;
+
+    const { data: appProprio } = await adminClient
+      .from("meta_apps")
+      .select("app_id, app_secret")
+      .eq("owner_id", ownerId)
+      .maybeSingle();
+
+    let appId: string;
+    let appSecret: string;
+    let appMode: "prime" | "crm" | "custom";
+
+    if (appProprio) {
+      appId = appProprio.app_id;
+      appSecret = appProprio.app_secret;
+      appMode = "custom";
+    } else {
+      // Sem app próprio cadastrado: mantém o comportamento antigo (apps
+      // fixos "Prime"/"CRM") pra não quebrar conta já conectada por eles.
+      const requestedApp = String(body.app || "prime").toLowerCase();
+      if (requestedApp !== "prime" && requestedApp !== "crm") {
+        return new Response(JSON.stringify({ error: "App Meta inválido" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const useCrm = requestedApp === "crm";
+      if (useCrm && (!crmAppId || !crmAppSecret)) {
+        return new Response(JSON.stringify({ error: "Credenciais do app CRM não configuradas" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (!useCrm && !primeAppSecret) {
+        return new Response(JSON.stringify({ error: "Credenciais do app Prime não configuradas" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      appId = useCrm ? crmAppId! : primeAppId;
+      appSecret = useCrm ? crmAppSecret! : primeAppSecret!;
+      appMode = useCrm ? "crm" : "prime";
     }
-    const useCrm = requestedApp === "crm";
-    if (useCrm && (!crmAppId || !crmAppSecret)) {
-      return new Response(JSON.stringify({ error: "Credenciais do app CRM não configuradas" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    if (!useCrm && !primeAppSecret) {
-      return new Response(JSON.stringify({ error: "Credenciais do app Prime não configuradas" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const appId = useCrm ? crmAppId! : primeAppId;
-    const appSecret = useCrm ? crmAppSecret! : primeAppSecret!;
-    const state = await createOAuthState(user.id, useCrm ? "crm" : "prime", appSecret);
+
+    const state = await createOAuthState(user.id, appMode, appSecret);
 
     const oauthUrl = new URL("https://www.facebook.com/v21.0/dialog/oauth");
     oauthUrl.searchParams.set("client_id", appId);
