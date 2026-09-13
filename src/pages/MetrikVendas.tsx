@@ -266,6 +266,7 @@ export default function MetrikVendas() {
                             assignedTo: v.leads?.assigned_to ?? null,
                           }}
                           membros={membros}
+                          ownerId={ownerId}
                         />
                       </td>
                     )}

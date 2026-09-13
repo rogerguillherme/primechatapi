@@ -5,6 +5,7 @@ import { Pencil, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
+import { normalizePhoneBR } from "@/lib/salesImport";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,14 +43,27 @@ const SEM_VENDEDOR = "__sem_vendedor__";
  * vendedor É o atendente responsável pelo lead no CRM (não um campo próprio
  * da venda) — trocar aqui é o mesmo dado, só editado de um lugar mais rápido
  * que abrir o lead no chat.
+ *
+ * Venda que chegou só por webhook, sem telefone reconhecido, nasce sem lead —
+ * e sem lead não existe "onde" gravar o vendedor. Quando isso acontece,
+ * oferece criar o cliente na hora (mesmo casamento por telefone que a
+ * importação de planilha já faz) e vincular a esta venda.
  */
-export function EditarVendaDialog({ venda, membros }: { venda: Venda; membros: Membro[] }) {
+export function EditarVendaDialog({
+  venda, membros, ownerId,
+}: {
+  venda: Venda;
+  membros: Membro[];
+  ownerId: string | null;
+}) {
   const qc = useQueryClient();
   const [aberto, setAberto] = useState(false);
   const [valor, setValor] = useState(() => (Number(venda.amount) || 0).toFixed(2).replace(".", ","));
   const [status, setStatus] = useState(venda.status);
   const [data, setData] = useState(() => format(new Date(venda.created_at), "yyyy-MM-dd"));
   const [vendedorId, setVendedorId] = useState(venda.assignedTo || SEM_VENDEDOR);
+  const [clienteNome, setClienteNome] = useState("");
+  const [clienteTelefone, setClienteTelefone] = useState("");
 
   const salvar = useMutation({
     mutationFn: async () => {
@@ -68,12 +82,52 @@ export function EditarVendaDialog({ venda, membros }: { venda: Venda; membros: M
         .eq("id", venda.id);
       if (error) throw error;
 
+      let leadId = venda.lead_id;
       const novoVendedor = vendedorId === SEM_VENDEDOR ? null : vendedorId;
-      if (venda.lead_id && novoVendedor !== (venda.assignedTo || null)) {
+
+      // Sem lead ainda: só vale a pena criar um se a intenção for vincular
+      // cliente e/ou atribuir vendedor — digitar telefone é o sinal disso.
+      if (!leadId && clienteTelefone.trim()) {
+        const telefone = normalizePhoneBR(clienteTelefone);
+        const { data: existente } = await (supabase as any)
+          .from("leads")
+          .select("id")
+          .eq("phone", telefone)
+          .eq("user_id", ownerId)
+          .maybeSingle();
+
+        if (existente) {
+          leadId = existente.id;
+        } else {
+          const { data: novoLead, error: leadInsertError } = await (supabase as any)
+            .from("leads")
+            .insert({
+              user_id: ownerId,
+              name: clienteNome.trim() || telefone,
+              phone: telefone,
+              assigned_to: novoVendedor,
+              origin: "manual",
+            })
+            .select("id")
+            .single();
+          if (leadInsertError) throw leadInsertError;
+          leadId = novoLead.id;
+        }
+
+        const { error: linkError } = await (supabase as any)
+          .from("orders")
+          .update({ lead_id: leadId })
+          .eq("id", venda.id);
+        if (linkError) throw linkError;
+      } else if (!leadId && novoVendedor) {
+        throw new Error("Informe o telefone do cliente pra poder atribuir um vendedor.");
+      }
+
+      if (leadId && novoVendedor !== (venda.assignedTo || null)) {
         const { error: leadError } = await (supabase as any)
           .from("leads")
           .update({ assigned_to: novoVendedor })
-          .eq("id", venda.lead_id);
+          .eq("id", leadId);
         if (leadError) throw leadError;
       }
     },
@@ -101,7 +155,7 @@ export function EditarVendaDialog({ venda, membros }: { venda: Venda; membros: M
         <DialogHeader>
           <DialogTitle>Editar venda</DialogTitle>
           <DialogDescription>
-            Ajusta valor, status, data e o vendedor responsável. Cliente não muda aqui.
+            Ajusta valor, status, data e o vendedor responsável.
           </DialogDescription>
         </DialogHeader>
 
@@ -143,27 +197,44 @@ export function EditarVendaDialog({ venda, membros }: { venda: Venda; membros: M
             </Select>
           </div>
 
+          {!venda.lead_id && (
+            <div className="space-y-1.5 rounded-md border border-dashed border-amber-500/40 bg-amber-500/5 p-3">
+              <p className="text-[11px] text-amber-600 dark:text-amber-500">
+                Essa venda não tem cliente vinculado. Informe o telefone pra criar/casar o
+                contato e poder atribuir um vendedor.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  value={clienteNome}
+                  onChange={(e) => setClienteNome(e.target.value)}
+                  placeholder="Nome (opcional)"
+                  className="h-9"
+                />
+                <Input
+                  value={clienteTelefone}
+                  onChange={(e) => setClienteTelefone(e.target.value)}
+                  placeholder="Telefone"
+                  className="h-9"
+                />
+              </div>
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <Label>Vendedor</Label>
-            {venda.lead_id ? (
-              <Select value={vendedorId} onValueChange={setVendedorId}>
-                <SelectTrigger className="h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={SEM_VENDEDOR}>Sem vendedor</SelectItem>
-                  {membros.map((m) => (
-                    <SelectItem key={m.member_user_id} value={m.member_user_id}>
-                      {m.display_name || m.email || "Vendedor"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <p className="text-[11px] text-muted-foreground">
-                Essa venda não tem cliente vinculado — sem lead não há a quem atribuir.
-              </p>
-            )}
+            <Select value={vendedorId} onValueChange={setVendedorId}>
+              <SelectTrigger className="h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={SEM_VENDEDOR}>Sem vendedor</SelectItem>
+                {membros.map((m) => (
+                  <SelectItem key={m.member_user_id} value={m.member_user_id}>
+                    {m.display_name || m.email || "Vendedor"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <Button className="w-full gap-2" disabled={salvar.isPending} onClick={() => salvar.mutate()}>
