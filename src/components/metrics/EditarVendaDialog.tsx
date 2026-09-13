@@ -23,19 +23,33 @@ const STATUS_OPCOES = [
   { value: "cancelled", label: "Cancelada" },
 ];
 
-type Venda = { id: string; amount: number; status: string; created_at: string };
+type Venda = {
+  id: string;
+  amount: number;
+  status: string;
+  created_at: string;
+  lead_id: string | null;
+  assignedTo: string | null;
+};
+
+type Membro = { member_user_id: string; display_name: string | null; email: string | null };
+
+const SEM_VENDEDOR = "__sem_vendedor__";
 
 /**
  * Correção manual de uma venda já lançada — valor digitado errado na
- * importação, status que ficou pendente e o pagamento caiu, data errada.
- * Não mexe em cliente nem vendedor: isso sai do lead responsável no CRM.
+ * importação, status que ficou pendente e o pagamento caiu, data errada. O
+ * vendedor É o atendente responsável pelo lead no CRM (não um campo próprio
+ * da venda) — trocar aqui é o mesmo dado, só editado de um lugar mais rápido
+ * que abrir o lead no chat.
  */
-export function EditarVendaDialog({ venda }: { venda: Venda }) {
+export function EditarVendaDialog({ venda, membros }: { venda: Venda; membros: Membro[] }) {
   const qc = useQueryClient();
   const [aberto, setAberto] = useState(false);
   const [valor, setValor] = useState(() => (Number(venda.amount) || 0).toFixed(2).replace(".", ","));
   const [status, setStatus] = useState(venda.status);
   const [data, setData] = useState(() => format(new Date(venda.created_at), "yyyy-MM-dd"));
+  const [vendedorId, setVendedorId] = useState(venda.assignedTo || SEM_VENDEDOR);
 
   const salvar = useMutation({
     mutationFn: async () => {
@@ -53,6 +67,15 @@ export function EditarVendaDialog({ venda }: { venda: Venda }) {
         .update({ amount: v, status, created_at: novaData.toISOString() })
         .eq("id", venda.id);
       if (error) throw error;
+
+      const novoVendedor = vendedorId === SEM_VENDEDOR ? null : vendedorId;
+      if (venda.lead_id && novoVendedor !== (venda.assignedTo || null)) {
+        const { error: leadError } = await (supabase as any)
+          .from("leads")
+          .update({ assigned_to: novoVendedor })
+          .eq("id", venda.lead_id);
+        if (leadError) throw leadError;
+      }
     },
     onSuccess: () => {
       toast.success("Venda atualizada.");
@@ -77,7 +100,9 @@ export function EditarVendaDialog({ venda }: { venda: Venda }) {
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle>Editar venda</DialogTitle>
-          <DialogDescription>Ajusta valor, status ou data. Cliente e vendedor não mudam aqui.</DialogDescription>
+          <DialogDescription>
+            Ajusta valor, status, data e o vendedor responsável. Cliente não muda aqui.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -116,6 +141,29 @@ export function EditarVendaDialog({ venda }: { venda: Venda }) {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Vendedor</Label>
+            {venda.lead_id ? (
+              <Select value={vendedorId} onValueChange={setVendedorId}>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SEM_VENDEDOR}>Sem vendedor</SelectItem>
+                  {membros.map((m) => (
+                    <SelectItem key={m.member_user_id} value={m.member_user_id}>
+                      {m.display_name || m.email || "Vendedor"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">
+                Essa venda não tem cliente vinculado — sem lead não há a quem atribuir.
+              </p>
+            )}
           </div>
 
           <Button className="w-full gap-2" disabled={salvar.isPending} onClick={() => salvar.mutate()}>

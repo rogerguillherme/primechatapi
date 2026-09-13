@@ -67,7 +67,7 @@ export default function MetrikVendas() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("orders")
-        .select("id, amount, status, created_at, payment_method, leads(name, email, assigned_to)")
+        .select("id, amount, status, created_at, payment_method, lead_id, leads(name, email, assigned_to)")
         .gte("created_at", inicio.toISOString())
         .lte("created_at", fim.toISOString())
         .order("created_at", { ascending: false })
@@ -256,7 +256,17 @@ export default function MetrikVendas() {
                     </td>
                     {podeConfigurar && (
                       <td className="px-4 py-3">
-                        <EditarVendaDialog venda={{ id: v.id, amount: v.amount, status: v.status, created_at: v.created_at }} />
+                        <EditarVendaDialog
+                          venda={{
+                            id: v.id,
+                            amount: v.amount,
+                            status: v.status,
+                            created_at: v.created_at,
+                            lead_id: v.lead_id,
+                            assignedTo: v.leads?.assigned_to ?? null,
+                          }}
+                          membros={membros}
+                        />
                       </td>
                     )}
                   </tr>
