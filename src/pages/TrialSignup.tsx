@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { MessageCircle, User, Mail, Lock, Loader2, CheckCircle2 } from "lucide-react";
+import { MessageCircle, User, Mail, Lock, IdCard, Loader2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
+import { cpfValido, maskCpf } from "@/lib/cpf";
 
 export default function TrialSignup() {
   const { session, loading } = useAuth();
@@ -16,6 +17,7 @@ export default function TrialSignup() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [cpf, setCpf] = useState("");
 
   if (loading) {
     return (
@@ -35,29 +37,54 @@ export default function TrialSignup() {
       toast.error("A senha precisa ter no mínimo 6 caracteres");
       return;
     }
+    const cpfDigits = cpf.replace(/\D/g, "");
+    if (!cpfValido(cpf)) {
+      toast.error("CPF inválido");
+      return;
+    }
+
     setIsLoading(true);
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: name, signup_source: "trial" },
-      },
-    });
-    setIsLoading(false);
+    try {
+      // Confere ANTES de criar a conta — dá um erro claro em vez da
+      // mensagem genérica que o Supabase Auth devolve quando o cadastro
+      // falha por trás (a constraint no banco é a trava de verdade; isto
+      // só existe pra avisar direito).
+      const { data: check, error: checkError } = await supabase.functions.invoke("check-trial-cpf", {
+        body: { cpf: cpfDigits },
+      });
+      if (checkError) throw new Error("Não consegui validar o CPF agora. Tente de novo em instantes.");
+      if (check?.error) throw new Error(check.error);
+      if (check?.available === false) {
+        throw new Error("Esse CPF já usou o teste grátis. Se a conta expirou, fale com a gente pra continuar.");
+      }
 
-    if (error) {
-      toast.error(error.message);
-      return;
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: name, signup_source: "trial", cpf: cpfDigits },
+        },
+      });
+      if (error) throw error;
+
+      if (data.session) {
+        toast.success("Conta criada! Seu teste grátis de 7 dias começou.");
+        window.location.href = "/";
+        return;
+      }
+
+      // Email confirmation required before a session is issued
+      setDone(true);
+    } catch (err: any) {
+      // Corrida rara (duas abas ao mesmo tempo) cai na constraint do banco
+      // em vez do check prévio — mesma mensagem nos dois casos.
+      const msg = /duplicate key|profiles_cpf_unique/i.test(err?.message || "")
+        ? "Esse CPF já usou o teste grátis. Se a conta expirou, fale com a gente pra continuar."
+        : err?.message || "Erro ao criar conta";
+      toast.error(msg);
+    } finally {
+      setIsLoading(false);
     }
-
-    if (data.session) {
-      toast.success("Conta criada! Seu teste grátis de 7 dias começou.");
-      window.location.href = "/";
-      return;
-    }
-
-    // Email confirmation required before a session is issued
-    setDone(true);
   };
 
   if (done) {
@@ -97,6 +124,23 @@ export default function TrialSignup() {
                 <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input id="name" placeholder="Seu nome" className="pl-9" value={name} onChange={(e) => setName(e.target.value)} required />
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="cpf">CPF</Label>
+              <div className="relative">
+                <IdCard className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="cpf"
+                  inputMode="numeric"
+                  placeholder="000.000.000-00"
+                  className="pl-9"
+                  value={cpf}
+                  onChange={(e) => setCpf(maskCpf(e.target.value))}
+                  maxLength={14}
+                  required
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">Um teste grátis por CPF.</p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="email">Email</Label>
