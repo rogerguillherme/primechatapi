@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AppHeader } from "@/components/AppHeader";
 import { MetrikHeader } from "@/components/MetrikHeader";
+import { PrimeGroupHeader } from "@/components/PrimeGroupHeader";
 import { AiAssistantChat } from "@/components/AiAssistantChat";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { PlatformProvider } from "@/contexts/PlatformContext";
@@ -24,6 +25,7 @@ const LandingPage = lazy(() => import("./pages/LandingPage"));
 const AdminUsers = lazy(() => import("./pages/AdminUsers"));
 const WabaHealth = lazy(() => import("./pages/WabaHealth"));
 const Metrik = lazy(() => import("./pages/Metrik"));
+const WhatsAppGroups = lazy(() => import("@/components/WhatsAppGroups").then((m) => ({ default: m.WhatsAppGroups })));
 const MetrikRanking = lazy(() => import("./pages/MetrikRanking"));
 const MetrikVendas = lazy(() => import("./pages/MetrikVendas"));
 const MetrikClientes = lazy(() => import("./pages/MetrikClientes"));
@@ -68,7 +70,11 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     const redirectTo = `${location.pathname}${location.search}${location.hash}`;
     // Cada produto tem a sua porta. Mandar quem tentou abrir o painel
     // comercial para a tela do chat faz parecer que ele errou de sistema.
-    const porta = location.pathname.startsWith("/metrik") ? "/metrik/entrar" : "/auth";
+    const porta = location.pathname.startsWith("/metrik")
+      ? "/metrik/entrar"
+      : location.pathname.startsWith("/prime-group")
+        ? "/prime-group/entrar"
+        : "/auth";
     return <Navigate to={`${porta}?redirect=${encodeURIComponent(redirectTo)}`} replace />;
   }
 
@@ -120,6 +126,9 @@ function AppRoutes() {
       <Route path="/auth" element={<Auth />} />
       {/* Porta própria do Metrik: mesma tela, outra identidade e outro destino. */}
       <Route path="/metrik/entrar" element={<Auth produto="metrics" />} />
+      {/* Idem para o Prime Group: mesma conta/sessão do Prime Chat, porta e
+          identidade próprias — para não parecer que entrou no app errado. */}
+      <Route path="/prime-group/entrar" element={<Auth produto="grupos" />} />
       <Route path="/teste-gratis" element={<TrialSignup />} />
       <Route path="/trial-expirado" element={<TrialExpired />} />
       <Route
@@ -172,6 +181,19 @@ function AppRoutes() {
               </main>
             </div>
           </AdminOnlyRoute>
+        }
+      />
+      <Route
+        path="/prime-group"
+        element={
+          <ProtectedRoute>
+            <div className="min-h-screen flex flex-col">
+              <PrimeGroupHeader />
+              <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-6xl mx-auto w-full">
+                <WhatsAppGroups />
+              </main>
+            </div>
+          </ProtectedRoute>
         }
       />
       {/* O casco escuro envolve TODAS as telas do Metrik: os tokens de cor

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { MessageCircle, Mail, Lock, Loader2, Trophy } from "lucide-react";
+import { MessageCircle, Mail, Lock, Loader2, Trophy, UsersRound } from "lucide-react";
 import { toast } from "sonner";
 import { MetrikLogo } from "@/components/MetrikLogo";
 import { useFavicon } from "@/hooks/use-favicon";
@@ -38,6 +38,15 @@ const PRODUTOS = {
     rota: "/metrik/entrar",
     destino: "/metrik",
     fundoIcone: "bg-slate-900",
+    corIcone: "text-white",
+  },
+  grupos: {
+    nome: "Prime Group",
+    descricao: "Gerenciamento de grupos WhatsApp em escala",
+    icone: UsersRound,
+    rota: "/prime-group/entrar",
+    destino: "/prime-group",
+    fundoIcone: "bg-indigo-900",
     corIcone: "text-white",
   },
 } as const;

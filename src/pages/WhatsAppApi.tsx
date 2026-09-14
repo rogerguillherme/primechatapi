@@ -84,7 +84,6 @@ const SalesImporter = lazy(() => import("@/components/sales/SalesImporter").then
 // trazer chat, kanban, agente e financeiro junto custava ~930 KB a todo mundo.
 const EvolutionBroadcastTab = lazy(() => import("@/components/EvolutionBroadcastTab").then((m) => ({ default: m.EvolutionBroadcastTab })));
 const WebhookEndpoints = lazy(() => import("@/components/WebhookEndpoints").then((m) => ({ default: m.WebhookEndpoints })));
-const WhatsAppGroups = lazy(() => import("@/components/WhatsAppGroups").then((m) => ({ default: m.WhatsAppGroups })));
 const AiAssistantSettings = lazy(() => import("@/components/AiAssistantSettings").then((m) => ({ default: m.AiAssistantSettings })));
 const VoiceStudio = lazy(() => import("@/components/VoiceStudio").then((m) => ({ default: m.VoiceStudio })));
 const AiAgentConfig = lazy(() => import("@/components/AiAgentConfig").then((m) => ({ default: m.AiAgentConfig })));
@@ -2526,11 +2525,19 @@ export default function WhatsAppApi() {
               <ShieldCheck size={16} />
               <span>Controle Anti-ban</span>
             </TabsTrigger>
-            <TabsTrigger value="grupos" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all")}>
+          </TabsList>
+          {/* Prime Group é outra "porta" (rota + login próprios, ver
+              /prime-group/entrar) — não é uma aba deste Tabs, por isso fica
+              fora da TabsList, como navegação de verdade. */}
+          <div className="px-2 pt-1">
+            <button
+              onClick={() => navigate("/prime-group")}
+              className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-all"
+            >
               <UsersRound size={16} />
               <span>Grupos</span>
-            </TabsTrigger>
-          </TabsList>
+            </button>
+          </div>
           <div className="mt-auto border-t border-sidebar-border p-2 space-y-0.5">
             {isAdmin && (
               <>
@@ -3195,10 +3202,6 @@ export default function WhatsAppApi() {
 
         <TabsContent value="webhook" className="space-y-4 p-4 sm:p-6 max-w-6xl overflow-y-auto flex-1 m-0">
           <Suspense fallback={<TabFallback />}><WebhookEndpoints onCreateFlow={handleCreateFlowFromWebhook} onSelectFlow={handleSelectFlowFromWebhook} /></Suspense>
-        </TabsContent>
-
-        <TabsContent value="grupos" className="space-y-4 p-4 sm:p-6 max-w-6xl overflow-y-auto flex-1 m-0">
-          <Suspense fallback={<TabFallback />}><WhatsAppGroups /></Suspense>
         </TabsContent>
 
 
