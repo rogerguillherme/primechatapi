@@ -2371,28 +2371,18 @@ export default function WhatsAppApi() {
           "shrink-0 flex-col transition-all duration-300 bg-sidebar",
           "fixed inset-y-0 left-0 z-50 w-64 max-w-[85vw] overflow-y-auto",
           "md:relative md:z-auto md:w-56 md:max-w-none md:overflow-y-auto",
-          mobileNavOpen ? "flex" : "hidden md:flex",
-          navCollapsed && "md:w-14"
+          mobileNavOpen ? "flex" : "hidden md:flex"
         )}>
           <div className="relative p-3 border-b border-sidebar-border flex items-center justify-between bg-sidebar">
-
-            {!navCollapsed && (
-              <div className="flex items-center gap-2.5 animate-fade-in">
-                <div className="w-8 h-8 rounded-lg bg-whatsapp/20 flex items-center justify-center">
-                  <MessageCircle size={16} className="text-whatsapp" />
-                </div>
-                <div>
-                  <h1 className="text-sm font-display font-bold text-white">Prime Chat</h1>
-                  <p className="text-[10px] text-white/50 leading-none">WhatsApp Cloud API</p>
-                </div>
+            <div className="flex items-center gap-2.5 animate-fade-in">
+              <div className="w-8 h-8 rounded-lg bg-whatsapp/20 flex items-center justify-center">
+                <MessageCircle size={16} className="text-whatsapp" />
               </div>
-            )}
-            <button
-              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="hidden md:block p-1.5 rounded-md text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
-            >
-              {navCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-            </button>
+              <div>
+                <h1 className="text-sm font-display font-bold text-white">Prime Chat</h1>
+                <p className="text-[10px] text-white/50 leading-none">WhatsApp Cloud API</p>
+              </div>
+            </div>
             <button
               onClick={() => setMobileNavOpen(false)}
               aria-label="Fechar menu"
