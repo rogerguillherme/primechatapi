@@ -2383,7 +2383,7 @@ export default function WhatsAppApi() {
           "md:bg-transparent md:backdrop-blur-none md:border-r-transparent md:shadow-none"
         )}>
           <div className="glass-sheen pointer-events-none absolute inset-0 md:hidden" />
-          <div className="relative p-3 border-b border-white/10 flex items-center justify-between bg-[hsl(160_18%_8%_/_0.92)] md:bg-transparent">
+          <div className="relative p-3 border-b border-white/10 flex items-center justify-between bg-[hsl(160_18%_8%_/_0.92)]">
 
             {!navCollapsed && (
               <div className="flex items-center gap-2.5 animate-fade-in">
