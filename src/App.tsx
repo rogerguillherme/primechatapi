@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AppHeader } from "@/components/AppHeader";
 import { MetrikHeader } from "@/components/MetrikHeader";
-import { PrimeGroupHeader } from "@/components/PrimeGroupHeader";
+import { PrimeGroupSidebar } from "@/components/PrimeGroupSidebar";
 import { AiAssistantChat } from "@/components/AiAssistantChat";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { PlatformProvider } from "@/contexts/PlatformContext";
@@ -25,7 +25,8 @@ const LandingPage = lazy(() => import("./pages/LandingPage"));
 const AdminUsers = lazy(() => import("./pages/AdminUsers"));
 const WabaHealth = lazy(() => import("./pages/WabaHealth"));
 const Metrik = lazy(() => import("./pages/Metrik"));
-const WhatsAppGroups = lazy(() => import("@/components/WhatsAppGroups").then((m) => ({ default: m.WhatsAppGroups })));
+const PrimeGroupDashboard = lazy(() => import("./pages/PrimeGroupDashboard"));
+const PrimeGroupInstances = lazy(() => import("./pages/PrimeGroupInstances"));
 const MetrikRanking = lazy(() => import("./pages/MetrikRanking"));
 const MetrikVendas = lazy(() => import("./pages/MetrikVendas"));
 const MetrikClientes = lazy(() => import("./pages/MetrikClientes"));
@@ -187,11 +188,20 @@ function AppRoutes() {
         path="/prime-group"
         element={
           <ProtectedRoute>
-            <div className="min-h-screen flex flex-col">
-              <PrimeGroupHeader />
-              <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-6xl mx-auto w-full">
-                <WhatsAppGroups />
-              </main>
+            <div className="min-h-screen flex">
+              <PrimeGroupSidebar />
+              <main className="flex-1 overflow-y-auto"><PrimeGroupDashboard /></main>
+            </div>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/prime-group/instancias"
+        element={
+          <ProtectedRoute>
+            <div className="min-h-screen flex">
+              <PrimeGroupSidebar />
+              <main className="flex-1 overflow-y-auto"><PrimeGroupInstances /></main>
             </div>
           </ProtectedRoute>
         }

@@ -505,6 +505,30 @@ Deno.serve(async (req) => {
         ? Math.max(0, Math.ceil((new Date(boState.next_allowed_at).getTime() - Date.now()) / 1000))
         : 0;
 
+      // Persiste status + foto de perfil na própria conta: a tela de
+      // Instâncias do Prime Group lista várias de uma vez e não pode chamar a
+      // Evolution uma vez por card só pra montar a lista — lê daqui depois.
+      const normalizedStatus = /open|connected|online/i.test(state)
+        ? "online"
+        : /connecting|qr/i.test(state)
+          ? "connecting"
+          : "offline";
+      const profileUpdate: Record<string, unknown> = { status: normalizedStatus };
+      try {
+        const profRes = await evoFetch(creds, `/instance/fetchInstances?instanceName=${encodeURIComponent(creds.instance)}`, { method: "GET" });
+        const list: any[] = Array.isArray(profRes.body) ? profRes.body : [profRes.body];
+        const found = list.find((x) => (x?.instance?.instanceName ?? x?.name ?? x?.instanceName) === creds.instance) ?? list[0];
+        const node = found?.instance ?? found ?? {};
+        const rawNumber = node?.ownerJid ?? node?.owner ?? node?.number ?? node?.wuid ?? node?.user?.id ?? node?.profile?.wid;
+        const digits = rawNumber ? String(rawNumber).split("@")[0].replace(/\D/g, "") : null;
+        if (digits) profileUpdate.display_phone_number = `+${digits}`;
+        const picture = node?.profilePicUrl ?? node?.profilePictureUrl ?? node?.profile?.picture;
+        if (picture) profileUpdate.profile_picture = picture;
+      } catch (e) {
+        console.warn("evolution-instance: falha ao buscar perfil (não fatal)", e);
+      }
+      await admin.from("whatsapp_accounts").update(profileUpdate).eq("id", account.id);
+
       return json({
         ok: stRes.ok,
         state,
