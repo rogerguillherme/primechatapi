@@ -1840,6 +1840,9 @@ export default function WhatsAppApi() {
   const isMobile = useIsMobile();
   // Em telas pequenas o menu nunca fica no modo "colapsado" (ícones): ele vira gaveta.
   const navCollapsed = sidebarCollapsed && !isMobile;
+  // Menus secundários (Automação/Vendas/Análise/Sistema) sempre minimizados;
+  // só o menu principal (Início, Conversas, Campanhas...) usa o toggle acima.
+  const secondaryNavCollapsed = !isMobile;
   const [activeMainTab, setActiveMainTab] = useState("home");
   const [flowTriggerType, setFlowTriggerType] = useState<string | undefined>(undefined);
   const [flowEditId, setFlowEditId] = useState<string | undefined>(undefined);
@@ -2459,85 +2462,85 @@ export default function WhatsAppApi() {
               <Gauge size={16} />
               {!navCollapsed && <span>Atendentes</span>}
             </TabsTrigger>
-            {!navCollapsed && (
+            {!secondaryNavCollapsed && (
               <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 px-3 pt-3 pb-1 font-semibold">Automação</p>
             )}
-            {navCollapsed && <div className="h-px bg-sidebar-border/40 mx-2 my-2" />}
-            <TabsTrigger value="flows" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+            {secondaryNavCollapsed && <div className="h-px bg-sidebar-border/40 mx-2 my-2" />}
+            <TabsTrigger value="flows" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", secondaryNavCollapsed && "justify-center px-0")} title={secondaryNavCollapsed ? "Fluxos" : undefined}>
               <GitBranch size={16} />
-              {!navCollapsed && <span>Fluxos</span>}
+              {!secondaryNavCollapsed && <span>Fluxos</span>}
             </TabsTrigger>
-            <TabsTrigger value="ai-agent" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+            <TabsTrigger value="ai-agent" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", secondaryNavCollapsed && "justify-center px-0")} title={secondaryNavCollapsed ? "Agente IA" : undefined}>
               <Bot size={16} />
-              {!navCollapsed && <span className="flex items-center gap-1.5">Agente IA <span className="text-[9px] px-1 py-0.5 rounded bg-ai/20 text-ai font-bold">PRO</span></span>}
+              {!secondaryNavCollapsed && <span className="flex items-center gap-1.5">Agente IA <span className="text-[9px] px-1 py-0.5 rounded bg-ai/20 text-ai font-bold">PRO</span></span>}
             </TabsTrigger>
-            <TabsTrigger value="ai-assistant" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+            <TabsTrigger value="ai-assistant" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", secondaryNavCollapsed && "justify-center px-0")} title={secondaryNavCollapsed ? "Assistente IA" : undefined}>
               <Sparkles size={16} />
-              {!navCollapsed && <span>Assistente IA</span>}
+              {!secondaryNavCollapsed && <span>Assistente IA</span>}
             </TabsTrigger>
-            <TabsTrigger value="voice-studio" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+            <TabsTrigger value="voice-studio" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", secondaryNavCollapsed && "justify-center px-0")} title={secondaryNavCollapsed ? "Vozes IA" : undefined}>
               <Volume2 size={16} />
-              {!navCollapsed && <span className="flex items-center gap-1.5">Vozes IA <span className="text-[9px] px-1 py-0.5 rounded bg-ai/20 text-ai font-bold">SCALE</span></span>}
+              {!secondaryNavCollapsed && <span className="flex items-center gap-1.5">Vozes IA <span className="text-[9px] px-1 py-0.5 rounded bg-ai/20 text-ai font-bold">SCALE</span></span>}
             </TabsTrigger>
-            {!navCollapsed && (
+            {!secondaryNavCollapsed && (
               <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 px-3 pt-3 pb-1 font-semibold">Vendas</p>
             )}
-            {navCollapsed && <div className="h-px bg-sidebar-border/40 mx-2 my-2" />}
-            <TabsTrigger value="orders" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+            {secondaryNavCollapsed && <div className="h-px bg-sidebar-border/40 mx-2 my-2" />}
+            <TabsTrigger value="orders" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", secondaryNavCollapsed && "justify-center px-0")} title={secondaryNavCollapsed ? "Pedidos" : undefined}>
               <ShoppingBag size={16} />
-              {!navCollapsed && <span>Pedidos</span>}
+              {!secondaryNavCollapsed && <span>Pedidos</span>}
             </TabsTrigger>
-            <TabsTrigger value="abandoned" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+            <TabsTrigger value="abandoned" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", secondaryNavCollapsed && "justify-center px-0")} title={secondaryNavCollapsed ? "Carrinho abandonado" : undefined}>
               <ShoppingCart size={16} />
-              {!navCollapsed && <span>Carrinho abandonado</span>}
+              {!secondaryNavCollapsed && <span>Carrinho abandonado</span>}
             </TabsTrigger>
-            <TabsTrigger value="sales-import" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+            <TabsTrigger value="sales-import" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", secondaryNavCollapsed && "justify-center px-0")} title={secondaryNavCollapsed ? "Importar vendas" : undefined}>
               <Upload size={16} />
-              {!navCollapsed && <span>Importar vendas</span>}
+              {!secondaryNavCollapsed && <span>Importar vendas</span>}
             </TabsTrigger>
-            <TabsTrigger value="products" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+            <TabsTrigger value="products" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", secondaryNavCollapsed && "justify-center px-0")} title={secondaryNavCollapsed ? "Produtos" : undefined}>
               <Boxes size={16} />
-              {!navCollapsed && <span>Produtos</span>}
+              {!secondaryNavCollapsed && <span>Produtos</span>}
             </TabsTrigger>
-            <TabsTrigger value="refunds" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+            <TabsTrigger value="refunds" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", secondaryNavCollapsed && "justify-center px-0")} title={secondaryNavCollapsed ? "Reembolsos" : undefined}>
               <Undo2 size={16} />
-              {!navCollapsed && <span>Reembolsos</span>}
+              {!secondaryNavCollapsed && <span>Reembolsos</span>}
             </TabsTrigger>
-            <TabsTrigger value="expirations" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+            <TabsTrigger value="expirations" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", secondaryNavCollapsed && "justify-center px-0")} title={secondaryNavCollapsed ? "Vencimentos" : undefined}>
               <CalendarClock size={16} />
-              {!navCollapsed && <span>Vencimentos</span>}
+              {!secondaryNavCollapsed && <span>Vencimentos</span>}
             </TabsTrigger>
-            {!navCollapsed && (
+            {!secondaryNavCollapsed && (
               <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 px-3 pt-3 pb-1 font-semibold">Análise</p>
             )}
-            {navCollapsed && <div className="h-px bg-sidebar-border/40 mx-2 my-2" />}
-            <TabsTrigger value="analytics" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+            {secondaryNavCollapsed && <div className="h-px bg-sidebar-border/40 mx-2 my-2" />}
+            <TabsTrigger value="analytics" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", secondaryNavCollapsed && "justify-center px-0")} title={secondaryNavCollapsed ? "Performance" : undefined}>
               <TrendingUp size={16} />
-              {!navCollapsed && <span>Performance</span>}
+              {!secondaryNavCollapsed && <span>Performance</span>}
             </TabsTrigger>
-            <TabsTrigger value="financial" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+            <TabsTrigger value="financial" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", secondaryNavCollapsed && "justify-center px-0")} title={secondaryNavCollapsed ? "Financeiro" : undefined}>
               <DollarSign size={16} />
-              {!navCollapsed && <span>Financeiro</span>}
+              {!secondaryNavCollapsed && <span>Financeiro</span>}
             </TabsTrigger>
-            <TabsTrigger value="metrito" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+            <TabsTrigger value="metrito" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", secondaryNavCollapsed && "justify-center px-0")} title={secondaryNavCollapsed ? "Tráfego Pago" : undefined}>
               <Megaphone size={16} />
-              {!navCollapsed && <span>Tráfego Pago</span>}
+              {!secondaryNavCollapsed && <span>Tráfego Pago</span>}
             </TabsTrigger>
-            {!navCollapsed && (
+            {!secondaryNavCollapsed && (
               <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 px-3 pt-3 pb-1 font-semibold">Sistema</p>
             )}
-            {navCollapsed && <div className="h-px bg-sidebar-border/40 mx-2 my-2" />}
-            <TabsTrigger value="webhook" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+            {secondaryNavCollapsed && <div className="h-px bg-sidebar-border/40 mx-2 my-2" />}
+            <TabsTrigger value="webhook" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", secondaryNavCollapsed && "justify-center px-0")} title={secondaryNavCollapsed ? "Integrações" : undefined}>
               <Webhook size={16} />
-              {!navCollapsed && <span>Integrações</span>}
+              {!secondaryNavCollapsed && <span>Integrações</span>}
             </TabsTrigger>
-            <TabsTrigger value="config" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+            <TabsTrigger value="config" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", secondaryNavCollapsed && "justify-center px-0")} title={secondaryNavCollapsed ? "Configuração" : undefined}>
               <Key size={16} />
-              {!navCollapsed && <span>Configuração</span>}
+              {!secondaryNavCollapsed && <span>Configuração</span>}
             </TabsTrigger>
-            <TabsTrigger value="antiban" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+            <TabsTrigger value="antiban" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", secondaryNavCollapsed && "justify-center px-0")} title={secondaryNavCollapsed ? "Controle Anti-ban" : undefined}>
               <ShieldCheck size={16} />
-              {!navCollapsed && <span>Controle Anti-ban</span>}
+              {!secondaryNavCollapsed && <span>Controle Anti-ban</span>}
             </TabsTrigger>
           </TabsList>
           <div className="mt-auto border-t border-sidebar-border p-2 space-y-0.5">
