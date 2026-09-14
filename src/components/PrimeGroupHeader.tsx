@@ -5,33 +5,39 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 
 /**
- * Cabeçalho do Prime Group — separado do AppHeader/MetrikHeader de
- * propósito, mesma razão dos dois: nada do resto do Prime Chat (seletor de
- * plataforma, busca de leads, navegação do Métrik) faz sentido aqui.
+ * Cabeçalho do Prime Group — mesmo estilo/cores do AppHeader do Prime Chat
+ * (gradient-header, ícone em caixa branca translúcida), só com a navegação
+ * trocada: nada do resto do Prime Chat (seletor de plataforma, busca de
+ * leads, sino do chat) faz sentido aqui.
  */
 export function PrimeGroupHeader() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
 
   return (
-    <header className="border-b border-border/60 bg-card/40 backdrop-blur">
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-2.5 h-16">
-          <div className="w-8 h-8 rounded-lg bg-indigo-900 flex items-center justify-center shrink-0">
-            <UsersRound size={16} className="text-white" />
+    <header className="gradient-header text-white">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
+              <UsersRound size={20} className="text-whatsapp" />
+            </div>
+            <div>
+              <h1 className="text-base font-display font-bold tracking-tight">Prime Group</h1>
+              <p className="text-[11px] text-white/50 leading-none">Grupos WhatsApp em escala</p>
+            </div>
           </div>
-          <span className="text-lg font-display font-bold tracking-tight">Prime Group</span>
 
-          <div className="ml-auto flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2">
             {user && (
-              <span className="text-xs text-muted-foreground hidden lg:inline">{user.email}</span>
+              <span className="text-xs text-white/50 hidden lg:inline">{user.email}</span>
             )}
 
             <Button
               variant="ghost"
               size="sm"
               onClick={() => navigate("/")}
-              className="gap-1.5 text-muted-foreground hover:text-foreground"
+              className="gap-1.5 text-white/60 hover:text-white hover:bg-white/10"
               title="Ir para o Prime Chat"
             >
               <MessageCircle size={15} />
@@ -43,7 +49,7 @@ export function PrimeGroupHeader() {
                 variant="ghost"
                 size="icon"
                 onClick={signOut}
-                className="text-muted-foreground hover:text-foreground"
+                className="text-white/60 hover:text-white hover:bg-white/10"
                 title="Sair"
               >
                 <LogOut size={16} />

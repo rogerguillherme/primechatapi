@@ -46,8 +46,8 @@ const PRODUTOS = {
     icone: UsersRound,
     rota: "/prime-group/entrar",
     destino: "/prime-group",
-    fundoIcone: "bg-indigo-900",
-    corIcone: "text-white",
+    fundoIcone: "gradient-primary",
+    corIcone: "text-primary-foreground",
   },
 } as const;
 
