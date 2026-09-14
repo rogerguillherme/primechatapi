@@ -11,7 +11,7 @@ import { PlatformProvider } from "@/contexts/PlatformContext";
 // Cada tela vira um arquivo separado, baixado só quando alguém entra nela.
 // Antes o build era um único JS de 2,6 MB: quem abria o login esperava o
 // construtor de fluxos, os gráficos e o leitor de planilha carregarem junto.
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 const WhatsAppApi = lazy(() => import("./pages/WhatsAppApi"));
 const MetaConnect = lazy(() => import("./pages/MetaConnect"));
 const InstagramDashboard = lazy(() => import("./pages/InstagramDashboard"));
@@ -113,11 +113,23 @@ function RouteFallback() {
   );
 }
 
+/** Rota que só existe pra dar um atalho de navegação pra outro app/domínio. */
+function ExternalRedirect({ to }: { to: string }) {
+  useEffect(() => {
+    window.location.replace(to);
+  }, [to]);
+  return <RouteFallback />;
+}
+
 function AppRoutes() {
   return (
     <Suspense fallback={<RouteFallback />}>
     <Routes>
       <Route path="/auth" element={<Auth />} />
+      {/* Prime Group é outro app/projeto (Lovable + repo próprios) — aqui é só
+          um atalho de navegação. Trocar pra prime-group.primechat.pro quando
+          o subdomínio estiver configurado. */}
+      <Route path="/prime-group" element={<ExternalRedirect to="https://wa-community-hub.lovable.app" />} />
       {/* Porta própria do Metrik: mesma tela, outra identidade e outro destino. */}
       <Route path="/metrik/entrar" element={<Auth produto="metrics" />} />
       <Route path="/teste-gratis" element={<TrialSignup />} />
