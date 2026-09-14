@@ -2375,15 +2375,13 @@ export default function WhatsAppApi() {
 
         {/* Sidebar */}
         <div className={cn(
-          "shrink-0 glass-sidebar flex-col transition-all duration-300",
+          "shrink-0 flex-col transition-all duration-300 bg-sidebar",
           "fixed inset-y-0 left-0 z-50 w-64 max-w-[85vw] overflow-y-auto",
           "md:relative md:z-auto md:w-56 md:max-w-none md:overflow-y-auto",
           mobileNavOpen ? "flex" : "hidden md:flex",
-          navCollapsed && "md:w-14",
-          "md:bg-transparent md:backdrop-blur-none md:border-r-transparent md:shadow-none"
+          navCollapsed && "md:w-14"
         )}>
-          <div className="glass-sheen pointer-events-none absolute inset-0 md:hidden" />
-          <div className="relative p-3 border-b border-white/10 flex items-center justify-between bg-[hsl(160_18%_8%_/_0.92)]">
+          <div className="relative p-3 border-b border-sidebar-border flex items-center justify-between bg-sidebar">
 
             {!navCollapsed && (
               <div className="flex items-center gap-2.5 animate-fade-in">
