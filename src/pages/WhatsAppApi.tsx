@@ -1842,7 +1842,11 @@ export default function WhatsAppApi() {
   const navCollapsed = sidebarCollapsed && !isMobile;
   // Menus secundários (Automação/Vendas/Análise/Sistema) sempre minimizados;
   // só o menu principal (Início, Conversas, Campanhas...) usa o toggle acima.
-  const secondaryNavCollapsed = !isMobile;
+  // As seções secundárias (Automação, Vendas...) seguem o mesmo colapso do
+  // menu principal — antes era `!isMobile`, o que deixava os rótulos sempre
+  // escondidos no desktop e o menu parecia "duplicado" (texto em cima, só
+  // ícones embaixo).
+  const secondaryNavCollapsed = navCollapsed;
   const [activeMainTab, setActiveMainTab] = useState("home");
   const [flowTriggerType, setFlowTriggerType] = useState<string | undefined>(undefined);
   const [flowEditId, setFlowEditId] = useState<string | undefined>(undefined);
