@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTeamContext } from "@/hooks/use-team";
@@ -40,6 +40,7 @@ function StatusBadgeInline({ status }: { status?: string }) {
 
 export default function MetaConnect() {
   const { session, user } = useAuth();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [isExchanging, setIsExchanging] = useState(false);
@@ -710,6 +711,18 @@ export default function MetaConnect() {
                 </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* ── Concluir ──
+          Fecha o ciclo: conectou a conta, escolheu as BMs/números que quer
+          usar, agora volta pro app em vez de ficar preso nesta tela. */}
+      {activeConnection && registeredAccounts && registeredAccounts.length > 0 && (
+        <div className="flex justify-end">
+          <Button size="lg" onClick={() => navigate("/")} className="gap-2">
+            <CheckCircle2 className="h-4 w-4" />
+            Concluir
+          </Button>
+        </div>
       )}
     </div>
   );

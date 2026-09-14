@@ -1,8 +1,9 @@
 import { lazy, Suspense, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { DollarSign, Clock, RotateCcw, Search } from "lucide-react";
+import { DollarSign, Clock, RotateCcw, Search, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useMetrikData } from "@/hooks/use-metrik-data";
@@ -17,6 +18,10 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Upload } from "lucide-react";
 
 // A importação já existe pronta no Prime Chat: lê a planilha, mapeia colunas,
@@ -34,6 +39,54 @@ const ROTULO: Record<string, { texto: string; classe: string }> = {
   chargeback: { texto: "Chargeback", classe: "bg-destructive/15 text-destructive" },
   cancelled: { texto: "Cancelada", classe: "bg-muted text-muted-foreground" },
 };
+
+function ExcluirVendaButton({ vendaId }: { vendaId: string }) {
+  const qc = useQueryClient();
+  const excluir = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from("orders").delete().eq("id", vendaId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Venda excluída.");
+      qc.invalidateQueries({ queryKey: ["metrik-vendas"] });
+      qc.invalidateQueries({ queryKey: ["metrik-orders"] });
+      qc.invalidateQueries({ queryKey: ["metrik-historico"] });
+    },
+    onError: (e: Error) => toast.error(e.message || "Erro ao excluir venda"),
+  });
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <button
+          className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+          title="Excluir venda"
+        >
+          <Trash2 size={14} />
+        </button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Excluir venda?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Essa ação remove a venda permanentemente e afeta faturamento e comissões já
+            calculados. Não pode ser desfeita.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => excluir.mutate()}
+            className="gap-2 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            Excluir
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
 
 export default function MetrikVendas() {
   useFavicon("/metrik-favicon.svg");
@@ -256,18 +309,21 @@ export default function MetrikVendas() {
                     </td>
                     {podeConfigurar && (
                       <td className="px-4 py-3">
-                        <EditarVendaDialog
-                          venda={{
-                            id: v.id,
-                            amount: v.amount,
-                            status: v.status,
-                            created_at: v.created_at,
-                            lead_id: v.lead_id,
-                            assignedTo: v.leads?.assigned_to ?? null,
-                          }}
-                          membros={membros}
-                          ownerId={ownerId}
-                        />
+                        <div className="flex items-center gap-0.5">
+                          <EditarVendaDialog
+                            venda={{
+                              id: v.id,
+                              amount: v.amount,
+                              status: v.status,
+                              created_at: v.created_at,
+                              lead_id: v.lead_id,
+                              assignedTo: v.leads?.assigned_to ?? null,
+                            }}
+                            membros={membros}
+                            ownerId={ownerId}
+                          />
+                          <ExcluirVendaButton vendaId={v.id} />
+                        </div>
                       </td>
                     )}
                   </tr>
