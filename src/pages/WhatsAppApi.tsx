@@ -2401,7 +2401,7 @@ export default function WhatsAppApi() {
                 )}
               >
                 <MessageCircle size={13} />
-                "WhatsApp"
+                WhatsApp
               </button>
               <button
                 onClick={() => navigate("/instagram")}
@@ -2411,7 +2411,7 @@ export default function WhatsAppApi() {
                 )}
               >
                 <Instagram size={13} />
-                "Instagram"
+                Instagram
               </button>
             </div>
           </div>
