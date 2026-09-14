@@ -1833,7 +1833,7 @@ export default function WhatsAppApi() {
   const [apiKey, setApiKey] = useState("");
   const [isDefault, setIsDefault] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   // Conversa aberta no chat → a barra inferior sai de cena no celular.
   const [chatConversationOpen, setChatConversationOpen] = useState(false);
@@ -2379,10 +2379,11 @@ export default function WhatsAppApi() {
           "fixed inset-y-0 left-0 z-50 w-64 max-w-[85vw] overflow-y-auto",
           "md:relative md:z-auto md:w-56 md:max-w-none md:overflow-y-auto",
           mobileNavOpen ? "flex" : "hidden md:flex",
-          navCollapsed && "md:w-14"
+          navCollapsed && "md:w-14",
+          "md:bg-transparent md:backdrop-blur-none md:border-r-transparent md:shadow-none"
         )}>
-          <div className="glass-sheen pointer-events-none absolute inset-0" />
-          <div className="relative p-3 border-b border-white/10 flex items-center justify-between">
+          <div className="glass-sheen pointer-events-none absolute inset-0 md:hidden" />
+          <div className="relative p-3 border-b border-white/10 flex items-center justify-between bg-[hsl(160_18%_8%_/_0.92)]">
 
             {!navCollapsed && (
               <div className="flex items-center gap-2.5 animate-fade-in">
