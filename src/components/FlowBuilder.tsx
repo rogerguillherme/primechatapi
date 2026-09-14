@@ -1261,20 +1261,18 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome do fluxo" className="h-8 max-w-[200px] text-sm" />
           <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição (opcional)" className="h-8 max-w-[200px] text-sm" />
         </div>
-        {isWhatsAppFlow && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => setSettingsOpen(true)}
-          >
-            <Settings2 size={14} />
-            Configurações
-            {(settings.variation_enabled || settings.sending_window_enabled) && (
-              <span className="ml-1 h-1.5 w-1.5 rounded-full bg-primary" />
-            )}
-          </Button>
-        )}
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5"
+          onClick={() => setSettingsOpen(true)}
+        >
+          <Settings2 size={14} />
+          Configurações
+          {(settings.variation_enabled || settings.sending_window_enabled) && (
+            <span className="ml-1 h-1.5 w-1.5 rounded-full bg-primary" />
+          )}
+        </Button>
         {draftSavedAt && (
           <span className="text-[11px] text-muted-foreground hidden md:inline">
             Rascunho salvo {draftSavedAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
@@ -1296,7 +1294,7 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
           setNodes={setNodes}
           setEdges={setEdges}
           templates={templates || []}
-          variationEnabled={isWhatsAppFlow && settings.variation_enabled}
+          variationEnabled={settings.variation_enabled}
         />
         <AiFlowChat onGenerate={handleAiGenerate} />
       </div>

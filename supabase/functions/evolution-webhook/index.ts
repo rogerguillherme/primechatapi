@@ -179,10 +179,20 @@ async function processFlowStep(step: any, execution: any, lead: any, supabase: a
         .replace(/\{\{\d+\}\}/g, firstName);
       body.interactive_buttons = Array.isArray(step.buttons) ? step.buttons : [];
     } else if (step.template_id) {
+      // Rotação: escolhe uniformemente entre o template principal e as
+      // variações cadastradas, mesma lógica do flow-processor (passo com
+      // delay) — sem isso só quem passava pelo caminho com espera recebia
+      // variação, e o resto sempre via o template principal.
+      const templateVariants = Array.isArray(step.template_variations)
+        ? step.template_variations.filter((v: any) => typeof v === "string" && v)
+        : [];
+      const templatePool = [step.template_id, ...templateVariants];
+      const chosenTemplateId = templatePool[Math.floor(Math.random() * templatePool.length)];
+
       const { data: template } = await supabase
         .from("chat_templates")
         .select("*")
-        .eq("id", step.template_id)
+        .eq("id", chosenTemplateId)
         .single();
 
       if (template?.template_name) {
@@ -201,7 +211,12 @@ async function processFlowStep(step: any, execution: any, lead: any, supabase: a
         body.message = template.content;
       }
     } else if (step.custom_message) {
-      body.message = step.custom_message
+      const messageVariants = Array.isArray(step.message_variations)
+        ? step.message_variations.filter((v: any) => typeof v === "string" && v.trim())
+        : [];
+      const messagePool = [step.custom_message, ...messageVariants];
+      const chosenMessage = messagePool[Math.floor(Math.random() * messagePool.length)];
+      body.message = chosenMessage
         .replace(/\{nome\}/g, firstName)
         .replace(/\{codigo\}/g, codigo)
         .replace(/\{\{\d+\}\}/g, firstName);
