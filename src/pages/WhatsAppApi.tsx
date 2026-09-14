@@ -1833,20 +1833,13 @@ export default function WhatsAppApi() {
   const [apiKey, setApiKey] = useState("");
   const [isDefault, setIsDefault] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   // Conversa aberta no chat → a barra inferior sai de cena no celular.
   const [chatConversationOpen, setChatConversationOpen] = useState(false);
   const isMobile = useIsMobile();
-  // Em telas pequenas o menu nunca fica no modo "colapsado" (ícones): ele vira gaveta.
-  const navCollapsed = sidebarCollapsed && !isMobile;
-  // Menus secundários (Automação/Vendas/Análise/Sistema) sempre minimizados;
-  // só o menu principal (Início, Conversas, Campanhas...) usa o toggle acima.
-  // As seções secundárias (Automação, Vendas...) seguem o mesmo colapso do
-  // menu principal — antes era `!isMobile`, o que deixava os rótulos sempre
-  // escondidos no desktop e o menu parecia "duplicado" (texto em cima, só
-  // ícones embaixo).
-  const secondaryNavCollapsed = navCollapsed;
+  // Menu lateral sempre expandido; a opção de minimizar foi removida.
+  const navCollapsed = false;
+  const secondaryNavCollapsed = false;
   const [activeMainTab, setActiveMainTab] = useState("home");
   const [flowTriggerType, setFlowTriggerType] = useState<string | undefined>(undefined);
   const [flowEditId, setFlowEditId] = useState<string | undefined>(undefined);
