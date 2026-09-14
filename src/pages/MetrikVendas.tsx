@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Card, Kpi, TituloPagina, Vazio, moeda } from "@/components/metrics/ui";
 import { NovaVendaDialog } from "@/components/metrics/NovaVendaDialog";
 import { EditarVendaDialog } from "@/components/metrics/EditarVendaDialog";
+import { AtribuirVendedorLoteDialog, type VendaSemVendedor } from "@/components/metrics/AtribuirVendedorLoteDialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
@@ -96,6 +97,7 @@ export default function MetrikVendas() {
 
   const [busca, setBusca] = useState("");
   const [status, setStatus] = useState<string>("todos");
+  const [loteAberto, setLoteAberto] = useState(false);
 
   // Independente do período selecionado: venda pendente parada é o sintoma
   // clássico de webhook que falhou em silêncio, e some da vista se ninguém
@@ -156,6 +158,19 @@ export default function MetrikVendas() {
       }
     }
     return { confirmado, pendente, reembolsado, qtdConfirmada, qtdPendente, qtdReembolso, naoAtribuidas };
+  }, [vendas]);
+
+  const vendasSemVendedor: VendaSemVendedor[] = useMemo(() => {
+    return (vendas as any[])
+      .filter((v) => v.status === "approved" && !v.leads?.assigned_to)
+      .map((v) => ({
+        id: v.id,
+        amount: v.amount,
+        created_at: v.created_at,
+        lead_id: v.lead_id,
+        leadNome: v.leads?.name ?? null,
+        leadEmail: v.leads?.email ?? null,
+      }));
   }, [vendas]);
 
   const lista = useMemo(() => {
@@ -219,14 +234,18 @@ export default function MetrikVendas() {
 
       {totais.naoAtribuidas > 0 && (
         <Card className="border-amber-500/40">
-          <p className="text-sm">
-            <b className="text-amber-500">{totais.naoAtribuidas} venda(s) sem vendedor.</b>{" "}
-            <span className="text-muted-foreground">
-              Elas contam no faturamento, mas não entram na comissão de ninguém. O vendedor
-              sai do atendente responsável pelo lead no CRM — atribua lá e elas aparecem no
-              ranking.
-            </span>
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm">
+              <b className="text-amber-500">{totais.naoAtribuidas} venda(s) sem vendedor.</b>{" "}
+              <span className="text-muted-foreground">
+                Elas contam no faturamento, mas não entram na comissão de ninguém. O vendedor
+                sai do atendente responsável pelo lead no CRM.
+              </span>
+            </p>
+            <Button size="sm" variant="outline" onClick={() => setLoteAberto(true)}>
+              Atribuir em lote
+            </Button>
+          </div>
         </Card>
       )}
 
@@ -344,6 +363,13 @@ export default function MetrikVendas() {
           </div>
         )}
       </Card>
+
+      <AtribuirVendedorLoteDialog
+        open={loteAberto}
+        onOpenChange={setLoteAberto}
+        vendas={vendasSemVendedor}
+        membros={membros}
+      />
     </div>
   );
 }
