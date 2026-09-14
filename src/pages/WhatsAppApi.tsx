@@ -2540,11 +2540,9 @@ export default function WhatsAppApi() {
               </>
             )}
             
-            {(
-              <div className="flex items-center justify-between px-3 py-2">
-                <span className="text-xs text-sidebar-foreground/50 truncate">{user?.email}</span>
-              </div>
-            )}
+            <div className="flex items-center justify-between px-3 py-2">
+              <span className="text-xs text-sidebar-foreground/50 truncate">{user?.email}</span>
+            </div>
             <div className="flex items-center gap-1 px-1">
               <ThemeToggle collapsed={false} />
               
