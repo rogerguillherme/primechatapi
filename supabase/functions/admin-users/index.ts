@@ -93,6 +93,30 @@ serve(async (req) => {
         expiryMap.set(p.user_id, p.trial_ends_at ?? null);
       });
 
+      // Vendedores/atendentes atribuídos a cada conta dona — pra mostrar no
+      // painel de contas admin quantos membros de equipe cada uma tem.
+      const { data: teamMembers } = await supabaseAdmin
+        .from("team_members")
+        .select("owner_id, member_user_id, access_level");
+      const userInfoById = new Map(
+        users.map((u: any) => [u.id, {
+          email: u.email,
+          display_name: u.user_metadata?.full_name || u.user_metadata?.name || "",
+        }]),
+      );
+      const teamByOwner = new Map<string, any[]>();
+      teamMembers?.forEach((tm: any) => {
+        const list = teamByOwner.get(tm.owner_id) || [];
+        const info = userInfoById.get(tm.member_user_id);
+        list.push({
+          member_user_id: tm.member_user_id,
+          email: info?.email || "",
+          display_name: info?.display_name || "",
+          access_level: tm.access_level,
+        });
+        teamByOwner.set(tm.owner_id, list);
+      });
+
       const mapped = users.map((u: any) => ({
         id: u.id,
         email: u.email,
@@ -102,6 +126,7 @@ serve(async (req) => {
         role: roleMap.get(u.id) || "user",
         instagram_enabled: igMap.get(u.id) || false,
         access_expires_at: expiryMap.get(u.id) ?? null,
+        team_members: teamByOwner.get(u.id) || [],
       }));
 
       return jsonResponse(mapped);

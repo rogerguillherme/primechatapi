@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Shield, User, Loader2, ArrowLeft, RefreshCw, Instagram, Clock, Infinity as InfinityIcon } from "lucide-react";
+import { Plus, Pencil, Trash2, Shield, Loader2, ArrowLeft, RefreshCw, Instagram, Clock, Infinity as InfinityIcon, Info, Users, Mail } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { AccountHealthAlerts } from "@/components/admin/AccountHealthAlerts";
 
@@ -25,6 +25,7 @@ interface AppUser {
   role: string;
   instagram_enabled: boolean;
   access_expires_at: string | null;
+  team_members: { member_user_id: string; email: string; display_name: string; access_level: string }[];
 }
 
 /** Converte ISO -> valor aceito por <input type="datetime-local"> (hora local). */
@@ -40,6 +41,16 @@ function formatAccessDate(iso: string): string {
   return new Date(iso).toLocaleString("pt-BR", {
     day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
   });
+}
+
+function AccessBadge({ expiresAt }: { expiresAt: string | null }) {
+  if (!expiresAt) {
+    return <Badge variant="secondary" className="gap-1"><InfinityIcon size={12} /> Livre</Badge>;
+  }
+  if (new Date(expiresAt) < new Date()) {
+    return <Badge variant="destructive" className="gap-1"><Clock size={12} /> Expirou {formatAccessDate(expiresAt)}</Badge>;
+  }
+  return <Badge variant="outline" className="gap-1"><Clock size={12} /> Até {formatAccessDate(expiresAt)}</Badge>;
 }
 
 class AdminFetchError extends Error {
@@ -128,6 +139,7 @@ export default function AdminUsers() {
   const { user } = useAuth();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
+  const [detailsUser, setDetailsUser] = useState<AppUser | null>(null);
   const [form, setForm] = useState({ email: "", password: "", display_name: "", role: "user", instagram_enabled: false, access_unlimited: true, access_expires_at: "" });
 
   const isSuperAdmin = user?.email === "admin@primechat.com";
@@ -247,6 +259,11 @@ export default function AdminUsers() {
     }
   };
 
+  // A tela é pra administrar contas donas do sistema, não os vendedores/
+  // atendentes de cada uma (esses são geridos dentro da própria conta, em
+  // Equipe) — por isso só mostra quem tem role "admin" aqui.
+  const adminUsers = users.filter((u) => u.role === "admin");
+
   const isPending = createMutation.isPending || updateMutation.isPending;
   const passwordValidationMessage = getPasswordValidationError(form.password, !editingUser);
 
@@ -310,22 +327,21 @@ export default function AdminUsers() {
                 <TableRow>
                   <TableHead>Nome</TableHead>
                   <TableHead>Email</TableHead>
-                  <TableHead>Cargo</TableHead>
+                  <TableHead className="text-center">Vendedores</TableHead>
                   <TableHead className="text-center">Instagram</TableHead>
                   <TableHead>Acesso</TableHead>
                   <TableHead>Último acesso</TableHead>
-                  <TableHead className="w-[100px]">Ações</TableHead>
+                  <TableHead className="w-[130px]">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users.map((u) => (
+                {adminUsers.map((u) => (
                   <TableRow key={u.id}>
                     <TableCell className="font-medium">{u.display_name || "—"}</TableCell>
                     <TableCell>{u.email}</TableCell>
-                    <TableCell>
-                      <Badge variant={u.role === "admin" ? "default" : "secondary"} className="gap-1">
-                        {u.role === "admin" ? <Shield size={12} /> : <User size={12} />}
-                        {u.role === "admin" ? "Admin" : "Usuário"}
+                    <TableCell className="text-center">
+                      <Badge variant="outline" className="gap-1">
+                        <Users size={12} /> {u.team_members?.length || 0}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-center">
@@ -335,19 +351,7 @@ export default function AdminUsers() {
                       />
                     </TableCell>
                     <TableCell className="text-sm">
-                      {!u.access_expires_at ? (
-                        <Badge variant="secondary" className="gap-1">
-                          <InfinityIcon size={12} /> Livre
-                        </Badge>
-                      ) : new Date(u.access_expires_at) < new Date() ? (
-                        <Badge variant="destructive" className="gap-1">
-                          <Clock size={12} /> Expirou {formatAccessDate(u.access_expires_at)}
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="gap-1">
-                          <Clock size={12} /> Até {formatAccessDate(u.access_expires_at)}
-                        </Badge>
-                      )}
+                      <AccessBadge expiresAt={u.access_expires_at} />
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {u.last_sign_in_at
@@ -358,6 +362,9 @@ export default function AdminUsers() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => setDetailsUser(u)} title="Ver detalhes da conta">
+                          <Info size={14} />
+                        </Button>
                         <Button variant="ghost" size="icon" onClick={() => openEdit(u)}>
                           <Pencil size={14} />
                         </Button>
@@ -379,10 +386,10 @@ export default function AdminUsers() {
                     </TableCell>
                   </TableRow>
                 ))}
-                {users.length === 0 && (
+                {adminUsers.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                      Nenhum usuário encontrado
+                      Nenhuma conta admin encontrada
                     </TableCell>
                   </TableRow>
                 )}
@@ -485,6 +492,61 @@ export default function AdminUsers() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!detailsUser} onOpenChange={(v) => !v && setDetailsUser(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{detailsUser?.display_name || detailsUser?.email}</DialogTitle>
+            <DialogDescription>Informações da conta e vendedores atribuídos</DialogDescription>
+          </DialogHeader>
+          {detailsUser && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="space-y-1">
+                  <p className="text-[11px] text-muted-foreground">Email</p>
+                  <p className="flex items-center gap-1.5"><Mail size={13} /> {detailsUser.email}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[11px] text-muted-foreground">Acesso</p>
+                  <AccessBadge expiresAt={detailsUser.access_expires_at} />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[11px] text-muted-foreground">Criado em</p>
+                  <p>{formatAccessDate(detailsUser.created_at)}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[11px] text-muted-foreground">Último acesso</p>
+                  <p>{detailsUser.last_sign_in_at ? formatAccessDate(detailsUser.last_sign_in_at) : "Nunca"}</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium flex items-center gap-1.5">
+                  <Users size={14} /> Vendedores atribuídos ({detailsUser.team_members?.length || 0})
+                </p>
+                {detailsUser.team_members?.length ? (
+                  <div className="rounded-lg border divide-y">
+                    {detailsUser.team_members.map((m) => (
+                      <div key={m.member_user_id} className="flex items-center justify-between px-3 py-2 text-sm">
+                        <div>
+                          <p className="font-medium">{m.display_name || "—"}</p>
+                          <p className="text-xs text-muted-foreground">{m.email}</p>
+                        </div>
+                        <Badge variant="outline" className="text-[10px] capitalize">{m.access_level}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Nenhum vendedor atribuído a esta conta.</p>
+                )}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetailsUser(null)}>Fechar</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
