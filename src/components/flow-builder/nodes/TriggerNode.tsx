@@ -27,6 +27,13 @@ export function TriggerNode({ id, data }: { id: string; data: Record<string, unk
     );
   };
 
+  const handleKeywordChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setNodes((nds) =>
+      nds.map((n) => (n.id === id ? { ...n, data: { ...n.data, trigger_value: value } } : n))
+    );
+  };
+
   return (
     <div className="bg-background border-2 border-dashed border-primary/40 rounded-xl p-4 min-w-[220px] shadow-sm">
       <div className="flex items-center gap-2 mb-2">
@@ -46,6 +53,21 @@ export function TriggerNode({ id, data }: { id: string; data: Record<string, unk
           </option>
         ))}
       </select>
+      {triggerType === "mensagem_recebida" && (
+        <div className="mt-2 space-y-1">
+          <textarea
+            value={(data.trigger_value as string) || ""}
+            onChange={handleKeywordChange}
+            placeholder={"Ex:\noi\nquero comprar\nmenu"}
+            className="w-full text-xs rounded-md border border-input bg-background px-2 py-1.5 text-foreground min-h-[60px] resize-y nodrag"
+            rows={3}
+          />
+          <p className="text-[10px] text-muted-foreground leading-snug">
+            Palavra(s) que ativam o fluxo, uma por linha. Em branco: inicia com qualquer
+            mensagem, só na primeira vez que o lead escrever.
+          </p>
+        </div>
+      )}
       <Handle type="source" position={Position.Right} className="!w-3 !h-3 !bg-primary !border-2 !border-background" />
     </div>
   );

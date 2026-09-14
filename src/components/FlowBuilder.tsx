@@ -742,7 +742,18 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
 
     (() => {
       const steps = flowStepsData;
-      const triggerNode = { ...createTriggerNode(), data: { trigger_type: flow.trigger_type || "" } };
+      // A palavra-chave do gatilho fica gravada no trigger_value do passo de
+      // entrada (é o campo que o webhook lê pra decidir qual fluxo iniciar);
+      // aqui ela volta pro nó do gatilho só pra reaparecer editável na tela.
+      const entryStepForKeyword =
+        steps.find((s: any) => s.is_entry === true) ?? steps.find((s: any) => !s.parent_step_id);
+      const triggerNode = {
+        ...createTriggerNode(),
+        data: {
+          trigger_type: flow.trigger_type || "",
+          trigger_value: entryStepForKeyword?.trigger_value || "",
+        },
+      };
 
       // Build nodes
       const stepNodes: Node[] = steps.map((s: any, i: number) => {
@@ -1044,6 +1055,10 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
       // Trigger→step edges define entry points but never become parent_step_id.
       const triggerChildren = adjList.get("trigger") || [];
       const entryNodeIds = new Set<string>(triggerChildren.map((c) => c.target));
+      // Palavra(s) configuradas no próprio nó de gatilho: viram o trigger_value
+      // do(s) passo(s) de entrada, que é o campo que o webhook já usa pra achar
+      // qual fluxo iniciar a partir do texto recebido do lead.
+      const triggerNodeKeyword = (nodes.find((n) => n.id === "trigger")?.data?.trigger_value as string) || null;
 
       const parentByChild = new Map<string, { parentId: string; sourceHandle?: string | null }>();
       edges.forEach((e) => {
@@ -1077,6 +1092,9 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
         const sourceHandle = parentInfo?.sourceHandle ?? null;
 
         let triggerValue = (node.data.trigger_value as string) || null;
+        if (entryNodeIds.has(nodeId) && triggerNodeKeyword) {
+          triggerValue = triggerNodeKeyword;
+        }
         if (sourceHandle && parentNodeId) {
           const parentNode = stepNodes.find((n) => n.id === parentNodeId);
           if (parentNode?.type === "interactive_buttons" && sourceHandle.startsWith("btn-")) {
