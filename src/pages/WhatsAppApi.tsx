@@ -1833,7 +1833,7 @@ export default function WhatsAppApi() {
   const [apiKey, setApiKey] = useState("");
   const [isDefault, setIsDefault] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   // Conversa aberta no chat → a barra inferior sai de cena no celular.
   const [chatConversationOpen, setChatConversationOpen] = useState(false);
