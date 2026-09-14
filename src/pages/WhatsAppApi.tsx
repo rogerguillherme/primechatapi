@@ -2430,38 +2430,43 @@ export default function WhatsAppApi() {
             </div>
           </div>
           <TabsList className="flex flex-col items-stretch bg-transparent h-auto p-2 gap-0.5">
-            <TabsTrigger value="home" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
-              <Home size={16} />
-              {!navCollapsed && <span>Início</span>}
-            </TabsTrigger>
-            <TabsTrigger value="chat" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
-              <MessageCircle size={16} />
-              {!navCollapsed && <span>Conversas</span>}
-            </TabsTrigger>
-            <TabsTrigger value="broadcast" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
-              <Send size={16} />
-              {!navCollapsed && <span>Campanhas</span>}
-            </TabsTrigger>
-            <TabsTrigger value="templates" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
-              <FileText size={16} />
-              {!navCollapsed && <span>Templates</span>}
-            </TabsTrigger>
-            <TabsTrigger value="history" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
-              <BarChart3 size={16} />
-              {!navCollapsed && <span>Histórico</span>}
-            </TabsTrigger>
-            <TabsTrigger value="kanban" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
-              <KanbanSquare size={16} />
-              {!navCollapsed && <span>Kanban</span>}
-            </TabsTrigger>
-            <TabsTrigger value="team" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
-              <Users size={16} />
-              {!navCollapsed && <span>Equipe</span>}
-            </TabsTrigger>
-            <TabsTrigger value="agent-metrics" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
-              <Gauge size={16} />
-              {!navCollapsed && <span>Atendentes</span>}
-            </TabsTrigger>
+            {/* Fixo no topo: com as seções abaixo sempre minimizadas, a lista
+                cresceu e passou a rolar — sem isso o menu principal some de
+                vista assim que a aba ativa fica mais abaixo na lista. */}
+            <div className="sticky top-0 z-10 bg-sidebar flex flex-col gap-0.5 pb-0.5">
+              <TabsTrigger value="home" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+                <Home size={16} />
+                {!navCollapsed && <span>Início</span>}
+              </TabsTrigger>
+              <TabsTrigger value="chat" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+                <MessageCircle size={16} />
+                {!navCollapsed && <span>Conversas</span>}
+              </TabsTrigger>
+              <TabsTrigger value="broadcast" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+                <Send size={16} />
+                {!navCollapsed && <span>Campanhas</span>}
+              </TabsTrigger>
+              <TabsTrigger value="templates" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+                <FileText size={16} />
+                {!navCollapsed && <span>Templates</span>}
+              </TabsTrigger>
+              <TabsTrigger value="history" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+                <BarChart3 size={16} />
+                {!navCollapsed && <span>Histórico</span>}
+              </TabsTrigger>
+              <TabsTrigger value="kanban" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+                <KanbanSquare size={16} />
+                {!navCollapsed && <span>Kanban</span>}
+              </TabsTrigger>
+              <TabsTrigger value="team" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+                <Users size={16} />
+                {!navCollapsed && <span>Equipe</span>}
+              </TabsTrigger>
+              <TabsTrigger value="agent-metrics" className={cn("justify-start rounded-lg text-sidebar-foreground data-[state=active]:bg-sidebar-primary data-[state=active]:text-sidebar-primary-foreground data-[state=active]:shadow-sm hover:bg-sidebar-accent gap-2.5 text-sm px-3 py-2.5 transition-all", navCollapsed && "justify-center px-0")}>
+                <Gauge size={16} />
+                {!navCollapsed && <span>Atendentes</span>}
+              </TabsTrigger>
+            </div>
             {!secondaryNavCollapsed && (
               <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 px-3 pt-3 pb-1 font-semibold">Automação</p>
             )}

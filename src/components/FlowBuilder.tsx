@@ -713,7 +713,7 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
   const { templates } = useUserTemplates();
 
   // Load existing steps and convert to nodes/edges
-  useQuery({
+  const { data: flowStepsData } = useQuery({
     queryKey: ["flow-steps", flow?.id],
     queryFn: async () => {
       if (!flow) return [];
@@ -722,8 +722,26 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
         .select("*")
         .eq("flow_id", flow.id)
         .order("step_order");
+      return data || [];
+    },
+    enabled: !!flow && !hydratedFromDraft && !isLoaded,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
 
-      const steps = data || [];
+  // Monta nodes/edges assim que os passos chegam — inclusive quando `flowStepsData`
+  // veio do cache (staleTime/gcTime Infinity fazem o React Query pular o queryFn
+  // de novo ao reabrir o mesmo fluxo). Antes esse efeito colateral vivia dentro do
+  // queryFn acima: nesse caso ele nunca rodava, `isLoaded` ficava travado em false
+  // e a tela ficava presa em "Carregando..." até um refresh limpar o cache.
+  useEffect(() => {
+    if (!flow || hydratedFromDraft || isLoaded || flowStepsData === undefined) return;
+
+    (() => {
+      const steps = flowStepsData;
       const triggerNode = { ...createTriggerNode(), data: { trigger_type: flow.trigger_type || "" } };
 
       // Build nodes
@@ -854,15 +872,8 @@ function FlowEditorView({ flow, onBack, initialTriggerType, initialKind }: { flo
       setNodes(allNodes);
       setEdges(allEdges);
       setIsLoaded(true);
-      return steps;
-    },
-    enabled: !!flow && !hydratedFromDraft && !isLoaded,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
-    refetchOnReconnect: false,
-    staleTime: Infinity,
-    gcTime: Infinity,
-  });
+    })();
+  }, [flow, hydratedFromDraft, isLoaded, flowStepsData, setNodes, setEdges]);
 
   useEffect(() => {
     if (initialDraft) {
