@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { EvolutionConnectCard } from "@/components/EvolutionConnectCard";
 
 interface EvolutionAccount {
   id: string;
@@ -99,15 +100,15 @@ export function WhatsAppGroups() {
 
   if (!carregandoContas && (!accounts || accounts.length === 0)) {
     return (
-      <Card>
-        <CardContent className="pt-6 text-center py-10">
-          <UsersRound className="h-10 w-10 mx-auto mb-3 text-muted-foreground opacity-40" />
-          <p className="font-medium">Nenhuma conta WhatsApp (Evolution) conectada</p>
-          <p className="text-sm text-muted-foreground mt-1">
-            Conecte um número via Evolution em Configuração antes de sincronizar grupos.
+      <div className="space-y-4">
+        <div>
+          <h1 className="text-2xl font-display font-bold">Grupos</h1>
+          <p className="text-muted-foreground text-sm">
+            Nenhuma conta WhatsApp conectada ainda — conecte uma abaixo pra sincronizar grupos.
           </p>
-        </CardContent>
-      </Card>
+        </div>
+        <EvolutionConnectCard onConnected={() => qc.invalidateQueries({ queryKey: ["evolution-groups-accounts"] })} />
+      </div>
     );
   }
 

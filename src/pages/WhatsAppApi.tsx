@@ -48,28 +48,10 @@ import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 const FlowBuilder = lazy(() => import("@/components/FlowBuilder").then((m) => ({ default: m.FlowBuilder })));
 import { TemplateManager } from "@/components/TemplateManager";
-import QRCodeLib from "qrcode";
+import { resolveQrToDataUrl, normalizePairingCode, invokeEvolutionInstance } from "@/lib/evolution-connect";
 
 // Converte o retorno do Evolution em um data-url renderizável.
 // O Evolution pode devolver: base64 PNG puro, data:image/png;base64,..., ou apenas a string do QR (ex: "2@AQUMum+...").
-async function resolveQrToDataUrl(raw: string): Promise<string> {
-  const value = raw.trim();
-  if (value.startsWith("data:image")) return value;
-  // Heurística: base64 PNG puro costuma começar com "iVBOR"
-  if (/^[A-Za-z0-9+/=]+$/.test(value) && value.length > 200 && value.startsWith("iVBOR")) {
-    return `data:image/png;base64,${value}`;
-  }
-  // Caso contrário, tratamos como payload do QR e geramos a imagem localmente
-  return await QRCodeLib.toDataURL(value, { width: 320, margin: 1 });
-}
-
-function normalizePairingCode(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const code = value.trim();
-  // Evolution às vezes devolve o payload bruto do QR em "code"; isso não é código de pareamento.
-  if (!code || code.length > 32 || code.includes("@") || code.includes(",")) return null;
-  return code;
-}
 const BroadcastQueue = lazy(() => import("@/components/BroadcastQueue").then((m) => ({ default: m.BroadcastQueue })));
 const ContactImporter = lazy(() => import("@/components/ContactImporter").then((m) => ({ default: m.ContactImporter })));
 import { SendingMetrics } from "@/components/SendingMetrics";
@@ -117,31 +99,6 @@ import { AgentMetrics } from "@/components/team/AgentMetrics";
 
 const isUnauthorizedFunctionError = (error: unknown) =>
   error instanceof Error && error.message.includes("401");
-
-const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
-
-const isTransientEvolutionError = (error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error ?? "");
-  return /503|temporarily unavailable|failed to fetch|edge runtime/i.test(message);
-};
-
-const invokeEvolutionInstance = async (body: Record<string, unknown>, retries = 4) => {
-  let lastError: unknown;
-  for (let attempt = 0; attempt <= retries; attempt += 1) {
-    try {
-      const { data, error } = await supabase.functions.invoke("evolution-instance", { body });
-      if (error) throw error;
-      if (data?.error) throw new Error(String(data.error));
-      return data;
-    } catch (error) {
-      lastError = error;
-      if (!isTransientEvolutionError(error) || attempt === retries) break;
-      // Exponential backoff: 1s, 2s, 4s, 8s — handles edge runtime cold starts
-      await sleep(1000 * Math.pow(2, attempt));
-    }
-  }
-  throw lastError instanceof Error ? lastError : new Error("Falha temporária ao acessar a conexão WhatsApp.");
-};
 
 const META_REDIRECT_URI = "https://primechatapi.lovable.app/auth/meta/callback";
 
