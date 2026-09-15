@@ -22,6 +22,7 @@ const Auth = lazy(() => import("./pages/Auth"));
 const TrialSignup = lazy(() => import("./pages/TrialSignup"));
 const TrialExpired = lazy(() => import("./pages/TrialExpired"));
 const LandingPage = lazy(() => import("./pages/LandingPage"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const AdminUsers = lazy(() => import("./pages/AdminUsers"));
 const WabaHealth = lazy(() => import("./pages/WabaHealth"));
 const Metrik = lazy(() => import("./pages/Metrik"));
@@ -391,6 +392,7 @@ function AppRoutes() {
         }
       />
       <Route path="/site" element={<LandingPage />} />
+      <Route path="/privacidade" element={<PrivacyPolicy />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
     </Suspense>
