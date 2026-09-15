@@ -260,27 +260,41 @@ export default function MetaConnect() {
       queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
       queryClient.invalidateQueries({ queryKey: ["meta-wabas"] });
 
-      // Register the phone number with WhatsApp Cloud API
-      try {
-        const { data: regData, error: regError } = await supabase.functions.invoke("whatsapp-register-phone", {
-          body: { phone_number_id: phone.id, pin: registrationPin },
-        });
-        if (regError || regData?.error) {
-          console.warn("Registro automático falhou:", regData?.error || regError?.message);
-        } else {
-          toast.success("Número registrado na API do WhatsApp!");
+      // Registro na Cloud API (obrigatorio para enviar e receber).
+      // Sem PIN de 6 digitos valido a Meta rejeita (#133005) e sem registro o
+      // envio volta #133010. O erro NAO pode ser engolido.
+      if (!/^\d{6}$/.test(registrationPin)) {
+        toast.warning(
+          "Numero adicionado, mas ainda NAO registrado. Informe o PIN de 6 digitos da verificacao em duas etapas e clique em Registrar abaixo para habilitar envio e recebimento.",
+        );
+      } else {
+        try {
+          const { data: regData, error: regError } = await supabase.functions.invoke("whatsapp-register-phone", {
+            body: { phone_number_id: phone.id, pin: registrationPin },
+          });
+          const regFail = regError?.message || (regData as any)?.error;
+          if (regFail) {
+            const code = (regData as any)?.error_code ? ` (codigo ${(regData as any).error_code})` : "";
+            toast.error(
+              `Falha ao registrar o numero${code}: ${regFail}. Confira o PIN de 6 digitos e registre novamente abaixo.`,
+            );
+          } else {
+            toast.success("Numero registrado na API do WhatsApp!");
+          }
+        } catch (regErr: any) {
+          toast.error(`Erro ao registrar o numero: ${regErr?.message || regErr}. Registre novamente abaixo com o PIN correto.`);
         }
-      } catch (regErr) {
-        console.warn("Erro no registro automático:", regErr);
       }
-
       // Subscribe webhook
       const { data: subData, error: subErr } = await supabase.functions.invoke(
         "whatsapp-subscribe-webhook",
         { body: { account_id: inserted?.id } },
       );
       
-      if (!subErr && subData?.success) {
+      const subFail = subErr?.message || (subData as any)?.error;
+      if (subFail) {
+        toast.error(`Falha ao configurar o webhook (recebimento): ${subFail}`);
+      } else if (subData?.success) {
         toast.success("Webhook configurado com sucesso.");
       }
 
