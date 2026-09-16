@@ -28,6 +28,11 @@ const WabaHealth = lazy(() => import("./pages/WabaHealth"));
 const Metrik = lazy(() => import("./pages/Metrik"));
 const PrimeGroupDashboard = lazy(() => import("./pages/PrimeGroupDashboard"));
 const PrimeGroupInstances = lazy(() => import("./pages/PrimeGroupInstances"));
+const PrimeGroupCampaign = lazy(() => import("./pages/PrimeGroupCampaign"));
+const PrimeGroupHistory = lazy(() => import("./pages/PrimeGroupHistory"));
+const PrimeGroupActivities = lazy(() => import("./pages/PrimeGroupActivities"));
+const PrimeGroupLeads = lazy(() => import("./pages/PrimeGroupLeads"));
+const PrimeGroupSettings = lazy(() => import("./pages/PrimeGroupSettings"));
 const MetrikRanking = lazy(() => import("./pages/MetrikRanking"));
 const MetrikVendas = lazy(() => import("./pages/MetrikVendas"));
 const MetrikClientes = lazy(() => import("./pages/MetrikClientes"));
@@ -203,6 +208,61 @@ function AppRoutes() {
             <div className="min-h-screen flex">
               <PrimeGroupSidebar />
               <main className="flex-1 overflow-y-auto"><PrimeGroupInstances /></main>
+            </div>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/prime-group/campanha"
+        element={
+          <ProtectedRoute>
+            <div className="min-h-screen flex">
+              <PrimeGroupSidebar />
+              <main className="flex-1 overflow-y-auto"><PrimeGroupCampaign /></main>
+            </div>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/prime-group/historico"
+        element={
+          <ProtectedRoute>
+            <div className="min-h-screen flex">
+              <PrimeGroupSidebar />
+              <main className="flex-1 overflow-y-auto"><PrimeGroupHistory /></main>
+            </div>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/prime-group/atividades"
+        element={
+          <ProtectedRoute>
+            <div className="min-h-screen flex">
+              <PrimeGroupSidebar />
+              <main className="flex-1 overflow-y-auto"><PrimeGroupActivities /></main>
+            </div>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/prime-group/leads"
+        element={
+          <ProtectedRoute>
+            <div className="min-h-screen flex">
+              <PrimeGroupSidebar />
+              <main className="flex-1 overflow-y-auto"><PrimeGroupLeads /></main>
+            </div>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/prime-group/configuracoes"
+        element={
+          <ProtectedRoute>
+            <div className="min-h-screen flex">
+              <PrimeGroupSidebar />
+              <main className="flex-1 overflow-y-auto"><PrimeGroupSettings /></main>
             </div>
           </ProtectedRoute>
         }

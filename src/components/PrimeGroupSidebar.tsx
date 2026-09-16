@@ -10,11 +10,11 @@ import { cn } from "@/lib/utils";
 const NAV = [
   { rota: "/prime-group", rotulo: "Dashboard", icone: LayoutGrid, pronto: true },
   { rota: "/prime-group/instancias", rotulo: "Instâncias", icone: Smartphone, pronto: true },
-  { rota: "/prime-group/campanha", rotulo: "Campanha", icone: Megaphone, pronto: false },
-  { rota: "/prime-group/historico", rotulo: "Histórico", icone: History, pronto: false },
-  { rota: "/prime-group/atividades", rotulo: "Atividades", icone: Activity, pronto: false },
-  { rota: "/prime-group/leads", rotulo: "Leads", icone: Users2, pronto: false },
-  { rota: "/prime-group/configuracoes", rotulo: "Configurações", icone: Settings, pronto: false },
+  { rota: "/prime-group/campanha", rotulo: "Campanha", icone: Megaphone, pronto: true },
+  { rota: "/prime-group/historico", rotulo: "Histórico", icone: History, pronto: true },
+  { rota: "/prime-group/atividades", rotulo: "Atividades", icone: Activity, pronto: true },
+  { rota: "/prime-group/leads", rotulo: "Leads", icone: Users2, pronto: true },
+  { rota: "/prime-group/configuracoes", rotulo: "Configurações", icone: Settings, pronto: true },
 ];
 
 /**
