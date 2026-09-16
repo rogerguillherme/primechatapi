@@ -34,8 +34,9 @@ interface Grupo { id: string; group_jid: string; name: string; participants_coun
 
 /**
  * Campanhas do Prime Group — cria um disparo pra vários grupos a partir de UMA
- * instância, com intervalo anti-ban. Grava em pg_campaigns + pg_campaign_targets.
- * O motor de envio (Evolution) é a fase final; aqui a campanha nasce agendada.
+ * instância, com intervalo anti-ban. Grava em pg_campaigns + pg_campaign_targets
+ * e aciona o motor de envio (pg-campaign-dispatch) — na hora, se for "enviar
+ * agora", ou pelo heartbeat de 1 min quando for agendada pra mais tarde.
  */
 export default function PrimeGroupCampaign() {
   const qc = useQueryClient();
@@ -224,11 +225,18 @@ function NovaCampanha({ userId, onDone }: { userId?: string; onDone: () => void 
         detail: `${alvos.length} grupos • alcance estimado ${alcance.toLocaleString("pt-BR")}`,
         campaign_id: camp.id,
       });
+
+      // Envio imediato (não agendado): aciona o motor na hora em vez de
+      // esperar até 1 minuto pelo heartbeat do cron.
+      if (enviar && !agendar) {
+        supabase.functions.invoke("pg-campaign-dispatch", { body: { campaign_id: camp.id } }).catch(() => {});
+      }
+
       return enviar;
     },
     onSuccess: (enviar) => {
       toast.success(enviar
-        ? "Campanha agendada. O envio começa quando o motor Evolution for ativado (fase final)."
+        ? (agendar ? "Campanha agendada." : "Envio iniciado.")
         : "Rascunho salvo.");
       onDone();
     },

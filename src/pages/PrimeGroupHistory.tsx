@@ -54,6 +54,11 @@ export default function PrimeGroupHistory() {
       const { error } = await (supabase as any).from("pg_campaigns").update({ status }).eq("id", id);
       if (error) throw error;
       await logActivity({ type: "info", title: `Campanha "${nome}" → ${STATUS_LABEL[status]}`, campaign_id: id });
+      // "Agendar"/"Retomar" mandam pra 'agendada' — aciona o motor na hora em
+      // vez de esperar o heartbeat de 1 min do cron.
+      if (status === "agendada") {
+        supabase.functions.invoke("pg-campaign-dispatch", { body: { campaign_id: id } }).catch(() => {});
+      }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["pg-campaigns"] }); toast.success("Status atualizado."); },
     onError: (e: any) => toast.error(e?.message || "Erro ao atualizar."),
