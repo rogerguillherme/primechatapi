@@ -1,6 +1,7 @@
-// Evolution API – Grupos WhatsApp: listar contas Evolution da equipe e
+// Evolution API – Grupos WhatsApp: listar contas Evolution da equipe,
 // sincronizar os grupos de uma conta (fetch na Evolution + upsert em
-// whatsapp_groups). Primeira fatia portada do Group Flow Hub.
+// whatsapp_groups) e extrair os participantes pra virarem leads do Prime
+// Group (upsert em pg_group_leads). Primeira fatia portada do Group Flow Hub.
 //
 // Multi-tenant: resolve o dono da conta a partir de quem chama (dono direto
 // ou membro de equipe com acesso de gerente), mesmo padrão do team-members.
@@ -42,6 +43,45 @@ async function fetchGroupsFromEvolution(serverUrl: string, apiKey: string, insta
     invite_link: g.inviteUrl ?? null,
     group_created_at: g.creation ? new Date(g.creation * 1000).toISOString() : null,
   })).filter((g) => g.group_jid);
+}
+
+/** Mesmo desenho do extractParticipantJid do evolution-webhook: o campo com
+ *  o telefone varia de servidor Evolution pra servidor. */
+function extractParticipantPhone(participant: any): string {
+  if (!participant) return "";
+  if (typeof participant === "string" || typeof participant === "number") {
+    return String(participant).split("@")[0].replace(/\D/g, "");
+  }
+  const jid = participant.id ?? participant.phoneNumber ?? participant.phone ?? participant.jid?.id ?? "";
+  return String(jid).split("@")[0].replace(/\D/g, "");
+}
+
+function extractParticipantName(participant: any): string | null {
+  if (!participant || typeof participant !== "object") return null;
+  return participant.name || participant.pushName || participant.notify || null;
+}
+
+async function fetchGroupsWithParticipants(serverUrl: string, apiKey: string, instanceName: string) {
+  const base = serverUrl.replace(/\/+$/, "").replace(/\/manager$/i, "");
+  const res = await fetch(
+    `${base}/group/fetchAllGroups/${encodeURIComponent(instanceName)}?getParticipants=true`,
+    { headers: { apikey: apiKey, "Content-Type": "application/json" } },
+  );
+  const text = await res.text();
+  let body: any = null;
+  try { body = text ? JSON.parse(text) : null; } catch { body = text; }
+  if (!res.ok) {
+    const detail = body?.response?.message ?? body?.message ?? String(text).slice(0, 200);
+    throw new Error(`Evolution HTTP ${res.status}: ${detail}`);
+  }
+  const list: any[] = Array.isArray(body) ? body : body?.groups ?? [];
+  return list
+    .map((g) => ({
+      group_jid: g.id ?? g.remoteJid ?? g.jid,
+      group_name: g.subject ?? g.name ?? "Sem nome",
+      participants: Array.isArray(g.participants) ? g.participants : [],
+    }))
+    .filter((g) => g.group_jid);
 }
 
 Deno.serve(async (req) => {
@@ -137,6 +177,71 @@ Deno.serve(async (req) => {
         .eq("id", account.id);
 
       return json({ success: true, count: groups.length });
+    }
+
+    // ── Extrair participantes dos grupos e virar leads (pg_group_leads) ──
+    if (action === "sync_leads") {
+      const { account_id } = body;
+      if (!account_id) return json({ error: "account_id é obrigatório" }, 400);
+
+      const { data: account, error: accErr } = await admin
+        .from("whatsapp_accounts")
+        .select("id, user_id, provider, phone_number_id, business_account_id, api_key, access_token")
+        .eq("id", account_id)
+        .eq("user_id", ownerId)
+        .eq("provider", "evolution")
+        .maybeSingle();
+      if (accErr) throw accErr;
+      if (!account) return json({ error: "Conta Evolution não encontrada." }, 404);
+
+      const serverUrl = account.business_account_id;
+      const apiKey = account.api_key || account.access_token;
+      if (!serverUrl || !apiKey) {
+        return json({ error: "Conta sem servidor/chave Evolution configurados." }, 400);
+      }
+
+      const groups = await fetchGroupsWithParticipants(serverUrl, apiKey, account.phone_number_id);
+
+      // group_id (FK pra whatsapp_groups) é best-effort: só resolve pros
+      // grupos já sincronizados via "sync". Sem isso, o lead ainda entra —
+      // só fica sem o link direto pro grupo.
+      const { data: knownGroups } = await admin
+        .from("whatsapp_groups").select("id, group_jid").eq("account_id", account.id);
+      const groupIdByJid = new Map((knownGroups || []).map((g: any) => [g.group_jid, g.id]));
+
+      const rows: any[] = [];
+      for (const g of groups) {
+        for (const p of g.participants) {
+          const phone = extractParticipantPhone(p);
+          if (!phone) continue;
+          rows.push({
+            user_id: account.user_id,
+            account_id: account.id,
+            group_id: groupIdByJid.get(g.group_jid) ?? null,
+            group_jid: g.group_jid,
+            group_name: g.group_name,
+            phone,
+            name: extractParticipantName(p),
+            is_admin: !!p?.admin,
+          });
+        }
+      }
+
+      if (rows.length > 0) {
+        const { error: upsertErr } = await admin
+          .from("pg_group_leads")
+          .upsert(rows, { onConflict: "user_id,phone,group_jid" });
+        if (upsertErr) throw upsertErr;
+      }
+
+      await admin.from("pg_activities").insert({
+        user_id: account.user_id,
+        type: "lead_sync",
+        title: `Leads extraídos de ${groups.length} grupo(s)`,
+        detail: `${rows.length} participante(s) coletado(s).`,
+      });
+
+      return json({ success: true, groups: groups.length, leads: rows.length });
     }
 
     return json({ error: "Ação inválida" }, 400);

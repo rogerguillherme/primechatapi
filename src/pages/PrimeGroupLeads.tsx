@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import {
-  Users2, Loader2, Search, Download, Ban, Shield, Layers,
+  Users2, Loader2, Search, Download, Ban, Shield, Layers, RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -15,15 +15,43 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 
+interface Instancia { id: string; name: string; }
+
 /** Leads do Prime Group — participantes extraídos dos grupos (pg_group_leads).
- *  Busca, filtro por grupo, exportar CSV e mandar pra blacklist. A extração em
- *  si (varredura dos grupos via Evolution) é a fase final; aqui gerimos o que
- *  já foi coletado. */
+ *  Busca, filtro por grupo, exportar CSV, mandar pra blacklist e extrair
+ *  participantes direto da Evolution (evolution-groups?action=sync_leads). */
 export default function PrimeGroupLeads() {
   const qc = useQueryClient();
   const { user } = useAuth();
   const [busca, setBusca] = useState("");
   const [grupo, setGrupo] = useState("todos");
+  const [instanciaExtracao, setInstanciaExtracao] = useState("");
+
+  const { data: instancias = [] } = useQuery({
+    queryKey: ["pg-instances-select"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("whatsapp_accounts").select("id, name").eq("provider", "evolution").order("name");
+      if (error) throw error;
+      return (data ?? []) as Instancia[];
+    },
+  });
+
+  const extrairLeads = useMutation({
+    mutationFn: async (accountId: string) => {
+      const { data, error } = await supabase.functions.invoke("evolution-groups", {
+        body: { action: "sync_leads", account_id: accountId },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data as { groups: number; leads: number };
+    },
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ["pg-group-leads"] });
+      toast.success(`${r.leads} lead(s) extraído(s) de ${r.groups} grupo(s).`);
+    },
+    onError: (e: any) => toast.error(e?.message || "Erro ao extrair participantes."),
+  });
 
   const { data: leads = [], isLoading } = useQuery({
     queryKey: ["pg-group-leads"],
@@ -83,9 +111,28 @@ export default function PrimeGroupLeads() {
           </h1>
           <p className="text-sm text-muted-foreground">Contatos extraídos dos seus grupos</p>
         </div>
-        <Button variant="outline" onClick={exportarCSV} disabled={filtrados.length === 0}>
-          <Download className="h-4 w-4 mr-1.5" /> Exportar CSV
-        </Button>
+        <div className="flex flex-wrap gap-2 items-center">
+          <Select value={instanciaExtracao} onValueChange={setInstanciaExtracao}>
+            <SelectTrigger className="w-48"><SelectValue placeholder="Escolha a instância" /></SelectTrigger>
+            <SelectContent>
+              {instancias.map((i) => <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>)}
+              {instancias.length === 0 && <div className="px-2 py-2 text-xs text-muted-foreground">Nenhuma instância. Crie em Instâncias.</div>}
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            disabled={!instanciaExtracao || extrairLeads.isPending}
+            onClick={() => extrairLeads.mutate(instanciaExtracao)}
+          >
+            {extrairLeads.isPending
+              ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+              : <RefreshCw className="h-4 w-4 mr-1.5" />}
+            Extrair participantes
+          </Button>
+          <Button variant="outline" onClick={exportarCSV} disabled={filtrados.length === 0}>
+            <Download className="h-4 w-4 mr-1.5" /> Exportar CSV
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-3">
@@ -114,7 +161,7 @@ export default function PrimeGroupLeads() {
         <Card className="p-12 text-center text-muted-foreground">
           <Users2 className="h-10 w-10 mx-auto text-muted-foreground/40" />
           <p className="mt-3">Nenhum lead coletado ainda.</p>
-          <p className="text-sm mt-1">A extração de participantes dos grupos entra junto com o motor Evolution (fase final).</p>
+          <p className="text-sm mt-1">Escolha uma instância acima e clique em "Extrair participantes".</p>
         </Card>
       ) : (
         <Card className="overflow-hidden">
