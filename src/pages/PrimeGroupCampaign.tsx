@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Megaphone, Plus, Loader2, Smartphone, Layers, Search, Send, Save,
   CalendarClock, Info, Users2,
@@ -31,6 +31,9 @@ import {
 
 interface Instancia { id: string; name: string; status: string | null; display_phone_number: string | null; }
 interface Grupo { id: string; group_jid: string; name: string; participants_count: number; }
+interface Prefill {
+  instancia: string; nome: string; mensagem: string; midiaUrl: string; midiaTipo: string; groupJids: string[];
+}
 
 /**
  * Campanhas do Prime Group — cria um disparo pra vários grupos a partir de UMA
@@ -43,6 +46,8 @@ export default function PrimeGroupCampaign() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [aberto, setAberto] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const corrigirId = searchParams.get("corrigir");
 
   const { data: campanhas = [], isLoading } = useQuery({
     queryKey: ["pg-campaigns"],
@@ -54,6 +59,42 @@ export default function PrimeGroupCampaign() {
     },
   });
 
+  // Veio do botão "Corrigir" no Histórico: busca a campanha original e só os
+  // grupos que a conferência (pg-campaign-audit) marcou fora de padrão.
+  const { data: prefill } = useQuery({
+    queryKey: ["pg-campaign-prefill", corrigirId],
+    enabled: !!corrigirId,
+    queryFn: async (): Promise<Prefill> => {
+      const { data: origem, error: e1 } = await (supabase as any)
+        .from("pg_campaigns").select("*").eq("id", corrigirId).single();
+      if (e1) throw e1;
+      const { data: ruins, error: e2 } = await (supabase as any)
+        .from("pg_campaign_targets").select("group_jid")
+        .eq("campaign_id", corrigirId).eq("check_status", "fora_padrao");
+      if (e2) throw e2;
+      return {
+        instancia: origem.account_id,
+        nome: `${origem.name} (correção)`,
+        mensagem: origem.message || "",
+        midiaUrl: origem.media_url || "",
+        midiaTipo: origem.media_type || "nenhuma",
+        groupJids: (ruins || []).map((a: any) => a.group_jid),
+      };
+    },
+  });
+
+  useEffect(() => {
+    if (prefill) setAberto(true);
+  }, [prefill]);
+
+  function fecharDialogo() {
+    setAberto(false);
+    if (corrigirId) {
+      searchParams.delete("corrigir");
+      setSearchParams(searchParams, { replace: true });
+    }
+  }
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-start justify-between gap-4">
@@ -63,11 +104,16 @@ export default function PrimeGroupCampaign() {
           </h1>
           <p className="text-sm text-muted-foreground">Disparos para grupos de WhatsApp em escala</p>
         </div>
-        <Dialog open={aberto} onOpenChange={setAberto}>
+        <Dialog open={aberto} onOpenChange={(o) => (o ? setAberto(true) : fecharDialogo())}>
           <DialogTrigger asChild>
             <Button><Plus className="h-4 w-4 mr-1.5" /> Nova campanha</Button>
           </DialogTrigger>
-          <NovaCampanha userId={user?.id} onDone={() => { setAberto(false); qc.invalidateQueries({ queryKey: ["pg-campaigns"] }); }} />
+          <NovaCampanha
+            key={corrigirId || "nova"}
+            userId={user?.id}
+            prefill={prefill}
+            onDone={() => { fecharDialogo(); qc.invalidateQueries({ queryKey: ["pg-campaigns"] }); }}
+          />
         </Dialog>
       </div>
 
@@ -125,14 +171,14 @@ function StatusBadge({ status }: { status: CampaignStatus }) {
 // ---------------------------------------------------------------------------
 // Diálogo de criação
 // ---------------------------------------------------------------------------
-function NovaCampanha({ userId, onDone }: { userId?: string; onDone: () => void }) {
-  const [nome, setNome] = useState("");
-  const [instancia, setInstancia] = useState<string>("");
+function NovaCampanha({ userId, onDone, prefill }: { userId?: string; onDone: () => void; prefill?: Prefill }) {
+  const [nome, setNome] = useState(prefill?.nome ?? "");
+  const [instancia, setInstancia] = useState<string>(prefill?.instancia ?? "");
   const [selecionados, setSelecionados] = useState<Record<string, boolean>>({});
   const [busca, setBusca] = useState("");
-  const [mensagem, setMensagem] = useState("");
-  const [midiaUrl, setMidiaUrl] = useState("");
-  const [midiaTipo, setMidiaTipo] = useState<string>("nenhuma");
+  const [mensagem, setMensagem] = useState(prefill?.mensagem ?? "");
+  const [midiaUrl, setMidiaUrl] = useState(prefill?.midiaUrl ?? "");
+  const [midiaTipo, setMidiaTipo] = useState<string>(prefill?.midiaTipo ?? "nenhuma");
   const [intMin, setIntMin] = useState(8);
   const [intMax, setIntMax] = useState(25);
   const [agendar, setAgendar] = useState(false);
@@ -163,6 +209,17 @@ function NovaCampanha({ userId, onDone }: { userId?: string; onDone: () => void 
       return (data ?? []) as Grupo[];
     },
   });
+
+  // Pré-seleciona só os grupos que vieram da correção, assim que a lista de
+  // grupos da instância carregar.
+  useEffect(() => {
+    if (!prefill || grupos.length === 0) return;
+    const jids = new Set(prefill.groupJids);
+    const novo: Record<string, boolean> = {};
+    for (const g of grupos) if (jids.has(g.group_jid)) novo[g.id] = true;
+    setSelecionados(novo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grupos]);
 
   const gruposFiltrados = useMemo(
     () => grupos.filter((g) => g.name.toLowerCase().includes(busca.toLowerCase())),
@@ -354,9 +411,19 @@ function NovaCampanha({ userId, onDone }: { userId?: string; onDone: () => void 
           <Input type="datetime-local" value={quando} onChange={(e) => setQuando(e.target.value)} />
         )}
 
+        {prefill && (
+          <div className="flex items-start gap-2 rounded-lg bg-amber-500/5 border border-amber-500/20 p-3 text-xs text-amber-700 dark:text-amber-300">
+            <Info className="h-4 w-4 shrink-0 mt-0.5" />
+            <span>Reenvio de correção: só os {prefill.groupJids.length} grupo(s) que a conferência marcou fora de padrão vieram pré-selecionados.</span>
+          </div>
+        )}
+
         <div className="flex items-start gap-2 rounded-lg bg-sky-500/5 border border-sky-500/20 p-3 text-xs text-sky-700 dark:text-sky-300">
           <Info className="h-4 w-4 shrink-0 mt-0.5" />
-          <span>A campanha é criada e agendada agora. O <strong>envio real via Evolution</strong> é a última etapa do módulo — assim que ativado, as campanhas agendadas começam a disparar automaticamente.</span>
+          <span>
+            Depois que a campanha terminar de enviar, o Prime Group reconfere os grupos de verdade (não só a
+            confirmação da Evolution) e avisa aqui no Histórico se algum ficar fora de padrão.
+          </span>
         </div>
       </div>
 

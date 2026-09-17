@@ -26,6 +26,8 @@ export interface PgCampaign {
   updated_at: string;
 }
 
+export type CheckStatus = "pendente" | "ok" | "fora_padrao" | "erro_checagem";
+
 export interface PgTarget {
   id: string;
   campaign_id: string;
@@ -36,6 +38,9 @@ export interface PgTarget {
   error: string | null;
   sent_at: string | null;
   created_at: string;
+  check_status: CheckStatus;
+  check_detail: string | null;
+  checked_at: string | null;
 }
 
 export interface PgActivity {

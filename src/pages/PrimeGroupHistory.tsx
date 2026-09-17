@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import {
   History, Loader2, Layers, Send, AlertCircle, Clock, ChevronRight,
-  Play, Pause, Trash2, X,
+  Play, Pause, Trash2, X, ShieldAlert, Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -31,6 +32,7 @@ const FILTROS: { chave: "todas" | CampaignStatus; rotulo: string }[] = [
  *  detalhe por grupo (pg_campaign_targets) num painel lateral. */
 export default function PrimeGroupHistory() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [filtro, setFiltro] = useState<"todas" | CampaignStatus>("todas");
   const [aberta, setAberta] = useState<PgCampaign | null>(null);
 
@@ -139,6 +141,7 @@ export default function PrimeGroupHistory() {
         onClose={() => setAberta(null)}
         onMudarStatus={(status) => aberta && mudarStatus.mutate({ id: aberta.id, status, nome: aberta.name })}
         onExcluir={() => aberta && excluir.mutate(aberta.id)}
+        onCorrigir={() => aberta && navigate(`/prime-group/campanha?corrigir=${aberta.id}`)}
         ocupado={mudarStatus.isPending || excluir.isPending}
       />
     </div>
@@ -146,10 +149,10 @@ export default function PrimeGroupHistory() {
 }
 
 function DetalheCampanha({
-  campanha, onClose, onMudarStatus, onExcluir, ocupado,
+  campanha, onClose, onMudarStatus, onExcluir, onCorrigir, ocupado,
 }: {
   campanha: PgCampaign | null; onClose: () => void;
-  onMudarStatus: (s: CampaignStatus) => void; onExcluir: () => void; ocupado: boolean;
+  onMudarStatus: (s: CampaignStatus) => void; onExcluir: () => void; onCorrigir: () => void; ocupado: boolean;
 }) {
   const { data: alvos = [], isLoading } = useQuery({
     queryKey: ["pg-targets", campanha?.id],
@@ -161,6 +164,8 @@ function DetalheCampanha({
       return (data ?? []) as PgTarget[];
     },
   });
+
+  const foraDePadrao = alvos.filter((a) => a.check_status === "fora_padrao");
 
   return (
     <Sheet open={!!campanha} onOpenChange={(o) => !o && onClose()}>
@@ -200,11 +205,27 @@ function DetalheCampanha({
                   <Play className="h-3.5 w-3.5 mr-1" /> Agendar
                 </Button>
               )}
+              {foraDePadrao.length > 0 && (
+                <Button size="sm" variant="outline" className="text-amber-700 border-amber-300 hover:bg-amber-50" disabled={ocupado} onClick={onCorrigir}>
+                  <Wrench className="h-3.5 w-3.5 mr-1" /> Corrigir {foraDePadrao.length} grupo(s)
+                </Button>
+              )}
               <Button size="sm" variant="ghost" className="text-red-600 hover:text-red-700" disabled={ocupado} onClick={onExcluir}>
                 <Trash2 className="h-3.5 w-3.5 mr-1" /> Excluir
               </Button>
               <Button size="sm" variant="ghost" onClick={onClose}><X className="h-3.5 w-3.5 mr-1" /> Fechar</Button>
             </div>
+
+            {foraDePadrao.length > 0 && (
+              <div className="mt-3 flex items-start gap-2 rounded-lg bg-amber-500/5 border border-amber-500/20 p-3 text-xs text-amber-700 dark:text-amber-300">
+                <ShieldAlert className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>
+                  A conferência pós-envio achou {foraDePadrao.length} grupo(s) fora de padrão mesmo com a Evolution
+                  confirmando o envio. Veja o motivo passando o mouse no selo de cada grupo abaixo, ou clique em
+                  "Corrigir" pra reabrir a campanha pré-preenchida só pra eles.
+                </span>
+              </div>
+            )}
 
             <div className="mt-5">
               <h4 className="text-sm font-semibold mb-2">Grupos ({alvos.length})</h4>
@@ -213,9 +234,12 @@ function DetalheCampanha({
               ) : (
                 <div className="border border-border rounded-lg divide-y divide-border">
                   {alvos.map((a) => (
-                    <div key={a.id} className="flex items-center justify-between px-3 py-2.5 text-sm">
+                    <div key={a.id} className="flex items-center justify-between gap-2 px-3 py-2.5 text-sm">
                       <span className="truncate flex-1">{a.group_name}</span>
-                      <AlvoBadge status={a.status} erro={a.error} />
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <CheckBadge status={a.check_status} detalhe={a.check_detail} />
+                        <AlvoBadge status={a.status} erro={a.error} />
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -235,4 +259,16 @@ function AlvoBadge({ status, erro }: { status: PgTarget["status"]; erro: string 
     erro: { t: "Erro", c: "bg-red-500/10 text-red-600" },
   }[status];
   return <span title={erro || undefined} className={`shrink-0 text-[10px] font-semibold uppercase px-2 py-0.5 rounded ${cfg.c}`}>{cfg.t}</span>;
+}
+
+/** Resultado da conferência pós-envio (pg-campaign-audit) — só aparece depois
+ *  que a campanha termina e a auditoria roda; "pendente" fica sem selo. */
+function CheckBadge({ status, detalhe }: { status: PgTarget["check_status"]; detalhe: string | null }) {
+  if (status === "pendente") return null;
+  const cfg = {
+    ok: { t: "Conferido", c: "bg-emerald-500/10 text-emerald-600" },
+    fora_padrao: { t: "Fora de padrão", c: "bg-amber-500/10 text-amber-700" },
+    erro_checagem: { t: "Não conferido", c: "bg-muted text-muted-foreground" },
+  }[status];
+  return <span title={detalhe || undefined} className={`shrink-0 text-[10px] font-semibold uppercase px-2 py-0.5 rounded ${cfg.c}`}>{cfg.t}</span>;
 }

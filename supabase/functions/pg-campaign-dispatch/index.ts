@@ -177,6 +177,19 @@ async function processCampaign(supabase: any, campaignId: string, startedAt: num
       `Campanha "${campaign.name}" ${finalStatus === "concluida" ? "concluída" : "falhou"}`,
       `${sent} enviados, ${errors} com erro.`,
     );
+
+    // Não confia só no "200 OK" da Evolution na hora do envio — reconfere os
+    // grupos de verdade em background (não bloqueia a resposta desta função).
+    if (sent > 0) {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      fetch(`${supabaseUrl}/functions/v1/pg-campaign-audit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+        body: JSON.stringify({ campaign_id: campaignId }),
+      }).catch(() => {});
+    }
+
     return { finished: finalStatus, sent, errors, processed };
   }
 
