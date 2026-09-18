@@ -6,9 +6,11 @@ import {
 import { useNavigate, useLocation } from "react-router-dom";
 
 import { useAuth } from "@/contexts/AuthContext";
+import { useTeamContext } from "@/hooks/use-team";
 import { Button } from "@/components/ui/button";
 import { MetrikLogo } from "@/components/MetrikLogo";
 import { cn } from "@/lib/utils";
+import { APPLYFY_ACCOUNT_ID } from "@/lib/applyfy";
 
 /**
  * Cabeçalho e navegação do Métrik.
@@ -21,7 +23,15 @@ import { cn } from "@/lib/utils";
  * Todas as seções abrem com dado real: nenhuma é casca esperando conteúdo,
  * porque aba que abre vazia ensina que clicar não leva a lugar nenhum.
  */
-const SECOES = [
+interface Secao {
+  rota: string;
+  rotulo: string;
+  icone: typeof LayoutGrid;
+  /** Some do menu pra quem não é a conta liberada (ver APPLYFY_ACCOUNT_ID). */
+  restrito?: boolean;
+}
+
+const SECOES: Secao[] = [
   { rota: "/metrik", rotulo: "Dashboard", icone: LayoutGrid },
   { rota: "/metrik/ranking", rotulo: "Ranking", icone: Trophy },
   { rota: "/metrik/vendas", rotulo: "Vendas", icone: DollarSign },
@@ -31,7 +41,8 @@ const SECOES = [
   { rota: "/metrik/comissionados", rotulo: "Comissionados", icone: Wallet },
   { rota: "/metrik/meta-ads", rotulo: "Meta Ads", icone: Megaphone },
   { rota: "/metrik/tracker", rotulo: "Tracker", icone: Radar },
-  { rota: "/metrik/utm", rotulo: "UTM", icone: Link2 },
+  // Ainda não é recurso geral do Prime Chat — só a conta do Estevao usa.
+  { rota: "/metrik/utm", rotulo: "UTM", icone: Link2, restrito: true },
   { rota: "/metrik/financeiro", rotulo: "Financeiro", icone: PiggyBank },
   { rota: "/metrik/missoes", rotulo: "Missões", icone: Medal },
   { rota: "/metrik/integracoes", rotulo: "Integrações", icone: Plug },
@@ -40,8 +51,11 @@ const SECOES = [
 
 export function MetrikHeader() {
   const { user, signOut } = useAuth();
+  const { data: team } = useTeamContext();
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const ownerId = team?.ownerId ?? user?.id;
+  const secoes = SECOES.filter((s) => !s.restrito || ownerId === APPLYFY_ACCOUNT_ID);
 
   return (
     <header className="border-b border-border/60 bg-card/40 backdrop-blur">
@@ -57,7 +71,7 @@ export function MetrikHeader() {
           </button>
 
           <nav className="flex items-center gap-1 overflow-x-auto">
-            {SECOES.map((s) => {
+            {secoes.map((s) => {
               const ativo = pathname === s.rota;
               return (
                 <button

@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Loader2, Plus, Trash2, ShoppingCart, Check, Copy } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { APPLYFY_ACCOUNT_ID } from "@/lib/applyfy";
 
 const WEBHOOK_URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/applyfy-webhook`;
 
@@ -130,6 +131,11 @@ export function ApplyfyCheckoutSettings() {
       qc.invalidateQueries({ queryKey: ["applyfy-products", ownerId] });
     },
   });
+
+  // Recurso ainda não é geral do Prime Chat — só a conta do Estevao usa.
+  // A trava de dados de verdade é RLS; isto só evita mostrar tela vazia
+  // pra qualquer outra conta.
+  if (ownerId !== APPLYFY_ACCOUNT_ID) return null;
 
   return (
     <CollapsibleSettingsCard

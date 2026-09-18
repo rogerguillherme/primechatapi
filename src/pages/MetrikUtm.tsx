@@ -8,6 +8,7 @@ import { useMetrikPeriodo } from "@/hooks/use-metrik-periodo";
 import { SeletorPeriodo } from "@/components/metrics/SeletorPeriodo";
 import { useFavicon } from "@/hooks/use-favicon";
 import { Card, Kpi, Barra, TituloPagina, Vazio, moeda } from "@/components/metrics/ui";
+import { APPLYFY_ACCOUNT_ID } from "@/lib/applyfy";
 
 interface ApplyfySale {
   id: string;
@@ -75,6 +76,15 @@ export default function MetrikUtm() {
   const porVendedor = useMemo(() => agrupar(pagas, "utm_medium"), [pagas]);
   const maiorCanal = porCanal[0]?.faturamento || 1;
   const maiorVendedor = porVendedor[0]?.faturamento || 1;
+
+  // Recurso ainda não é geral do Prime Chat — só a conta do Estevao usa.
+  if (ownerId && ownerId !== APPLYFY_ACCOUNT_ID) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center text-muted-foreground">
+        <p>Esse painel ainda não está disponível pra essa conta.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
