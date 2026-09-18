@@ -25,7 +25,7 @@ import {
   MoreVertical, ArrowLeft, Paperclip, Clock, MessageCircleReply,
   ShoppingBag, RotateCcw, Tag, X, AlertCircle, Bot, Users, PowerOff, Megaphone,
   Info, Pencil, Columns3, Zap, Workflow, UserPlus, Pause, Play, Reply,
-  CheckCircle2, Mail, Forward,
+  CheckCircle2, Mail, Forward, Loader2,
 } from "lucide-react";
 import { BulkBroadcastDialog } from "@/components/BulkBroadcastDialog";
 import { ContactInfoSheet } from "@/components/chat/ContactInfoSheet";
@@ -659,6 +659,33 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
       if (error) throw error;
       return data || [];
     },
+  });
+
+  // ── LINK DE CHECKOUT (ApplyFy) ──
+  // Catálogo cadastrado em Configurações › Checkout ApplyFy. Sem produto
+  // cadastrado, o botão simplesmente não aparece na composer.
+  const { data: applyfyProducts } = useQuery({
+    queryKey: ["applyfy-products-active"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("applyfy_products").select("id, name").eq("active", true).order("name");
+      if (error) throw error;
+      return (data || []) as { id: string; name: string }[];
+    },
+  });
+
+  const gerarLinkCheckout = useMutation({
+    mutationFn: async (productId: string) => {
+      if (!selectedLead) throw new Error("Nenhuma conversa selecionada");
+      const { data, error } = await supabase.functions.invoke("applyfy-checkout-link", {
+        body: { lead_id: selectedLead.id, product_id: productId },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data.checkoutUrl as string;
+    },
+    onSuccess: (url) => handleMessageChange(message ? `${message} ${url}` : url),
+    onError: (e: any) => toast.error(e.message || "Erro ao gerar link de checkout"),
   });
 
   // Fluxos para o seletor do cabeçalho.
@@ -2383,6 +2410,33 @@ export function CloudChatTab({ onConversationChange }: CloudChatTabProps = {}) {
                   <button onClick={() => fileInputRef.current?.click()} className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground">
                     <Paperclip size={20} />
                   </button>
+
+                  {/* Link de checkout com UTM automática (vendedor + lead) */}
+                  {applyfyProducts && applyfyProducts.length > 0 && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          title="Inserir link de checkout"
+                          disabled={gerarLinkCheckout.isPending}
+                          className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground disabled:opacity-50"
+                        >
+                          {gerarLinkCheckout.isPending
+                            ? <Loader2 size={20} className="animate-spin" />
+                            : <ShoppingBag size={20} />}
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-64">
+                        <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase">
+                          Link de checkout
+                        </div>
+                        {applyfyProducts.map((p) => (
+                          <DropdownMenuItem key={p.id} onClick={() => gerarLinkCheckout.mutate(p.id)}>
+                            {p.name}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
 
                   {/* Emojis e figurinhas */}
                   <EmojiPicker

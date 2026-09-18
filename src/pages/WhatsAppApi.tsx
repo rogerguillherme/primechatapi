@@ -90,6 +90,7 @@ import { ShareLinksSettings } from "@/components/settings/ShareLinksSettings";
 import { StageAutomationsSettings } from "@/components/settings/StageAutomationsSettings";
 import { ChatLabelsSettings } from "@/components/settings/ChatLabelsSettings";
 import { ChatShortcutsSettings } from "@/components/settings/ChatShortcutsSettings";
+import { ApplyfyCheckoutSettings } from "@/components/settings/ApplyfyCheckoutSettings";
 import { NotificationSettings } from "@/components/settings/NotificationSettings";
 import { useLeadsPicker } from "@/hooks/use-leads-picker";
 
@@ -2549,6 +2550,9 @@ export default function WhatsAppApi() {
 
           {/* Atalhos digitáveis do chat (/fluxo1, /oi ...) */}
           <ChatShortcutsSettings />
+
+          {/* Credenciais e catálogo pro botão de link de checkout no chat */}
+          <ApplyfyCheckoutSettings />
 
           {/* Exibir ou não o botão do agente IA no chat */}
           <ChatAiButtonSetting />
