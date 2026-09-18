@@ -1,7 +1,7 @@
 import {
   LogOut, MessageCircle, LayoutGrid, Trophy, DollarSign,
   Contact, Users, Flag, Wallet, Plug, Settings, Medal,
-  Megaphone, Radar, PiggyBank,
+  Megaphone, Radar, PiggyBank, Link2,
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 
@@ -31,6 +31,7 @@ const SECOES = [
   { rota: "/metrik/comissionados", rotulo: "Comissionados", icone: Wallet },
   { rota: "/metrik/meta-ads", rotulo: "Meta Ads", icone: Megaphone },
   { rota: "/metrik/tracker", rotulo: "Tracker", icone: Radar },
+  { rota: "/metrik/utm", rotulo: "UTM", icone: Link2 },
   { rota: "/metrik/financeiro", rotulo: "Financeiro", icone: PiggyBank },
   { rota: "/metrik/missoes", rotulo: "Missões", icone: Medal },
   { rota: "/metrik/integracoes", rotulo: "Integrações", icone: Plug },

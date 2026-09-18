@@ -44,6 +44,7 @@ const MetrikConfiguracoes = lazy(() => import("./pages/MetrikConfiguracoes"));
 const MetrikMissoes = lazy(() => import("./pages/MetrikMissoes"));
 const MetrikMetaAds = lazy(() => import("./pages/MetrikMetaAds"));
 const MetrikTracker = lazy(() => import("./pages/MetrikTracker"));
+const MetrikUtm = lazy(() => import("./pages/MetrikUtm"));
 const MetrikFinanceiro = lazy(() => import("./pages/MetrikFinanceiro"));
 import { Loader2 } from "lucide-react";
 import { BroadcastProgressFloat } from "@/components/BroadcastProgressFloat";
@@ -420,6 +421,19 @@ function AppRoutes() {
               <MetrikHeader />
               <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto w-full">
                 <MetrikTracker />
+              </main>
+            </div>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/metrik/utm"
+        element={
+          <ProtectedRoute>
+            <div className="metrik-shell min-h-screen flex flex-col">
+              <MetrikHeader />
+              <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto w-full">
+                <MetrikUtm />
               </main>
             </div>
           </ProtectedRoute>

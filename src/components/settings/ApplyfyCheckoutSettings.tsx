@@ -8,8 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Plus, Trash2, ShoppingCart, Check } from "lucide-react";
+import { Loader2, Plus, Trash2, ShoppingCart, Check, Copy } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+const WEBHOOK_URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/applyfy-webhook`;
 
 interface ApplyfyProduct {
   id: string;
@@ -33,6 +35,7 @@ export function ApplyfyCheckoutSettings() {
 
   const [publicKey, setPublicKey] = useState("");
   const [secretKey, setSecretKey] = useState("");
+  const [webhookToken, setWebhookToken] = useState("");
   const [savingCreds, setSavingCreds] = useState(false);
   const [novoProduto, setNovoProduto] = useState(EMPTY_PRODUCT);
   const [criando, setCriando] = useState(false);
@@ -42,9 +45,9 @@ export function ApplyfyCheckoutSettings() {
     enabled: !!ownerId,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("applyfy_credentials" as any).select("public_key, updated_at").maybeSingle();
+        .from("applyfy_credentials" as any).select("public_key, webhook_token, updated_at").maybeSingle();
       if (error) throw error;
-      return data as { public_key: string; updated_at: string } | null;
+      return data as { public_key: string; webhook_token: string | null; updated_at: string } | null;
     },
   });
 
@@ -62,16 +65,21 @@ export function ApplyfyCheckoutSettings() {
   const salvarCreds = useMutation({
     mutationFn: async () => {
       if (!ownerId) throw new Error("Sessão expirada");
-      if (!publicKey.trim() || !secretKey.trim()) throw new Error("Informe a Chave Pública e a Chave Privada");
-      const { error } = await supabase.from("applyfy_credentials" as any).upsert(
-        { user_id: ownerId, public_key: publicKey.trim(), secret_key: secretKey.trim() },
-        { onConflict: "user_id" },
-      );
+      const temChaves = publicKey.trim() && secretKey.trim();
+      const temToken = webhookToken.trim();
+      if (!temChaves && !temToken) {
+        throw new Error("Informe a Chave Pública + Chave Privada, ou o Token do webhook");
+      }
+      const payload: Record<string, string> = { user_id: ownerId };
+      if (publicKey.trim()) payload.public_key = publicKey.trim();
+      if (secretKey.trim()) payload.secret_key = secretKey.trim();
+      if (webhookToken.trim()) payload.webhook_token = webhookToken.trim();
+      const { error } = await supabase.from("applyfy_credentials" as any).upsert(payload, { onConflict: "user_id" });
       if (error) throw error;
     },
     onSuccess: () => {
       toast({ title: "Credenciais da ApplyFy salvas" });
-      setPublicKey(""); setSecretKey("");
+      setPublicKey(""); setSecretKey(""); setWebhookToken("");
       qc.invalidateQueries({ queryKey: ["applyfy-credentials", ownerId] });
     },
     onError: (e: any) => toast({ title: "Erro ao salvar", description: e.message, variant: "destructive" }),
@@ -167,6 +175,46 @@ export function ApplyfyCheckoutSettings() {
             <Button size="sm" onClick={() => salvarCreds.mutate()} disabled={salvarCreds.isPending}>
               {salvarCreds.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
               Salvar
+            </Button>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <Label className="text-sm font-medium">Webhook de vendas</Label>
+            {creds?.webhook_token && (
+              <span className="flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                <Check className="h-3 w-3" /> Configurado
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            No painel da ApplyFy, vá em <b>Configurações → Webhooks → Criar</b>, cole a URL abaixo como
+            "URL alvo do disparo", marque os eventos de transação (criada/paga/estornada) e cole aqui o
+            token que ela gerar. Sem isso as vendas não aparecem no dashboard por UTM.
+          </p>
+          <div className="flex items-center gap-1.5">
+            <code className="flex-1 min-w-0 truncate rounded bg-muted px-2 py-1.5 text-xs">{WEBHOOK_URL}</code>
+            <Button
+              size="icon" variant="ghost" className="h-8 w-8 shrink-0"
+              onClick={() => { navigator.clipboard.writeText(WEBHOOK_URL); toast({ title: "URL copiada" }); }}
+            >
+              <Copy size={14} />
+            </Button>
+          </div>
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="space-y-1">
+              <Label className="text-xs">Token do webhook</Label>
+              <Input
+                value={webhookToken}
+                onChange={(e) => setWebhookToken(e.target.value)}
+                placeholder={creds?.webhook_token ? "•••••••••••••••• (já salvo)" : "Cole o token gerado pela ApplyFy"}
+                className="h-9 w-72 font-mono text-xs"
+              />
+            </div>
+            <Button size="sm" onClick={() => salvarCreds.mutate()} disabled={salvarCreds.isPending || !webhookToken.trim()}>
+              {salvarCreds.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
+              Salvar token
             </Button>
           </div>
         </div>
